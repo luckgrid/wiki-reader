@@ -43,20 +43,20 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 | P1-R8 | Focus + nav state model | T6–T9 | done | c97963e |
 | P1-R9 | K3 visuals, keymap, terminal safety | T5,T12,T13 | done | c97963e |
 | P1-R10 | Docs, process, test hygiene | T10–T11,T14,T16–T18 | done | 5911ea5 |
-| P1-R11 | Post-merge residuals + check.sh | N1–N6 | done | `scripts/check.sh` on tip; PR #20 closed as superseded |
-| P1-R12 | Renderer to V1 | V1 | done | PR #22 / tip (StyledLine); polish in R17 |
-| P1-R13 | Cursor mapping + syntect raw | V2 | done | PR #23 / tip |
-| P1-R14 | Search core + overlay | S1 | done | PR #24 / tip; S1 completion in R19 |
-| P1-R15 | Watcher + reindex | V3 | done | PR #25 / tip; hardening in R18 |
-| P1-R16 | Hygiene | | done | tip #26 |
-| P1-R17 | Renderer polish | V1 | done | lists/tables/alerts/fences/links/footnotes |
-| P1-R18 | Live reload hardening | V3 | done | path filter, off-thread rebuild, anchored cursor, page-removed |
-| P1-R19 | Search overlay to S1 | S1 | done | n/N, highlight, mouse, multi-word pages |
-| P1-R20 | Perf + docs | | done | syntect OnceLock; docs sync |
-| P1-R21 | Renderer perf + table align | V1 | done | line-starts offset→line; sep width; scaling + `#[ignore]` budget |
-| P1-R22 | Watcher correctness | V3 | done | `.planning`/dirs; `rebuild_pending`; shorter debounce in tests |
-| P1-R23 | Search match remap | S1 | done | source-line matches; toggle/resize remap; display dedupe |
-| P1-R24 | Roadmap honesty + test time | | done | statuses; watcher debounce param; scaling tests |
+| P1-R11 | Post-merge residuals + check.sh | N1–N6 | done | 1414d39 (`scripts/check.sh`) |
+| P1-R12 | Renderer to V1 | V1 | done | 1414d39 (StyledLine) |
+| P1-R13 | Cursor mapping + syntect raw | V2 | done | 1414d39 |
+| P1-R14 | Search core + overlay | S1 | done | 1414d39 |
+| P1-R15 | Watcher + reindex | V3 | done | 1414d39 |
+| P1-R16 | Hygiene | | done | 1414d39 |
+| P1-R17 | Renderer polish | V1 | done | 1414d39 |
+| P1-R18 | Live reload hardening | V3 | done | 1414d39 |
+| P1-R19 | Search overlay to S1 | S1 | done | 1414d39 |
+| P1-R20 | Perf + docs | | done | 1414d39 |
+| P1-R21 | Renderer perf + table align | V1 | done | 1414d39 |
+| P1-R22 | Watcher correctness | V3 | done | 1414d39 |
+| P1-R23 | Search match remap | S1 | done | 1414d39 |
+| P1-R24 | Roadmap honesty + test time | | done | 1414d39 |
 | P1-07 | Layout regions + hit map | | done | 5911ea5 |
 | P1-07a | Core support APIs (breadcrumb, blocks, nav focus) | | done | 5911ea5 |
 | P1-07b | TUI skeleton: regions, hit map, static content | | done | 5911ea5 |
@@ -66,11 +66,11 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 | P1-08a | Pane focus (K1) + side-nav keys (K4) | K1,K4 | done | 5911ea5 |
 | P1-08b | Viewer cursor (K2) + interim ViewerDoc | K2 | done | 5911ea5 |
 | P1-08c | Viewer Tab cycle (K3) | K3 | done | 5911ea5 |
-| P1-09 | Links, Tab/Enter/click | L1–L3 | done | tip (PR #21 stack) |
-| P1-10 | Search overlay | S1 | done | tip + R19 + R23 |
-| P1-11 | Raw toggle | V2 | done | tip + R23 match remap |
-| P1-12 | Live reload | V3 | done | tip + R18 + R22 |
-| P1-13 | Renderer port | V1 | done | tip + R17 + R21 |
+| P1-09 | Links, Tab/Enter/click | L1–L3 | done | 1414d39 |
+| P1-10 | Search overlay | S1 | done | 1414d39 |
+| P1-11 | Raw toggle | V2 | done | 1414d39 |
+| P1-12 | Live reload | V3 | done | 1414d39 |
+| P1-13 | Renderer port | V1 | done | 1414d39 |
 | P1-S1 | Spike, herdr input | | done | [spike note](spikes/p1-s1-herdr-input.md); doc-only; live herdr key log pending |
 | P1-S2 | Spike, tree widget decision | | done | ADR-0009 → superseded by ADR-0010 |
 
