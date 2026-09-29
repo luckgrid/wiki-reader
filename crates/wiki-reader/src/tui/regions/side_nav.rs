@@ -1,7 +1,7 @@
-//! Side nav: flat visible rows into our `HitMap` (ADR-0009 option B).
+//! Side nav: flat visible rows into our `HitMap` ([ADR-0010](../../../../wiki/decisions/0010-flat-side-nav-rows.md)).
 //!
-//! `tui-tree-widget` was evaluated; syncing `TreeState` from core `NavState` each
-//! frame duplicated the source of truth while our hit map already owns row rects.
+//! ADR-0009 chose `tui-tree-widget`; P1-07c shipped flat rows instead because
+//! syncing `TreeState` from core `NavState` each frame duplicated the source of truth.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;

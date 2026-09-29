@@ -2,14 +2,14 @@
 id: WR-ADR-0009
 title: ADR-0009: Adopt tui-tree-widget for side nav
 summary: Use tui-tree-widget; it exposes position→identifier hit-testing via rendered_at/click_at.
-status: accepted
+status: superseded
 updated: 2026-09-29
-related: [0008-side-nav-as-site-nav]
+related: [0008-side-nav-as-site-nav, 0010-flat-side-nav-rows]
 ---
 
 # ADR-0009: Adopt tui-tree-widget for side nav
 
-**Status:** Accepted · **Date:** 2026-09-29 · **Spike:** P1-S2
+**Status:** Superseded by [ADR-0010](0010-flat-side-nav-rows.md) · **Date:** 2026-09-29 · **Spike:** P1-S2
 
 ## Context
 
@@ -34,4 +34,8 @@ P1-07/08 need a collapsible side-nav with mouse hit-testing. The prior-art note 
 
 ## Follow-up (P1-R5 compile gate)
 
-Verified 2026-09-29 in a throwaway crate (`tui-tree-widget` 0.24.1 + `ratatui` 0.30.2, `TestBackend`): `TreeState::rendered_at(Position)` and `TreeState::click_at(Position)` compile and return hits after a stateful render. Claim stands; no superseding ADR needed. Gate crate was not kept in-tree.
+Verified 2026-09-29 in a throwaway crate (`tui-tree-widget` 0.24.1 + `ratatui` 0.30.2, `TestBackend`): `TreeState::rendered_at(Position)` and `TreeState::click_at(Position)` compile and return hits after a stateful render. Gate crate was not kept in-tree.
+
+## Supersession (P1-R10)
+
+P1-07c shipped option **B** (flat rows into `HitMap`). Syncing `TreeState` from core `NavState` each frame duplicated state. See [ADR-0010](0010-flat-side-nav-rows.md).

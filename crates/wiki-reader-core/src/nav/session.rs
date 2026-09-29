@@ -490,15 +490,16 @@ mod tests {
     /// N1: every entry point yields the same history + tree reveal for the same page.
     fn assert_same_arrival(nav: &Navigator, expected: &PageKey) {
         assert_eq!(&nav.tab().current().page, expected);
-        assert!(
-            nav.nav()
-                .expanded
-                .iter()
-                .any(|id| matches!(id, NodeId::Group(_)))
-                || expected.relative_path.components().count() <= 1,
-            "nested page should expand ancestors; expanded={:?}",
-            nav.nav().expanded
-        );
+        let mut ancestors = HashSet::new();
+        expand_ancestors(&nav.nav().tree, expected, &mut ancestors);
+        for id in &ancestors {
+            assert!(
+                nav.nav().expanded.contains(id),
+                "expected ancestor {id:?} expanded for {}; expanded={:?}",
+                expected.relative_path.display(),
+                nav.nav().expanded
+            );
+        }
     }
 
     /// N4: ancestors expanded; current page marked ● in `render_text`.

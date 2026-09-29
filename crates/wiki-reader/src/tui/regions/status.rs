@@ -4,27 +4,8 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::widgets::Paragraph;
 
+use crate::tui::focus::FocusPane;
 use crate::tui::theme::Theme;
-
-/// Which pane is focused (for the status label).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum FocusPane {
-    /// Side nav.
-    Nav,
-    /// Viewer.
-    #[default]
-    Viewer,
-}
-
-impl FocusPane {
-    #[must_use]
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Nav => "NAV",
-            Self::Viewer => "VIEWER",
-        }
-    }
-}
 
 /// Status fields drawn into one line.
 pub struct StatusModel<'a> {

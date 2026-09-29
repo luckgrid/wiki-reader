@@ -73,7 +73,7 @@ Tried as-is inside herdr. **Kept:** it's markdown-only, reads far better than su
 | Need | Crate | Notes |
 |------|-------|-------|
 | TUI | `ratatui` 0.30.x + `crossterm` | 0.30 split into `ratatui-core`/`ratatui-widgets`. herdr itself is built on ratatui 0.30 + crossterm 0.29. |
-| Tree widget | `tui-tree-widget` | Collapsible tree with state. Check that it exposes row rects for mouse hit-testing; if not, render the tree ourselves (it's a flat list of visible rows). |
+| Tree widget | flat `HitMap` rows ([ADR-0010](../decisions/0010-flat-side-nav-rows.md)) | Custom visible-row list; `tui-tree-widget` evaluated then rejected (ADR-0009 superseded) because `TreeState` duplicated core `NavState`. |
 | Scrolling | `tui-scrollview` (optional) | |
 | Async | `tokio` | Watcher, background render, herdr calls |
 | CLI | `clap` (derive) | |

@@ -3,7 +3,7 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::action::Action;
-use super::regions::status::FocusPane;
+use super::focus::FocusPane;
 
 /// Whether plain-letter global bindings are active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

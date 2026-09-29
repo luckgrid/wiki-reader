@@ -25,7 +25,7 @@ pub enum Hit {
     Prev,
     /// Viewer footer next.
     Next,
-    /// Viewer body line (1-based source line).
+    /// Viewer body line (0-based source line index).
     ViewerLine(u32),
     /// Click focuses the nav pane.
     FocusNav,

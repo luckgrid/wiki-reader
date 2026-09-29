@@ -4,6 +4,7 @@
 
 pub mod action;
 pub mod app;
+pub mod focus;
 pub mod hit;
 pub mod keymap;
 pub mod layout;

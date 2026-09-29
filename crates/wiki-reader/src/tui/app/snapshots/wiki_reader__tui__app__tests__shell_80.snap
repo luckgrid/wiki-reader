@@ -1,0 +1,28 @@
+---
+source: crates/wiki-reader/src/tui/app/tests.rs
+expression: out
+---
+Worked Example Wiki                                                          ◫ ✕
+┌Nav─────────────────────┐┌Viewer──────────────────────────────────────────────┐
+│ ⌕ Search…              ││---                                                 │
+│▌● Worked Example Wiki  ││id: FX-ROOT                                         │
+│ ▸ Architecture Overview││title: Worked Example Wiki                          │
+│ ▸ Decisions            ││summary: Minimal fixture collection for wiki-reader │
+│                        ││status: draft                                       │
+│                        ││updated: 2026-09-28                                 │
+│                        ││related: [architecture]                             │
+│                        ││---                                                 │
+│                        ││                                                    │
+│                        ││# Worked Example Wiki                               │
+│                        ││                                                    │
+│                        ││A tiny markdown collection used as the default smoke│
+│                        ││                                                    │
+│                        ││Start at [Architecture Overview](architecture/README│
+│                        ││                                                    │
+│                        ││                                                    │
+│                        ││                                                    │
+│                        ││                                                    │
+│                        ││                                                    │
+│                        │└────────────────────────────────────────────────────┘
+└────────────────────────┘‹ —                            Architecture Overview ›
+VIEWER · README.md · L1 7% · 29w · 1m · 2026-09-28
