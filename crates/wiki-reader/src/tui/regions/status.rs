@@ -42,11 +42,11 @@ pub struct StatusModel<'a> {
     pub minutes: u32,
     /// Updated frontmatter or "—".
     pub updated: &'a str,
-    /// Message area.
+    /// Message area (focused-item target or transient notice).
     pub message: &'a str,
 }
 
-/// Draw the status bar.
+/// Draw the status bar. When narrow, drop lower-priority fields before the message.
 pub fn draw(frame: &mut Frame<'_>, area: Rect, model: &StatusModel<'_>, theme: &Theme) {
     if area.width == 0 {
         return;
@@ -56,23 +56,40 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, model: &StatusModel<'_>, theme: &
     } else {
         format!("{}m", model.minutes)
     };
-    let mut text = format!(
-        "{} · {} · L{} {}% · {}w · {} · {}",
-        model.focus.label(),
-        model.path,
-        model.line,
-        model.pct,
-        model.words,
+    let w = usize::from(area.width);
+    let msg = model.message;
+    let msg_suffix = if msg.is_empty() {
+        String::new()
+    } else {
+        format!(" · {msg}")
+    };
+    let msg_len = msg_suffix.chars().count();
+    let budget = w.saturating_sub(msg_len);
+
+    // High → low priority fields (drop from the end when narrowing).
+    let mut fields: Vec<String> = vec![
+        model.focus.label().to_owned(),
+        model.path.to_owned(),
+        format!("L{} {}%", model.line, model.pct),
+        format!("{}w", model.words),
         reading,
-        model.updated
-    );
-    if !model.message.is_empty() {
-        text.push_str(" · ");
-        text.push_str(model.message);
+        model.updated.to_owned(),
+    ];
+    let mut head = join_fields(&fields);
+    while head.chars().count() > budget && fields.len() > 2 {
+        fields.pop();
+        head = join_fields(&fields);
     }
-    // Truncate to width.
-    let chars: String = text.chars().take(usize::from(area.width)).collect();
+    if head.chars().count() > budget {
+        head = head.chars().take(budget).collect();
+    }
+    let text = format!("{head}{msg_suffix}");
+    let chars: String = text.chars().take(w).collect();
     frame.render_widget(Paragraph::new(chars).style(theme.muted()), area);
+}
+
+fn join_fields(fields: &[String]) -> String {
+    fields.join(" · ")
 }
 
 /// Reading time in minutes, rounded up (words / 230).

@@ -7,7 +7,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
-use wiki_reader_core::nav::{NavItem, NavTree, NodeId};
+use wiki_reader_core::nav::{NavItem, NavStop, NavTree, NodeId};
 use wiki_reader_core::provider::PageKey;
 
 use crate::tui::hit::{Hit, HitMap};
@@ -40,7 +40,7 @@ pub fn draw(
     tree: &NavTree,
     expanded: &std::collections::HashSet<NodeId>,
     current: &PageKey,
-    cursor: Option<&NodeId>,
+    cursor: &NavStop,
     scroll: u16,
     focused: bool,
     theme: &Theme,
@@ -70,7 +70,17 @@ pub fn draw(
         height: 1,
     };
     hits.push(search_rect, Hit::NavSearchRow);
-    let search = Line::from(Span::styled("⌕ Search…", theme.muted()));
+    let on_search = matches!(cursor, NavStop::Search);
+    let search_style = if on_search {
+        theme.accent()
+    } else {
+        theme.muted()
+    };
+    let search_mark = if on_search { "▌" } else { " " };
+    let search = Line::from(Span::styled(
+        format!("{search_mark}⌕ Search…"),
+        search_style,
+    ));
 
     let rows = visible_rows(tree, expanded);
     let scroll = usize::from(scroll);
@@ -96,12 +106,9 @@ pub fn draw(
             NodeId::Page(k) if k == current => "● ",
             _ => "",
         };
-        let cursor_mark = if cursor == Some(&row.id) { "▌" } else { " " };
-        let style = if cursor == Some(&row.id) {
-            theme.accent()
-        } else {
-            theme.text()
-        };
+        let on_row = matches!(cursor, NavStop::Node(id) if id == &row.id);
+        let cursor_mark = if on_row { "▌" } else { " " };
+        let style = if on_row { theme.accent() } else { theme.text() };
         let text: String = format!("{cursor_mark}{marker}{}", row.label)
             .chars()
             .take(usize::from(inner.width))
