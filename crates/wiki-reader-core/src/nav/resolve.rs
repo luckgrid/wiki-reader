@@ -77,7 +77,7 @@ fn unresolved(t: &str) -> ResolveOutcome {
 }
 
 fn same_page_anchor(from: &PageKey, anchor: &str, index: &Index) -> ResolveOutcome {
-    let slug = crate::parse::github_slug(anchor);
+    let slug = slug_fragment(anchor);
     let notice = missing_anchor_notice(from, &slug, index);
     ResolveOutcome {
         target: Target::Anchor(slug),
@@ -92,12 +92,19 @@ fn page_with_anchor(key: PageKey, anchor: Option<&str>, index: &Index) -> Resolv
             notice: None,
         };
     };
-    let slug = crate::parse::github_slug(raw);
+    let slug = slug_fragment(raw);
     let notice = missing_anchor_notice(&key, &slug, index);
     ResolveOutcome {
         target: Target::Page(key, Some(slug)),
         notice,
     }
+}
+
+fn slug_fragment(raw: &str) -> String {
+    let decoded = percent_decode_str(raw)
+        .decode_utf8()
+        .map_or_else(|_| raw.to_owned(), std::borrow::Cow::into_owned);
+    crate::parse::github_slug(&decoded)
 }
 
 fn missing_anchor_notice(page: &PageKey, slug: &str, index: &Index) -> Option<String> {

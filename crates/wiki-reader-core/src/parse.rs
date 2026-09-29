@@ -2,11 +2,10 @@
 //!
 //! See [content model](../../../wiki/product/content-model.md).
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashSet};
 use std::ops::Range;
 
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
-use serde::Deserialize;
 
 /// Non-fatal problem found while parsing a page.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,8 +50,8 @@ pub struct Frontmatter {
     pub nav_order: Option<f64>,
     /// Shorter tree/breadcrumb label.
     pub nav_title: Option<String>,
-    /// Unknown keys, stringified for raw disclosure.
-    pub unknown: HashMap<String, String>,
+    /// Unknown keys, stringified for raw disclosure (ordered for stable display).
+    pub unknown: BTreeMap<String, String>,
     /// Delimiter kind when a block was present.
     pub kind: Option<FrontmatterKind>,
 }
@@ -125,25 +124,35 @@ pub fn parse(source: &str) -> ParsedPage {
     }
 }
 
-/// GitHub-style heading slug (lowercase, strip punctuation, spaces → `-`).
+/// GitHub-style heading slug (github-slugger rules).
+///
+/// Lowercase; keep Unicode letters/marks/numbers, `_`, and `-`; each space
+/// becomes `-`; drop other punctuation; do not collapse hyphens.
 #[must_use]
 pub fn github_slug(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
-    let mut prev_hyphen = false;
-    for c in text.chars() {
-        if c.is_ascii_alphanumeric() {
-            out.push(c.to_ascii_lowercase());
-            prev_hyphen = false;
-        } else if (c == ' ' || c == '-') && !prev_hyphen && !out.is_empty() {
+    for c in text.trim().chars() {
+        if c.is_whitespace() {
             out.push('-');
-            prev_hyphen = true;
+        } else if c == '_' || c == '-' || c.is_alphanumeric() || is_mark(c) {
+            for lower in c.to_lowercase() {
+                out.push(lower);
+            }
         }
-        // punctuation dropped
-    }
-    while out.ends_with('-') {
-        out.pop();
     }
     out
+}
+
+/// Combining marks (Mn/Mc/Me blocks) kept by github-slugger; no unicode crate.
+fn is_mark(c: char) -> bool {
+    matches!(
+        c as u32,
+        0x0300..=0x036F
+            | 0x1AB0..=0x1AFF
+            | 0x1DC0..=0x1DFF
+            | 0x20D0..=0x20FF
+            | 0xFE20..=0xFE2F
+    )
 }
 
 fn split_frontmatter(
@@ -208,69 +217,6 @@ fn find_closing_fence(after_open: &str, delimiter: &str) -> Option<Range<usize>>
     None
 }
 
-#[derive(Debug, Deserialize, Default)]
-struct YamlFm {
-    id: Option<String>,
-    title: Option<String>,
-    summary: Option<String>,
-    status: Option<String>,
-    #[serde(default)]
-    tags: Vec<String>,
-    #[serde(default)]
-    work_units: Vec<String>,
-    #[serde(default)]
-    applies_to: Vec<String>,
-    #[serde(default)]
-    related: StringOrList,
-    owner: Option<String>,
-    updated: Option<String>,
-    nav_order: Option<f64>,
-    nav_title: Option<String>,
-    #[serde(flatten)]
-    unknown: HashMap<String, serde_norway::Value>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-struct TomlFm {
-    id: Option<String>,
-    title: Option<String>,
-    summary: Option<String>,
-    status: Option<String>,
-    #[serde(default)]
-    tags: Vec<String>,
-    #[serde(default)]
-    work_units: Vec<String>,
-    #[serde(default)]
-    applies_to: Vec<String>,
-    #[serde(default)]
-    related: StringOrList,
-    owner: Option<String>,
-    updated: Option<String>,
-    nav_order: Option<f64>,
-    nav_title: Option<String>,
-    #[serde(flatten)]
-    unknown: HashMap<String, toml::Value>,
-}
-
-/// Accept `related: "x"` or `related: ["a", "b"]`.
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-struct StringOrList(Vec<String>);
-
-impl<'de> Deserialize<'de> for StringOrList {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum Helper {
-            One(String),
-            Many(Vec<String>),
-        }
-        Ok(match Helper::deserialize(deserializer)? {
-            Helper::One(s) => Self(vec![s]),
-            Helper::Many(v) => Self(v),
-        })
-    }
-}
-
 fn parse_yaml_frontmatter(raw: &str, diagnostics: &mut Vec<Diagnostic>) -> Frontmatter {
     if raw.trim().is_empty() {
         return Frontmatter {
@@ -278,27 +224,29 @@ fn parse_yaml_frontmatter(raw: &str, diagnostics: &mut Vec<Diagnostic>) -> Front
             ..Frontmatter::default()
         };
     }
-    match serde_norway::from_str::<YamlFm>(raw) {
-        Ok(y) => Frontmatter {
-            id: y.id,
-            title: y.title,
-            summary: y.summary,
-            status: y.status,
-            tags: y.tags,
-            work_units: y.work_units,
-            applies_to: y.applies_to,
-            related: y.related.0,
-            owner: y.owner,
-            updated: y.updated,
-            nav_order: y.nav_order,
-            nav_title: y.nav_title,
-            unknown: y
-                .unknown
-                .into_iter()
-                .map(|(k, v)| (k, value_to_string_yaml(&v)))
-                .collect(),
-            kind: Some(FrontmatterKind::Yaml),
-        },
+    match serde_norway::from_str::<serde_norway::Value>(raw) {
+        Ok(serde_norway::Value::Mapping(map)) => {
+            let mut fm = Frontmatter {
+                kind: Some(FrontmatterKind::Yaml),
+                ..Frontmatter::default()
+            };
+            for (key, value) in map {
+                let Some(name) = yaml_key_name(&key) else {
+                    continue;
+                };
+                apply_frontmatter_key(&mut fm, &name, &YamlVal(&value), diagnostics);
+            }
+            fm
+        }
+        Ok(_) => {
+            diagnostics.push(Diagnostic {
+                message: "YAML frontmatter root must be a mapping".into(),
+            });
+            Frontmatter {
+                kind: Some(FrontmatterKind::Yaml),
+                ..Frontmatter::default()
+            }
+        }
         Err(err) => {
             diagnostics.push(Diagnostic {
                 message: format!("invalid YAML frontmatter: {err}"),
@@ -318,27 +266,17 @@ fn parse_toml_frontmatter(raw: &str, diagnostics: &mut Vec<Diagnostic>) -> Front
             ..Frontmatter::default()
         };
     }
-    match toml::from_str::<TomlFm>(raw) {
-        Ok(t) => Frontmatter {
-            id: t.id,
-            title: t.title,
-            summary: t.summary,
-            status: t.status,
-            tags: t.tags,
-            work_units: t.work_units,
-            applies_to: t.applies_to,
-            related: t.related.0,
-            owner: t.owner,
-            updated: t.updated,
-            nav_order: t.nav_order,
-            nav_title: t.nav_title,
-            unknown: t
-                .unknown
-                .into_iter()
-                .map(|(k, v)| (k, value_to_string_toml(&v)))
-                .collect(),
-            kind: Some(FrontmatterKind::Toml),
-        },
+    match raw.parse::<toml::Table>() {
+        Ok(table) => {
+            let mut fm = Frontmatter {
+                kind: Some(FrontmatterKind::Toml),
+                ..Frontmatter::default()
+            };
+            for (name, value) in table {
+                apply_frontmatter_key(&mut fm, &name, &TomlVal(&value), diagnostics);
+            }
+            fm
+        }
         Err(err) => {
             diagnostics.push(Diagnostic {
                 message: format!("invalid TOML frontmatter: {err}"),
@@ -351,12 +289,198 @@ fn parse_toml_frontmatter(raw: &str, diagnostics: &mut Vec<Diagnostic>) -> Front
     }
 }
 
-fn value_to_string_yaml(v: &serde_norway::Value) -> String {
-    serde_norway::to_string(v).unwrap_or_else(|_| format!("{v:?}"))
+fn yaml_key_name(key: &serde_norway::Value) -> Option<String> {
+    match key {
+        serde_norway::Value::String(s) => Some(s.clone()),
+        serde_norway::Value::Bool(b) => Some(b.to_string()),
+        serde_norway::Value::Number(n) => Some(n.to_string()),
+        _ => None,
+    }
 }
 
-fn value_to_string_toml(v: &toml::Value) -> String {
-    v.to_string()
+/// Value adapter so YAML and TOML share one extract path.
+trait FmValue {
+    fn as_string(&self) -> Option<String>;
+    fn as_f64(&self) -> Option<f64>;
+    fn as_list_strings(&self) -> Option<Vec<String>>;
+    fn to_display(&self) -> String;
+}
+
+struct YamlVal<'a>(&'a serde_norway::Value);
+struct TomlVal<'a>(&'a toml::Value);
+
+impl FmValue for YamlVal<'_> {
+    fn as_string(&self) -> Option<String> {
+        match self.0 {
+            serde_norway::Value::String(s) => Some(s.clone()),
+            serde_norway::Value::Bool(b) => Some(b.to_string()),
+            serde_norway::Value::Number(n) => Some(n.to_string()),
+            serde_norway::Value::Null
+            | serde_norway::Value::Sequence(_)
+            | serde_norway::Value::Mapping(_)
+            | serde_norway::Value::Tagged(_) => None,
+        }
+    }
+
+    fn as_f64(&self) -> Option<f64> {
+        match self.0 {
+            serde_norway::Value::Number(n) => n.as_f64(),
+            serde_norway::Value::String(s) => s.trim().parse().ok(),
+            _ => None,
+        }
+    }
+
+    fn as_list_strings(&self) -> Option<Vec<String>> {
+        match self.0 {
+            serde_norway::Value::Sequence(seq) => Some(
+                seq.iter()
+                    .filter_map(|v| YamlVal(v).as_string())
+                    .map(|s| s.trim().to_owned())
+                    .filter(|s| !s.is_empty())
+                    .collect(),
+            ),
+            serde_norway::Value::String(s) => {
+                let t = s.trim();
+                if t.is_empty() {
+                    Some(vec![])
+                } else {
+                    Some(vec![t.to_owned()])
+                }
+            }
+            serde_norway::Value::Bool(_) | serde_norway::Value::Number(_) => {
+                self.as_string().map(|s| vec![s])
+            }
+            _ => None,
+        }
+    }
+
+    fn to_display(&self) -> String {
+        serde_norway::to_string(self.0)
+            .unwrap_or_else(|_| format!("{:?}", self.0))
+            .trim()
+            .to_owned()
+    }
+}
+
+impl FmValue for TomlVal<'_> {
+    fn as_string(&self) -> Option<String> {
+        match self.0 {
+            toml::Value::String(s) => Some(s.clone()),
+            toml::Value::Boolean(b) => Some(b.to_string()),
+            toml::Value::Integer(i) => Some(i.to_string()),
+            toml::Value::Float(f) => Some(f.to_string()),
+            toml::Value::Datetime(d) => Some(d.to_string()),
+            toml::Value::Array(_) | toml::Value::Table(_) => None,
+        }
+    }
+
+    fn as_f64(&self) -> Option<f64> {
+        match self.0 {
+            toml::Value::Float(f) => Some(*f),
+            // ponytail: nav_order fits f64; i64→f64 loss only past 2^53
+            #[allow(clippy::cast_precision_loss)]
+            toml::Value::Integer(i) => Some(*i as f64),
+            toml::Value::String(s) => s.trim().parse().ok(),
+            _ => None,
+        }
+    }
+
+    fn as_list_strings(&self) -> Option<Vec<String>> {
+        match self.0 {
+            toml::Value::Array(arr) => Some(
+                arr.iter()
+                    .filter_map(|v| TomlVal(v).as_string())
+                    .map(|s| s.trim().to_owned())
+                    .filter(|s| !s.is_empty())
+                    .collect(),
+            ),
+            toml::Value::String(s) => {
+                let t = s.trim();
+                if t.is_empty() {
+                    Some(vec![])
+                } else {
+                    Some(vec![t.to_owned()])
+                }
+            }
+            toml::Value::Boolean(_)
+            | toml::Value::Integer(_)
+            | toml::Value::Float(_)
+            | toml::Value::Datetime(_) => self.as_string().map(|s| vec![s]),
+            toml::Value::Table(_) => None,
+        }
+    }
+
+    fn to_display(&self) -> String {
+        self.0.to_string().trim().to_owned()
+    }
+}
+
+fn apply_frontmatter_key(
+    fm: &mut Frontmatter,
+    name: &str,
+    value: &impl FmValue,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let name = name.trim();
+    if name.is_empty() {
+        diagnostics.push(Diagnostic {
+            message: "frontmatter key is blank; skipped".into(),
+        });
+        return;
+    }
+    match name {
+        "id" | "title" | "summary" | "status" | "owner" | "updated" | "nav_title" => {
+            match value.as_string() {
+                Some(s) => {
+                    let s = s.trim().to_owned();
+                    if s.is_empty() {
+                        return;
+                    }
+                    match name {
+                        "id" => fm.id = Some(s),
+                        "title" => fm.title = Some(s),
+                        "summary" => fm.summary = Some(s),
+                        "status" => fm.status = Some(s),
+                        "owner" => fm.owner = Some(s),
+                        "updated" => fm.updated = Some(s),
+                        "nav_title" => fm.nav_title = Some(s),
+                        _ => unreachable!(),
+                    }
+                }
+                None => diagnostics.push(Diagnostic {
+                    message: format!("frontmatter `{name}`: expected string-ish value; skipped"),
+                }),
+            }
+        }
+        "nav_order" => match value.as_f64() {
+            Some(n) => fm.nav_order = Some(n),
+            None => diagnostics.push(Diagnostic {
+                message: "frontmatter `nav_order`: expected number; skipped".into(),
+            }),
+        },
+        "tags" | "work_units" | "applies_to" | "related" => match value.as_list_strings() {
+            Some(list) => match name {
+                "tags" => fm.tags = list,
+                "work_units" => fm.work_units = list,
+                "applies_to" => fm.applies_to = list,
+                "related" => fm.related = list,
+                _ => unreachable!(),
+            },
+            None => diagnostics.push(Diagnostic {
+                message: format!("frontmatter `{name}`: expected string or list; skipped"),
+            }),
+        },
+        _ => {
+            let display = if let Some(s) = value.as_string() {
+                s.trim().to_owned()
+            } else {
+                value.to_display()
+            };
+            if !display.is_empty() {
+                fm.unknown.insert(name.to_owned(), display);
+            }
+        }
+    }
 }
 
 fn walk_markdown(body: &str, body_line_offset: u32) -> (Option<String>, Vec<Heading>, Vec<MdLink>) {
@@ -377,7 +501,7 @@ fn walk_markdown(body: &str, body_line_offset: u32) -> (Option<String>, Vec<Head
     let mut h1 = None;
     let mut headings = Vec::new();
     let mut links = Vec::new();
-    let mut slug_counts: HashMap<String, u32> = HashMap::new();
+    let mut used_slugs: HashSet<String> = HashSet::new();
 
     let mut in_code_block = false;
     let mut in_heading: Option<(u8, u32, String)> = None;
@@ -401,7 +525,7 @@ fn walk_markdown(body: &str, body_line_offset: u32) -> (Option<String>, Vec<Head
                         h1 = Some(text.clone());
                     }
                     let base = github_slug(&text);
-                    let slug = unique_slug(&base, &mut slug_counts);
+                    let slug = unique_slug(&base, &mut used_slugs);
                     headings.push(Heading {
                         level,
                         text,
@@ -465,15 +589,18 @@ fn line_start_offsets(text: &str) -> Vec<usize> {
     starts
 }
 
-fn unique_slug(base: &str, counts: &mut HashMap<String, u32>) -> String {
-    let n = counts.entry(base.to_owned()).or_insert(0);
-    let slug = if *n == 0 {
-        base.to_owned()
-    } else {
-        format!("{base}-{n}")
-    };
-    *n += 1;
-    slug
+fn unique_slug(base: &str, used: &mut HashSet<String>) -> String {
+    if used.insert(base.to_owned()) {
+        return base.to_owned();
+    }
+    let mut n = 1u32;
+    loop {
+        let candidate = format!("{base}-{n}");
+        if used.insert(candidate.clone()) {
+            return candidate;
+        }
+        n += 1;
+    }
 }
 
 fn is_external(target: &str) -> bool {
@@ -565,10 +692,46 @@ mod tests {
     #[test]
     fn github_slug_and_uniqueness() {
         assert_eq!(github_slug("Hello World!"), "hello-world");
-        assert_eq!(github_slug("  Foo -- Bar  "), "foo-bar");
-        let page = parse("# Dup\n\n## Dup\n\n## Dup\n");
+        assert_eq!(github_slug("  Foo -- Bar  "), "foo----bar");
+        assert_eq!(github_slug("Café Résumé"), "café-résumé");
+        assert_eq!(github_slug("snake_case name"), "snake_case-name");
+        assert_eq!(github_slug("C++ & Rust"), "c--rust");
+        let page = parse("# Dup\n\n## Dup\n\n## Dup\n\n## Dup-1\n\n## Dup\n");
         let slugs: Vec<_> = page.headings.iter().map(|h| h.slug.as_str()).collect();
-        assert_eq!(slugs, vec!["dup", "dup-1", "dup-2"]);
+        // Collision-safe: natural "dup-1" forces the 4th Dup to "dup-2", 5th to "dup-3".
+        assert_eq!(slugs, vec!["dup", "dup-1", "dup-2", "dup-1-1", "dup-3"]);
+    }
+
+    #[test]
+    fn bad_key_does_not_drop_siblings() {
+        let src = "---\ntitle: Keep Me\ntags: draft\nnav_order: \"2\"\nid: 42\nrelated: spec\n---\n\n# H\n";
+        let page = parse(src);
+        assert_eq!(page.frontmatter.title.as_deref(), Some("Keep Me"));
+        assert_eq!(page.frontmatter.tags, vec!["draft"]);
+        assert_eq!(page.frontmatter.nav_order, Some(2.0));
+        assert_eq!(page.frontmatter.id.as_deref(), Some("42"));
+        assert_eq!(page.frontmatter.related, vec!["spec"]);
+        assert!(page.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn blank_frontmatter_key_skipped() {
+        // YAML null key / empty: ensure we don't panic and keep title.
+        let src = "---\ntitle: T\n? ''\n: nope\n---\n\n# H\n";
+        let page = parse(src);
+        assert_eq!(page.frontmatter.title.as_deref(), Some("T"));
+    }
+
+    #[test]
+    fn unknown_values_trimmed_and_ordered() {
+        let src = "---\ntitle: X\nzebra: \"  z  \"\nalpha: 1\n---\n\n# X\n";
+        let page = parse(src);
+        let keys: Vec<_> = page.frontmatter.unknown.keys().cloned().collect();
+        assert_eq!(keys, vec!["alpha", "zebra"]);
+        assert_eq!(
+            page.frontmatter.unknown.get("zebra").map(String::as_str),
+            Some("z")
+        );
     }
 
     #[test]
