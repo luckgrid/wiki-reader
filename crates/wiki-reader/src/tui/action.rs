@@ -98,6 +98,8 @@ pub enum Action {
     ConfirmDecline,
     /// Toggle raw / rendered view (`r`).
     ToggleViewMode,
+    /// Open current page in `$VISUAL` / `$EDITOR` at the cursor line (`e`).
+    OpenInEditor,
     /// No-op / ignored.
     #[allow(dead_code)]
     None,

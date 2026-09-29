@@ -88,6 +88,7 @@ pub fn map_global(key: KeyEvent) -> Option<Action> {
         KeyCode::Char('q') => Some(Action::Quit),
         KeyCode::Char('b') => Some(Action::ToggleNav),
         KeyCode::Char('r') => Some(Action::ToggleViewMode),
+        KeyCode::Char('e') => Some(Action::OpenInEditor),
         KeyCode::Char('/') => Some(Action::OpenSearch),
         KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             Some(Action::OpenSearch)
