@@ -339,7 +339,7 @@ impl App {
 
     /// Re-lay out the rendered page when the viewer text width changes.
     pub(crate) fn ensure_layout_width(&mut self, text_width: u16) {
-        let w = text_width.max(20).min(100);
+        let w = text_width.clamp(20, 100);
         if self.layout_width == w {
             return;
         }
