@@ -8,5 +8,5 @@ mod session;
 mod tree;
 
 pub use resolve::{ResolveOutcome, Target, resolve};
-pub use session::{Disposition, Effect, Location, NavState, Navigator, Tab, ViewMode};
+pub use session::{Disposition, Effect, Location, NavState, Navigator, Tab, ViewMode, ViewState};
 pub use tree::{NavItem, NavTree, NodeId, humanize_filename, page_label};

@@ -1,0 +1,11 @@
+---
+source: crates/wiki-reader-core/src/nav/tree.rs
+expression: text
+---
+Summary Root
+▾ Two
+  Two
+  One
+Three
+▾ Other pages
+  Orphan Page

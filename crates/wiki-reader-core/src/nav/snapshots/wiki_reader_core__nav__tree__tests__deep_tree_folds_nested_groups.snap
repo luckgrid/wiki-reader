@@ -1,0 +1,12 @@
+---
+source: crates/wiki-reader-core/src/nav/tree.rs
+expression: "tree.render_text(&expanded, None)"
+---
+Deep Root
+▾ Level One
+  Level One
+  ▾ Level Two
+    Level Two
+    ▾ Level Three
+      Level Three
+      Deep Leaf

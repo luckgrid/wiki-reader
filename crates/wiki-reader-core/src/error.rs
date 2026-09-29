@@ -6,6 +6,8 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
+use crate::provider::PageKey;
+
 /// Core library error.
 #[derive(Debug, Error)]
 pub enum Error {
@@ -25,7 +27,11 @@ pub enum Error {
     #[error("path outside collection: {0}")]
     PathOutsideRoot(PathBuf),
 
-    /// Placeholder for messages that do not yet have a typed variant.
-    #[error("{0}")]
-    Message(String),
+    /// Collection has no markdown pages.
+    #[error("collection has no pages")]
+    EmptyCollection,
+
+    /// Requested start page is not in the index.
+    #[error("page not found: {}", .0.relative_path.display())]
+    PageNotFound(PageKey),
 }

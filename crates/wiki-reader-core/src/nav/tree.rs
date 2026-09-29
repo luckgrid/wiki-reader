@@ -138,7 +138,10 @@ fn render_items(
     }
 }
 
-/// Label for a page: `nav_title` → `title` → H1 → humanized filename.
+/// Label for a page: `nav_title` → frontmatter `title` → H1 → humanized filename.
+///
+/// Uses parsed fields (not [`crate::index::Page::title`]) so the stem fallback
+/// used for index/search does not block humanization in the tree.
 #[must_use]
 pub fn page_label(index: &Index, key: &PageKey) -> String {
     let Some(page) = index.pages.get(key) else {
@@ -147,8 +150,8 @@ pub fn page_label(index: &Index, key: &PageKey) -> String {
     if let Some(ref t) = page.parsed.frontmatter.nav_title {
         return t.clone();
     }
-    if !page.title.is_empty() {
-        return page.title.clone();
+    if let Some(ref t) = page.parsed.frontmatter.title {
+        return t.clone();
     }
     if let Some(ref h1) = page.parsed.h1 {
         return h1.clone();
@@ -207,6 +210,20 @@ fn is_landing(path: &Path) -> bool {
     )
 }
 
+/// Prefer README over index (then `.markdown` variants).
+fn pick_landing(pages: &[PathBuf]) -> Option<PathBuf> {
+    const PREF: &[&str] = &["README.md", "README.markdown", "index.md", "index.markdown"];
+    for name in PREF {
+        if let Some(p) = pages
+            .iter()
+            .find(|p| p.file_name().and_then(|n| n.to_str()) == Some(*name))
+        {
+            return Some(p.clone());
+        }
+    }
+    None
+}
+
 // --- filesystem folding -------------------------------------------------------
 
 #[derive(Debug, Default)]
@@ -241,26 +258,26 @@ fn insert_page(dir: &mut DirNode, rel: &Path) {
 }
 
 fn fold_dir(dir_path: &Path, dir: &DirNode, index: &Index, is_root: bool) -> Vec<NavItem> {
-    let collection_id = index
-        .pages
-        .values()
-        .next()
-        .map(|p| p.key.collection_id.clone())
-        .unwrap_or_default();
+    let collection_id = index.collection_id.as_str();
 
-    let mut landing: Option<PathBuf> = None;
-    let mut other_pages: Vec<PathBuf> = Vec::new();
-    for p in &dir.pages {
-        if is_landing(p) {
-            if landing.is_none() {
-                landing = Some(p.clone());
-            } else {
-                other_pages.push(p.clone());
-            }
-        } else {
-            other_pages.push(p.clone());
-        }
-    }
+    let landing = pick_landing(&dir.pages);
+    let mut other_pages: Vec<PathBuf> = dir
+        .pages
+        .iter()
+        .filter(|p| landing.as_ref() != Some(*p))
+        .cloned()
+        .collect();
+    // Deterministic sibling page order before nav_order sort.
+    other_pages.sort_by(|a, b| {
+        nat_cmp(
+            &a.file_name()
+                .map(|s| s.to_string_lossy().to_lowercase())
+                .unwrap_or_default(),
+            &b.file_name()
+                .map(|s| s.to_string_lossy().to_lowercase())
+                .unwrap_or_default(),
+        )
+    });
 
     // Child folder items (folded).
     let mut child_dir_items: Vec<(String, Vec<NavItem>, bool)> = Vec::new();
@@ -275,7 +292,7 @@ fn fold_dir(dir_path: &Path, dir: &DirNode, index: &Index, is_root: bool) -> Vec
     }
 
     if is_root {
-        return fold_root(&collection_id, landing, other_pages, child_dir_items, index);
+        return fold_root(collection_id, landing, other_pages, child_dir_items, index);
     }
 
     // Non-root folding rules.
@@ -284,7 +301,7 @@ fn fold_dir(dir_path: &Path, dir: &DirNode, index: &Index, is_root: bool) -> Vec
         (None, false) => Vec::new(), // hidden
         (Some(land), false) => {
             // Only README → leaf link
-            let key = page_key(&collection_id, land);
+            let key = page_key(collection_id, land);
             vec![NavItem::Page {
                 id: NodeId::Page(key.clone()),
                 label: page_label(index, &key),
@@ -293,7 +310,7 @@ fn fold_dir(dir_path: &Path, dir: &DirNode, index: &Index, is_root: bool) -> Vec
         }
         (Some(land), true) => {
             // Group with landing first
-            let key = page_key(&collection_id, land);
+            let key = page_key(collection_id, land);
             let label = page_label(index, &key);
             let mut children = vec![NavItem::Page {
                 id: NodeId::Page(key.clone()),
@@ -301,7 +318,7 @@ fn fold_dir(dir_path: &Path, dir: &DirNode, index: &Index, is_root: bool) -> Vec
                 key,
             }];
             children.extend(sorted_siblings(
-                &collection_id,
+                collection_id,
                 other_pages,
                 child_dir_items,
                 index,
@@ -319,7 +336,7 @@ fn fold_dir(dir_path: &Path, dir: &DirNode, index: &Index, is_root: bool) -> Vec
                 |s| s.to_string_lossy().into_owned(),
             );
             let label = humanize_stem(&folder_name);
-            let children = sorted_siblings(&collection_id, other_pages, child_dir_items, index);
+            let children = sorted_siblings(collection_id, other_pages, child_dir_items, index);
             vec![NavItem::Group {
                 id: NodeId::Group(dir_path.to_path_buf()),
                 label,
@@ -406,12 +423,13 @@ fn sorted_siblings(
                 .pages
                 .get(key)
                 .and_then(|pg| pg.parsed.frontmatter.nav_order),
+            // Landing group's order comes from the landing page; README-less → None.
             NavItem::Group { children, .. } => children.first().and_then(|c| match c {
-                NavItem::Page { key, .. } => index
+                NavItem::Page { key, .. } if is_landing(&key.relative_path) => index
                     .pages
                     .get(key)
                     .and_then(|pg| pg.parsed.frontmatter.nav_order),
-                NavItem::Group { .. } => None,
+                _ => None,
             }),
         };
         entries.push(Entry {
@@ -474,27 +492,95 @@ fn take_num(chars: &mut std::iter::Peekable<impl Iterator<Item = char>>) -> u64 
 
 // --- SUMMARY.md / _sidebar.md -------------------------------------------------
 
+/// Open SUMMARY nest: parent page becomes a group with nested children.
+struct SummaryNest {
+    key: PageKey,
+    label: String,
+    children: Vec<NavItem>,
+}
+
+enum SummaryEv {
+    Part {
+        line: u32,
+        title: String,
+    },
+    Link {
+        line: u32,
+        depth: u32,
+        text: String,
+        target: String,
+    },
+}
+
+fn push_summary_top(
+    part: &mut Option<(String, Vec<NavItem>)>,
+    root: &mut Vec<NavItem>,
+    item: NavItem,
+) {
+    if let Some((_, children)) = part.as_mut() {
+        children.push(item);
+    } else {
+        root.push(item);
+    }
+}
+
+fn close_summary_stack_to(
+    stack: &mut Vec<SummaryNest>,
+    keep: usize,
+    part: &mut Option<(String, Vec<NavItem>)>,
+    root: &mut Vec<NavItem>,
+) {
+    while stack.len() > keep {
+        let nest = stack.pop().expect("stack");
+        let item = summary_nest_to_item(nest);
+        if let Some(parent) = stack.last_mut() {
+            parent.children.push(item);
+        } else {
+            push_summary_top(part, root, item);
+        }
+    }
+}
+
+#[allow(clippy::too_many_lines)] // SUMMARY event walk is one cohesive state machine.
 fn build_from_summary(index: &Index) -> Option<Vec<NavItem>> {
-    let collection_id = index.pages.values().next()?.key.collection_id.clone();
+    let collection_id = index.collection_id.as_str();
     let summary_key = ["SUMMARY.md", "_sidebar.md"].into_iter().find_map(|name| {
-        let key = page_key(&collection_id, Path::new(name));
+        let key = page_key(collection_id, Path::new(name));
         index.pages.get(&key).map(|_| key)
     })?;
 
-    // SUMMARY.md itself is not a content page for nav — but it was discovered as .md.
-    // Prefer reading its body from the index page record.
     let summary_page = index.pages.get(&summary_key)?;
-    let links = &summary_page.parsed.links;
-    if links.is_empty() {
+    if summary_page.parsed.links.is_empty() {
         return None;
     }
 
+    let mut events: Vec<SummaryEv> = Vec::new();
+    for h in &summary_page.parsed.headings {
+        if h.level == 1 {
+            events.push(SummaryEv::Part {
+                line: h.source_line,
+                title: h.text.clone(),
+            });
+        }
+    }
+    for link in &summary_page.parsed.links {
+        events.push(SummaryEv::Link {
+            line: link.source_line,
+            depth: link.depth.max(1),
+            text: link.text.clone(),
+            target: link.target.clone(),
+        });
+    }
+    events.sort_by_key(|e| match e {
+        SummaryEv::Part { line, .. } | SummaryEv::Link { line, .. } => *line,
+    });
+
     let mut listed = HashSet::new();
-    let mut items = Vec::new();
-    // Root README first if present and not already first in SUMMARY.
-    let root_readme = page_key(&collection_id, Path::new("README.md"));
+    let mut root_items: Vec<NavItem> = Vec::new();
+
+    let root_readme = page_key(collection_id, Path::new("README.md"));
     if index.pages.contains_key(&root_readme) {
-        items.push(NavItem::Page {
+        root_items.push(NavItem::Page {
             id: NodeId::Page(root_readme.clone()),
             label: page_label(index, &root_readme),
             key: root_readme.clone(),
@@ -502,22 +588,120 @@ fn build_from_summary(index: &Index) -> Option<Vec<NavItem>> {
         listed.insert(root_readme);
     }
 
-    for link in links {
-        let outcome = resolve(&link.target, &summary_key, index);
-        let Target::Page(key, _) = outcome.target else {
-            continue;
-        };
-        if key.relative_path == summary_key.relative_path {
-            continue;
+    let mut part: Option<(String, Vec<NavItem>)> = None;
+    let mut stack: Vec<SummaryNest> = Vec::new();
+    let mut saw_link = false;
+
+    for ev in events {
+        match ev {
+            SummaryEv::Part { title, .. } => {
+                if !saw_link && part.is_none() && stack.is_empty() {
+                    continue;
+                }
+                close_summary_stack_to(&mut stack, 0, &mut part, &mut root_items);
+                if let Some((label, children)) = part.take()
+                    && !children.is_empty()
+                {
+                    root_items.push(NavItem::Group {
+                        id: NodeId::Group(PathBuf::from(format!("summary-part-{label}"))),
+                        label,
+                        children,
+                    });
+                }
+                part = Some((title, Vec::new()));
+            }
+            SummaryEv::Link {
+                depth,
+                text,
+                target,
+                ..
+            } => {
+                saw_link = true;
+                let depth = depth as usize;
+                let outcome = resolve(&target, &summary_key, index);
+                let Target::Page(key, _) = outcome.target else {
+                    continue;
+                };
+                if key.relative_path == summary_key.relative_path || listed.contains(&key) {
+                    continue;
+                }
+                listed.insert(key.clone());
+                let label = if text.is_empty() {
+                    page_label(index, &key)
+                } else {
+                    text
+                };
+
+                close_summary_stack_to(
+                    &mut stack,
+                    depth.saturating_sub(1),
+                    &mut part,
+                    &mut root_items,
+                );
+
+                if depth <= 1 {
+                    push_summary_top(
+                        &mut part,
+                        &mut root_items,
+                        NavItem::Page {
+                            id: NodeId::Page(key.clone()),
+                            label,
+                            key,
+                        },
+                    );
+                } else {
+                    while stack.len() < depth - 1 {
+                        let host = if let Some((_, ch)) = part.as_mut() {
+                            ch
+                        } else {
+                            &mut root_items
+                        };
+                        let Some(NavItem::Page {
+                            key: pk, label: pl, ..
+                        }) = host.pop()
+                        else {
+                            break;
+                        };
+                        stack.push(SummaryNest {
+                            key: pk,
+                            label: pl,
+                            children: Vec::new(),
+                        });
+                    }
+                    if stack.len() == depth - 1 {
+                        stack
+                            .last_mut()
+                            .expect("stack")
+                            .children
+                            .push(NavItem::Page {
+                                id: NodeId::Page(key.clone()),
+                                label,
+                                key,
+                            });
+                    } else {
+                        push_summary_top(
+                            &mut part,
+                            &mut root_items,
+                            NavItem::Page {
+                                id: NodeId::Page(key.clone()),
+                                label,
+                                key,
+                            },
+                        );
+                    }
+                }
+            }
         }
-        if listed.contains(&key) {
-            continue;
-        }
-        listed.insert(key.clone());
-        items.push(NavItem::Page {
-            id: NodeId::Page(key.clone()),
-            label: page_label(index, &key),
-            key,
+    }
+
+    close_summary_stack_to(&mut stack, 0, &mut part, &mut root_items);
+    if let Some((label, children)) = part.take()
+        && !children.is_empty()
+    {
+        root_items.push(NavItem::Group {
+            id: NodeId::Group(PathBuf::from(format!("summary-part-{label}"))),
+            label,
+            children,
         });
     }
 
@@ -542,14 +726,28 @@ fn build_from_summary(index: &Index) -> Option<Vec<NavItem>> {
                 key,
             })
             .collect();
-        items.push(NavItem::Group {
+        root_items.push(NavItem::Group {
             id: NodeId::OtherPages,
             label: "Other pages".into(),
             children,
         });
     }
 
-    Some(items)
+    Some(root_items)
+}
+
+fn summary_nest_to_item(nest: SummaryNest) -> NavItem {
+    let mut children = vec![NavItem::Page {
+        id: NodeId::Page(nest.key.clone()),
+        label: nest.label.clone(),
+        key: nest.key,
+    }];
+    children.extend(nest.children);
+    NavItem::Group {
+        id: NodeId::Group(PathBuf::from(format!("summary-{}", nest.label))),
+        label: nest.label,
+        children,
+    }
 }
 
 #[cfg(test)]
@@ -560,6 +758,15 @@ mod tests {
     fn index_at(rel: &str) -> Index {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
         Index::build(&FsProvider::open(root).unwrap()).unwrap()
+    }
+
+    fn expand_all(items: &[NavItem], expanded: &mut HashSet<NodeId>) {
+        for item in items {
+            if let NavItem::Group { id, children, .. } = item {
+                expanded.insert(id.clone());
+                expand_all(children, expanded);
+            }
+        }
     }
 
     #[test]
@@ -613,10 +820,22 @@ mod tests {
             .iter()
             .map(|k| page_label(&index, k))
             .collect();
-        // Root README first, then SUMMARY order Two, One, Three, then orphan under Other.
+        // Root README first, then SUMMARY: Two (group) → One nested, Three, then orphan.
         assert_eq!(
             labels,
             vec!["Summary Root", "Two", "One", "Three", "Orphan Page"]
+        );
+        // Nested list produced a Group for Two.
+        let has_two_group = tree.items.iter().any(|i| matches!(
+            i,
+            NavItem::Group { label, children, .. }
+                if label == "Two"
+                    && children.iter().any(|c| matches!(c, NavItem::Page { label, .. } if label == "One"))
+        ));
+        assert!(
+            has_two_group,
+            "expected Group Two containing One; items={:?}",
+            tree.items
         );
         assert!(tree.items.iter().any(|i| matches!(
             i,
@@ -625,6 +844,22 @@ mod tests {
                 ..
             }
         )));
+    }
+
+    #[test]
+    fn summary_md_nested_snapshot() {
+        let index = index_at("../../fixtures/summary-md");
+        let tree = NavTree::build(&index);
+        let mut expanded = HashSet::new();
+        for item in &tree.items {
+            if let NavItem::Group { id, .. } = item {
+                expanded.insert(id.clone());
+            }
+        }
+        // Also expand nested groups.
+        expand_all(&tree.items, &mut expanded);
+        let text = tree.render_text(&expanded, None);
+        insta::assert_snapshot!(text);
     }
 
     #[test]
@@ -638,5 +873,53 @@ mod tests {
                 .iter()
                 .any(|k| k.relative_path.as_path() == Path::new("l1/l2/l3/leaf.md"))
         );
+        let mut expanded = HashSet::new();
+        expand_all(&tree.items, &mut expanded);
+        insta::assert_snapshot!(tree.render_text(&expanded, None));
+    }
+
+    #[test]
+    fn worked_example_all_expanded_snapshot() {
+        let index = index_at("../../fixtures/worked-example");
+        let tree = NavTree::build(&index);
+        let mut expanded = HashSet::new();
+        expand_all(&tree.items, &mut expanded);
+        let root = PageKey {
+            collection_id: "worked-example".into(),
+            relative_path: PathBuf::from("README.md"),
+        };
+        insta::assert_snapshot!(tree.render_text(&expanded, Some(&root)));
+    }
+
+    #[test]
+    fn page_label_humanizes_numbered_stem_without_title() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("README.md"), "# Root\n").unwrap();
+        std::fs::write(dir.path().join("02-token-projection.md"), "Just prose.\n").unwrap();
+        let index = Index::build(&FsProvider::open(dir.path()).unwrap()).unwrap();
+        let key = PageKey {
+            collection_id: index.collection_id.clone(),
+            relative_path: PathBuf::from("02-token-projection.md"),
+        };
+        assert_eq!(page_label(&index, &key), "Token Projection");
+        // Page.title keeps raw stem for search/index.
+        assert_eq!(index.pages[&key].title, "02-token-projection");
+    }
+
+    #[test]
+    fn readme_preferred_over_index_deterministically() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("README.md"), "# From Readme\n").unwrap();
+        std::fs::write(dir.path().join("index.md"), "# From Index\n").unwrap();
+        let a = Index::build(&FsProvider::open(dir.path()).unwrap()).unwrap();
+        let b = Index::build(&FsProvider::open(dir.path()).unwrap()).unwrap();
+        let ta = NavTree::build(&a);
+        let tb = NavTree::build(&b);
+        assert_eq!(ta, tb);
+        let NavItem::Page { key, label, .. } = &ta.items[0] else {
+            panic!("expected root page");
+        };
+        assert_eq!(key.relative_path, PathBuf::from("README.md"));
+        assert_eq!(label, "From Readme");
     }
 }

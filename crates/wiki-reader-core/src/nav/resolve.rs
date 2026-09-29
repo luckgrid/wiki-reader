@@ -77,7 +77,7 @@ fn unresolved(t: &str) -> ResolveOutcome {
 }
 
 fn same_page_anchor(from: &PageKey, anchor: &str, index: &Index) -> ResolveOutcome {
-    let slug = crate::parse::github_slug(anchor);
+    let slug = slug_fragment(anchor);
     let notice = missing_anchor_notice(from, &slug, index);
     ResolveOutcome {
         target: Target::Anchor(slug),
@@ -92,12 +92,19 @@ fn page_with_anchor(key: PageKey, anchor: Option<&str>, index: &Index) -> Resolv
             notice: None,
         };
     };
-    let slug = crate::parse::github_slug(raw);
+    let slug = slug_fragment(raw);
     let notice = missing_anchor_notice(&key, &slug, index);
     ResolveOutcome {
         target: Target::Page(key, Some(slug)),
         notice,
     }
+}
+
+fn slug_fragment(raw: &str) -> String {
+    let decoded = percent_decode_str(raw)
+        .decode_utf8()
+        .map_or_else(|_| raw.to_owned(), std::borrow::Cow::into_owned);
+    crate::parse::github_slug(&decoded)
 }
 
 fn missing_anchor_notice(page: &PageKey, slug: &str, index: &Index) -> Option<String> {
@@ -135,34 +142,20 @@ fn url_decode_once(s: &str) -> Option<String> {
     Some(decoded.into_owned())
 }
 
-/// Rules 3–4: relative (and root-relative when `t` starts with `/`), then path variants.
+/// Rules 3–4: relative to page dir, or root-relative when `t` starts with `/`; then path variants.
 fn resolve_path(path_part: &str, from: &PageKey, index: &Index) -> Option<PageKey> {
     if path_part.is_empty() {
         return Some(from.clone());
     }
 
-    let page_dir = from.relative_path.parent().unwrap_or_else(|| Path::new(""));
-
-    let mut bases = vec![page_dir.to_path_buf()];
-    if path_part.starts_with('/') {
-        bases.push(PathBuf::new()); // collection root
-    }
-
-    let trimmed = path_part.trim_start_matches('/');
-    for base in bases {
-        let joined = if path_part.starts_with('/') {
-            PathBuf::from(trimmed)
-        } else {
-            base.join(path_part)
-        };
-        let Some(norm) = normalize_dots(&joined) else {
-            continue;
-        };
-        if let Some(key) = lookup_variants(&norm, index) {
-            return Some(key);
-        }
-    }
-    None
+    let joined = if path_part.starts_with('/') {
+        PathBuf::from(path_part.trim_start_matches('/'))
+    } else {
+        let page_dir = from.relative_path.parent().unwrap_or_else(|| Path::new(""));
+        page_dir.join(path_part)
+    };
+    let norm = normalize_dots(&joined)?;
+    lookup_variants(&norm, index)
 }
 
 fn lookup_variants(path: &Path, index: &Index) -> Option<PageKey> {

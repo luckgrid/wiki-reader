@@ -20,7 +20,7 @@ mod tests {
 
     #[test]
     fn error_display_works() {
-        let err = Error::Message("smoke".into());
-        assert_eq!(err.to_string(), "smoke");
+        let err = Error::EmptyCollection;
+        assert_eq!(err.to_string(), "collection has no pages");
     }
 }
