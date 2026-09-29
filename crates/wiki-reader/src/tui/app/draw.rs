@@ -13,10 +13,8 @@ use crate::tui::viewer_doc::{FocusTarget, ViewerDoc, format_target};
 pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     app.hit_map.clear();
     let area = frame.area();
-    if app.nav_visible.is_none() {
-        app.nav_visible = Some(area.width >= 80);
-    }
-    let regions = layout::split(area, app.nav_visible.unwrap_or(false));
+    app.sync_nav_for_width(area.width);
+    let regions = layout::split(area, app.nav_visible);
     app.viewer_rows = regions.viewer.height.max(1);
     // Borders (2) + search row (1); remaining rows show the tree.
     app.nav_viewport = regions.side_nav.height.saturating_sub(3).max(1);

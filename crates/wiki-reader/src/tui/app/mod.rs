@@ -31,8 +31,14 @@ pub struct App {
     pub provider: FsProvider,
     /// Focused pane.
     pub focus: FocusPane,
-    /// Side nav visible (docked ≥80 cols, overlay &lt;80). `None` until first draw seeds from width.
-    pub nav_visible: Option<bool>,
+    /// Side nav visible (docked ≥80 cols, overlay &lt;80).
+    pub nav_visible: bool,
+    /// User toggled nav; cleared when crossing the 80-col boundary.
+    pub nav_user_override: bool,
+    /// Last known terminal width (for overlay-close-on-nav).
+    pub term_width: u16,
+    /// Previous frame wide (≥80) vs narrow; `None` until first draw.
+    nav_width_regime: Option<bool>,
     /// Side nav scroll offset (rows below the search line).
     pub nav_scroll: u16,
     /// Current viewer document.
@@ -76,8 +82,10 @@ impl App {
             navigator,
             provider,
             focus: FocusPane::Viewer,
-            // Seeded from terminal width on first draw (≥80 shown, &lt;80 hidden).
-            nav_visible: None,
+            nav_visible: false,
+            nav_user_override: false,
+            term_width: 80,
+            nav_width_regime: None,
             nav_scroll: 0,
             doc: RawDoc::from_source("", None),
             cursor_line: 0,
@@ -122,8 +130,8 @@ impl App {
         match action {
             Action::Quit => self.quit = true,
             Action::ToggleNav => {
-                let cur = self.nav_visible.unwrap_or(false);
-                self.nav_visible = Some(!cur);
+                self.nav_user_override = true;
+                self.nav_visible = !self.nav_visible;
             }
             Action::PrevPage | Action::NextPage => {
                 let effects = if matches!(action, Action::PrevPage) {
@@ -220,9 +228,13 @@ impl App {
     }
 
     pub(crate) fn apply_effects(&mut self, effects: Vec<Effect>) {
+        let mut page_changed = false;
         for effect in effects {
             match effect {
-                Effect::LoadPage(key) => self.load_page(&key),
+                Effect::LoadPage(key) => {
+                    page_changed = true;
+                    self.load_page(&key);
+                }
                 Effect::RevealInTree(page) => {
                     self.reveal_page_in_nav(&page);
                 }
@@ -253,6 +265,9 @@ impl App {
             self.navigator.set_nav_cursor(NodeId::Page(page.clone()));
             self.reveal_page_in_nav(&page);
         }
+        if page_changed && self.term_width < 80 {
+            self.nav_visible = false;
+        }
     }
 
     pub(crate) fn load_page(&mut self, key: &PageKey) {
@@ -274,9 +289,22 @@ impl App {
         self.doc.anchor_line(slug)
     }
 
-    pub(crate) fn close_overlay_after_nav(&mut self, term_width: u16) {
-        if term_width < 80 {
-            self.nav_visible = Some(false);
+    /// Sync side-nav visibility with terminal width (called each frame from draw).
+    pub(crate) fn sync_nav_for_width(&mut self, width: u16) {
+        self.term_width = width;
+        let wide = width >= 80;
+        match self.nav_width_regime {
+            None => {
+                self.nav_visible = wide;
+                self.nav_width_regime = Some(wide);
+            }
+            Some(prev) if prev != wide => {
+                self.nav_user_override = false;
+                self.nav_visible = wide;
+                self.nav_width_regime = Some(wide);
+            }
+            Some(_) if !self.nav_user_override => self.nav_visible = wide,
+            Some(_) => {}
         }
     }
 }

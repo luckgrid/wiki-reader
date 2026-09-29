@@ -346,6 +346,7 @@ impl Navigator {
             return Vec::new();
         }
         tab.cursor -= 1;
+        self.notice = None;
         self.effects_for_current()
     }
 
@@ -357,6 +358,7 @@ impl Navigator {
             return Vec::new();
         }
         tab.cursor += 1;
+        self.notice = None;
         self.effects_for_current()
     }
 
@@ -711,6 +713,19 @@ mod tests {
             .filter(|e| matches!(e, Effect::Notice(_)))
             .collect();
         assert_eq!(notices.len(), 1, "effects={effects:?}");
+    }
+
+    #[test]
+    fn back_clears_stale_notice() {
+        let mut nav = worked();
+        nav.go_to_page(key("architecture/README.md"), ViewState::default());
+        nav.follow_link(
+            "design-system/tokens.md#missing-anchor",
+            ViewState::default(),
+        );
+        assert!(nav.notice().is_some());
+        nav.back(ViewState::default());
+        assert!(nav.notice().is_none());
     }
 
     #[test]

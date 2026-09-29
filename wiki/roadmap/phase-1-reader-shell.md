@@ -38,25 +38,26 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 | P1-R3 | NavTree correctness | F1,F5,F6,T1 | done | e85c57b |
 | P1-R4 | Navigator hardening | F4,F10,N1–N4 | done | 66866be |
 | P1-R5 | Docs, spikes, housekeeping | | done | 20bdf18 |
-| P1-R6 | Geometry: header hits + nav visibility | T1,T2 | done | tip remediation |
-| P1-R7 | Viewport + scroll follow | T3,T4 | done | tip remediation |
-| P1-R8 | Focus + nav state model | T6–T9 | done | tip remediation |
-| P1-R9 | K3 visuals, keymap, terminal safety | T5,T12,T13 | done | tip remediation |
-| P1-R10 | Docs, process, test hygiene | T10–T11,T14,T16–T18 | done | tip remediation |
-| P1-07 | Layout regions + hit map | | todo | parent of 07a–07c |
-| P1-07a | Core support APIs (breadcrumb, blocks, nav focus) | | done | (pending merge) |
-| P1-07b | TUI skeleton: regions, hit map, static content | | done | (pending merge) |
-| P1-07c | Side nav (`HitMap` flat rows; ADR-0010) | T1,N4 | done | (pending merge); supersedes ADR-0009 A |
+| P1-R6 | Geometry: header hits + nav visibility | T1,T2 | done | c97963e |
+| P1-R7 | Viewport + scroll follow | T3,T4 | done | c97963e |
+| P1-R8 | Focus + nav state model | T6–T9 | done | c97963e |
+| P1-R9 | K3 visuals, keymap, terminal safety | T5,T12,T13 | done | c97963e |
+| P1-R10 | Docs, process, test hygiene | T10–T11,T14,T16–T18 | done | 5911ea5 |
+| P1-R11 | Post-merge residuals + check.sh | N1–N6 | doing | nav reseed, notice clear, clamp, check.sh |
+| P1-07 | Layout regions + hit map | | done | 5911ea5 |
+| P1-07a | Core support APIs (breadcrumb, blocks, nav focus) | | done | 5911ea5 |
+| P1-07b | TUI skeleton: regions, hit map, static content | | done | 5911ea5 |
+| P1-07c | Side nav (`HitMap` flat rows; ADR-0010) | T1,N4 | done | 5911ea5 |
 | P1-G | Live herdr key-log gate | | done | example done; live herdr check pending (gate still open) | [P1-S1](spikes/p1-s1-herdr-input.md) |
-| P1-08 | Focus/cursor | K1–K4 | todo | parent of 08a–08c; entry: P1-G (08a shipped ahead of gate with keymap fallbacks) |
-| P1-08a | Pane focus (K1) + side-nav keys (K4) | K1,K4 | done | (pending merge); ahead of live P1-G |
-| P1-08b | Viewer cursor (K2) + interim ViewerDoc | K2 | done | (pending merge) |
-| P1-08c | Viewer Tab cycle (K3) | K3 | done | (pending merge); Enter activation → P1-09 |
-| P1-09 | Links, Tab/Enter/click | L1–L3 | todo | blocked on R6–R9; non-md / `?query` in content-model |
-| P1-10 | Search overlay | S1 | todo | |
-| P1-11 | Raw toggle | V2 | todo | |
-| P1-12 | Live reload | V3 | todo | |
-| P1-13 | Renderer port | V1 | todo | needs P1-R1 `github_slug`; parallel OK |
+| P1-08 | Focus/cursor | K1–K4 | done | 5911ea5 |
+| P1-08a | Pane focus (K1) + side-nav keys (K4) | K1,K4 | done | 5911ea5 |
+| P1-08b | Viewer cursor (K2) + interim ViewerDoc | K2 | done | 5911ea5 |
+| P1-08c | Viewer Tab cycle (K3) | K3 | done | 5911ea5 |
+| P1-09 | Links, Tab/Enter/click | L1–L3 | todo | |
+| P1-10 | Search overlay | S1 | doing | remaining: fuzzy nucleo, overlay UI, safe snippets |
+| P1-11 | Raw toggle | V2 | doing | remaining: syntect + gutter; cursor via source_map |
+| P1-12 | Live reload | V3 | doing | remaining: debouncer+re-list, reindex(ViewState), TUI poll |
+| P1-13 | Renderer port | V1 | doing | remaining: V1 elements, source_map, width-aware layout |
 | P1-S1 | Spike, herdr input | | done | [spike note](spikes/p1-s1-herdr-input.md); doc-only; live herdr key log pending |
 | P1-S2 | Spike, tree widget decision | | done | ADR-0009 → superseded by ADR-0010 |
 
