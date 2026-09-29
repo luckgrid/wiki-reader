@@ -110,6 +110,90 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         },
         &theme,
     );
+
+    if let Some(overlay) = &app.search {
+        draw_search_overlay(frame, area, overlay, &theme);
+    }
+}
+
+fn draw_search_overlay(
+    frame: &mut Frame<'_>,
+    area: ratatui::layout::Rect,
+    overlay: &crate::tui::search_ui::SearchOverlay,
+    theme: &crate::tui::theme::Theme,
+) {
+    use crate::tui::search_ui::SearchMode;
+    use ratatui::text::{Line, Span};
+    use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph};
+
+    let width = area.width.clamp(20, 60);
+    let height = area.height.clamp(8, 16);
+    let x = area.x.saturating_add(area.width.saturating_sub(width) / 2);
+    let y = area
+        .y
+        .saturating_add(area.height.saturating_sub(height) / 2);
+    let rect = ratatui::layout::Rect {
+        x,
+        y,
+        width,
+        height,
+    };
+    frame.render_widget(Clear, rect);
+    let mode = match overlay.mode {
+        SearchMode::Pages => "Pages",
+        SearchMode::Text => "Text",
+    };
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(theme.border(true))
+        .title(format!(" Search [{mode}] (Tab) "));
+    let inner = block.inner(rect);
+    frame.render_widget(block, rect);
+    let query_line = Paragraph::new(Line::from(vec![
+        Span::raw("> "),
+        Span::styled(overlay.query.clone(), theme.text()),
+        Span::raw("█"),
+    ]));
+    let q_rect = ratatui::layout::Rect {
+        x: inner.x,
+        y: inner.y,
+        width: inner.width,
+        height: 1,
+    };
+    frame.render_widget(query_line, q_rect);
+
+    let list_rect = ratatui::layout::Rect {
+        x: inner.x,
+        y: inner.y.saturating_add(1),
+        width: inner.width,
+        height: inner.height.saturating_sub(1),
+    };
+    let items: Vec<ListItem> = match overlay.mode {
+        SearchMode::Pages => overlay
+            .page_hits
+            .iter()
+            .enumerate()
+            .map(|(i, h)| {
+                let mark = if i == overlay.selected { "› " } else { "  " };
+                ListItem::new(format!("{mark}{}", h.page.relative_path.display()))
+            })
+            .collect(),
+        SearchMode::Text => overlay
+            .text_hits
+            .iter()
+            .enumerate()
+            .map(|(i, h)| {
+                let mark = if i == overlay.selected { "› " } else { "  " };
+                ListItem::new(format!(
+                    "{mark}{}:{} {}",
+                    h.page.relative_path.display(),
+                    h.line,
+                    h.snippet
+                ))
+            })
+            .collect(),
+    };
+    frame.render_widget(List::new(items), list_rect);
 }
 
 fn focused_status_message(app: &App) -> String {

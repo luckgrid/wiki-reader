@@ -437,7 +437,8 @@ fn search_row_is_nav_stop_with_cursor() {
     assert!(matches!(app.navigator.nav().cursor, NavStop::Search));
     // Status/search activate.
     app.update(Action::NavActivate);
-    assert!(app.message.contains("search"));
+    assert!(app.search.is_some());
+    assert_eq!(app.input_mode, crate::tui::keymap::InputMode::Overlay);
 }
 
 #[test]

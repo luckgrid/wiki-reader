@@ -4,6 +4,7 @@ use wiki_reader_core::nav::{NavStop, NodeId};
 use wiki_reader_core::provider::PageKey;
 
 use super::App;
+use crate::tui::action::Action;
 use crate::tui::regions::side_nav;
 
 impl App {
@@ -117,7 +118,7 @@ impl App {
     pub(crate) fn nav_activate(&mut self) {
         match self.navigator.nav().cursor.clone() {
             NavStop::Search => {
-                self.message = "search: coming in P1-10".into();
+                self.update(Action::OpenSearch);
             }
             NavStop::Node(NodeId::Page(key)) => {
                 self.navigator.set_nav_cursor(NodeId::Page(key.clone()));

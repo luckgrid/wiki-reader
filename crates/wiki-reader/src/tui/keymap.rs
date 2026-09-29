@@ -41,8 +41,18 @@ pub fn map(
     }
 
     if mode == InputMode::Overlay {
-        // Esc reserved for closing overlays (P1-10); no global plain-letter binds.
-        return (None, Chord::None);
+        return match key.code {
+            KeyCode::Esc => (Some(Action::CloseSearch), Chord::None),
+            KeyCode::Enter => (Some(Action::SearchActivate), Chord::None),
+            KeyCode::Tab => (Some(Action::SearchToggleMode), Chord::None),
+            KeyCode::Up => (Some(Action::SearchSelectDelta(-1)), Chord::None),
+            KeyCode::Down => (Some(Action::SearchSelectDelta(1)), Chord::None),
+            KeyCode::Backspace => (Some(Action::SearchBackspace), Chord::None),
+            KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                (Some(Action::SearchChar(c)), Chord::None)
+            }
+            _ => (None, Chord::None),
+        };
     }
 
     if mode == InputMode::Confirm {
@@ -78,6 +88,10 @@ pub fn map_global(key: KeyEvent) -> Option<Action> {
         KeyCode::Char('q') => Some(Action::Quit),
         KeyCode::Char('b') => Some(Action::ToggleNav),
         KeyCode::Char('r') => Some(Action::ToggleViewMode),
+        KeyCode::Char('/') => Some(Action::OpenSearch),
+        KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            Some(Action::OpenSearch)
+        }
         KeyCode::Char('[') => Some(Action::PrevPage),
         KeyCode::Char(']') => Some(Action::NextPage),
         KeyCode::Backspace => Some(Action::Back),
@@ -223,14 +237,22 @@ mod tests {
         assert_eq!(a2, Some(Action::ViewerHome));
         assert_eq!(c2, Chord::None);
 
-        // Overlay swallows plain letters
+        // Overlay types plain letters into the search field
         let (a, _) = map(
             key(KeyCode::Char('q')),
             FocusPane::Viewer,
             InputMode::Overlay,
             Chord::None,
         );
-        assert_eq!(a, None);
+        assert_eq!(a, Some(Action::SearchChar('q')));
+        // Esc closes search
+        let (a, _) = map(
+            key(KeyCode::Esc),
+            FocusPane::Viewer,
+            InputMode::Overlay,
+            Chord::None,
+        );
+        assert_eq!(a, Some(Action::CloseSearch));
         // Ctrl+C still quits in overlay
         let (a, _) = map(
             key_mod(KeyCode::Char('c'), KeyModifiers::CONTROL),

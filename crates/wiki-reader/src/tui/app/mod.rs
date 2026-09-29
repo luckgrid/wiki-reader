@@ -13,9 +13,11 @@ use super::keymap::{Chord, InputMode};
 use super::opener::{Opener, SystemOpener};
 use super::page_doc::PageDoc;
 use super::rendered_doc::RenderedViewerDoc;
+use super::search_ui::{SearchMode, SearchOverlay};
 use super::theme::Theme;
 use super::viewer_doc::{RawDoc, ViewerDoc};
 use wiki_reader_core::nav::ViewMode;
+use wiki_reader_core::search;
 
 mod draw;
 mod events;
@@ -75,6 +77,8 @@ pub struct App {
     pub pending_external: Option<String>,
     /// External link opener (swappable in tests).
     pub(crate) opener: Box<dyn Opener>,
+    /// Search overlay (None when closed).
+    pub search: Option<SearchOverlay>,
 }
 
 impl App {
@@ -113,6 +117,7 @@ impl App {
             input_mode: InputMode::Normal,
             pending_external: None,
             opener: Box::new(SystemOpener),
+            search: None,
         };
         let page = app.navigator.tab().current().page.clone();
         app.apply_effects(vec![
@@ -172,10 +177,13 @@ impl App {
                 self.navigator.set_group_expanded(id, open);
                 self.clamp_nav_scroll();
             }
-            Action::OpenSearch => {
-                self.navigator.set_nav_stop(NavStop::Search);
-                self.message = "search: coming in P1-10".into();
-            }
+            Action::OpenSearch => self.open_search(),
+            Action::CloseSearch => self.close_search(false),
+            Action::SearchChar(c) => self.search_type(c),
+            Action::SearchBackspace => self.search_backspace(),
+            Action::SearchSelectDelta(d) => self.search_select(d),
+            Action::SearchToggleMode => self.search_toggle_mode(),
+            Action::SearchActivate => self.search_activate(),
             Action::FocusNav => {
                 if self.focus != FocusPane::Nav {
                     self.navigator.nav_focus_gained();
@@ -253,6 +261,130 @@ impl App {
             }
             Action::ToggleViewMode => self.toggle_view_mode(),
             Action::None => {}
+        }
+    }
+
+    fn open_search(&mut self) {
+        self.navigator.set_nav_stop(NavStop::Search);
+        self.search = Some(SearchOverlay {
+            query: String::new(),
+            mode: SearchMode::Pages,
+            selected: 0,
+            page_hits: Vec::new(),
+            text_hits: Vec::new(),
+            prev_focus: self.focus,
+            prev_cursor: self.cursor_line,
+            prev_scroll: self.scroll,
+            prev_nav_stop: self.navigator.nav().cursor.clone(),
+        });
+        self.input_mode = InputMode::Overlay;
+        self.message.clear();
+    }
+
+    fn close_search(&mut self, keep_navigation: bool) {
+        let Some(overlay) = self.search.take() else {
+            return;
+        };
+        self.input_mode = InputMode::Normal;
+        if !keep_navigation {
+            self.focus = overlay.prev_focus;
+            self.cursor_line = overlay.prev_cursor;
+            self.scroll = overlay.prev_scroll;
+            match overlay.prev_nav_stop {
+                NavStop::Search => self.navigator.set_nav_stop(NavStop::Search),
+                NavStop::Node(id) => self.navigator.set_nav_cursor(id),
+            }
+            self.ensure_cursor_visible();
+        }
+        self.message.clear();
+    }
+
+    fn search_refresh(&mut self) {
+        let Some(overlay) = self.search.as_mut() else {
+            return;
+        };
+        let index = self.navigator.index();
+        match overlay.mode {
+            SearchMode::Pages => {
+                overlay.page_hits = search::search_pages(&overlay.query, index);
+                overlay.text_hits.clear();
+            }
+            SearchMode::Text => {
+                overlay.text_hits = search::search_text(&overlay.query, index);
+                overlay.page_hits.clear();
+            }
+        }
+        overlay.clamp_selected();
+    }
+
+    fn search_type(&mut self, c: char) {
+        if let Some(overlay) = self.search.as_mut() {
+            overlay.query.push(c);
+        }
+        self.search_refresh();
+    }
+
+    fn search_backspace(&mut self) {
+        if let Some(overlay) = self.search.as_mut() {
+            overlay.query.pop();
+        }
+        self.search_refresh();
+    }
+
+    fn search_select(&mut self, delta: i32) {
+        let Some(overlay) = self.search.as_mut() else {
+            return;
+        };
+        let n = i32::try_from(overlay.result_len()).unwrap_or(0);
+        if n == 0 {
+            return;
+        }
+        let cur = i32::try_from(overlay.selected).unwrap_or(0);
+        let next = (cur + delta).rem_euclid(n);
+        overlay.selected = u32::try_from(next).unwrap_or(0) as usize;
+    }
+
+    fn search_toggle_mode(&mut self) {
+        if let Some(overlay) = self.search.as_mut() {
+            overlay.mode = match overlay.mode {
+                SearchMode::Pages => SearchMode::Text,
+                SearchMode::Text => SearchMode::Pages,
+            };
+            overlay.selected = 0;
+        }
+        self.search_refresh();
+    }
+
+    fn search_activate(&mut self) {
+        let Some(overlay) = self.search.as_ref() else {
+            return;
+        };
+        match overlay.mode {
+            SearchMode::Pages => {
+                let Some(hit) = overlay.page_hits.get(overlay.selected) else {
+                    return;
+                };
+                let key = hit.page.clone();
+                self.close_search(true);
+                self.focus = FocusPane::Viewer;
+                let effects = self.navigator.go_to_page(key, self.view_state());
+                self.apply_effects(effects);
+            }
+            SearchMode::Text => {
+                let Some(hit) = overlay.text_hits.get(overlay.selected) else {
+                    return;
+                };
+                let key = hit.page.clone();
+                let line = hit.line.saturating_sub(1);
+                self.close_search(true);
+                self.focus = FocusPane::Viewer;
+                let effects = self.navigator.go_to_page(key, self.view_state());
+                self.apply_effects(effects);
+                self.cursor_line = self.doc.display_cursor(line);
+                self.scroll = self.cursor_line;
+                self.ensure_cursor_visible();
+                self.message = format!("match line {}", line.saturating_add(1));
+            }
         }
     }
 

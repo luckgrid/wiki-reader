@@ -22,8 +22,20 @@ pub enum Action {
     GoToPage(PageKey),
     /// Toggle a nav group.
     ToggleGroup(NodeId),
-    /// Activate the search row (stub until P1-10).
+    /// Activate the search overlay.
     OpenSearch,
+    /// Close search overlay without navigating.
+    CloseSearch,
+    /// Type a character into the search field.
+    SearchChar(char),
+    /// Backspace in search field.
+    SearchBackspace,
+    /// Move selection in search results.
+    SearchSelectDelta(i32),
+    /// Toggle Pages / Text mode.
+    SearchToggleMode,
+    /// Activate the selected search result.
+    SearchActivate,
     /// Focus the side nav pane.
     FocusNav,
     /// Focus the viewer pane.

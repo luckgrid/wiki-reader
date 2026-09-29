@@ -13,5 +13,6 @@ pub mod opener;
 pub mod page_doc;
 pub mod regions;
 pub mod rendered_doc;
+pub mod search_ui;
 pub mod theme;
 pub mod viewer_doc;
