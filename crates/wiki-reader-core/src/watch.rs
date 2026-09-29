@@ -90,13 +90,19 @@ pub fn is_vcs_dir_name(name: &str) -> bool {
 /// True when `path` should trigger a reindex (aligned with discovery, not cargo `target`).
 ///
 /// Markdown pages under the root count, including dot-dirs like `.planning/`.
-/// Directory paths (rename/delete) also count. Non-markdown files do not.
+/// Directories (rename/delete) also count — including dotted names like `v1.2`.
+/// Non-markdown files do not.
 ///
 /// ponytail: gitignore is not consulted on watch events (ceiling: may dirty
 /// ignored paths); upgrade with `ignore::gitignore` matching if noise bites.
 #[must_use]
 pub fn path_is_relevant(root: &Path, path: &Path) -> bool {
-    let rel = path.strip_prefix(root).unwrap_or(path);
+    let Ok(rel) = path.strip_prefix(root) else {
+        return false;
+    };
+    if rel.as_os_str().is_empty() {
+        return false;
+    }
     for c in rel.components() {
         let std::path::Component::Normal(name) = c else {
             continue;
@@ -111,16 +117,27 @@ pub fn path_is_relevant(root: &Path, path: &Path) -> bool {
     if is_markdown(path) {
         return true;
     }
-    // Non-markdown files (.txt, etc.) never dirty — including when FSEvents also
-    // reports a parent directory for the write.
-    if path.extension().is_some() {
+    // Prefer filesystem truth over Path::extension heuristics (dotted dirs).
+    if path.is_dir() {
+        return true;
+    }
+    if path.is_file() {
         return false;
     }
-    // Extension-less path: directory rename/delete under the collection (not root).
-    let Ok(rel) = path.strip_prefix(root) else {
+    // Missing: dirty unless it looks like a deleted non-markdown file.
+    // Numeric "extensions" (v1.2) still count so deleted version dirs dirty.
+    !suppress_missing_non_markdown(path)
+}
+
+/// True when a missing path should stay quiet (deleted `.txt` etc., not `v1.2`).
+fn suppress_missing_non_markdown(path: &Path) -> bool {
+    let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
         return false;
     };
-    !rel.as_os_str().is_empty()
+    if matches!(ext, "md" | "markdown") {
+        return false;
+    }
+    !ext.chars().all(|c| c.is_ascii_digit())
 }
 
 #[cfg(test)]
@@ -273,10 +290,42 @@ mod tests {
         assert!(!path_is_relevant(root, Path::new("/wiki/foo.txt")));
         assert!(!path_is_relevant(root, Path::new("/wiki/.git/HEAD")));
         assert!(!path_is_relevant(root, Path::new("/wiki/.jj/x.md")));
-        // Directory path (no extension): relevant for rename/delete.
+        // Missing extension-less path: treat as dir rename/delete.
         assert!(path_is_relevant(root, Path::new("/wiki/docs")));
         // Collection root itself must not count (parent-dir noise on file writes).
         assert!(!path_is_relevant(root, Path::new("/wiki")));
+        // Missing dotted dir (numeric "ext") still relevant.
+        assert!(path_is_relevant(root, Path::new("/wiki/v1.2")));
+    }
+
+    #[test]
+    fn path_is_relevant_fs_dir_vs_file() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        let dotted = root.join("v1.2");
+        fs::create_dir(&dotted).unwrap();
+        assert!(
+            path_is_relevant(root, &dotted),
+            "existing dotted directory must dirty"
+        );
+        fs::remove_dir(&dotted).unwrap();
+        assert!(
+            path_is_relevant(root, &dotted),
+            "deleted dotted directory must dirty"
+        );
+
+        let makefile = root.join("Makefile");
+        fs::write(&makefile, "all:\n").unwrap();
+        assert!(
+            !path_is_relevant(root, &makefile),
+            "Makefile write must not dirty"
+        );
+        let vim_temp = root.join("4913");
+        fs::write(&vim_temp, "x").unwrap();
+        assert!(
+            !path_is_relevant(root, &vim_temp),
+            "extension-less tempfile must not dirty"
+        );
     }
 
     #[test]
