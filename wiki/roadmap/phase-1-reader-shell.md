@@ -39,6 +39,7 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 | P1-R6 | Geometry: header hits + nav visibility | T1,T2 | doing | tip remediation |
 | P1-R7 | Viewport + scroll follow | T3,T4 | doing | tip remediation |
 | P1-R8 | Focus + nav state model | T6–T9 | doing | tip remediation |
+| P1-R9 | K3 visuals, keymap, terminal safety | T5,T12,T13 | doing | tip remediation |
 | P1-07 | Layout regions + hit map | | todo | parent of 07a–07c |
 | P1-07a | Core support APIs (breadcrumb, blocks, nav focus) | | done | (pending merge) |
 | P1-07b | TUI skeleton: regions, hit map, static content | | done | (pending merge) |

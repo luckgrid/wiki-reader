@@ -17,11 +17,12 @@ use wiki_reader_core::provider::{CollectionProvider, FsProvider, PageKey};
 use super::action::Action;
 use super::hit::{Hit, HitMap};
 use super::keymap;
+use super::keymap::{Chord, InputMode};
 use super::layout;
 use super::regions::status::{FocusPane, StatusModel};
 use super::regions::{footer, header, side_nav, status, viewer};
 use super::theme::Theme;
-use super::viewer_doc::{FocusItem, RawDoc, ViewerDoc, cycle, format_target};
+use super::viewer_doc::{FocusItem, FocusTarget, RawDoc, ViewerDoc, cycle, format_target};
 
 /// Owned application state.
 pub struct App {
@@ -55,6 +56,10 @@ pub struct App {
     pub theme: Theme,
     /// Quit requested.
     pub quit: bool,
+    /// Pending multi-key chord (`gg`).
+    pub chord: Chord,
+    /// Input mode (Normal vs Overlay).
+    pub input_mode: InputMode,
 }
 
 impl App {
@@ -86,6 +91,8 @@ impl App {
             hit_map: HitMap::default(),
             theme: Theme::default(),
             quit: false,
+            chord: Chord::None,
+            input_mode: InputMode::Normal,
         };
         let page = app.navigator.tab().current().page.clone();
         app.apply_effects(vec![
@@ -477,17 +484,17 @@ impl App {
         let tree = &self.navigator.nav().tree;
         if tree.prev(current).is_some() {
             items.push(FocusItem {
-                line: u32::MAX - 1,
+                line: None,
                 cols: (0, 1),
-                kind: super::viewer_doc::FocusKind::FooterPrev,
+                kind: FocusTarget::FooterPrev,
                 target: String::new(),
             });
         }
         if tree.next(current).is_some() {
             items.push(FocusItem {
-                line: u32::MAX,
+                line: None,
                 cols: (0, 1),
-                kind: super::viewer_doc::FocusKind::FooterNext,
+                kind: FocusTarget::FooterNext,
                 target: String::new(),
             });
         }
@@ -507,8 +514,8 @@ impl App {
         let Some(it) = items.get(i) else {
             return;
         };
-        if it.line < u32::MAX - 1 {
-            self.cursor_line = it.line;
+        if let Some(line) = it.doc_line() {
+            self.cursor_line = line;
             self.ensure_cursor_visible();
         }
         // Focused-item target is derived at draw time (not stored in `message`).
@@ -527,44 +534,51 @@ impl App {
 ///
 /// Returns when terminal init/draw fails or the collection cannot be indexed.
 pub fn run(root: &Path) -> io::Result<()> {
-    let mut app = match App::new(root) {
-        Ok(app) => app,
-        Err(wiki_reader_core::Error::EmptyCollection) => {
-            eprintln!(
-                "error: collection has no markdown pages: {}",
-                root.display()
-            );
-            std::process::exit(1);
-        }
-        Err(wiki_reader_core::Error::PageNotFound(key)) => {
-            eprintln!(
-                "error: start page not found: {}",
-                key.relative_path.display()
-            );
-            std::process::exit(1);
-        }
-        Err(err) => return Err(io::Error::other(err)),
-    };
+    // Validate before entering the terminal so empty collections don't leak raw mode.
+    let mut app = App::new(root).map_err(|err| match err {
+        wiki_reader_core::Error::EmptyCollection => io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("collection has no markdown pages: {}", root.display()),
+        ),
+        wiki_reader_core::Error::PageNotFound(key) => io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("start page not found: {}", key.relative_path.display()),
+        ),
+        other => io::Error::other(other),
+    })?;
 
     install_panic_hook();
     let mut terminal = ratatui::try_init()?;
+    // Armed after try_init: Drop always restores alt-screen/raw; mouse if enabled.
+    let mut guard = TerminalGuard { mouse: false };
     execute!(stdout(), EnableMouseCapture)?;
+    guard.mouse = true;
     let result = run_loop(&mut terminal, &mut app);
-    restore_terminal();
+    drop(guard);
     result
+}
+
+/// RAII restore for raw mode / alt screen / mouse capture.
+struct TerminalGuard {
+    mouse: bool,
+}
+
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        if self.mouse {
+            let _ = execute!(stdout(), DisableMouseCapture);
+        }
+        ratatui::restore();
+    }
 }
 
 fn install_panic_hook() {
     let prev = panic::take_hook();
     panic::set_hook(Box::new(move |info| {
-        restore_terminal();
+        let _ = execute!(stdout(), DisableMouseCapture);
+        ratatui::restore();
         prev(info);
     }));
-}
-
-fn restore_terminal() {
-    let _ = execute!(stdout(), DisableMouseCapture);
-    ratatui::restore();
 }
 
 fn run_loop(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
@@ -580,8 +594,9 @@ fn run_loop(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
         if event::poll(std::time::Duration::from_millis(250))? {
             match event::read()? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => {
-                    let action =
-                        keymap::map_global(key).or_else(|| keymap::map_pane(key, app.focus));
+                    let (action, next_chord) =
+                        keymap::map(key, app.focus, app.input_mode, app.chord);
+                    app.chord = next_chord;
                     if let Some(action) = action {
                         let nav_action = matches!(
                             action,
@@ -689,6 +704,9 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
 
     header::draw(frame, regions.header, &crumbs, &theme, &mut app.hit_map);
 
+    let focus_item = app
+        .focused_item
+        .and_then(|i| app.focus_list().get(i).cloned());
     viewer::draw(
         frame,
         regions.viewer,
@@ -696,6 +714,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         app.scroll,
         app.cursor_line,
         app.focus == FocusPane::Viewer,
+        focus_item.as_ref(),
         &theme,
         &mut app.hit_map,
     );
@@ -708,11 +727,16 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     let next_label = next
         .as_ref()
         .map(|k| wiki_reader_core::nav::page_label(app.navigator.index(), k));
+    let footer_focus = focus_item.as_ref().and_then(|it| match it.kind {
+        FocusTarget::FooterPrev | FocusTarget::FooterNext => Some(it.kind),
+        FocusTarget::Link => None,
+    });
     footer::draw(
         frame,
         regions.footer,
         prev_label.as_deref(),
         next_label.as_deref(),
+        footer_focus,
         &theme,
         &mut app.hit_map,
     );
@@ -768,11 +792,9 @@ fn focused_status_message(app: &App) -> String {
     };
     let page = &app.navigator.tab().current().page;
     match it.kind {
-        super::viewer_doc::FocusKind::Link => {
-            format_target(&it.target, page, app.navigator.index())
-        }
-        super::viewer_doc::FocusKind::FooterPrev => "‹ prev".into(),
-        super::viewer_doc::FocusKind::FooterNext => "next ›".into(),
+        FocusTarget::Link => format_target(&it.target, page, app.navigator.index()),
+        FocusTarget::FooterPrev => "‹ prev".into(),
+        FocusTarget::FooterNext => "next ›".into(),
     }
 }
 
@@ -1352,5 +1374,28 @@ mod tests {
                 scroll + vh
             );
         }
+    }
+
+    #[test]
+    fn tab_cycle_through_app_includes_footer() {
+        let root = fixture();
+        let mut app = App::new(&root).unwrap();
+        app.update(Action::FocusViewer);
+        let n = app.focus_list().len();
+        assert!(n >= 2, "expected links+footer, got {n}");
+        let mut saw_footer = false;
+        for _ in 0..n {
+            app.update(Action::ViewerTab);
+            let items = app.focus_list();
+            let i = app.focused_item.expect("focused");
+            if matches!(
+                items[i].kind,
+                FocusTarget::FooterPrev | FocusTarget::FooterNext
+            ) {
+                saw_footer = true;
+            }
+        }
+        assert!(saw_footer, "Tab cycle should reach footer buttons");
+        let _ = draw_app(&mut app, 100, 24);
     }
 }

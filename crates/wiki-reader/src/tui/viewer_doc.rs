@@ -8,7 +8,7 @@ use wiki_reader_core::provider::PageKey;
 
 /// Kind of a Tab-cycle focus item.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FocusKind {
+pub enum FocusTarget {
     /// Inline markdown link.
     Link,
     /// Viewer footer prev.
@@ -20,14 +20,25 @@ pub enum FocusKind {
 /// One Tab-cycle target in the viewer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FocusItem {
-    /// 0-based source line.
-    pub line: u32,
-    /// Column range on that line (byte/char index; best-effort).
+    /// 0-based source line; `None` for footer buttons.
+    pub line: Option<u32>,
+    /// Display-column range on that line `[start, end)`.
     pub cols: (u16, u16),
     /// Item kind.
-    pub kind: FocusKind,
+    pub kind: FocusTarget,
     /// Raw target string (path, url, or empty for footer).
     pub target: String,
+}
+
+impl FocusItem {
+    /// Document line for links; `None` for footer buttons.
+    #[must_use]
+    pub fn doc_line(&self) -> Option<u32> {
+        match self.kind {
+            FocusTarget::Link => self.line,
+            FocusTarget::FooterPrev | FocusTarget::FooterNext => None,
+        }
+    }
 }
 
 /// Document view used by the viewer pane.
@@ -142,6 +153,20 @@ impl ViewerDoc for RawDoc {
     }
 }
 
+fn display_col_at(line: &str, byte_offset: usize) -> u16 {
+    let mut col = 0u16;
+    let mut i = 0usize;
+    for ch in line.chars() {
+        if i >= byte_offset {
+            break;
+        }
+        let w = u16::try_from(ratatui::text::Span::raw(ch.to_string()).width()).unwrap_or(1);
+        col = col.saturating_add(w.max(1));
+        i += ch.len_utf8();
+    }
+    col
+}
+
 fn link_items(lines: &[String], md_links: &[MdLink]) -> Vec<FocusItem> {
     md_links
         .iter()
@@ -152,20 +177,21 @@ fn link_items(lines: &[String], md_links: &[MdLink]) -> Vec<FocusItem> {
                     let needle = format!("[{}]({})", md.text, md.target);
                     if let Some(start) = line.find(&needle) {
                         let end = start + needle.len();
-                        (
-                            u16::try_from(start).unwrap_or(0),
-                            u16::try_from(end).unwrap_or(u16::MAX),
-                        )
+                        (display_col_at(line, start), display_col_at(line, end))
                     } else {
-                        (0, u16::try_from(line.chars().count()).unwrap_or(u16::MAX))
+                        (
+                            0,
+                            u16::try_from(ratatui::text::Span::raw(line.as_str()).width())
+                                .unwrap_or(u16::MAX),
+                        )
                     }
                 }
                 None => (0, 0),
             };
             FocusItem {
-                line: md.source_line.saturating_sub(1),
+                line: Some(md.source_line.saturating_sub(1)),
                 cols,
-                kind: FocusKind::Link,
+                kind: FocusTarget::Link,
                 target: md.target.clone(),
             }
         })
@@ -196,24 +222,27 @@ pub mod cycle {
 
     /// Next item after `cursor_line` (wrap; footer items last in `items`).
     #[must_use]
+    fn sort_key(it: &FocusItem) -> u32 {
+        it.line.unwrap_or(u32::MAX)
+    }
+
     pub fn next_after(items: &[FocusItem], cursor_line: u32, backward: bool) -> Option<usize> {
         if items.is_empty() {
             return None;
         }
         if backward {
-            // Previous: last item with line < cursor, else wrap to last.
             items
                 .iter()
                 .enumerate()
                 .rev()
-                .find(|(_, it)| it.line < cursor_line)
+                .find(|(_, it)| sort_key(it) < cursor_line)
                 .map(|(i, _)| i)
                 .or(Some(items.len() - 1))
         } else {
             items
                 .iter()
                 .enumerate()
-                .find(|(_, it)| it.line > cursor_line)
+                .find(|(_, it)| sort_key(it) > cursor_line)
                 .map(|(i, _)| i)
                 .or(Some(0))
         }
@@ -274,27 +303,27 @@ more words here
     fn tab_cycle_rules() {
         let items = vec![
             FocusItem {
-                line: 2,
+                line: Some(2),
                 cols: (0, 1),
-                kind: FocusKind::Link,
+                kind: FocusTarget::Link,
                 target: "a".into(),
             },
             FocusItem {
-                line: 5,
+                line: Some(5),
                 cols: (0, 1),
-                kind: FocusKind::Link,
+                kind: FocusTarget::Link,
                 target: "b".into(),
             },
             FocusItem {
-                line: 99,
+                line: None,
                 cols: (0, 1),
-                kind: FocusKind::FooterPrev,
+                kind: FocusTarget::FooterPrev,
                 target: String::new(),
             },
             FocusItem {
-                line: 99,
+                line: None,
                 cols: (0, 1),
-                kind: FocusKind::FooterNext,
+                kind: FocusTarget::FooterNext,
                 target: String::new(),
             },
         ];
