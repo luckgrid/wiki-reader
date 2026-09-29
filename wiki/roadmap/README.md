@@ -18,4 +18,4 @@ Used markdown-reader inside herdr. Keeper for quick reading; IDE-style model doe
 
 ## How to use the task files
 
-See [guides/development.md](../guides/development.md). Mark checklist items as you complete them; keep exit criteria visible at the top of each phase file.
+See [guides/development.md](../guides/development.md). Set Status to `doing`/`done`; reference the ID in commit messages. Keep exit criteria visible at the top of each phase file.

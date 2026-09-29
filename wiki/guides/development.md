@@ -66,9 +66,9 @@ See [architecture overview](../architecture/overview.md) and [ADR-0006](../decis
 ## Task workflow
 
 1. Open the current phase file under [roadmap](../roadmap/README.md) (Phase 1: [phase-1-reader-shell.md](../roadmap/phase-1-reader-shell.md)).
-2. Pick an unchecked item; implement the smallest change that completes it.
+2. Pick a `todo` row; set Status to `doing`; implement the smallest change that completes it.
 3. Run the three checks above.
-4. Check the box in the phase file when done. Leave exit criteria visible.
+4. Set Status to `done`; reference the ID in commit messages. Leave exit criteria visible.
 
 ## Related
 

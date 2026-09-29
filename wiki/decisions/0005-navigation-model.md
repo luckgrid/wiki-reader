@@ -40,7 +40,7 @@ flowchart LR
 ```
 
 ## Consequences
-- ➕ Consistent behavior everywhere; enforced by invariant tests (03).
+- ➕ Consistent behavior everywhere; enforced by invariant tests ([architecture](../architecture/overview.md)).
 - ➕ Matches every reader's existing mental model from browsers and doc sites.
 - ➖ Anchor jumps and history need care (scroll restore, forward truncation).
 - ➖ `Tab` belongs to link focus in the reader, so region switching needs another key (`Ctrl-w`/`F6`).

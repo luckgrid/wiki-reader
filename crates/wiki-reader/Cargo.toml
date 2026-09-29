@@ -12,7 +12,9 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { workspace = true }
-crossterm = { workspace = true }
 ratatui = { workspace = true }
 wiki-reader-core = { workspace = true }
 wiki-reader-render = { workspace = true }
+
+[lints]
+workspace = true

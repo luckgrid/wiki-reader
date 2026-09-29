@@ -3,9 +3,9 @@
 use std::io;
 use std::path::Path;
 
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::DefaultTerminal;
 use ratatui::Frame;
+use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::widgets::{Block, Borders, Paragraph};
 
@@ -14,7 +14,7 @@ use ratatui::Terminal;
 
 /// Run the placeholder TUI until quit. Restores the terminal on every exit path.
 pub fn run(root: &Path) -> io::Result<()> {
-    let mut terminal = ratatui::init();
+    let mut terminal = ratatui::try_init()?;
     let result = run_loop(&mut terminal, root);
     ratatui::restore();
     result

@@ -1733,7 +1733,6 @@ name = "wiki-reader"
 version = "0.1.0"
 dependencies = [
  "clap",
- "crossterm",
  "ratatui",
  "wiki-reader-core",
  "wiki-reader-render",
