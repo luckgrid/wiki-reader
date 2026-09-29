@@ -85,15 +85,20 @@ impl CollectionProvider for FsProvider {
     }
 
     fn list_pages(&self) -> Result<Vec<PageMeta>, Error> {
-        // ponytail: no config exclude globs yet; add when C1/config lands
+        // TODO(C1): config exclude globs.
         let mut pages = Vec::new();
         let walker = ignore::WalkBuilder::new(&self.root)
             .hidden(false) // content-model: include dot-dirs unless gitignored
             .require_git(false)
+            .filter_entry(|e| {
+                let name = e.file_name();
+                name != ".git" && name != ".jj"
+            })
             .build();
 
         for entry in walker {
             let entry = entry?;
+            // Symlinked .md files are skipped: follow_links is false.
             if !entry.file_type().is_some_and(|ft| ft.is_file()) {
                 continue;
             }
@@ -150,21 +155,28 @@ fn is_markdown(path: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{CollectionProvider, FsProvider};
+    use super::{CollectionProvider, FsProvider, PageKey};
+    use crate::Error;
+    use std::fs;
     use std::path::{Path, PathBuf};
 
     fn fixture_root() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/worked-example")
     }
 
+    fn rel_paths(provider: &FsProvider) -> Vec<String> {
+        provider
+            .list_pages()
+            .expect("list")
+            .iter()
+            .map(|p| p.key.relative_path.to_string_lossy().replace('\\', "/"))
+            .collect()
+    }
+
     #[test]
     fn discovers_worked_example_pages() {
         let provider = FsProvider::open(fixture_root()).expect("open fixture");
-        let pages = provider.list_pages().expect("list");
-        let paths: Vec<_> = pages
-            .iter()
-            .map(|p| p.key.relative_path.to_string_lossy().replace('\\', "/"))
-            .collect();
+        let paths = rel_paths(&provider);
 
         assert_eq!(
             paths,
@@ -191,5 +203,73 @@ mod tests {
             .expect("root README");
         let body = provider.read(&root.key).expect("read");
         assert!(body.contains("Worked Example Wiki"));
+    }
+
+    #[test]
+    fn discovery_respects_ignore_hidden_markdown_and_vcs() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+
+        fs::write(root.join(".gitignore"), "secret.md\n").expect("gitignore");
+        fs::write(root.join("secret.md"), "ignored\n").expect("secret");
+        fs::write(root.join("notes.txt"), "not markdown\n").expect("txt");
+        fs::write(root.join("y.markdown"), "markdown ext\n").expect("markdown");
+        fs::create_dir(root.join(".planning")).expect("planning dir");
+        fs::write(root.join(".planning/x.md"), "hidden dir\n").expect("planning page");
+        fs::create_dir(root.join(".git")).expect("git dir");
+        fs::write(root.join(".git/z.md"), "vcs noise\n").expect("git md");
+
+        let provider = FsProvider::open(root).expect("open");
+        let paths = rel_paths(&provider);
+
+        assert_eq!(paths, [".planning/x.md", "y.markdown"]);
+        assert!(paths.iter().all(|p| !p.split('/').any(|c| c == ".git")));
+    }
+
+    #[test]
+    fn open_rejects_missing_path_and_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let missing = dir.path().join("nope");
+        assert!(matches!(
+            FsProvider::open(&missing),
+            Err(Error::NotADirectory(_))
+        ));
+
+        let file = dir.path().join("file.md");
+        fs::write(&file, "x\n").expect("write");
+        assert!(matches!(
+            FsProvider::open(&file),
+            Err(Error::NotADirectory(_))
+        ));
+    }
+
+    #[test]
+    fn read_rejects_parent_and_absolute_paths() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        fs::write(dir.path().join("ok.md"), "hi\n").expect("write");
+        let provider = FsProvider::open(dir.path()).expect("open");
+
+        let parent = PageKey {
+            collection_id: provider
+                .root()
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into(),
+            relative_path: PathBuf::from("../ok.md"),
+        };
+        assert!(matches!(
+            provider.read(&parent),
+            Err(Error::PathOutsideRoot(_))
+        ));
+
+        let absolute = PageKey {
+            collection_id: parent.collection_id.clone(),
+            relative_path: dir.path().join("ok.md"),
+        };
+        assert!(matches!(
+            provider.read(&absolute),
+            Err(Error::PathOutsideRoot(_))
+        ));
     }
 }
