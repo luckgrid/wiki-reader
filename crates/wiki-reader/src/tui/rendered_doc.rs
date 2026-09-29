@@ -73,14 +73,19 @@ impl RenderedViewerDoc {
         if map.is_empty() {
             return 0;
         }
-        // First rendered line whose source >= target; else last.
+        // Last rendered line whose source <= target (row that contains it), then
+        // rewind to the first wrap of that source so multi-line blocks stay at top.
         map.iter()
             .enumerate()
-            .find(|(_, s)| **s >= source_1based)
-            .map_or_else(
-                || u32::try_from(map.len().saturating_sub(1)).unwrap_or(0),
-                |(i, _)| u32::try_from(i).unwrap_or(0),
-            )
+            .rev()
+            .find(|(_, s)| **s <= source_1based)
+            .map_or(0, |(i, &src)| {
+                let start = map[..i]
+                    .iter()
+                    .rposition(|&s| s != src)
+                    .map_or(0, |p| p.saturating_add(1));
+                u32::try_from(start).unwrap_or(0)
+            })
     }
 }
 
@@ -103,5 +108,74 @@ impl ViewerDoc for RenderedViewerDoc {
 
     fn link_spans(&self) -> &[wiki_reader_render::LinkSpan] {
         &self.inner.links
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::viewer_doc::ViewerDoc;
+    use super::*;
+    use std::collections::HashMap;
+    use std::path::Path;
+    use wiki_reader_core::provider::PageKey;
+
+    fn build(src: &str, width: u16) -> RenderedViewerDoc {
+        let index = Index {
+            collection_id: "t".into(),
+            pages: HashMap::default(),
+            edges: vec![],
+            by_from: HashMap::default(),
+            by_to: HashMap::default(),
+            by_id: HashMap::default(),
+            by_path: HashMap::default(),
+            diagnostics: vec![],
+        };
+        let key = PageKey {
+            collection_id: "t".into(),
+            relative_path: Path::new("x.md").into(),
+        };
+        RenderedViewerDoc::build(src, None, &key, &index, width)
+    }
+
+    #[test]
+    fn last_table_row_source_lands_on_that_row() {
+        let src = "| h |\n| --- |\n| a |\n| NEEDLE |\n";
+        let doc = build(src, 40);
+        let page = super::super::page_doc::PageDoc::Rendered(doc.clone());
+        // Source line 4 (1-based) → 0-based source 3.
+        let display = page.display_cursor(3);
+        let lines = page.lines();
+        let idx = usize::try_from(display).unwrap();
+        assert!(
+            lines[idx].contains("NEEDLE"),
+            "display {display} should be NEEDLE row, got {:?}",
+            lines.get(idx)
+        );
+        // Toggle width (re-layout) still maps to NEEDLE via source.
+        let doc2 = build(src, 28);
+        let page2 = super::super::page_doc::PageDoc::Rendered(doc2);
+        let display2 = page2.display_cursor(3);
+        assert!(
+            page2.lines()[usize::try_from(display2).unwrap()].contains("NEEDLE"),
+            "resize must keep source 3 on NEEDLE"
+        );
+        // Round-trip: display → source → display stays on NEEDLE.
+        let src0 = page.source_cursor(display);
+        assert_eq!(src0, 3);
+        assert_eq!(page.display_cursor(src0), display);
+    }
+
+    #[test]
+    fn rendered_for_source_last_leq_on_gap() {
+        // Blank line inside a block: last row with source <= blank should win.
+        let src = "line one\n\nline three\n";
+        let doc = build(src, 40);
+        // Source line 2 is blank; map should land on "line one" (source 1), not "line three".
+        let display = doc.rendered_for_source(2);
+        let line = &doc.lines()[usize::try_from(display).unwrap()];
+        assert!(
+            line.contains("line one"),
+            "blank source should stay on prior row, got {line:?}"
+        );
     }
 }

@@ -185,7 +185,10 @@ struct LayoutState<'a> {
     list_marker_pending: bool,
     in_table: bool,
     table_row: Vec<String>,
-    table_rows: Vec<Vec<String>>,
+    /// Source line for the row currently being collected.
+    table_row_src: u32,
+    /// (source line, cells) per header/body row.
+    table_rows: Vec<(u32, Vec<String>)>,
     table_header_done: bool,
     heading_level: Option<u8>,
     heading_text: String,
@@ -230,6 +233,7 @@ impl<'a> LayoutState<'a> {
             list_marker_pending: false,
             in_table: false,
             table_row: Vec::new(),
+            table_row_src: 1,
             table_rows: Vec::new(),
             table_header_done: false,
             heading_level: None,
@@ -376,6 +380,7 @@ impl<'a> LayoutState<'a> {
             }
             Tag::TableHead | Tag::TableRow => {
                 self.table_row.clear();
+                self.table_row_src = src;
             }
             Tag::TableCell => {
                 self.style_stack.push(StyleKind::Table);
@@ -452,18 +457,20 @@ impl<'a> LayoutState<'a> {
                 }
             }
             TagEnd::Table => {
-                self.flush_table(src);
+                self.flush_table();
                 self.in_table = false;
             }
             TagEnd::TableHead => {
                 if !self.table_row.is_empty() {
-                    self.table_rows.push(std::mem::take(&mut self.table_row));
+                    self.table_rows
+                        .push((self.table_row_src, std::mem::take(&mut self.table_row)));
                     self.table_header_done = true;
                 }
             }
             TagEnd::TableRow => {
                 if !self.table_row.is_empty() {
-                    self.table_rows.push(std::mem::take(&mut self.table_row));
+                    self.table_rows
+                        .push((self.table_row_src, std::mem::take(&mut self.table_row)));
                 }
             }
             TagEnd::TableCell => {
@@ -711,35 +718,46 @@ impl<'a> LayoutState<'a> {
         s.trim().to_owned()
     }
 
-    fn flush_table(&mut self, src: u32) {
+    fn flush_table(&mut self) {
         if self.table_rows.is_empty() {
             return;
         }
-        let rows = std::mem::take(&mut self.table_rows);
-        let cols = rows.iter().map(Vec::len).max().unwrap_or(1).max(1);
-        let mut rows = rows;
-        for row in &mut rows {
+        let mut rows = std::mem::take(&mut self.table_rows);
+        let cols = rows
+            .iter()
+            .map(|(_, cells)| cells.len())
+            .max()
+            .unwrap_or(1)
+            .max(1);
+        for (_, row) in &mut rows {
             while row.len() < cols {
                 row.push(String::new());
             }
         }
-        let widths = fair_share_widths(&rows, cols, self.width);
+        let cell_rows: Vec<&[String]> = rows.iter().map(|(_, c)| c.as_slice()).collect();
+        let widths = fair_share_widths(&cell_rows, cols, self.width);
         let header_count = usize::from(self.table_header_done);
-        for (i, row) in rows.iter().enumerate() {
+        for (i, (row_src, row)) in rows.iter().enumerate() {
             let line = format_table_row(row, &widths);
-            self.cur_src = src;
+            self.cur_src = *row_src;
             self.cur.push(StyledSpan {
                 text: line,
                 kind: StyleKind::Table,
             });
-            self.commit_line(src);
+            self.commit_line(*row_src);
             if i + 1 == header_count {
+                // GFM separator line sits between header and first body row.
+                let mut sep_src = row_src.saturating_add(1);
+                if let Some((next_src, _)) = rows.get(i + 1) {
+                    sep_src = sep_src.min(*next_src).max(*row_src);
+                }
                 let sep = format_table_separator(&widths);
+                self.cur_src = sep_src;
                 self.cur.push(StyledSpan {
                     text: sep,
                     kind: StyleKind::Table,
                 });
-                self.commit_line(src);
+                self.commit_line(sep_src);
             }
         }
         self.table_header_done = false;
@@ -893,9 +911,11 @@ fn parse_alert_prefix(t: &str) -> Option<(&str, &str)> {
     None
 }
 
-fn fair_share_widths(rows: &[Vec<String>], cols: usize, total_width: usize) -> Vec<usize> {
-    // │ {cell}│ × cols → borders = cols+1, one leading space per cell (= cols)
-    let chrome = cols.saturating_add(1).saturating_add(cols);
+fn fair_share_widths(rows: &[&[String]], cols: usize, total_width: usize) -> Vec<usize> {
+    // │ {cell} │ × cols → borders = cols+1, leading+trailing space per cell (= 2*cols)
+    let chrome = cols
+        .saturating_add(1)
+        .saturating_add(cols.saturating_mul(2));
     let avail = total_width.saturating_sub(chrome).max(cols);
     let natural: Vec<usize> = (0..cols)
         .map(|c| {
@@ -949,16 +969,17 @@ fn format_table_row(row: &[String], widths: &[usize]) -> String {
     for (cell, &w) in row.iter().zip(widths.iter()) {
         let clipped = truncate_width(cell, w);
         let pad = w.saturating_sub(clipped.width());
-        let _ = write!(out, " {clipped}{}│", " ".repeat(pad));
+        // Always one leading and one trailing space inside the cell.
+        let _ = write!(out, " {clipped}{} │", " ".repeat(pad));
     }
     out
 }
 
 fn format_table_separator(widths: &[usize]) -> String {
-    // Match data row inter-border gap: one leading space + w content chars.
+    // Match data row: leading space + w content + trailing space.
     let mut out = String::from("├");
     for (i, &w) in widths.iter().enumerate() {
-        out.push_str(&"─".repeat(w.saturating_add(1)));
+        out.push_str(&"─".repeat(w.saturating_add(2)));
         if i + 1 == widths.len() {
             out.push('┤');
         } else {
