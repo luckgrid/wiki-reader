@@ -3,7 +3,9 @@
 use std::collections::HashMap;
 use std::fmt::Write as _;
 
-use pulldown_cmark::{CodeBlockKind, CowStr, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{
+    BlockQuoteKind, CodeBlockKind, CowStr, Event, HeadingLevel, Options, Parser, Tag, TagEnd,
+};
 use unicode_width::UnicodeWidthStr;
 use wiki_reader_core::Index;
 use wiki_reader_core::index::Page;
@@ -120,11 +122,20 @@ pub fn render(
         state.push_frontmatter_box(&parsed);
     }
 
-    let options =
-        Options::ENABLE_TABLES | Options::ENABLE_TASKLISTS | Options::ENABLE_STRIKETHROUGH;
+    let options = Options::ENABLE_TABLES
+        | Options::ENABLE_TASKLISTS
+        | Options::ENABLE_STRIKETHROUGH
+        | Options::ENABLE_FOOTNOTES
+        | Options::ENABLE_GFM;
     for (event, range) in Parser::new_ext(&body, options).into_offset_iter() {
         let src = offset_to_line(&body, body_line_offset, range.start);
-        state.handle(event, src);
+        // Closing tags span the whole construct; prefer end for fence close etc.
+        let src_end = offset_to_line(
+            &body,
+            body_line_offset,
+            range.end.saturating_sub(1).max(range.start),
+        );
+        state.handle(event, src, src_end);
     }
     state.finish_block();
 
@@ -165,9 +176,16 @@ struct LayoutState<'a> {
     list_stack: Vec<ListCtx>,
     in_code_block: bool,
     code_fence_lang: String,
+    /// Next source line for code body rows (advances per content line).
+    code_line_src: u32,
     in_quote: bool,
+    /// Alert label when quote opens with `[!NOTE]` / goal / decision / risk.
+    alert_label: Option<String>,
+    list_marker_pending: bool,
     in_table: bool,
     table_row: Vec<String>,
+    table_rows: Vec<Vec<String>>,
+    table_header_done: bool,
     heading_level: Option<u8>,
     heading_text: String,
     used_slugs: HashMap<String, u32>,
@@ -205,9 +223,14 @@ impl<'a> LayoutState<'a> {
             list_stack: Vec::new(),
             in_code_block: false,
             code_fence_lang: String::new(),
+            code_line_src: 1,
             in_quote: false,
+            alert_label: None,
+            list_marker_pending: false,
             in_table: false,
             table_row: Vec::new(),
+            table_rows: Vec::new(),
+            table_header_done: false,
             heading_level: None,
             heading_text: String::new(),
             used_slugs: HashMap::new(),
@@ -215,10 +238,10 @@ impl<'a> LayoutState<'a> {
         }
     }
 
-    fn handle(&mut self, event: Event<'_>, src: u32) {
+    fn handle(&mut self, event: Event<'_>, src: u32, src_end: u32) {
         match event {
             Event::Start(tag) => self.start_tag(tag, src),
-            Event::End(end) => self.end_tag(end, src),
+            Event::End(end) => self.end_tag(end, src, src_end),
             Event::Text(t) => self.text(&t, src),
             Event::Code(t) => self.inline_code(&t, src),
             Event::SoftBreak => self.soft_break(src),
@@ -233,17 +256,22 @@ impl<'a> LayoutState<'a> {
                 self.commit_line(src);
             }
             Event::TaskListMarker(checked) => {
+                self.ensure_list_marker(src);
                 let mark = if checked { "[x] " } else { "[ ] " };
                 self.push_span(mark.to_owned(), StyleKind::TaskMarker, src);
             }
             Event::Html(h) | Event::InlineHtml(h) => {
-                // Alerts arrive as blockquote + paragraph text; raw HTML ignored.
                 let _ = h;
             }
-            Event::FootnoteReference(_) | Event::InlineMath(_) | Event::DisplayMath(_) => {}
+            Event::FootnoteReference(name) => {
+                self.ensure_list_marker(src);
+                self.push_span(format!("[^{name}]"), StyleKind::Plain, src);
+            }
+            Event::InlineMath(_) | Event::DisplayMath(_) => {}
         }
     }
 
+    #[allow(clippy::too_many_lines)] // tag dispatch table
     fn start_tag(&mut self, tag: Tag<'_>, src: u32) {
         match tag {
             Tag::Paragraph => {
@@ -253,7 +281,7 @@ impl<'a> LayoutState<'a> {
                 if self.in_quote {
                     self.push_span("│ ".into(), StyleKind::Quote, src);
                 }
-                self.prefix_list_marker(src);
+                self.ensure_list_marker(src);
             }
             Tag::Heading { level, .. } => {
                 self.finish_block();
@@ -266,15 +294,27 @@ impl<'a> LayoutState<'a> {
                 let hashes = "#".repeat(usize::from(lv));
                 self.push_span(format!("{hashes} "), StyleKind::Heading(lv), src);
             }
-            Tag::BlockQuote(_) => {
+            Tag::BlockQuote(kind) => {
                 self.finish_block();
                 self.mark_block(src);
                 self.in_quote = true;
+                self.alert_label = kind.map(|k| match k {
+                    BlockQuoteKind::Note => "NOTE".into(),
+                    BlockQuoteKind::Tip => "TIP".into(),
+                    BlockQuoteKind::Important => "IMPORTANT".into(),
+                    BlockQuoteKind::Warning => "WARNING".into(),
+                    BlockQuoteKind::Caution => "CAUTION".into(),
+                });
+                if let Some(label) = self.alert_label.clone() {
+                    self.push_span(format!("│ [{label}]"), StyleKind::Quote, src);
+                    self.commit_line(src);
+                }
             }
             Tag::CodeBlock(kind) => {
                 self.finish_block();
                 self.mark_block(src);
                 self.in_code_block = true;
+                self.code_line_src = src.saturating_add(1);
                 self.code_fence_lang = match kind {
                     CodeBlockKind::Fenced(lang) => lang.to_string(),
                     CodeBlockKind::Indented => String::new(),
@@ -299,6 +339,7 @@ impl<'a> LayoutState<'a> {
                 self.finish_block();
                 self.mark_block(src);
                 self.cur_src = src;
+                self.list_marker_pending = true;
             }
             Tag::Emphasis => self.style_stack.push(StyleKind::Emphasis),
             Tag::Strong => self.style_stack.push(StyleKind::Strong),
@@ -318,7 +359,6 @@ impl<'a> LayoutState<'a> {
             Tag::Image {
                 dest_url, title, ..
             } => {
-                // Image-in-link / image: show alt as link-like text toward dest.
                 let alt = if title.is_empty() {
                     format!("[{dest_url}]")
                 } else {
@@ -330,19 +370,20 @@ impl<'a> LayoutState<'a> {
                 self.finish_block();
                 self.mark_block(src);
                 self.in_table = true;
+                self.table_rows.clear();
+                self.table_header_done = false;
             }
             Tag::TableHead | Tag::TableRow => {
                 self.table_row.clear();
             }
             Tag::TableCell => {
-                // cells collected via Text into table_row via a flag — use Text buffer
                 self.style_stack.push(StyleKind::Table);
             }
             _ => {}
         }
     }
 
-    fn end_tag(&mut self, end: TagEnd, src: u32) {
+    fn end_tag(&mut self, end: TagEnd, src: u32, src_end: u32) {
         match end {
             TagEnd::Paragraph => {
                 self.commit_line(src);
@@ -359,17 +400,23 @@ impl<'a> LayoutState<'a> {
             }
             TagEnd::BlockQuote(_) => {
                 self.in_quote = false;
+                self.alert_label = None;
             }
             TagEnd::CodeBlock => {
                 self.in_code_block = false;
-                self.push_span("```".into(), StyleKind::CodeBlock, src);
-                self.commit_line(src);
+                // Closing fence maps to its own source line (range end), not the open.
+                let close_src = src_end.max(src);
+                self.push_span("```".into(), StyleKind::CodeBlock, close_src);
+                self.commit_line(close_src);
             }
             TagEnd::List(_) => {
                 self.list_stack.pop();
             }
             TagEnd::Item => {
-                self.commit_line(src);
+                if !self.cur.is_empty() {
+                    self.commit_line(src);
+                }
+                self.list_marker_pending = false;
                 if let Some(list) = self.list_stack.last_mut()
                     && list.ordered
                 {
@@ -382,22 +429,18 @@ impl<'a> LayoutState<'a> {
             TagEnd::Link => {
                 let _ = self.style_stack.pop();
                 if let Some(mut lb) = self.in_link.take() {
-                    // close current segment
+                    // Finalize current-line segment without duplicating per-word rects.
                     let end_col =
                         u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(0);
                     let line = u32::try_from(self.styled.len()).unwrap_or(0);
-                    if end_col > lb.start_col || !lb.text.is_empty() {
-                        lb.segments
-                            .push((line, (lb.start_col, end_col.max(lb.start_col))));
-                    }
+                    coalesce_link_segment(&mut lb.segments, line, lb.start_col, end_col);
                     let class = match resolve(&lb.raw, self.from, self.index).target {
                         Target::External(_) => LinkClass::External,
                         Target::Unresolved(_) => LinkClass::Broken,
                         _ => LinkClass::Internal,
                     };
-                    if lb.segments.is_empty() && !lb.text.is_empty() {
-                        lb.segments.push((line, (lb.start_col, end_col)));
-                    }
+                    // Drop empty / inverted segments
+                    lb.segments.retain(|&(_, (a, b))| a < b);
                     self.links.push(LinkSpan {
                         id: LinkId(self.link_id),
                         raw_target: lb.raw,
@@ -408,14 +451,22 @@ impl<'a> LayoutState<'a> {
                 }
             }
             TagEnd::Table => {
+                self.flush_table(src);
                 self.in_table = false;
             }
-            TagEnd::TableHead | TagEnd::TableRow => {
-                self.flush_table_row(src);
+            TagEnd::TableHead => {
+                if !self.table_row.is_empty() {
+                    self.table_rows.push(std::mem::take(&mut self.table_row));
+                    self.table_header_done = true;
+                }
+            }
+            TagEnd::TableRow => {
+                if !self.table_row.is_empty() {
+                    self.table_rows.push(std::mem::take(&mut self.table_row));
+                }
             }
             TagEnd::TableCell => {
                 let _ = self.style_stack.pop();
-                // cell text already pushed into cur; split off into table_row
                 let cell = self.drain_cur_text();
                 self.table_row.push(cell);
             }
@@ -425,27 +476,50 @@ impl<'a> LayoutState<'a> {
 
     fn text(&mut self, t: &str, src: u32) {
         if self.in_code_block {
-            for (i, line) in t.split('\n').enumerate() {
-                if i > 0 || !self.cur.is_empty() {
-                    self.commit_line(src);
-                }
-                // gutter
-                self.push_span("│ ".into(), StyleKind::CodeBlock, src);
-                self.push_span(line.to_owned(), StyleKind::CodeBlock, src);
-                // don't commit yet if more content — split leaves trailing empty
+            // Drop the trailing empty split from a final newline (no blank │ row).
+            let body = t.strip_suffix('\n').unwrap_or(t);
+            if body.is_empty() && t.ends_with('\n') {
+                return;
             }
-            if t.ends_with('\n') {
-                self.commit_line(src);
+            for line in body.split('\n') {
+                let line_src = self.code_line_src;
+                self.push_span("│ ".into(), StyleKind::CodeBlock, line_src);
+                self.push_span(line.to_owned(), StyleKind::CodeBlock, line_src);
+                self.commit_line(line_src);
+                self.code_line_src = self.code_line_src.saturating_add(1);
             }
             return;
         }
+        let text = if self.in_quote && self.alert_label.is_none() {
+            if let Some((label, rest)) = parse_alert_prefix(t) {
+                self.alert_label = Some(label.to_owned());
+                // Replace the bare quote gutter with a labelled alert header.
+                if self.cur.len() == 1
+                    && self.cur[0].text == "│ "
+                    && self.cur[0].kind == StyleKind::Quote
+                {
+                    self.cur.clear();
+                    self.push_span(format!("│ [{label}] "), StyleKind::Quote, src);
+                } else {
+                    self.push_span(format!("[{label}] "), StyleKind::Quote, src);
+                }
+                rest.to_owned()
+            } else {
+                t.to_owned()
+            }
+        } else {
+            t.to_owned()
+        };
         if self.heading_level.is_some() {
-            self.heading_text.push_str(t);
+            self.heading_text.push_str(&text);
         }
         if let Some(lb) = self.in_link.as_mut() {
-            lb.text.push_str(t);
+            lb.text.push_str(&text);
         }
-        self.push_wrapping(t, src);
+        self.ensure_list_marker(src);
+        if !text.is_empty() {
+            self.push_wrapping(&text, src);
+        }
     }
 
     fn inline_code(&mut self, t: &CowStr<'_>, src: u32) {
@@ -497,6 +571,14 @@ impl<'a> LayoutState<'a> {
         if self.block_starts.last().copied() != Some(line) {
             self.block_starts.push(line);
         }
+    }
+
+    fn ensure_list_marker(&mut self, src: u32) {
+        if !self.list_marker_pending {
+            return;
+        }
+        self.list_marker_pending = false;
+        self.prefix_list_marker(src);
     }
 
     fn prefix_list_marker(&mut self, src: u32) {
@@ -565,7 +647,7 @@ impl<'a> LayoutState<'a> {
                 if start < end
                     && let Some(lb) = self.in_link.as_mut()
                 {
-                    lb.segments.push((line, (start, end)));
+                    coalesce_link_segment(&mut lb.segments, line, start, end);
                 }
             }
             rest = next;
@@ -598,7 +680,7 @@ impl<'a> LayoutState<'a> {
             spans,
             source_line: if self.cur_src == 0 { src } else { self.cur_src },
         };
-        // open new link segment after wrap
+        // Next link glyphs start at column 0 of the following display row.
         if let Some(lb) = self.in_link.as_mut() {
             lb.start_line = u32::try_from(self.styled.len().saturating_add(1)).unwrap_or(0);
             lb.start_col = 0;
@@ -628,20 +710,38 @@ impl<'a> LayoutState<'a> {
         s.trim().to_owned()
     }
 
-    fn flush_table_row(&mut self, src: u32) {
-        if self.table_row.is_empty() {
+    fn flush_table(&mut self, src: u32) {
+        if self.table_rows.is_empty() {
             return;
         }
-        let cols = self.table_row.len().max(1);
-        let cell_w = (self.width.saturating_sub(cols.saturating_add(1)) / cols).max(3);
-        let mut row = String::from("│");
-        for cell in &self.table_row {
-            let clipped = truncate_width(cell, cell_w);
-            let _ = write!(row, " {clipped:<cell_w$}│");
+        let rows = std::mem::take(&mut self.table_rows);
+        let cols = rows.iter().map(Vec::len).max().unwrap_or(1).max(1);
+        let mut rows = rows;
+        for row in &mut rows {
+            while row.len() < cols {
+                row.push(String::new());
+            }
         }
-        self.push_span(row, StyleKind::Table, src);
-        self.commit_line(src);
-        self.table_row.clear();
+        let widths = fair_share_widths(&rows, cols, self.width);
+        let header_count = usize::from(self.table_header_done);
+        for (i, row) in rows.iter().enumerate() {
+            let line = format_table_row(row, &widths);
+            self.cur_src = src;
+            self.cur.push(StyledSpan {
+                text: line,
+                kind: StyleKind::Table,
+            });
+            self.commit_line(src);
+            if i + 1 == header_count {
+                let sep = format_table_separator(&widths);
+                self.cur.push(StyledSpan {
+                    text: sep,
+                    kind: StyleKind::Table,
+                });
+                self.commit_line(src);
+            }
+        }
+        self.table_header_done = false;
     }
 }
 
@@ -685,10 +785,11 @@ fn strip_fm(source: &str) -> Option<String> {
 }
 
 fn offset_to_line(body: &str, body_line_offset: u32, byte: usize) -> u32 {
-    let idx = body[..byte.min(body.len())]
-        .bytes()
-        .filter(|&b| b == b'\n')
-        .count();
+    let mut byte = byte.min(body.len());
+    while byte > 0 && !body.is_char_boundary(byte) {
+        byte -= 1;
+    }
+    let idx = body[..byte].bytes().filter(|&b| b == b'\n').count();
     body_line_offset + u32::try_from(idx).unwrap_or(0)
 }
 
@@ -742,4 +843,119 @@ fn truncate_width(s: &str, max: usize) -> String {
     }
     let (head, _) = split_at_width(s, max.saturating_sub(1));
     format!("{head}…")
+}
+
+/// Merge contiguous link glyph runs on the same display line into one rect.
+fn coalesce_link_segment(segs: &mut Vec<(u32, (u16, u16))>, line: u32, start: u16, end: u16) {
+    if start >= end {
+        return;
+    }
+    if let Some(last) = segs.last_mut()
+        && last.0 == line
+    {
+        last.1.0 = last.1.0.min(start);
+        last.1.1 = last.1.1.max(end);
+        return;
+    }
+    segs.push((line, (start, end)));
+}
+
+fn parse_alert_prefix(t: &str) -> Option<(&str, &str)> {
+    let trimmed = t.trim_start();
+    for label in [
+        "NOTE",
+        "TIP",
+        "IMPORTANT",
+        "WARNING",
+        "CAUTION",
+        "GOAL",
+        "DECISION",
+        "RISK",
+    ] {
+        let needle = format!("[!{label}]");
+        if let Some(rest) = trimmed.strip_prefix(&needle) {
+            return Some((label, rest.trim_start()));
+        }
+        let lower = format!("[!{}]", label.to_lowercase());
+        if let Some(rest) = trimmed.strip_prefix(&lower) {
+            return Some((label, rest.trim_start()));
+        }
+    }
+    None
+}
+
+fn fair_share_widths(rows: &[Vec<String>], cols: usize, total_width: usize) -> Vec<usize> {
+    // │ cell │ cell │ → borders = cols+1, plus one space pad each side of cell (= 2*cols)
+    let chrome = cols
+        .saturating_add(1)
+        .saturating_add(cols.saturating_mul(2));
+    let avail = total_width.saturating_sub(chrome).max(cols);
+    let natural: Vec<usize> = (0..cols)
+        .map(|c| {
+            rows.iter()
+                .map(|r| r.get(c).map_or(0, |s| s.width()))
+                .max()
+                .unwrap_or(1)
+                .max(1)
+        })
+        .collect();
+    let sum: usize = natural.iter().sum();
+    if sum <= avail {
+        return natural;
+    }
+    // Scale down proportionally, then fix remainder; floor at 1.
+    let mut widths: Vec<usize> = natural
+        .iter()
+        .map(|&n| ((n * avail) / sum).max(1))
+        .collect();
+    let mut used: usize = widths.iter().sum();
+    while used > avail {
+        if let Some((i, _)) = widths
+            .iter()
+            .enumerate()
+            .filter(|(_, w)| **w > 1)
+            .max_by_key(|(_, w)| **w)
+        {
+            widths[i] -= 1;
+            used -= 1;
+        } else {
+            break;
+        }
+    }
+    while used < avail {
+        if let Some((i, _)) = natural
+            .iter()
+            .enumerate()
+            .max_by_key(|(i, n)| **n - widths[*i])
+        {
+            widths[i] += 1;
+            used += 1;
+        } else {
+            break;
+        }
+    }
+    widths
+}
+
+fn format_table_row(row: &[String], widths: &[usize]) -> String {
+    let mut out = String::from("│");
+    for (cell, &w) in row.iter().zip(widths.iter()) {
+        let clipped = truncate_width(cell, w);
+        let pad = w.saturating_sub(clipped.width());
+        let _ = write!(out, " {clipped}{}│", " ".repeat(pad));
+    }
+    out
+}
+
+fn format_table_separator(widths: &[usize]) -> String {
+    let mut out = String::from("├");
+    for (i, &w) in widths.iter().enumerate() {
+        out.push_str(&"─".repeat(w.saturating_add(2)));
+        if i + 1 == widths.len() {
+            out.push('┤');
+        } else {
+            out.push('┼');
+        }
+    }
+    out
 }

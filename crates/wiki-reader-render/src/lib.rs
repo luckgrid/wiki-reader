@@ -11,6 +11,7 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::path::Path;
+    use unicode_width::UnicodeWidthStr;
     use wiki_reader_core::provider::{CollectionProvider, FsProvider, PageKey};
 
     fn empty_key() -> PageKey {
@@ -128,6 +129,126 @@ mod tests {
     }
 
     #[test]
+    fn source_map_monotonic_across_fenced_code() {
+        let src = "```rust\nfn a() {}\nfn b() {}\n```\n";
+        let doc = render_src(src, 40);
+        assert!(
+            doc.source_map.windows(2).all(|w| w[1] >= w[0]),
+            "source_map not monotonic: {:?}",
+            doc.source_map
+        );
+        let plain = doc.lines.join("\n");
+        assert!(
+            !doc.lines.iter().any(|l| l == "│ " || l == "│"),
+            "trailing empty code gutter: {plain:?}"
+        );
+        // Closing fence is its own row with its own source line (≥ last content).
+        assert!(
+            doc.lines.iter().any(|l| l.trim() == "```"),
+            "missing close fence: {plain}"
+        );
+    }
+
+    #[test]
+    fn tight_lists_have_markers_and_nest_indent() {
+        let src = "- a\n- b\n  - nested\n1. one\n2. two\n- [ ] task\n";
+        let doc = render_src(src, 40);
+        let plain = doc.lines.join("\n");
+        assert!(
+            doc.lines.iter().any(|l| l.contains('•') && l.contains('a')),
+            "missing bullet: {plain}"
+        );
+        assert!(
+            doc.lines
+                .iter()
+                .any(|l| l.contains("1.") && l.contains("one")),
+            "missing ordered: {plain}"
+        );
+        assert!(
+            doc.lines
+                .iter()
+                .any(|l| l.contains("nested") && l.starts_with("  ")),
+            "missing nest indent: {plain}"
+        );
+        assert!(
+            doc.lines
+                .iter()
+                .any(|l| l.contains('•') && l.contains("[ ]")),
+            "task should keep bullet + marker: {plain}"
+        );
+    }
+
+    #[test]
+    fn table_fair_share_separator_and_width() {
+        let src = "| short | a_very_long_header_cell |\n| --- | --- |\n| 1 | 2 |\n";
+        for width in [40_u16, 80] {
+            let doc = render_src(src, width);
+            let plain = doc.lines.join("\n");
+            assert!(
+                doc.lines.iter().any(|l| l.contains('┼') || l.contains('─')),
+                "w={width}: missing header separator: {plain}"
+            );
+            assert!(
+                doc.lines
+                    .iter()
+                    .all(|l| l.width() <= usize::from(width) + 2),
+                "w={width}: row exceeds width: {plain}"
+            );
+            assert!(
+                doc.lines.iter().any(|l| l.contains('…') || l.contains('│')),
+                "w={width}: expected table cells: {plain}"
+            );
+        }
+    }
+
+    #[test]
+    fn alert_note_is_labelled() {
+        let src = "> [!NOTE]\n> hello world\n";
+        let doc = render_src(src, 40);
+        let plain = doc.lines.join("\n");
+        assert!(
+            plain.contains("[NOTE]"),
+            "expected labelled alert, got {plain}"
+        );
+    }
+
+    #[test]
+    fn wrapped_link_one_segment_per_line() {
+        let src =
+            "See [this is a fairly long link label that should wrap](https://example.com) end.\n";
+        let doc = render_src(src, 30);
+        assert!(!doc.links.is_empty());
+        let segs = &doc.links[0].segments;
+        assert!(!segs.is_empty());
+        let mut lines: Vec<u32> = segs.iter().map(|(l, _)| *l).collect();
+        lines.sort_unstable();
+        lines.dedup();
+        assert_eq!(
+            segs.len(),
+            lines.len(),
+            "expected one segment per display line, got {segs:?}"
+        );
+    }
+
+    #[test]
+    fn footnote_reference_renders() {
+        let src = "Note[^1]\n\n[^1]: body\n";
+        let doc = render_src(src, 40);
+        let plain = doc.lines.join("\n");
+        assert!(plain.contains("[^1]"), "expected footnote ref, got {plain}");
+    }
+
+    #[test]
+    fn wrapped_link_has_segments() {
+        let src =
+            "See [this is a fairly long link label that should wrap](https://example.com) end.\n";
+        let doc = render_src(src, 30);
+        assert!(!doc.links.is_empty());
+        let segs = &doc.links[0].segments;
+        assert!(!segs.is_empty());
+    }
+
+    #[test]
     fn anchor_line_is_rendered_index_in_range() {
         let src = "# Existing Heading\n\nBody text here.\n";
         let doc = render_src(src, 40);
@@ -169,12 +290,20 @@ mod tests {
     }
 
     #[test]
-    fn wrapped_link_has_segments() {
-        let src =
-            "See [this is a fairly long link label that should wrap](https://example.com) end.\n";
-        let doc = render_src(src, 30);
-        assert!(!doc.links.is_empty());
-        let segs = &doc.links[0].segments;
-        assert!(!segs.is_empty());
+    fn render_timing_50kb_ceiling() {
+        use std::time::Instant;
+        let chunk = "# H\n\nPara with [link](https://ex.com) and a list:\n\n- a\n- b\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\n```\ncode\n```\n\n";
+        let src = chunk.repeat(400); // ≈ 50 KB
+        let src_len = src.len();
+        assert!(src_len >= 40_000, "fixture too small: {src_len}");
+        let start = Instant::now();
+        let doc = render_src(&src, 80);
+        let elapsed = start.elapsed();
+        assert!(!doc.lines.is_empty());
+        // CI-safe generous ceiling. Manual budget on a laptop: < 20 ms (release).
+        assert!(
+            elapsed.as_millis() < 30_000,
+            "render took {elapsed:?}, expected < 30s"
+        );
     }
 }
