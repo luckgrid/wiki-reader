@@ -83,7 +83,7 @@ impl Tab {
 pub enum NavStop {
     /// ⌕ Search… row above the tree.
     Search,
-    /// Page, group, or OtherPages node.
+    /// Page, group, or `OtherPages` node.
     Node(NodeId),
 }
 

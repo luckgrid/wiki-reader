@@ -104,6 +104,7 @@ impl App {
     }
 
     /// Pure state update (unit-testable without a terminal).
+    #[allow(clippy::too_many_lines)] // split in P1-R10
     pub fn update(&mut self, action: Action) {
         // Transient notices clear on the next key/action (Tab keeps focus target).
         if !matches!(
@@ -735,10 +736,10 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     let pct = ((app.scroll.saturating_add(1)) * 100) / total;
     let path = page.relative_path.display().to_string();
     let focus_target = focused_status_message(app);
-    let status_msg = if !app.message.is_empty() {
-        app.message.as_str()
-    } else {
+    let status_msg = if app.message.is_empty() {
         focus_target.as_str()
+    } else {
+        app.message.as_str()
     };
     status::draw(
         frame,
