@@ -32,6 +32,41 @@ pub enum Action {
     CycleFocus,
     /// Set viewer cursor to a source line.
     SetCursorLine(u32),
+    /// Side-nav: step to previous visible row (↑ / Shift+Tab).
+    NavStepUp,
+    /// Side-nav: step to next visible row (↓ / Tab).
+    NavStepDown,
+    /// Side-nav: jump to previous group header or search (Shift+↑).
+    NavJumpUp,
+    /// Side-nav: jump to next group header (Shift+↓).
+    NavJumpDown,
+    /// Side-nav: expand group or enter (→).
+    NavExpand,
+    /// Side-nav: collapse group or go to parent (←).
+    NavCollapse,
+    /// Side-nav: Enter — open page or toggle group.
+    NavActivate,
+    /// Viewer cursor / scroll (filled in P1-08b).
+    ViewerUp,
+    /// Viewer down.
+    ViewerDown,
+    /// Viewer block jump up.
+    ViewerBlockUp,
+    /// Viewer block jump down.
+    ViewerBlockDown,
+    /// Viewer page up.
+    ViewerPageUp,
+    /// Viewer page down.
+    ViewerPageDown,
+    /// Viewer home.
+    ViewerHome,
+    /// Viewer end.
+    ViewerEnd,
+    /// Viewer Tab cycle forward (P1-08c).
+    ViewerTab,
+    /// Viewer Tab cycle backward.
+    ViewerBackTab,
     /// No-op / ignored.
+    #[allow(dead_code)]
     None,
 }
