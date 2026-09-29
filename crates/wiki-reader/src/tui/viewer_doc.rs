@@ -81,6 +81,8 @@ pub struct RawDoc {
     links: Vec<LinkSpan>,
     word_count: u32,
     updated: String,
+    /// Syntect highlight runs per source line (parallel to `lines`).
+    pub highlights: Vec<Vec<crate::tui::highlight::HlSpan>>,
 }
 
 impl RawDoc {
@@ -135,6 +137,7 @@ impl RawDoc {
             )
         };
         let link_spans = link_spans_from_md(&lines, &md_links, from, index, provider);
+        let highlights = crate::tui::highlight::highlight_markdown(source);
         Self {
             lines,
             blocks,
@@ -142,6 +145,7 @@ impl RawDoc {
             links: link_spans,
             word_count,
             updated,
+            highlights,
         }
     }
 

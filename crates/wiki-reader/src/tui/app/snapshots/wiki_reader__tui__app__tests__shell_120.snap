@@ -4,20 +4,20 @@ expression: out
 ---
 Worked Example Wiki                                                                                                  ◫ ✕
 ┌Nav─────────────────────────┐┌Viewer──────────────────────────────────────────────────────────────────────────────────┐
-│ ⌕ Search…                  ││---                                                                                     │
-│▌● Worked Example Wiki      ││id: FX-ROOT                                                                             │
-│ ▸ Architecture Overview    ││title: Worked Example Wiki                                                              │
+│ ⌕ Search…                  ││── frontmatter ──                                                                       │
+│▌● Worked Example Wiki      ││title: Worked Example Wiki                                                              │
+│ ▸ Architecture Overview    ││updated: 2026-09-28                                                                     │
 │ ▸ Decisions                ││summary: Minimal fixture collection for wiki-reader smoke tests.                        │
-│                            ││status: draft                                                                           │
-│                            ││updated: 2026-09-28                                                                     │
-│                            ││related: [architecture]                                                                 │
-│                            ││---                                                                                     │
-│                            ││                                                                                        │
+│                            ││─────────────────                                                                       │
 │                            ││# Worked Example Wiki                                                                   │
-│                            ││                                                                                        │
 │                            ││A tiny markdown collection used as the default smoke-test root.                         │
+│                            ││Start at Architecture Overview, follow Token Projection, then return via back when      │
+│                            ││history exists.                                                                         │
 │                            ││                                                                                        │
-│                            ││Start at [Architecture Overview](architecture/README.md), follow [Token Projection](arch│
+│                            ││                                                                                        │
+│                            ││                                                                                        │
+│                            ││                                                                                        │
+│                            ││                                                                                        │
 │                            ││                                                                                        │
 │                            ││                                                                                        │
 │                            ││                                                                                        │
@@ -25,4 +25,4 @@ Worked Example Wiki                                                             
 │                            ││                                                                                        │
 │                            │└────────────────────────────────────────────────────────────────────────────────────────┘
 └────────────────────────────┘‹ —                                                                Architecture Overview ›
-VIEWER · README.md · L1 7% · 29w · 1m · 2026-09-28
+VIEWER · README.md · L1 11% · 29w · 1m · 2026-09-28

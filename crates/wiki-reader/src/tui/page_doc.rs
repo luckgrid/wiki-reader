@@ -36,6 +36,24 @@ impl PageDoc {
             Self::Rendered(d) => d.link_target(id),
         }
     }
+
+    /// 0-based source line for a 0-based display cursor.
+    #[must_use]
+    pub fn source_cursor(&self, display: u32) -> u32 {
+        match self {
+            Self::Raw(_) => display,
+            Self::Rendered(d) => d.source_line_for_rendered(display).saturating_sub(1),
+        }
+    }
+
+    /// 0-based display cursor for a 0-based source line.
+    #[must_use]
+    pub fn display_cursor(&self, source: u32) -> u32 {
+        match self {
+            Self::Raw(_) => source,
+            Self::Rendered(d) => d.rendered_for_source(source.saturating_add(1)),
+        }
+    }
 }
 
 impl ViewerDoc for PageDoc {

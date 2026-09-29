@@ -125,8 +125,8 @@ impl App {
 
     pub(crate) fn view_state(&self) -> ViewState {
         ViewState {
-            cursor_line: self.cursor_line,
-            scroll: self.scroll,
+            cursor_line: self.doc.source_cursor(self.cursor_line),
+            scroll: self.doc.source_cursor(self.scroll),
         }
     }
 
@@ -258,12 +258,14 @@ impl App {
 
     fn toggle_view_mode(&mut self) {
         let key = self.navigator.tab().current().page.clone();
+        let source = self.doc.source_cursor(self.cursor_line);
+        let source_scroll = self.doc.source_cursor(self.scroll);
         let new_mode = match self.navigator.tab().current().mode {
             ViewMode::Rendered => ViewMode::Raw,
             ViewMode::Raw => ViewMode::Rendered,
         };
         self.navigator.set_view_mode(new_mode);
-        self.load_page(&key);
+        self.reload_page_keeping_view(&key, source, source_scroll);
     }
 
     pub(crate) fn apply_effects(&mut self, effects: Vec<Effect>) {
@@ -282,8 +284,9 @@ impl App {
                         }
                     } else {
                         let loc = self.navigator.tab().current();
-                        self.cursor_line = loc.cursor_line;
-                        self.scroll = loc.scroll;
+                        self.cursor_line = self.doc.display_cursor(loc.cursor_line);
+                        self.scroll = self.doc.display_cursor(loc.scroll);
+                        self.ensure_cursor_visible();
                     }
                 }
                 Effect::Notice(msg) => self.message = msg,
@@ -346,13 +349,13 @@ impl App {
         self.layout_width = w;
         if matches!(self.navigator.tab().current().mode, ViewMode::Rendered) {
             let key = self.navigator.tab().current().page.clone();
-            let cursor = self.cursor_line;
-            let scroll = self.scroll;
-            self.reload_page_keeping_view(&key, cursor, scroll);
+            let source = self.doc.source_cursor(self.cursor_line);
+            let source_scroll = self.doc.source_cursor(self.scroll);
+            self.reload_page_keeping_view(&key, source, source_scroll);
         }
     }
 
-    fn reload_page_keeping_view(&mut self, key: &PageKey, cursor: u32, scroll: u32) {
+    fn reload_page_keeping_view(&mut self, key: &PageKey, source_cursor: u32, source_scroll: u32) {
         match self.provider.read(key) {
             Ok(src) => {
                 let index = self.navigator.index();
@@ -371,9 +374,11 @@ impl App {
                         PageDoc::Rendered(RenderedViewerDoc::build(&src, page, key, index, width))
                     }
                 };
+                self.cursor_line = self.doc.display_cursor(source_cursor);
+                self.scroll = self.doc.display_cursor(source_scroll);
                 let max = u32::try_from(self.doc.lines().len().saturating_sub(1)).unwrap_or(0);
-                self.cursor_line = cursor.min(max);
-                self.scroll = scroll.min(max);
+                self.cursor_line = self.cursor_line.min(max);
+                self.scroll = self.scroll.min(max);
                 self.ensure_cursor_visible();
             }
             Err(err) => {

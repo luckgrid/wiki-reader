@@ -30,11 +30,17 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     let focus_item = app
         .focused_item
         .and_then(|i| app.focus_list().get(i).cloned());
+    let (highlights, gutter) = match &app.doc {
+        crate::tui::page_doc::PageDoc::Raw(d) => (Some(d.highlights.as_slice()), true),
+        crate::tui::page_doc::PageDoc::Rendered(_) => (None, false),
+    };
     viewer::draw(
         frame,
         regions.viewer,
         app.doc.lines(),
         app.doc.link_spans(),
+        highlights,
+        gutter,
         app.scroll,
         app.cursor_line,
         app.focus == FocusPane::Viewer,

@@ -36,9 +36,9 @@ pub enum ViewMode {
 /// Viewer cursor/scroll captured before a navigation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ViewState {
-    /// Viewer cursor line.
+    /// 0-based **source** line (stable across raw/rendered).
     pub cursor_line: u32,
-    /// Viewer scroll offset.
+    /// Viewer scroll offset (display lines; approximate across modes).
     pub scroll: u32,
 }
 
@@ -49,7 +49,7 @@ pub struct Location {
     pub page: PageKey,
     /// Optional heading slug.
     pub anchor: Option<String>,
-    /// Viewer cursor line (restored on back).
+    /// 0-based **source** line (restored on back).
     pub cursor_line: u32,
     /// Viewer scroll offset (restored on back).
     pub scroll: u32,
@@ -151,7 +151,7 @@ impl Navigator {
             anchor: None,
             cursor_line: 0,
             scroll: 0,
-            mode: ViewMode::Raw,
+            mode: ViewMode::Rendered,
         };
         let mut expanded = HashSet::new();
         expand_ancestors(&tree, &start, &mut expanded);

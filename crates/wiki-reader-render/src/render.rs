@@ -68,7 +68,6 @@ impl StyledLine {
     pub fn plain(&self) -> String {
         self.spans.iter().map(|s| s.text.as_str()).collect()
     }
-
 }
 
 /// Layout output for the viewer.

@@ -373,20 +373,20 @@ fn nav_k4_steps_and_activate() {
 fn viewer_cursor_scroll_and_back_restore() {
     let root = fixture();
     let mut app = App::new(&root).unwrap();
+    let _ = draw_app(&mut app, 100, 24);
     app.update(Action::FocusViewer);
-    app.update(Action::ViewerDown);
-    app.update(Action::ViewerDown);
-    assert_eq!(app.cursor_line, 2);
-    let scroll_before = app.scroll;
+    // Skip frontmatter box lines so source_map is unique for this cursor.
+    for _ in 0..12 {
+        app.update(Action::ViewerDown);
+    }
+    let source = app.doc.source_cursor(app.cursor_line);
+    assert!(source > 0, "expected body source line, got {source}");
     app.update(Action::GoToPage(PageKey {
         collection_id: "worked-example".into(),
         relative_path: PathBuf::from("architecture/README.md"),
     }));
-    // Leave with view state saved on navigate from README... we navigated from root
-    // with cursor 2; go back.
     app.update(Action::Back);
-    assert_eq!(app.cursor_line, 2);
-    assert_eq!(app.scroll, scroll_before);
+    assert_eq!(app.doc.source_cursor(app.cursor_line), source);
 }
 
 #[test]
@@ -671,14 +671,24 @@ fn view_mode_toggle_round_trips_raw_and_rendered() {
     let root = fixture();
     let mut app = App::new(&root).unwrap();
     let _ = draw_app(&mut app, 100, 24);
+    assert!(matches!(
+        app.doc,
+        crate::tui::page_doc::PageDoc::Rendered(_)
+    ));
+    for _ in 0..12 {
+        app.update(Action::ViewerDown);
+    }
+    let source = app.doc.source_cursor(app.cursor_line);
+    assert!(source > 0);
+    app.update(Action::ToggleViewMode);
     assert!(matches!(app.doc, crate::tui::page_doc::PageDoc::Raw(_)));
+    assert_eq!(app.doc.source_cursor(app.cursor_line), source);
     app.update(Action::ToggleViewMode);
     assert!(matches!(
         app.doc,
         crate::tui::page_doc::PageDoc::Rendered(_)
     ));
-    app.update(Action::ToggleViewMode);
-    assert!(matches!(app.doc, crate::tui::page_doc::PageDoc::Raw(_)));
+    assert_eq!(app.doc.source_cursor(app.cursor_line), source);
 }
 
 fn link_chain_root() -> PathBuf {

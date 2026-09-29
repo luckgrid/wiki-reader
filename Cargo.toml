@@ -21,6 +21,8 @@ pulldown-cmark = { version = "0.13.4", default-features = false }
 percent-encoding = "2.3.2"
 notify = "8.0.0"
 insta = "1.48.0"
+syntect = { version = "5.3.0", default-features = false, features = ["default-syntaxes", "default-themes", "regex-fancy"] }
+unicode-width = "0.2.0"
 wiki-reader-core = { path = "crates/wiki-reader-core" }
 wiki-reader-render = { path = "crates/wiki-reader-render" }
 

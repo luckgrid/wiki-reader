@@ -58,13 +58,29 @@ impl RenderedViewerDoc {
 
     /// Source line (1-based) for rendered cursor line (0-based).
     #[must_use]
-    #[allow(dead_code)]
     pub fn source_line_for_rendered(&self, rendered_line: u32) -> u32 {
         self.inner
             .source_map
             .get(usize::try_from(rendered_line).unwrap_or(0))
             .copied()
             .unwrap_or(1)
+    }
+
+    /// Nearest rendered line (0-based) for a 1-based source line.
+    #[must_use]
+    pub fn rendered_for_source(&self, source_1based: u32) -> u32 {
+        let map = &self.inner.source_map;
+        if map.is_empty() {
+            return 0;
+        }
+        // First rendered line whose source >= target; else last.
+        map.iter()
+            .enumerate()
+            .find(|(_, s)| **s >= source_1based)
+            .map_or_else(
+                || u32::try_from(map.len().saturating_sub(1)).unwrap_or(0),
+                |(i, _)| u32::try_from(i).unwrap_or(0),
+            )
     }
 }
 
