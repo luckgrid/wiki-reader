@@ -60,7 +60,8 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 | P1-R25 | Source-map precision + table padding | V1,S1 | done | 17167ef |
 | P1-R26 | Watcher FS heuristics | V3 | done | 8f81082 |
 | P1-R27 | Roadmap honesty + exit checklist | | done | 35d711b |
-| P1-R28 | Performance guard rails | V1,V2 | doing | this PR |
+| P1-R28 | Performance guard rails | V1,V2 | done | adae549 |
+| P1-R29 | Perf guard finish (ceiling, stale highlight, docs) | V1,V2 | doing | this PR |
 | P1-07 | Layout regions + hit map | | done | 5911ea5 |
 | P1-07a | Core support APIs (breadcrumb, blocks, nav focus) | | done | 5911ea5 |
 | P1-07b | TUI skeleton: regions, hit map, static content | | done | 5911ea5 |
@@ -89,7 +90,7 @@ Phase status stays `active` until every item below is ticked (operator-owned whe
 5. [ ] Open/close search; Esc restores the prior cursor.
 6. [ ] Ctrl+C and `q` restore the terminal in herdr and in a plain terminal.
 
-Also: both ignored release budgets must pass before Phase 1 closes — `cargo test -p wiki-reader-render --release -- --ignored` (render <20 ms / 50 KB) and `cargo test -p wiki-reader --release -- raw_load_budget --ignored` (raw UI path <50 ms / 50 KB, no sync highlight; syntect runs off-thread). CI asserts offset→line lookup work grows ~linearly (doubling input ≤ 2.2× lookups).
+Also: both ignored release budgets must pass before Phase 1 closes — `cargo test -p wiki-reader-render --release -- --ignored` (render <20 ms / 50 KB) and `cargo test -p wiki-reader --release -- raw_load_budget --ignored` (raw UI path <50 ms / 50 KB, no sync highlight; syntect ~370 ms / 50 KB release runs off-thread and paints asynchronously). CI asserts a ~170 KB debug render finishes under a 10 s wall-clock ceiling (guards regression to per-call newline scans).
 
 ## Related
 

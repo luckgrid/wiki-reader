@@ -58,7 +58,8 @@ fn pick_theme(ts: &ThemeSet) -> Option<&Theme> {
 
 /// Highlight `source` as markdown. Falls back to plain lines on error.
 ///
-/// Call off the UI thread — full-page syntect is tens–hundreds of ms for large pages.
+/// Call off the UI thread — full-page syntect is ~370 ms / 50 KB (release) and
+/// applies asynchronously; the UI paints plain text until the worker result lands.
 #[must_use]
 pub fn highlight_markdown(source: &str) -> Vec<Vec<HlSpan>> {
     #[cfg(test)]
