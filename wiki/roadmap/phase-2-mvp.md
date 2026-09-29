@@ -27,7 +27,7 @@ All P0/P1 acceptance criteria in [product spec](../product/spec.md) pass; two we
 | P2-05 | Tabs as secondary | TB | todo | core `Disposition` ready; TUI bar + keys |
 | P2-06 | Mermaid tiers | D1 | todo | text tier first; image behind Kitty/herdr |
 | P2-07 | Responsive side nav | R1 | done | shipped in P1-R6 |
-| P2-08 | `$EDITOR` | E1 | doing | this PR |
+| P2-08 | `$EDITOR` | E1 | done | d130b92 |
 | P2-09 | Config incl. `nav.labels` | C1 | todo | before session restore |
 | P2-10 | Session restore | M1 | todo | `$XDG_STATE_HOME/wiki-reader/state.toml` |
 
