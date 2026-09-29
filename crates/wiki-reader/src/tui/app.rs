@@ -276,7 +276,11 @@ impl App {
                 self.navigator.set_group_expanded(id, false);
             }
             NodeId::Page(key) => {
-                if let Some(parent) = key.relative_path.parent().filter(|p| !p.as_os_str().is_empty()) {
+                if let Some(parent) = key
+                    .relative_path
+                    .parent()
+                    .filter(|p| !p.as_os_str().is_empty())
+                {
                     self.navigator
                         .set_nav_cursor(NodeId::Group(parent.to_path_buf()));
                 }
