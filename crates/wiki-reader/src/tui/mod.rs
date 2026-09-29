@@ -4,6 +4,7 @@
 
 pub mod action;
 pub mod app;
+pub mod editor;
 pub mod focus;
 pub mod highlight;
 pub mod hit;

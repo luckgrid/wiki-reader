@@ -42,7 +42,7 @@ pub fn run(root: &Path) -> io::Result<()> {
     let mut guard = TerminalGuard { mouse: false };
     execute!(stdout(), EnableMouseCapture)?;
     guard.mouse = true;
-    let result = run_loop(&mut terminal, &mut app);
+    let result = run_loop(&mut terminal, &mut app, &mut guard);
     drop(guard);
     result
 }
@@ -70,7 +70,11 @@ fn install_panic_hook() {
     }));
 }
 
-fn run_loop(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
+fn run_loop(
+    terminal: &mut DefaultTerminal,
+    app: &mut App,
+    guard: &mut TerminalGuard,
+) -> io::Result<()> {
     loop {
         terminal.draw(|frame| draw(frame, app))?;
         if app.quit {
@@ -83,7 +87,9 @@ fn run_loop(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
                     let (action, next_chord) =
                         keymap::map(key, app.focus, app.input_mode, app.chord);
                     app.chord = next_chord;
-                    if let Some(action) = action {
+                    if let Some(Action::OpenInEditor) = action {
+                        suspend_run_editor(terminal, app, guard)?;
+                    } else if let Some(action) = action {
                         app.update(action);
                     }
                 }
@@ -96,6 +102,24 @@ fn run_loop(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
             }
         }
     }
+}
+
+/// Leave alt-screen/raw/mouse, run `$EDITOR`, then re-enter (`TerminalGuard` semantics).
+fn suspend_run_editor(
+    terminal: &mut DefaultTerminal,
+    app: &mut App,
+    guard: &mut TerminalGuard,
+) -> io::Result<()> {
+    if guard.mouse {
+        let _ = execute!(stdout(), DisableMouseCapture);
+        guard.mouse = false;
+    }
+    ratatui::restore();
+    app.open_in_editor();
+    *terminal = ratatui::try_init()?;
+    execute!(stdout(), EnableMouseCapture)?;
+    guard.mouse = true;
+    Ok(())
 }
 
 pub(crate) fn apply_mouse(

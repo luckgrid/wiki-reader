@@ -8,6 +8,7 @@ use wiki_reader_core::nav::{Effect, NavStop, Navigator, NodeId, ViewState};
 use wiki_reader_core::provider::{CollectionProvider, FsProvider, PageKey};
 
 use super::action::Action;
+use super::editor::{EditorLauncher, SystemEditor};
 use super::focus::FocusPane;
 use super::hit::HitMap;
 use super::keymap::{Chord, InputMode};
@@ -79,6 +80,8 @@ pub struct App {
     pub pending_external: Option<String>,
     /// External link opener (swappable in tests).
     pub(crate) opener: Box<dyn Opener>,
+    /// `$EDITOR` launcher (swappable in tests).
+    pub(crate) editor: Box<dyn EditorLauncher>,
     /// Search overlay (None when closed).
     pub search: Option<SearchOverlay>,
     /// Optional filesystem watcher (live reload).
@@ -143,6 +146,7 @@ impl App {
             input_mode: InputMode::Normal,
             pending_external: None,
             opener: Box::new(SystemOpener),
+            editor: Box::new(SystemEditor),
             search: None,
             watcher,
             rebuild_rx: None,
@@ -337,6 +341,7 @@ impl App {
                 self.message.clear();
             }
             Action::ToggleViewMode => self.toggle_view_mode(),
+            Action::OpenInEditor => self.open_in_editor(),
             Action::None => {}
         }
     }
@@ -560,6 +565,32 @@ impl App {
         };
         self.navigator.set_view_mode(new_mode);
         self.reload_page_keeping_view(&key, source, source_scroll);
+    }
+
+    /// Open the current page in `$VISUAL`/`$EDITOR` at the cursor's source line.
+    ///
+    /// Callers that own the terminal must suspend/restore around this (see
+    /// `events`); tests inject a recording launcher and call
+    /// [`Self::open_in_editor_with`].
+    pub(crate) fn open_in_editor(&mut self) {
+        self.open_in_editor_with(crate::tui::editor::resolve_editor());
+    }
+
+    pub(crate) fn open_in_editor_with(&mut self, editor: Option<String>) {
+        let Some(editor) = editor else {
+            self.message = "no $VISUAL or $EDITOR set".into();
+            return;
+        };
+        let key = self.navigator.tab().current().page.clone();
+        let path = crate::tui::editor::page_abs_path(self.provider.root(), &key.relative_path);
+        let source = self.doc.source_cursor(self.cursor_line);
+        let source_scroll = self.doc.source_cursor(self.scroll);
+        let line_1based = source.saturating_add(1);
+        let cmd = crate::tui::editor::build_editor_command(&editor, &path, line_1based);
+        match self.editor.launch(&cmd) {
+            Ok(()) => self.reload_page_keeping_view(&key, source, source_scroll),
+            Err(err) => self.message = format!("editor failed: {err}"),
+        }
     }
 
     /// Poll the filesystem watcher and reindex when dirty (rebuild off UI thread).

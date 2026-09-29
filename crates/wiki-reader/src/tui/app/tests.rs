@@ -986,6 +986,49 @@ fn heading_jump_works_in_raw_and_after_toggle() {
     );
 }
 
+#[test]
+fn open_in_editor_no_env_sets_message() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.open_in_editor_with(None);
+    assert!(
+        app.message.contains("$VISUAL") || app.message.contains("$EDITOR"),
+        "expected no-editor message, got {:?}",
+        app.message
+    );
+}
+
+#[test]
+fn open_in_editor_records_command_and_keeps_source_line() {
+    use crate::tui::editor::RecordingEditor;
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/README.md"),
+    }));
+    let _ = draw_app(&mut app, 120, 24);
+    for _ in 0..8 {
+        app.update(Action::ViewerDown);
+    }
+    let source = app.doc.source_cursor(app.cursor_line);
+    let recorder = RecordingEditor::default();
+    let log = recorder.launched.clone();
+    app.editor = Box::new(recorder);
+    app.open_in_editor_with(Some("nvim".into()));
+    let cmds = log.lock().expect("lock");
+    assert_eq!(cmds.len(), 1);
+    assert_eq!(cmds[0].program, "nvim");
+    assert_eq!(cmds[0].args[0], format!("+{}", source.saturating_add(1)));
+    assert!(
+        cmds[0].args[1].ends_with("architecture/README.md"),
+        "path={}",
+        cmds[0].args[1]
+    );
+    drop(cmds);
+    assert_eq!(app.doc.source_cursor(app.cursor_line), source);
+}
+
 #[derive(Default)]
 struct LogOpener(std::sync::Arc<std::sync::Mutex<Vec<String>>>);
 
