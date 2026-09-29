@@ -91,8 +91,9 @@ impl CollectionProvider for FsProvider {
             .hidden(false) // content-model: include dot-dirs unless gitignored
             .require_git(false)
             .filter_entry(|e| {
-                let name = e.file_name();
-                name != ".git" && name != ".jj"
+                e.file_name()
+                    .to_str()
+                    .is_none_or(|n| !crate::watch::is_vcs_dir_name(n))
             })
             .build();
 

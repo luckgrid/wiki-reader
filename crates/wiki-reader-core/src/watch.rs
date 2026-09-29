@@ -1,4 +1,4 @@
-//! Filesystem watcher: notify-debouncer-mini → markdown-only dirty pings.
+//! Filesystem watcher: notify-debouncer-mini → markdown/dir dirty pings.
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
@@ -18,7 +18,7 @@ pub struct PollDirty {
     pub errors: u32,
 }
 
-/// Debounced watcher. Only markdown paths under the collection root set dirty.
+/// Debounced watcher. Markdown pages and directory events under the root set dirty.
 pub struct Watcher {
     rx: Receiver<notify_debouncer_mini::DebounceEventResult>,
     root: PathBuf,
@@ -33,9 +33,18 @@ impl Watcher {
     ///
     /// Returns when the path cannot be canonicalized or notify cannot watch it.
     pub fn start(root: &Path) -> Result<Self, notify::Error> {
+        Self::start_with_debounce(root, Duration::from_millis(250))
+    }
+
+    /// Like [`start`] with a custom debounce window (tests use a short value).
+    ///
+    /// # Errors
+    ///
+    /// Returns when the path cannot be canonicalized or notify cannot watch it.
+    pub fn start_with_debounce(root: &Path, debounce: Duration) -> Result<Self, notify::Error> {
         let root = std::fs::canonicalize(root).map_err(notify::Error::io)?;
         let (tx, rx) = mpsc::channel();
-        let mut debouncer = new_debouncer(Duration::from_millis(250), tx)?;
+        let mut debouncer = new_debouncer(debounce, tx)?;
         debouncer.watcher().watch(&root, RecursiveMode::Recursive)?;
         Ok(Self {
             rx,
@@ -50,7 +59,7 @@ impl Watcher {
         &self.root
     }
 
-    /// Non-blocking: relevant markdown activity / error counts since last poll.
+    /// Non-blocking: relevant markdown / directory activity / error counts since last poll.
     #[must_use]
     pub fn poll_dirty(&self) -> PollDirty {
         let mut out = PollDirty::default();
@@ -72,7 +81,19 @@ impl Watcher {
     }
 }
 
-/// True when `path` is a markdown file under `root`, not inside ignored dirs.
+/// True when a VCS metadata directory name should be ignored (matches `FsProvider`).
+#[must_use]
+pub fn is_vcs_dir_name(name: &str) -> bool {
+    name == ".git" || name == ".jj"
+}
+
+/// True when `path` should trigger a reindex (aligned with discovery, not cargo `target`).
+///
+/// Markdown pages under the root count, including dot-dirs like `.planning/`.
+/// Directory paths (rename/delete) also count. Non-markdown files do not.
+///
+/// ponytail: gitignore is not consulted on watch events (ceiling: may dirty
+/// ignored paths); upgrade with `ignore::gitignore` matching if noise bites.
 #[must_use]
 pub fn path_is_relevant(root: &Path, path: &Path) -> bool {
     let rel = path.strip_prefix(root).unwrap_or(path);
@@ -83,11 +104,16 @@ pub fn path_is_relevant(root: &Path, path: &Path) -> bool {
         let Some(name) = name.to_str() else {
             continue;
         };
-        if name == ".git" || name == ".jj" || name == "target" || name.starts_with('.') {
+        if is_vcs_dir_name(name) {
             return false;
         }
     }
-    is_markdown(path)
+    if is_markdown(path) {
+        return true;
+    }
+    // Directory rename/delete: still on disk as a dir, or a path with no extension
+    // (notify often reports the directory path without a trailing slash).
+    path.is_dir() || path.extension().is_none()
 }
 
 #[cfg(test)]
@@ -97,9 +123,25 @@ mod tests {
     use std::thread;
     use tempfile::tempdir;
 
+    const TEST_DEBOUNCE: Duration = Duration::from_millis(50);
+
+    fn start_test(root: &Path) -> Watcher {
+        Watcher::start_with_debounce(root, TEST_DEBOUNCE).unwrap()
+    }
+
+    fn wait_dirty(watcher: &Watcher) -> bool {
+        for _ in 0..40 {
+            thread::sleep(Duration::from_millis(50));
+            if watcher.poll_dirty().dirty {
+                return true;
+            }
+        }
+        false
+    }
+
     #[test]
     fn nonexistent_root_returns_err() {
-        let err = Watcher::start(Path::new("/definitely/not/here-wiki-reader-watch"));
+        let err = Watcher::start(Path::new("/definitely/not-here-wiki-reader-watch"));
         assert!(err.is_err());
     }
 
@@ -108,20 +150,11 @@ mod tests {
         let dir = tempdir().unwrap();
         let root = dir.path();
         fs::write(root.join("a.md"), "# a\n").unwrap();
-        let watcher = Watcher::start(root).unwrap();
-        // clear startup noise
-        thread::sleep(Duration::from_millis(300));
+        let watcher = start_test(root);
+        thread::sleep(TEST_DEBOUNCE);
         let _ = watcher.poll_dirty();
         fs::write(root.join("b.md"), "# b\n").unwrap();
-        let mut saw = false;
-        for _ in 0..20 {
-            thread::sleep(Duration::from_millis(100));
-            if watcher.poll_dirty().dirty {
-                saw = true;
-                break;
-            }
-        }
-        assert!(saw, "expected dirty after write");
+        assert!(wait_dirty(&watcher), "expected dirty after write");
     }
 
     #[test]
@@ -131,17 +164,31 @@ mod tests {
         fs::write(root.join("a.md"), "# a\n").unwrap();
         let git = root.join(".git");
         fs::create_dir(&git).unwrap();
-        let watcher = Watcher::start(root).unwrap();
-        thread::sleep(Duration::from_millis(300));
+        let watcher = start_test(root);
+        thread::sleep(TEST_DEBOUNCE);
         let _ = watcher.poll_dirty();
 
         fs::write(git.join("HEAD"), "ref: refs/heads/main\n").unwrap();
         fs::write(root.join("notes.txt"), "nope\n").unwrap();
-        thread::sleep(Duration::from_millis(400));
+        thread::sleep(TEST_DEBOUNCE.saturating_mul(2));
         assert!(
             !watcher.poll_dirty().dirty,
             ".git / .txt must not set dirty"
         );
+    }
+
+    #[test]
+    fn planning_dot_dir_edit_sets_dirty() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        let planning = root.join(".planning");
+        fs::create_dir(&planning).unwrap();
+        fs::write(planning.join("p.md"), "# p\n").unwrap();
+        let watcher = start_test(root);
+        thread::sleep(TEST_DEBOUNCE);
+        let _ = watcher.poll_dirty();
+        fs::write(planning.join("p.md"), "# p2\n").unwrap();
+        assert!(wait_dirty(&watcher), ".planning/ edit should dirty");
     }
 
     #[test]
@@ -150,22 +197,16 @@ mod tests {
         let root = dir.path();
         fs::write(root.join("a.md"), "# a\n").unwrap();
         fs::write(root.join("b.md"), "# b\n").unwrap();
-        let watcher = Watcher::start(root).unwrap();
-        thread::sleep(Duration::from_millis(300));
+        let watcher = start_test(root);
+        thread::sleep(TEST_DEBOUNCE);
         let _ = watcher.poll_dirty();
 
         fs::write(root.join("a.md"), "# a2\n").unwrap();
         fs::write(root.join("b.md"), "# b2\n").unwrap();
-        let mut saw = false;
-        for _ in 0..20 {
-            thread::sleep(Duration::from_millis(100));
-            if watcher.poll_dirty().dirty {
-                saw = true;
-                break;
-            }
-        }
-        assert!(saw, "two .md edits in one window should dirty");
-        // Rebuild sees both (Index::build lists both).
+        assert!(
+            wait_dirty(&watcher),
+            "two .md edits in one window should dirty"
+        );
         let provider = crate::provider::FsProvider::open(root).unwrap();
         let index = crate::Index::build(&provider).unwrap();
         assert_eq!(index.pages.len(), 2);
@@ -176,32 +217,55 @@ mod tests {
         let dir = tempdir().unwrap();
         let root = dir.path();
         fs::write(root.join("a.md"), "# a\n").unwrap();
-        let watcher = Watcher::start(root).unwrap();
-        thread::sleep(Duration::from_millis(300));
+        let watcher = start_test(root);
+        thread::sleep(TEST_DEBOUNCE);
         let _ = watcher.poll_dirty();
 
         let tmp = root.join("a.md.tmp");
         fs::write(&tmp, "# a rewritten\n").unwrap();
         fs::rename(&tmp, root.join("a.md")).unwrap();
-        let mut saw = false;
-        for _ in 0..20 {
-            thread::sleep(Duration::from_millis(100));
-            if watcher.poll_dirty().dirty {
-                saw = true;
-                break;
-            }
-        }
-        assert!(saw, "atomic rename onto .md should dirty");
+        assert!(wait_dirty(&watcher), "atomic rename onto .md should dirty");
+    }
+
+    #[test]
+    fn directory_rename_sets_dirty() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        let docs = root.join("docs");
+        fs::create_dir(&docs).unwrap();
+        fs::write(docs.join("a.md"), "# a\n").unwrap();
+        let watcher = start_test(root);
+        thread::sleep(TEST_DEBOUNCE);
+        let _ = watcher.poll_dirty();
+        fs::rename(&docs, root.join("docs2")).unwrap();
+        assert!(wait_dirty(&watcher), "directory rename should dirty");
+    }
+
+    #[test]
+    fn directory_delete_sets_dirty() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        let docs = root.join("docs");
+        fs::create_dir(&docs).unwrap();
+        fs::write(docs.join("a.md"), "# a\n").unwrap();
+        let watcher = start_test(root);
+        thread::sleep(TEST_DEBOUNCE);
+        let _ = watcher.poll_dirty();
+        fs::remove_dir_all(&docs).unwrap();
+        assert!(wait_dirty(&watcher), "directory delete should dirty");
     }
 
     #[test]
     fn path_is_relevant_filters() {
         let root = Path::new("/wiki");
         assert!(path_is_relevant(root, Path::new("/wiki/foo.md")));
+        assert!(path_is_relevant(root, Path::new("/wiki/.planning/x.md")));
+        assert!(path_is_relevant(root, Path::new("/wiki/target/x.md")));
         assert!(!path_is_relevant(root, Path::new("/wiki/foo.txt")));
         assert!(!path_is_relevant(root, Path::new("/wiki/.git/HEAD")));
-        assert!(!path_is_relevant(root, Path::new("/wiki/target/x.md")));
-        assert!(!path_is_relevant(root, Path::new("/wiki/.hidden/x.md")));
+        assert!(!path_is_relevant(root, Path::new("/wiki/.jj/x.md")));
+        // Directory path (no extension): relevant for rename/delete.
+        assert!(path_is_relevant(root, Path::new("/wiki/docs")));
     }
 
     #[test]
@@ -218,18 +282,10 @@ mod tests {
             let _ = (real, link);
             return;
         }
-        let watcher = Watcher::start(&link).unwrap();
-        thread::sleep(Duration::from_millis(300));
+        let watcher = start_test(&link);
+        thread::sleep(TEST_DEBOUNCE);
         let _ = watcher.poll_dirty();
         fs::write(real.join("b.md"), "# b\n").unwrap();
-        let mut saw = false;
-        for _ in 0..20 {
-            thread::sleep(Duration::from_millis(100));
-            if watcher.poll_dirty().dirty {
-                saw = true;
-                break;
-            }
-        }
-        assert!(saw, "symlinked root should see events");
+        assert!(wait_dirty(&watcher), "symlinked root should see events");
     }
 }
