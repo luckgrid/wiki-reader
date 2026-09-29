@@ -113,6 +113,8 @@ pub enum Effect {
     Notice(String),
     /// Confirm before opening an external URL.
     ConfirmExternal(String),
+    /// Current page no longer exists; keep history for Back.
+    PageRemoved,
 }
 
 /// Pure navigation state machine (no terminal deps).
@@ -203,10 +205,16 @@ impl Navigator {
         if !self.index.pages.contains_key(&cur) {
             self.notice = Some("page removed".into());
             // Keep history so Back still works; do not LoadPage a missing file.
-            return vec![Effect::Notice("page removed".into())];
+            return vec![Effect::PageRemoved];
         }
+        self.notice = None;
         expand_ancestors(&self.nav.tree, &cur, &mut self.nav.expanded);
-        self.effects_for_current()
+        // Same-page reload: restore live cursor/scroll — do not re-apply the anchor.
+        vec![
+            Effect::LoadPage(cur.clone()),
+            Effect::RevealInTree(cur),
+            Effect::ScrollTo(None),
+        ]
     }
 
     /// Open tabs.
@@ -774,7 +782,55 @@ mod tests {
         let index = nav.index().clone();
         let effects = nav.reindex(index, ViewState::default());
         assert!(effects.iter().any(|e| matches!(e, Effect::LoadPage(_))));
+        assert!(
+            effects.iter().any(|e| matches!(e, Effect::ScrollTo(None))),
+            "reindex must restore view, not re-apply anchor: {effects:?}"
+        );
         assert_eq!(nav.tab().history.len(), 2);
+    }
+
+    #[test]
+    fn reindex_anchored_page_keeps_saved_cursor() {
+        let mut nav = worked();
+        nav.go_to_page(key("README.md"), ViewState::default());
+        // Navigate via anchor then move the live cursor away from the heading.
+        nav.navigate(
+            Target::Anchor("worked-example-wiki".into()),
+            Disposition::Replace,
+            ViewState::default(),
+        );
+        assert!(nav.tab().current().anchor.is_some());
+        let index = nav.index().clone();
+        let effects = nav.reindex(index, view(26, 10));
+        assert!(
+            effects.iter().any(|e| matches!(e, Effect::ScrollTo(None))),
+            "anchored reload must not ScrollTo(Some): {effects:?}"
+        );
+        assert!(
+            !effects
+                .iter()
+                .any(|e| matches!(e, Effect::ScrollTo(Some(_))))
+        );
+        assert_eq!(nav.tab().current().cursor_line, 26);
+        assert_eq!(nav.tab().current().scroll, 10);
+    }
+
+    #[test]
+    fn reindex_missing_page_emits_page_removed() {
+        let mut nav = worked();
+        nav.go_to_page(key("architecture/README.md"), ViewState::default());
+        // Empty-ish index: rebuild from a tiny temp collection without that page.
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("only.md"), "# only\n").unwrap();
+        let index = Index::build(&FsProvider::open(dir.path()).unwrap()).unwrap();
+        let effects = nav.reindex(index, ViewState::default());
+        assert!(
+            matches!(effects.as_slice(), [Effect::PageRemoved]),
+            "{effects:?}"
+        );
+        assert_eq!(nav.notice(), Some("page removed"));
+        // History preserved for Back.
+        assert!(nav.tab().history.len() >= 2);
     }
 
     #[test]
