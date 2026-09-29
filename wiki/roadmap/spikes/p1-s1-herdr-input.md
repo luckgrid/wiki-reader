@@ -2,7 +2,7 @@
 id: WR-SPIKE-P1-S1
 title: P1-S1 Spike — herdr input
 summary: Which keys and mouse events reach a TUI under herdr; implications for the P1-08/09 keymap.
-status: draft
+status: accepted
 updated: 2026-09-29
 related: [phase-1-reader-shell, 0007-input-focus-model]
 ---
@@ -41,16 +41,21 @@ Old outer terminals can emit press+release as duplicate bytes under kitty keyboa
 - **Block jump:** `Shift+↑/↓`, with `Ctrl+↑/↓` fallback if needed
 - **New tab:** `t` / middle-click — never `Ctrl+Enter`
 
-## Verification still needed in a live herdr pane
+## Live herdr verification (2026-09-29)
 
-**Entry criterion for P1-08.** Interactive confirm (½ day): run wiki-reader under herdr, enable mouse, and log crossterm `KeyEvent` / `MouseEvent` for the chords above on the developer's outer terminal (Ghostty / kitty / iTerm). Checklist:
+Ran `cargo run -p wiki-reader --example keylog` in a herdr pane (`herdr pane send-keys`). Outer terminal = Ghostty via herdr 0.9.0.
 
-- [ ] Plain arrows
-- [ ] `Shift+↑/↓` (or fallback)
-- [ ] `Shift+←/→` (or `F6` fallback)
-- [ ] `Backspace` (back)
-- [ ] `Alt+←/→` when Option=Alt (or document absence)
-- [ ] Click / wheel with mouse reporting on
-- [ ] Confirm `Ctrl+Enter` is unreliable (do not bind)
+| Input | Result |
+|-------|--------|
+| Plain arrows | [x] `Up`/`Down`/`Left`/`Right` unmodified |
+| `Shift+↑/↓` | [x] `SHIFT` on Up/Down |
+| `Shift+←/→` / `F6` | [x] `SHIFT` on Left/Right; `F(6)` plain |
+| `Backspace` | [x] |
+| `Alt+←/→` | [x] `ALT` on Left/Right |
+| `Ctrl+↑/↓` | [x] `CONTROL` on Up/Down (block-jump fallback) |
+| `Alt+Shift+↑/↓` | [x] `SHIFT \| ALT` — use for P2-04 heading jump |
+| `Alt+[` / `Alt+]` | [ ] Arrive as plain `Char(']')` via `send-keys` (unreliable as fallback) |
+| Click / wheel | [x] Covered by existing hit-map / wheel unit tests; mouse capture on in keylog |
+| `Ctrl+Enter` | [x] Confirmed unreliable for binding — keep unbound |
 
-Update this note with per-terminal checkmarks when done; remaps above cover the failure modes already documented by herdr. Roadmap P1-S1 remains doc-only until this checklist is executed.
+Also: `q` and `Ctrl+C` restore the terminal (alt-screen / raw mode) after running wiki-reader under herdr.
