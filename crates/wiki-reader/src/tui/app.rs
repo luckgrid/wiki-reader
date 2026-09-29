@@ -1,4 +1,4 @@
-//! Placeholder app: four regions showing the collection root; q/Esc quit.
+//! App shell: owns [`Navigator`]; placeholder regions until P1-07+.
 
 use std::io;
 use std::path::Path;
@@ -8,22 +8,39 @@ use ratatui::Frame;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::widgets::{Block, Borders, Paragraph};
+use wiki_reader_core::Index;
+use wiki_reader_core::nav::Navigator;
+use wiki_reader_core::provider::FsProvider;
 
 #[cfg(test)]
 use ratatui::Terminal;
 
-/// Run the placeholder TUI until quit. Restores the terminal on every exit path.
+/// Run the TUI until quit. Restores the terminal on every exit path.
+///
+/// # Errors
+///
+/// Returns when terminal init/draw fails or the collection cannot be indexed.
 pub fn run(root: &Path) -> io::Result<()> {
+    let provider = FsProvider::open(root).map_err(io::Error::other)?;
+    let index = Index::build(&provider).map_err(io::Error::other)?;
+    let navigator = Navigator::new(index, None);
     let mut terminal = ratatui::try_init()?;
-    let result = run_loop(&mut terminal, root);
+    let result = run_loop(&mut terminal, root, &navigator);
     ratatui::restore();
     result
 }
 
-fn run_loop(terminal: &mut DefaultTerminal, root: &Path) -> io::Result<()> {
+fn run_loop(terminal: &mut DefaultTerminal, root: &Path, navigator: &Navigator) -> io::Result<()> {
     let root_display = root.display().to_string();
+    let page = navigator
+        .tab()
+        .current()
+        .page
+        .relative_path
+        .display()
+        .to_string();
     loop {
-        terminal.draw(|frame| draw(frame, &root_display))?;
+        terminal.draw(|frame| draw(frame, &root_display, &page))?;
         if event::poll(std::time::Duration::from_millis(250))? {
             match event::read()? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
@@ -36,7 +53,7 @@ fn run_loop(terminal: &mut DefaultTerminal, root: &Path) -> io::Result<()> {
     }
 }
 
-fn draw(frame: &mut Frame<'_>, root: &str) {
+fn draw(frame: &mut Frame<'_>, root: &str, page: &str) {
     let area = frame.area();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -63,8 +80,10 @@ fn draw(frame: &mut Frame<'_>, root: &str) {
         mid[0],
     );
     frame.render_widget(
-        Paragraph::new(format!("viewer\n\nroot: {root}\n\nq / Esc to quit"))
-            .block(Block::default().borders(Borders::ALL).title("Viewer")),
+        Paragraph::new(format!(
+            "viewer\n\nroot: {root}\npage: {page}\n\nq / Esc to quit"
+        ))
+        .block(Block::default().borders(Borders::ALL).title("Viewer")),
         mid[1],
     );
 
@@ -80,7 +99,9 @@ fn draw(frame: &mut Frame<'_>, root: &str) {
 pub fn render_placeholder(root: &str, width: u16, height: u16) -> String {
     let backend = ratatui::backend::TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).expect("test terminal");
-    terminal.draw(|frame| draw(frame, root)).expect("draw");
+    terminal
+        .draw(|frame| draw(frame, root, "README.md"))
+        .expect("draw");
     format!("{:?}", terminal.backend().buffer())
 }
 

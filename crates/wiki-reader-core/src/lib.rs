@@ -12,6 +12,7 @@ pub mod provider;
 pub mod watch;
 
 pub use error::Error;
+pub use index::Index;
 
 #[cfg(test)]
 mod tests {
