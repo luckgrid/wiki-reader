@@ -10,7 +10,7 @@ use crate::index::Index;
 use crate::provider::PageKey;
 
 use super::resolve::{Target, resolve};
-use super::tree::{NavTree, NodeId};
+use super::tree::{NavItem, NavTree, NodeId};
 
 /// How a navigation should affect tabs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -183,14 +183,26 @@ impl Navigator {
         self.tabs[self.active].current_mut().mode = mode;
     }
 
-    /// Replace the index after a filesystem change; preserve tabs/history.
+    /// Replace the index after a filesystem change; preserve tabs/history and live view.
     #[must_use]
-    pub fn reindex(&mut self, index: Index) -> Vec<Effect> {
+    pub fn reindex(&mut self, index: Index, view: ViewState) -> Vec<Effect> {
+        self.save_view(view);
         let cur = self.tab().current().page.clone();
         self.index = index;
         self.nav.tree = NavTree::build(&self.index);
+
+        let ids = collect_node_ids(&self.nav.tree.items);
+        self.nav.expanded.retain(|id| ids.contains(id));
+
+        if let NavStop::Node(id) = &self.nav.cursor
+            && !ids.contains(id)
+        {
+            self.nav.cursor = NavStop::Search;
+        }
+
         if !self.index.pages.contains_key(&cur) {
             self.notice = Some("page removed".into());
+            // Keep history so Back still works; do not LoadPage a missing file.
             return vec![Effect::Notice("page removed".into())];
         }
         expand_ancestors(&self.nav.tree, &cur, &mut self.nav.expanded);
@@ -446,6 +458,27 @@ impl Navigator {
             Effect::RevealInTree(page),
             Effect::ScrollTo(anchor),
         ]
+    }
+}
+
+fn collect_node_ids(items: &[NavItem]) -> HashSet<NodeId> {
+    let mut ids = HashSet::new();
+    collect_node_ids_into(items, &mut ids);
+    ids.insert(NodeId::OtherPages);
+    ids
+}
+
+fn collect_node_ids_into(items: &[NavItem], ids: &mut HashSet<NodeId>) {
+    for item in items {
+        match item {
+            NavItem::Page { id, .. } => {
+                ids.insert(id.clone());
+            }
+            NavItem::Group { id, children, .. } => {
+                ids.insert(id.clone());
+                collect_node_ids_into(children, ids);
+            }
+        }
     }
 }
 
@@ -739,7 +772,7 @@ mod tests {
         let mut nav = worked();
         nav.go_to_page(key("architecture/README.md"), ViewState::default());
         let index = nav.index().clone();
-        let effects = nav.reindex(index);
+        let effects = nav.reindex(index, ViewState::default());
         assert!(effects.iter().any(|e| matches!(e, Effect::LoadPage(_))));
         assert_eq!(nav.tab().history.len(), 2);
     }

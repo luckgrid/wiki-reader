@@ -160,7 +160,9 @@ impl FsProvider {
     }
 }
 
-fn is_markdown(path: &Path) -> bool {
+/// True when the path looks like a markdown page (`.md` / `.markdown`).
+#[must_use]
+pub fn is_markdown(path: &Path) -> bool {
     matches!(
         path.extension().and_then(|ext| ext.to_str()),
         Some("md" | "markdown")

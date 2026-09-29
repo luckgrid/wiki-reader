@@ -76,6 +76,7 @@ fn run_loop(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
         if app.quit {
             return Ok(());
         }
+        app.poll_watcher();
         if event::poll(std::time::Duration::from_millis(250))? {
             match event::read()? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => {

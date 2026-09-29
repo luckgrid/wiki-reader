@@ -79,6 +79,8 @@ pub struct App {
     pub(crate) opener: Box<dyn Opener>,
     /// Search overlay (None when closed).
     pub search: Option<SearchOverlay>,
+    /// Optional filesystem watcher (live reload).
+    pub(crate) watcher: Option<wiki_reader_core::watch::Watcher>,
 }
 
 impl App {
@@ -118,6 +120,7 @@ impl App {
             pending_external: None,
             opener: Box::new(SystemOpener),
             search: None,
+            watcher: wiki_reader_core::watch::Watcher::start(root).ok(),
         };
         let page = app.navigator.tab().current().page.clone();
         app.apply_effects(vec![
@@ -398,6 +401,22 @@ impl App {
         };
         self.navigator.set_view_mode(new_mode);
         self.reload_page_keeping_view(&key, source, source_scroll);
+    }
+
+    /// Poll the filesystem watcher and reindex when dirty.
+    pub(crate) fn poll_watcher(&mut self) {
+        let Some(watcher) = self.watcher.as_ref() else {
+            return;
+        };
+        if !watcher.poll_dirty() {
+            return;
+        }
+        let Ok(index) = Index::build(&self.provider) else {
+            return;
+        };
+        let view = self.view_state();
+        let effects = self.navigator.reindex(index, view);
+        self.apply_effects(effects);
     }
 
     pub(crate) fn apply_effects(&mut self, effects: Vec<Effect>) {
