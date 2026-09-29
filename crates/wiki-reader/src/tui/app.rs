@@ -15,7 +15,7 @@ use wiki_reader_core::nav::{Effect, Navigator, NodeId, ViewState};
 use wiki_reader_core::provider::{CollectionProvider, FsProvider, PageKey};
 
 use super::action::Action;
-use super::hit::HitMap;
+use super::hit::{Hit, HitMap};
 use super::keymap;
 use super::layout;
 use super::regions::status::{FocusPane, StatusModel};
@@ -32,6 +32,8 @@ pub struct App {
     pub focus: FocusPane,
     /// Side nav visible (or overlay forced open).
     pub nav_open: bool,
+    /// Side nav scroll offset (rows below the search line).
+    pub nav_scroll: u16,
     /// Raw page lines currently shown.
     pub lines: Vec<String>,
     /// Viewer cursor (0-based source line index).
@@ -68,6 +70,7 @@ impl App {
             provider,
             focus: FocusPane::Viewer,
             nav_open: true,
+            nav_scroll: 0,
             lines: Vec::new(),
             cursor_line: 0,
             scroll: 0,
@@ -298,7 +301,7 @@ fn run_loop(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
                     }
                 }
                 Event::Mouse(mouse) => {
-                    if let Some(action) = mouse_to_action(app, mouse) {
+                    if let Some(action) = apply_mouse(app, mouse) {
                         let nav_action = matches!(
                             action,
                             Action::GoToPage(_) | Action::PrevPage | Action::NextPage
@@ -315,14 +318,41 @@ fn run_loop(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
     }
 }
 
-fn mouse_to_action(
-    app: &App,
-    mouse: ratatui::crossterm::event::MouseEvent,
-) -> Option<Action> {
+fn apply_mouse(app: &mut App, mouse: ratatui::crossterm::event::MouseEvent) -> Option<Action> {
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) => {
             let hit = app.hit_map.hit_at(mouse.column, mouse.row)?;
             Some(HitMap::action_for(hit))
+        }
+        MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
+            let over_nav = app.hit_map.entries().iter().any(|(r, h)| {
+                mouse.column >= r.x
+                    && mouse.column < r.x.saturating_add(r.width)
+                    && mouse.row >= r.y
+                    && mouse.row < r.y.saturating_add(r.height)
+                    && matches!(
+                        h,
+                        Hit::FocusNav
+                            | Hit::NavItem(_)
+                            | Hit::NavGroupToggle(_)
+                            | Hit::NavSearchRow
+                    )
+            });
+            let up = matches!(mouse.kind, MouseEventKind::ScrollUp);
+            if over_nav {
+                app.nav_scroll = if up {
+                    app.nav_scroll.saturating_sub(1)
+                } else {
+                    app.nav_scroll.saturating_add(1)
+                };
+            } else {
+                app.scroll = if up {
+                    app.scroll.saturating_sub(1)
+                } else {
+                    app.scroll.saturating_add(1)
+                };
+            }
+            None
         }
         _ => None,
     }
@@ -376,6 +406,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
             &nav.expanded,
             &page,
             nav.cursor.as_ref(),
+            app.nav_scroll,
             app.focus == FocusPane::Nav,
             &theme,
             &mut app.hit_map,
@@ -405,7 +436,6 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::hit::Hit;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use ratatui::crossterm::event::MouseEvent;
@@ -422,9 +452,7 @@ mod tests {
         }
         let backend = TestBackend::new(width, height);
         let mut terminal = Terminal::new(backend).expect("terminal");
-        terminal
-            .draw(|frame| draw(frame, &mut app))
-            .expect("draw");
+        terminal.draw(|frame| draw(frame, &mut app)).expect("draw");
         format!("{:?}", terminal.backend().buffer())
     }
 
@@ -505,7 +533,7 @@ mod tests {
             row: py,
             modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
         };
-        if let Some(a) = mouse_to_action(&via_mouse, mouse) {
+        if let Some(a) = apply_mouse(&mut via_mouse, mouse) {
             via_mouse.update(a);
         }
         assert_eq!(via_mouse.navigator.tab().current().page, page_key);
@@ -541,6 +569,78 @@ mod tests {
         assert_eq!(
             app.navigator.tab().current().page.relative_path,
             PathBuf::from("architecture/README.md")
+        );
+    }
+
+    #[test]
+    fn nav_item_click_matches_go_to_page() {
+        let root = fixture();
+        let target = PageKey {
+            collection_id: "worked-example".into(),
+            relative_path: PathBuf::from("decisions/0001-stack.md"),
+        };
+        let mut via_action = App::new(&root).unwrap();
+        via_action.update(Action::GoToPage(target.clone()));
+        let hist_a: Vec<_> = via_action
+            .navigator
+            .tab()
+            .history
+            .iter()
+            .map(|l| l.page.relative_path.clone())
+            .collect();
+
+        let mut via_click = App::new(&root).unwrap();
+        // Expand decisions so the page row is visible.
+        via_click
+            .navigator
+            .set_group_expanded(NodeId::Group(PathBuf::from("decisions")), true);
+        let backend = TestBackend::new(120, 30);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| draw(f, &mut via_click)).unwrap();
+        let action = {
+            let hit = via_click
+                .hit_map
+                .entries()
+                .iter()
+                .find(|(_, h)| matches!(h, Hit::NavItem(NodeId::Page(k)) if k == &target));
+            assert!(hit.is_some(), "nav item hit missing");
+            HitMap::action_for(&hit.unwrap().1)
+        };
+        via_click.update(action);
+        let hist_b: Vec<_> = via_click
+            .navigator
+            .tab()
+            .history
+            .iter()
+            .map(|l| l.page.relative_path.clone())
+            .collect();
+        assert_eq!(hist_a, hist_b);
+        assert!(
+            via_click
+                .navigator
+                .nav()
+                .expanded
+                .contains(&NodeId::Group(PathBuf::from("decisions")))
+        );
+    }
+
+    #[test]
+    fn prev_next_auto_expands_ancestors() {
+        let root = fixture();
+        let mut app = App::new(&root).unwrap();
+        app.update(Action::NextPage); // architecture README
+        app.update(Action::NextPage); // design-system README
+        assert!(
+            app.navigator
+                .nav()
+                .expanded
+                .contains(&NodeId::Group(PathBuf::from("architecture")))
+        );
+        assert!(
+            app.navigator
+                .nav()
+                .expanded
+                .contains(&NodeId::Group(PathBuf::from("architecture/design-system")))
         );
     }
 }
