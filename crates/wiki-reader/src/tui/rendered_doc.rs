@@ -98,6 +98,10 @@ impl ViewerDoc for RenderedViewerDoc {
         &self.inner.block_starts
     }
 
+    fn heading_lines(&self) -> Vec<u32> {
+        self.inner.headings.iter().map(|(_, line)| *line).collect()
+    }
+
     fn anchor_line(&self, slug: &str) -> Option<u32> {
         self.inner
             .headings

@@ -35,6 +35,24 @@ impl App {
         self.ensure_cursor_visible();
     }
 
+    pub(crate) fn viewer_heading(&mut self, dir: i32) {
+        self.focused_item = None;
+        let headings = self.doc.heading_lines();
+        let cur = self.cursor_line.saturating_add(1);
+        if dir < 0 {
+            if let Some(h) = headings.iter().rev().find(|&&h| h < cur).copied() {
+                self.cursor_line = h.saturating_sub(1);
+            } else if let Some(&first) = headings.first() {
+                self.cursor_line = first.saturating_sub(1);
+            }
+        } else if let Some(h) = headings.iter().find(|&&h| h > cur).copied() {
+            self.cursor_line = h.saturating_sub(1);
+        } else if let Some(&last) = headings.last() {
+            self.cursor_line = last.saturating_sub(1);
+        }
+        self.ensure_cursor_visible();
+    }
+
     pub(crate) fn ensure_cursor_visible(&mut self) {
         let page_h = u32::from(self.viewer_rows.max(1));
         if self.cursor_line < self.scroll {

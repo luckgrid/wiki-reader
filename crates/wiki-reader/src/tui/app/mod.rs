@@ -198,6 +198,8 @@ impl App {
                 | Action::ViewerDown
                 | Action::ViewerBlockUp
                 | Action::ViewerBlockDown
+                | Action::ViewerHeadingUp
+                | Action::ViewerHeadingDown
                 | Action::ViewerPageUp
                 | Action::ViewerPageDown
                 | Action::ViewerHome
@@ -297,6 +299,8 @@ impl App {
             Action::ViewerDown => self.viewer_move_line(1),
             Action::ViewerBlockUp => self.viewer_block(-1),
             Action::ViewerBlockDown => self.viewer_block(1),
+            Action::ViewerHeadingUp => self.viewer_heading(-1),
+            Action::ViewerHeadingDown => self.viewer_heading(1),
             Action::ViewerPageUp => {
                 let step = i32::from(self.viewer_rows.saturating_sub(1).max(1));
                 self.viewer_move_line(-step);

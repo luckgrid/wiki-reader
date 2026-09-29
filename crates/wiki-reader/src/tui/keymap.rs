@@ -125,22 +125,28 @@ pub fn map_pane(key: KeyEvent, focus: FocusPane) -> Option<Action> {
             KeyCode::Enter => Some(Action::NavActivate),
             _ => None,
         },
-        FocusPane::Viewer => match key.code {
-            KeyCode::Up if shift || ctrl => Some(Action::ViewerBlockUp),
-            KeyCode::Down if shift || ctrl => Some(Action::ViewerBlockDown),
-            KeyCode::Char('k') | KeyCode::Up => Some(Action::ViewerUp),
-            KeyCode::Char('j') | KeyCode::Down => Some(Action::ViewerDown),
-            KeyCode::PageUp => Some(Action::ViewerPageUp),
-            KeyCode::Char(' ') if shift => Some(Action::ViewerPageUp),
-            KeyCode::PageDown | KeyCode::Char(' ') => Some(Action::ViewerPageDown),
-            KeyCode::Home => Some(Action::ViewerHome),
-            KeyCode::End | KeyCode::Char('G') => Some(Action::ViewerEnd),
-            KeyCode::BackTab => Some(Action::ViewerBackTab),
-            KeyCode::Tab if shift => Some(Action::ViewerBackTab),
-            KeyCode::Tab => Some(Action::ViewerTab),
-            KeyCode::Enter => Some(Action::ViewerActivate),
-            _ => None,
-        },
+        FocusPane::Viewer => {
+            let alt = key.modifiers.contains(KeyModifiers::ALT);
+            match key.code {
+                // herdr key log 2026-09-29: Alt+Shift+↑/↓ arrives; Alt+[/] does not keep ALT
+                KeyCode::Up if alt && shift => Some(Action::ViewerHeadingUp),
+                KeyCode::Down if alt && shift => Some(Action::ViewerHeadingDown),
+                KeyCode::Up if shift || ctrl => Some(Action::ViewerBlockUp),
+                KeyCode::Down if shift || ctrl => Some(Action::ViewerBlockDown),
+                KeyCode::Char('k') | KeyCode::Up => Some(Action::ViewerUp),
+                KeyCode::Char('j') | KeyCode::Down => Some(Action::ViewerDown),
+                KeyCode::PageUp => Some(Action::ViewerPageUp),
+                KeyCode::Char(' ') if shift => Some(Action::ViewerPageUp),
+                KeyCode::PageDown | KeyCode::Char(' ') => Some(Action::ViewerPageDown),
+                KeyCode::Home => Some(Action::ViewerHome),
+                KeyCode::End | KeyCode::Char('G') => Some(Action::ViewerEnd),
+                KeyCode::BackTab => Some(Action::ViewerBackTab),
+                KeyCode::Tab if shift => Some(Action::ViewerBackTab),
+                KeyCode::Tab => Some(Action::ViewerTab),
+                KeyCode::Enter => Some(Action::ViewerActivate),
+                _ => None,
+            }
+        }
     }
 }
 
@@ -263,5 +269,18 @@ mod tests {
             Chord::None,
         );
         assert_eq!(a, Some(Action::Quit));
+    }
+
+    #[test]
+    fn keymap_heading_jump_alt_shift() {
+        let up = key_mod(KeyCode::Up, KeyModifiers::ALT | KeyModifiers::SHIFT);
+        let down = key_mod(KeyCode::Down, KeyModifiers::ALT | KeyModifiers::SHIFT);
+        let (got_up, _) = map(up, FocusPane::Viewer, InputMode::Normal, Chord::None);
+        let (got_down, _) = map(down, FocusPane::Viewer, InputMode::Normal, Chord::None);
+        assert_eq!(got_up, Some(Action::ViewerHeadingUp));
+        assert_eq!(got_down, Some(Action::ViewerHeadingDown));
+        let block = key_mod(KeyCode::Up, KeyModifiers::SHIFT);
+        let (got_block, _) = map(block, FocusPane::Viewer, InputMode::Normal, Chord::None);
+        assert_eq!(got_block, Some(Action::ViewerBlockUp));
     }
 }

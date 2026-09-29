@@ -920,6 +920,72 @@ fn linked_from_absent_in_raw_mode() {
     );
 }
 
+#[test]
+fn heading_jump_skips_body_and_stops_at_ends() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/README.md"),
+    }));
+    let _ = draw_app(&mut app, 120, 24);
+    let headings = app.doc.heading_lines();
+    assert!(headings.len() >= 2, "need ≥2 headings, got {headings:?}");
+    app.cursor_line = 0;
+    app.update(Action::ViewerHeadingDown);
+    assert_eq!(app.cursor_line, headings[0].saturating_sub(1));
+    // Body rows between headings are skipped.
+    let between = headings[0]; // 1-based; land past first heading
+    app.cursor_line = between; // 0-based line after first heading start
+    app.update(Action::ViewerHeadingDown);
+    assert_eq!(app.cursor_line, headings[1].saturating_sub(1));
+    // Stop at last heading.
+    for _ in 0..headings.len() + 2 {
+        app.update(Action::ViewerHeadingDown);
+    }
+    assert_eq!(
+        app.cursor_line,
+        headings.last().copied().unwrap().saturating_sub(1)
+    );
+    // Stop at first heading going up.
+    for _ in 0..headings.len() + 2 {
+        app.update(Action::ViewerHeadingUp);
+    }
+    assert_eq!(app.cursor_line, headings[0].saturating_sub(1));
+}
+
+#[test]
+fn heading_jump_works_in_raw_and_after_toggle() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/README.md"),
+    }));
+    let rendered_headings = app.doc.heading_lines();
+    app.update(Action::ViewerHeadingDown);
+    let rendered_line = app.cursor_line;
+    assert_eq!(rendered_line, rendered_headings[0].saturating_sub(1));
+    app.update(Action::ToggleViewMode);
+    assert!(matches!(app.doc, crate::tui::page_doc::PageDoc::Raw(_)));
+    let raw_headings = app.doc.heading_lines();
+    assert!(!raw_headings.is_empty());
+    app.cursor_line = 0;
+    app.update(Action::ViewerHeadingDown);
+    assert_eq!(app.cursor_line, raw_headings[0].saturating_sub(1));
+    app.update(Action::ToggleViewMode);
+    assert!(matches!(
+        app.doc,
+        crate::tui::page_doc::PageDoc::Rendered(_)
+    ));
+    app.cursor_line = 0;
+    app.update(Action::ViewerHeadingDown);
+    assert_eq!(
+        app.cursor_line,
+        app.doc.heading_lines()[0].saturating_sub(1)
+    );
+}
+
 #[derive(Default)]
 struct LogOpener(std::sync::Arc<std::sync::Mutex<Vec<String>>>);
 
