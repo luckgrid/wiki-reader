@@ -89,6 +89,8 @@ pub struct MdLink {
     pub source_line: u32,
     /// Internal vs external.
     pub kind: MdLinkKind,
+    /// Nesting depth inside list items (`1` = top-level list); `0` if not in a list.
+    pub depth: u32,
 }
 
 /// Result of parsing one page's source text.
@@ -504,6 +506,7 @@ fn walk_markdown(body: &str, body_line_offset: u32) -> (Option<String>, Vec<Head
     let mut used_slugs: HashSet<String> = HashSet::new();
 
     let mut in_code_block = false;
+    let mut list_depth: u32 = 0;
     let mut in_heading: Option<(u8, u32, String)> = None;
     let mut in_link: Option<(String, String, u32)> = None; // target, text, line
 
@@ -514,6 +517,12 @@ fn walk_markdown(body: &str, body_line_offset: u32) -> (Option<String>, Vec<Head
             }
             Event::End(TagEnd::CodeBlock) => {
                 in_code_block = false;
+            }
+            Event::Start(Tag::List(_)) if !in_code_block => {
+                list_depth = list_depth.saturating_add(1);
+            }
+            Event::End(TagEnd::List(_)) if !in_code_block => {
+                list_depth = list_depth.saturating_sub(1);
             }
             Event::Start(Tag::Heading { level, .. }) if !in_code_block => {
                 in_heading = Some((level as u8, offset_to_line(range.start), String::new()));
@@ -553,6 +562,7 @@ fn walk_markdown(body: &str, body_line_offset: u32) -> (Option<String>, Vec<Head
                         target,
                         source_line,
                         kind,
+                        depth: list_depth,
                     });
                 }
             }

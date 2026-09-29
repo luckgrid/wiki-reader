@@ -120,17 +120,17 @@ wiki/
     └── 0002-adapters.md
 ```
 
-renders as
+renders as (annotated; `render_text` omits the ← markers)
 
 ```
-● Worked Example Wiki
-▾ Architecture Overview
-  Architecture Overview
-  ▾ Design System
-    Design System
-    Token Projection
-  Workflow OS
-▸ Decisions
+● Worked Example Wiki          ← landing / root entry
+▾ Architecture Overview        ← group
+  Architecture Overview        ← landing page
+  ▾ Design System              ← group
+    Design System              ← landing page
+    Token Projection           ← leaf
+  Workflow OS                  ← leaf (folder with only README)
+▸ Decisions                    ← group (collapsed)
 ```
 
 > [!NOTE]
