@@ -14,6 +14,7 @@ Architecture decision records. Accepted ADRs are immutable; supersede them inste
 | [0006](0006-reader-first.md) | Reader first; core stays terminal-free | accepted |
 | [0007](0007-input-focus-model.md) | Input & focus model | accepted |
 | [0008](0008-side-nav-as-site-nav.md) | Side nav as site navigation | accepted |
+| [0009](0009-tui-tree-widget.md) | Adopt tui-tree-widget for side nav | accepted |
 
 ## Related
 

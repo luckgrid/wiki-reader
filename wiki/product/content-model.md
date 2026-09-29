@@ -107,7 +107,7 @@ The root folder is special: the root README is always the **first top-level item
 
 ```
 wiki/
-├── README.md                    "Luckgrid Wiki"
+├── README.md                    "Worked Example Wiki"
 ├── architecture/
 │   ├── README.md                "Architecture Overview"
 │   ├── design-system/
@@ -123,14 +123,14 @@ wiki/
 renders as
 
 ```
-● Luckgrid Wiki
-▾ Architecture Overview          ← group (label from its README)
-    Architecture Overview        ← landing page
-  ▾ Design System                ← group
-      Design System              ← landing page
-      Token Projection
-    Workflow OS                  ← folder with only a README → leaf
-▸ Decisions                      ← group without README → folder name
+● Worked Example Wiki
+▾ Architecture Overview
+  Architecture Overview
+  ▾ Design System
+    Design System
+    Token Projection
+  Workflow OS
+▸ Decisions
 ```
 
 > [!NOTE]
