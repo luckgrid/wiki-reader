@@ -5,6 +5,7 @@
 
 use std::collections::HashSet;
 
+use crate::Error;
 use crate::index::Index;
 use crate::provider::PageKey;
 
@@ -30,6 +31,15 @@ pub enum ViewMode {
     Rendered,
     /// Raw source.
     Raw,
+}
+
+/// Viewer cursor/scroll captured before a navigation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ViewState {
+    /// Viewer cursor line.
+    pub cursor_line: u32,
+    /// Viewer scroll offset.
+    pub scroll: u32,
 }
 
 /// A point in history within a tab.
@@ -99,30 +109,34 @@ pub enum Effect {
 /// Pure navigation state machine (no terminal deps).
 #[derive(Debug, Clone)]
 pub struct Navigator {
-    /// Collection index.
-    pub index: Index,
-    /// Open tabs.
-    pub tabs: Vec<Tab>,
-    /// Active tab index.
-    pub active: usize,
-    /// Side nav state.
-    pub nav: NavState,
-    /// Footer notice from the last navigation, if any.
-    pub notice: Option<String>,
+    index: Index,
+    tabs: Vec<Tab>,
+    active: usize,
+    nav: NavState,
+    notice: Option<String>,
 }
 
 impl Navigator {
     /// Start on `start` (or the root README / first page).
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics when the index has no pages.
-    #[must_use]
-    pub fn new(index: Index, start: Option<PageKey>) -> Self {
+    /// Returns [`Error::EmptyCollection`] when the index has no pages, or
+    /// [`Error::PageNotFound`] when `start` is not in the index.
+    pub fn new(index: Index, start: Option<PageKey>) -> Result<Self, Error> {
+        if index.pages.is_empty() {
+            return Err(Error::EmptyCollection);
+        }
         let tree = NavTree::build(&index);
-        let start = start
-            .or_else(|| tree.page_order().into_iter().next())
-            .expect("collection has at least one page");
+        let start = match start {
+            Some(key) if index.pages.contains_key(&key) => key,
+            Some(key) => return Err(Error::PageNotFound(key)),
+            None => tree
+                .page_order()
+                .into_iter()
+                .next()
+                .ok_or(Error::EmptyCollection)?,
+        };
         let loc = Location {
             page: start.clone(),
             anchor: None,
@@ -132,7 +146,7 @@ impl Navigator {
         };
         let mut expanded = HashSet::new();
         expand_ancestors(&tree, &start, &mut expanded);
-        Self {
+        Ok(Self {
             index,
             tabs: vec![Tab {
                 history: vec![loc],
@@ -146,7 +160,37 @@ impl Navigator {
                 seen_page: Some(start),
             },
             notice: None,
-        }
+        })
+    }
+
+    /// Collection index.
+    #[must_use]
+    pub fn index(&self) -> &Index {
+        &self.index
+    }
+
+    /// Open tabs.
+    #[must_use]
+    pub fn tabs(&self) -> &[Tab] {
+        &self.tabs
+    }
+
+    /// Active tab index.
+    #[must_use]
+    pub fn active(&self) -> usize {
+        self.active
+    }
+
+    /// Side nav state.
+    #[must_use]
+    pub fn nav(&self) -> &NavState {
+        &self.nav
+    }
+
+    /// Footer notice from the last navigation, if any.
+    #[must_use]
+    pub fn notice(&self) -> Option<&str> {
+        self.notice.as_deref()
     }
 
     /// Active tab.
@@ -162,22 +206,25 @@ impl Navigator {
     }
 
     /// Navigate to a resolved or unresolved [`Target`].
-    pub fn navigate(&mut self, target: Target, how: Disposition) -> Vec<Effect> {
+    pub fn navigate(&mut self, target: Target, how: Disposition, view: ViewState) -> Vec<Effect> {
         match target {
             Target::External(url) => {
+                // Leave history unchanged.
                 vec![Effect::ConfirmExternal(url)]
             }
             Target::Unresolved(raw) => {
+                // Leave history unchanged.
                 self.notice = Some(format!("broken link: {raw}"));
                 vec![Effect::Notice(format!("broken link: {raw}"))]
             }
             Target::Anchor(slug) => {
+                self.save_view(view);
                 let page = self.tab().current().page.clone();
                 let outcome = resolve(&format!("#{slug}"), &page, &self.index);
                 self.push_location(
                     Location {
                         page: page.clone(),
-                        anchor: Some(slug.clone()),
+                        anchor: Some(slug),
                         cursor_line: 0,
                         scroll: 0,
                         mode: self.tab().current().mode,
@@ -187,6 +234,7 @@ impl Navigator {
                 )
             }
             Target::Page(key, anchor) => {
+                self.save_view(view);
                 let mut notice = None;
                 if let Some(ref slug) = anchor {
                     let outcome = resolve(&format!("#{slug}"), &key, &self.index);
@@ -208,49 +256,39 @@ impl Navigator {
     }
 
     /// Resolve a raw link from the current page and navigate (`Replace`).
-    pub fn follow_link(&mut self, raw: &str) -> Vec<Effect> {
+    pub fn follow_link(&mut self, raw: &str, view: ViewState) -> Vec<Effect> {
         let from = self.tab().current().page.clone();
         let outcome = resolve(raw, &from, &self.index);
-        let mut effects = self.navigate(outcome.target, Disposition::Replace);
-        if let Some(n) = outcome.notice {
-            self.notice = Some(n.clone());
-            effects.push(Effect::Notice(n));
-        }
-        effects
+        // Single notice path: `push_location` / Unresolved arm emit Notice.
+        self.navigate(outcome.target, Disposition::Replace, view)
     }
 
     /// Tree / breadcrumb / search / start-page entry: go to a page with `Replace`.
-    pub fn go_to_page(&mut self, key: PageKey) -> Vec<Effect> {
-        self.navigate(Target::Page(key, None), Disposition::Replace)
+    pub fn go_to_page(&mut self, key: PageKey, view: ViewState) -> Vec<Effect> {
+        self.navigate(Target::Page(key, None), Disposition::Replace, view)
     }
 
     /// Prev page in the nav tree.
-    pub fn go_prev(&mut self) -> Vec<Effect> {
+    pub fn go_prev(&mut self, view: ViewState) -> Vec<Effect> {
         let cur = self.tab().current().page.clone();
         match self.nav.tree.prev(&cur) {
-            Some(key) => self.go_to_page(key),
+            Some(key) => self.go_to_page(key, view),
             None => Vec::new(),
         }
     }
 
     /// Next page in the nav tree.
-    pub fn go_next(&mut self) -> Vec<Effect> {
+    pub fn go_next(&mut self, view: ViewState) -> Vec<Effect> {
         let cur = self.tab().current().page.clone();
         match self.nav.tree.next(&cur) {
-            Some(key) => self.go_to_page(key),
+            Some(key) => self.go_to_page(key, view),
             None => Vec::new(),
         }
     }
 
-    /// Save viewer scroll/cursor into the current location (call before navigate).
-    pub fn save_view(&mut self, cursor_line: u32, scroll: u32) {
-        let loc = self.tabs[self.active].current_mut();
-        loc.cursor_line = cursor_line;
-        loc.scroll = scroll;
-    }
-
-    /// Browser back.
-    pub fn back(&mut self) -> Vec<Effect> {
+    /// Browser back (saves current view onto the location being left).
+    pub fn back(&mut self, view: ViewState) -> Vec<Effect> {
+        self.save_view(view);
         let tab = &mut self.tabs[self.active];
         if tab.cursor == 0 {
             return Vec::new();
@@ -260,7 +298,8 @@ impl Navigator {
     }
 
     /// Browser forward.
-    pub fn forward(&mut self) -> Vec<Effect> {
+    pub fn forward(&mut self, view: ViewState) -> Vec<Effect> {
+        self.save_view(view);
         let tab = &mut self.tabs[self.active];
         if tab.cursor + 1 >= tab.history.len() {
             return Vec::new();
@@ -269,12 +308,31 @@ impl Navigator {
         self.effects_for_current()
     }
 
+    fn save_view(&mut self, view: ViewState) {
+        let loc = self.tabs[self.active].current_mut();
+        loc.cursor_line = view.cursor_line;
+        loc.scroll = view.scroll;
+    }
+
     fn push_location(
         &mut self,
         loc: Location,
         how: Disposition,
         notice: Option<String>,
     ) -> Vec<Effect> {
+        // Identical page+anchor: refresh notice / reveal, but do not push history.
+        if how == Disposition::Replace {
+            let cur = self.tab().current();
+            if cur.page == loc.page && cur.anchor == loc.anchor {
+                self.notice.clone_from(&notice);
+                let mut effects = self.effects_for_current();
+                if let Some(n) = notice {
+                    effects.push(Effect::Notice(n));
+                }
+                return effects;
+            }
+        }
+
         self.notice.clone_from(&notice);
         match how {
             Disposition::Replace => {
@@ -352,13 +410,20 @@ mod tests {
     fn worked() -> Navigator {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/worked-example");
         let index = Index::build(&FsProvider::open(root).unwrap()).unwrap();
-        Navigator::new(index, None)
+        Navigator::new(index, None).unwrap()
     }
 
     fn key(path: &str) -> PageKey {
         PageKey {
             collection_id: "worked-example".into(),
             relative_path: PathBuf::from(path),
+        }
+    }
+
+    fn view(cursor_line: u32, scroll: u32) -> ViewState {
+        ViewState {
+            cursor_line,
+            scroll,
         }
     }
 
@@ -373,23 +438,63 @@ mod tests {
     /// N1: every entry point yields the same history + tree selection for the same page.
     fn assert_same_arrival(nav: &Navigator, expected: &PageKey) {
         assert_eq!(&nav.tab().current().page, expected);
-        assert_eq!(nav.nav.cursor, Some(NodeId::Page(expected.clone())));
-        assert_eq!(nav.nav.seen_page.as_ref(), Some(expected));
+        assert_eq!(nav.nav().cursor, Some(NodeId::Page(expected.clone())));
+        assert_eq!(nav.nav().seen_page.as_ref(), Some(expected));
+    }
+
+    /// N4: ancestors expanded; current page marked ● in `render_text`.
+    fn assert_n4(nav: &Navigator, expected: &PageKey) {
+        assert_same_arrival(nav, expected);
+        let text = nav
+            .nav()
+            .tree
+            .render_text(&nav.nav().expanded, Some(expected));
+        assert!(
+            text.contains('●'),
+            "expected ● marker for current page, got:\n{text}"
+        );
+        // Nested pages must have ancestor groups expanded.
+        let path = &expected.relative_path;
+        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+            assert!(
+                nav.nav()
+                    .expanded
+                    .contains(&NodeId::Group(parent.to_path_buf())),
+                "expected ancestor {parent:?} expanded; expanded={:?}",
+                nav.nav().expanded
+            );
+        }
+    }
+
+    #[test]
+    fn empty_collection_is_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let index = Index::build(&FsProvider::open(dir.path()).unwrap()).unwrap();
+        let err = Navigator::new(index, None).unwrap_err();
+        assert!(matches!(err, Error::EmptyCollection));
+    }
+
+    #[test]
+    fn start_page_not_found_is_error() {
+        let nav = worked();
+        let index = nav.index().clone();
+        let err = Navigator::new(index, Some(key("nope.md"))).unwrap_err();
+        assert!(matches!(err, Error::PageNotFound(_)));
     }
 
     #[test]
     fn start_page_selects_root_readme() {
         let nav = worked();
         assert_eq!(nav.tab_count(), 1);
-        assert_same_arrival(&nav, &key("README.md"));
+        assert_n4(&nav, &key("README.md"));
     }
 
     #[test]
     fn tree_select_replace_pushes_history() {
         let mut nav = worked();
         let target = key("architecture/README.md");
-        nav.go_to_page(target.clone());
-        assert_same_arrival(&nav, &target);
+        nav.go_to_page(target.clone(), ViewState::default());
+        assert_n4(&nav, &target);
         assert_eq!(
             history_pages(&nav),
             vec![
@@ -401,71 +506,165 @@ mod tests {
     }
 
     #[test]
-    fn link_follow_matches_tree_select_history() {
+    fn entry_points_agree_on_history_and_selection() {
+        let target = key("architecture/design-system/tokens.md");
+
         let mut via_tree = worked();
+        via_tree.go_to_page(target.clone(), ViewState::default());
+
         let mut via_link = worked();
-        let target = key("architecture/README.md");
-        via_tree.go_to_page(target.clone());
-        via_link.follow_link("architecture/README.md");
+        via_link.follow_link("architecture/design-system/tokens.md", ViewState::default());
+
+        let mut via_search = worked();
+        via_search.go_to_page(target.clone(), ViewState::default()); // search → go_to_page
+
+        let mut via_crumb = worked();
+        via_crumb.go_to_page(target.clone(), ViewState::default()); // breadcrumb → go_to_page
+
+        let mut via_next = worked();
+        via_next.go_to_page(
+            key("architecture/design-system/README.md"),
+            ViewState::default(),
+        );
+        via_next.go_next(ViewState::default());
+
+        for nav in [&via_tree, &via_link, &via_search, &via_crumb, &via_next] {
+            assert_n4(nav, &target);
+        }
+        // Direct entry points share history shape; prev/next may include intermediate stops.
         assert_eq!(via_tree.tab().history, via_link.tab().history);
-        assert_eq!(via_tree.nav.cursor, via_link.nav.cursor);
-        assert_same_arrival(&via_link, &target);
+        assert_eq!(via_tree.tab().history, via_search.tab().history);
+        assert_eq!(via_tree.tab().history, via_crumb.tab().history);
+        assert_eq!(via_next.tab().current().page, target);
     }
 
     #[test]
-    fn breadcrumb_and_prev_next_funnel_through_navigate() {
+    fn prev_next_move_in_tree_order() {
         let mut nav = worked();
-        // breadcrumb ≡ go_to_page
-        nav.go_to_page(key("architecture/design-system/tokens.md"));
-        let after_crumb = nav.tab().history.clone();
-        let cursor = nav.nav.cursor.clone();
-
-        let mut nav2 = worked();
-        nav2.go_to_page(key("architecture/design-system/tokens.md"));
-        assert_eq!(nav2.tab().history, after_crumb);
-        assert_eq!(nav2.nav.cursor, cursor);
-
-        // prev/next from architecture landing
-        let mut nav3 = worked();
-        nav3.go_to_page(key("architecture/README.md"));
-        nav3.go_next();
+        nav.go_to_page(key("architecture/README.md"), ViewState::default());
+        nav.go_next(ViewState::default());
         assert_eq!(
-            nav3.tab().current().page.relative_path,
+            nav.tab().current().page.relative_path,
             PathBuf::from("architecture/design-system/README.md")
         );
-        nav3.go_prev();
+        assert_n4(&nav, &key("architecture/design-system/README.md"));
+        nav.go_prev(ViewState::default());
         assert_eq!(
-            nav3.tab().current().page.relative_path,
+            nav.tab().current().page.relative_path,
             PathBuf::from("architecture/README.md")
-        );
-        assert_eq!(nav3.tab_count(), 1);
-    }
-
-    #[test]
-    fn anchor_jump_pushes_history_entry() {
-        let mut nav = worked();
-        nav.navigate(
-            Target::Anchor("worked-example-wiki".into()),
-            Disposition::Replace,
-        );
-        assert_eq!(nav.tab().history.len(), 2);
-        assert_eq!(
-            nav.tab().current().anchor.as_deref(),
-            Some("worked-example-wiki")
         );
         assert_eq!(nav.tab_count(), 1);
     }
 
     #[test]
+    fn identical_anchor_does_not_duplicate_history() {
+        let mut nav = worked();
+        nav.navigate(
+            Target::Anchor("worked-example-wiki".into()),
+            Disposition::Replace,
+            ViewState::default(),
+        );
+        assert_eq!(nav.tab().history.len(), 2);
+        nav.navigate(
+            Target::Anchor("worked-example-wiki".into()),
+            Disposition::Replace,
+            ViewState::default(),
+        );
+        assert_eq!(nav.tab().history.len(), 2);
+    }
+
+    #[test]
+    fn unresolved_and_external_leave_history_unchanged() {
+        let mut nav = worked();
+        let before = nav.tab().history.clone();
+        let effects = nav.navigate(
+            Target::Unresolved("missing.md".into()),
+            Disposition::Replace,
+            ViewState::default(),
+        );
+        assert_eq!(nav.tab().history, before);
+        assert_eq!(effects.len(), 1);
+        assert!(matches!(effects[0], Effect::Notice(_)));
+
+        let effects = nav.navigate(
+            Target::External("https://example.com".into()),
+            Disposition::Replace,
+            ViewState::default(),
+        );
+        assert_eq!(nav.tab().history, before);
+        assert!(matches!(effects[0], Effect::ConfirmExternal(_)));
+    }
+
+    #[test]
+    fn new_tab_and_background_tab() {
+        let mut nav = worked();
+        nav.navigate(
+            Target::Page(key("architecture/README.md"), None),
+            Disposition::NewTab,
+            ViewState::default(),
+        );
+        assert_eq!(nav.tab_count(), 2);
+        assert_eq!(nav.active(), 1);
+        assert_eq!(
+            nav.tab().current().page.relative_path,
+            PathBuf::from("architecture/README.md")
+        );
+
+        nav.navigate(
+            Target::Page(key("decisions/0001-stack.md"), None),
+            Disposition::BackgroundTab,
+            ViewState::default(),
+        );
+        assert_eq!(nav.tab_count(), 3);
+        assert_eq!(nav.active(), 1); // focus unchanged
+    }
+
+    #[test]
+    fn forward_truncated_after_back_then_navigate() {
+        let mut nav = worked();
+        nav.go_to_page(key("architecture/README.md"), ViewState::default());
+        nav.go_to_page(
+            key("architecture/design-system/tokens.md"),
+            ViewState::default(),
+        );
+        nav.back(ViewState::default());
+        assert_eq!(nav.tab().history.len(), 3);
+        nav.go_to_page(key("decisions/0001-stack.md"), ViewState::default());
+        assert_eq!(
+            history_pages(&nav),
+            vec![
+                PathBuf::from("README.md"),
+                PathBuf::from("architecture/README.md"),
+                PathBuf::from("decisions/0001-stack.md"),
+            ]
+        );
+        assert!(nav.forward(ViewState::default()).is_empty());
+    }
+
+    #[test]
+    fn single_notice_per_follow_link() {
+        let mut nav = worked();
+        // Link to missing page → one Notice.
+        let effects = nav.follow_link("./nope-missing.md", ViewState::default());
+        let notices: Vec<_> = effects
+            .iter()
+            .filter(|e| matches!(e, Effect::Notice(_)))
+            .collect();
+        assert_eq!(notices.len(), 1, "effects={effects:?}");
+    }
+
+    #[test]
     fn back_restores_scroll_and_forward_round_trips() {
         let mut nav = worked();
-        nav.save_view(12, 34);
-        nav.go_to_page(key("architecture/README.md"));
-        nav.save_view(1, 2);
-        nav.go_to_page(key("architecture/design-system/tokens.md"));
+        nav.go_to_page(key("architecture/README.md"), view(12, 34));
+        nav.go_to_page(key("architecture/design-system/tokens.md"), view(1, 2));
 
         assert_eq!(nav.tab().history.len(), 3);
-        nav.back();
+        // History[0] should have saved 12/34 from the navigate that left README.
+        assert_eq!(nav.tab().history[0].cursor_line, 12);
+        assert_eq!(nav.tab().history[0].scroll, 34);
+
+        nav.back(view(9, 9));
         assert_eq!(
             nav.tab().current().page.relative_path,
             PathBuf::from("architecture/README.md")
@@ -473,23 +672,22 @@ mod tests {
         assert_eq!(nav.tab().current().cursor_line, 1);
         assert_eq!(nav.tab().current().scroll, 2);
 
-        nav.back();
+        nav.back(ViewState::default());
         assert_eq!(nav.tab().current().cursor_line, 12);
         assert_eq!(nav.tab().current().scroll, 34);
 
-        // back ×10 never creates tabs; stays at start
         for _ in 0..10 {
-            nav.back();
+            nav.back(ViewState::default());
         }
         assert_eq!(nav.tab_count(), 1);
         assert_eq!(nav.tab().cursor, 0);
 
-        nav.forward();
+        nav.forward(ViewState::default());
         assert_eq!(
             nav.tab().current().page.relative_path,
             PathBuf::from("architecture/README.md")
         );
-        nav.forward();
+        nav.forward(ViewState::default());
         assert_eq!(
             nav.tab().current().page.relative_path,
             PathBuf::from("architecture/design-system/tokens.md")
@@ -498,8 +696,9 @@ mod tests {
     }
 
     #[test]
-    fn replace_never_opens_a_second_tab() {
+    fn exit_criterion_ten_links_back_ten() {
         let mut nav = worked();
+        let start = nav.tab().current().page.clone();
         let paths = [
             "architecture/README.md",
             "architecture/design-system/tokens.md",
@@ -512,11 +711,28 @@ mod tests {
             "architecture/design-system/tokens.md",
             "decisions/0001-stack.md",
         ];
-        for p in paths {
-            nav.go_to_page(key(p));
+        nav.go_to_page(key(paths[0]), view(10, 20));
+        for (i, p) in paths.iter().enumerate().skip(1) {
+            nav.go_to_page(
+                key(p),
+                view(u32::try_from(i).unwrap(), u32::try_from(i * 2).unwrap()),
+            );
         }
+        assert_eq!(nav.tab().history.len(), 11); // start + 10
+        assert_eq!(nav.tab_count(), 1);
+
         for _ in 0..10 {
-            nav.back();
+            nav.back(ViewState::default());
+        }
+        assert_eq!(&nav.tab().current().page, &start);
+        assert_eq!(nav.tab().current().cursor_line, 10);
+        assert_eq!(nav.tab().current().scroll, 20);
+        assert_eq!(nav.tab_count(), 1);
+
+        // Forward round-trip through the stack.
+        for p in paths {
+            nav.forward(ViewState::default());
+            assert_eq!(nav.tab().current().page.relative_path, PathBuf::from(p));
         }
         assert_eq!(nav.tab_count(), 1);
     }

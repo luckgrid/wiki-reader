@@ -23,7 +23,24 @@ use ratatui::Terminal;
 pub fn run(root: &Path) -> io::Result<()> {
     let provider = FsProvider::open(root).map_err(io::Error::other)?;
     let index = Index::build(&provider).map_err(io::Error::other)?;
-    let navigator = Navigator::new(index, None);
+    let navigator = match Navigator::new(index, None) {
+        Ok(nav) => nav,
+        Err(wiki_reader_core::Error::EmptyCollection) => {
+            eprintln!(
+                "error: collection has no markdown pages: {}",
+                root.display()
+            );
+            std::process::exit(1);
+        }
+        Err(wiki_reader_core::Error::PageNotFound(key)) => {
+            eprintln!(
+                "error: start page not found: {}",
+                key.relative_path.display()
+            );
+            std::process::exit(1);
+        }
+        Err(err) => return Err(io::Error::other(err)),
+    };
     let mut terminal = ratatui::try_init()?;
     let result = run_loop(&mut terminal, root, &navigator);
     ratatui::restore();
