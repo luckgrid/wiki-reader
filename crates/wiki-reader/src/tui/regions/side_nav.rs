@@ -96,11 +96,7 @@ pub fn draw(
             NodeId::Page(k) if k == current => "● ",
             _ => "",
         };
-        let cursor_mark = if cursor == Some(&row.id) {
-            "▌"
-        } else {
-            " "
-        };
+        let cursor_mark = if cursor == Some(&row.id) { "▌" } else { " " };
         let style = if cursor == Some(&row.id) {
             theme.accent()
         } else {
