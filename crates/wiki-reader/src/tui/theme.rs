@@ -83,13 +83,11 @@ impl Theme {
 
     /// Map renderer [`StyleKind`](wiki_reader_render::StyleKind) to a ratatui style.
     #[must_use]
+    #[allow(dead_code)] // used when viewer paints StyledLine (R13)
     pub fn style_kind(&self, kind: wiki_reader_render::StyleKind) -> Style {
         use wiki_reader_render::StyleKind;
         match kind {
-            StyleKind::Plain => self.text(),
-            StyleKind::Heading(1) => Style::default()
-                .fg(self.accent)
-                .add_modifier(Modifier::BOLD),
+            StyleKind::Plain | StyleKind::Table => self.text(),
             StyleKind::Heading(_) => Style::default()
                 .fg(self.accent)
                 .add_modifier(Modifier::BOLD),
@@ -102,11 +100,9 @@ impl Theme {
                 .add_modifier(Modifier::CROSSED_OUT),
             StyleKind::InlineCode | StyleKind::CodeBlock => Style::default().fg(Color::Green),
             StyleKind::Link => Style::default().fg(self.link),
-            StyleKind::Quote => Style::default().fg(self.text_muted),
+            StyleKind::Quote | StyleKind::Frontmatter => Style::default().fg(self.text_muted),
             StyleKind::Rule => Style::default().fg(self.border),
-            StyleKind::Table => Style::default().fg(self.text),
             StyleKind::TaskMarker => Style::default().fg(self.accent),
-            StyleKind::Frontmatter => Style::default().fg(self.text_muted),
         }
     }
 
