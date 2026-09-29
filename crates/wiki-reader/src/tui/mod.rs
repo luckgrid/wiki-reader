@@ -5,9 +5,14 @@
 pub mod action;
 pub mod app;
 pub mod focus;
+pub mod highlight;
 pub mod hit;
 pub mod keymap;
 pub mod layout;
+pub mod opener;
+pub mod page_doc;
 pub mod regions;
+pub mod rendered_doc;
+pub mod search_ui;
 pub mod theme;
 pub mod viewer_doc;

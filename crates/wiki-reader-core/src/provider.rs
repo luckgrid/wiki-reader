@@ -91,8 +91,9 @@ impl CollectionProvider for FsProvider {
             .hidden(false) // content-model: include dot-dirs unless gitignored
             .require_git(false)
             .filter_entry(|e| {
-                let name = e.file_name();
-                name != ".git" && name != ".jj"
+                e.file_name()
+                    .to_str()
+                    .is_none_or(|n| !crate::watch::is_vcs_dir_name(n))
             })
             .build();
 
@@ -129,6 +130,20 @@ impl CollectionProvider for FsProvider {
 }
 
 impl FsProvider {
+    /// True when `relative` points at a regular non-markdown file under the collection root.
+    #[must_use]
+    pub fn non_markdown_file_exists(&self, relative: &Path) -> bool {
+        if relative.is_absolute()
+            || relative
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
+            return false;
+        }
+        let abs = self.root.join(relative);
+        abs.is_file() && !is_markdown(&abs)
+    }
+
     fn resolve(&self, relative: &Path) -> Result<PathBuf, Error> {
         if relative.is_absolute()
             || relative
@@ -146,7 +161,9 @@ impl FsProvider {
     }
 }
 
-fn is_markdown(path: &Path) -> bool {
+/// True when the path looks like a markdown page (`.md` / `.markdown`).
+#[must_use]
+pub fn is_markdown(path: &Path) -> bool {
     matches!(
         path.extension().and_then(|ext| ext.to_str()),
         Some("md" | "markdown")

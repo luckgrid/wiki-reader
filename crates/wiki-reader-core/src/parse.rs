@@ -109,6 +109,8 @@ pub struct ParsedPage {
     /// 1-based source lines of each top-level block start (heading, paragraph,
     /// list, code, table, quote, rule).
     pub blocks: Vec<u32>,
+    /// 1-based source line of the first body line (1 when no frontmatter).
+    pub body_line_offset: u32,
     /// Word count of the body excluding frontmatter and code blocks.
     pub word_count: u32,
     /// Non-fatal parse issues.
@@ -128,6 +130,7 @@ pub fn parse(source: &str) -> ParsedPage {
         headings,
         links,
         blocks,
+        body_line_offset,
         word_count,
         diagnostics,
     }

@@ -4,20 +4,20 @@ expression: out
 ---
 Worked Example Wiki                                      ◫ ✕
 ┌Viewer────────────────────────────────────────────────────┐
-│---                                                       │
-│id: FX-ROOT                                               │
+│── frontmatter ──                                         │
 │title: Worked Example Wiki                                │
-│summary: Minimal fixture collection for wiki-reader smoke │
-│status: draft                                             │
 │updated: 2026-09-28                                       │
-│related: [architecture]                                   │
-│---                                                       │
-│                                                          │
+│summary: Minimal fixture collection for wiki-reader smoke │
+│tests.                                                    │
+│─────────────────                                         │
 │# Worked Example Wiki                                     │
-│                                                          │
 │A tiny markdown collection used as the default smoke-test │
+│root.                                                     │
+│Start at Architecture Overview, follow Token Projection,  │
+│then return via back when history exists.                 │
 │                                                          │
-│Start at [Architecture Overview](architecture/README.md), │
+│                                                          │
+│                                                          │
 │                                                          │
 │                                                          │
 │                                                          │
@@ -25,4 +25,4 @@ Worked Example Wiki                                      ◫ ✕
 │                                                          │
 └──────────────────────────────────────────────────────────┘
 ‹ —                                  Architecture Overview ›
-VIEWER · README.md · L1 7% · 29w · 1m · 2026-09-28
+VIEWER · README.md · L1 9% · 29w · 1m · 2026-09-28

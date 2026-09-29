@@ -7,6 +7,9 @@ description = "Markdown to RenderedDoc for wiki-reader"
 rust-version.workspace = true
 
 [dependencies]
+pulldown-cmark = { workspace = true }
+unicode-width = { workspace = true }
+wiki-reader-core = { workspace = true }
 
 [lints]
 workspace = true

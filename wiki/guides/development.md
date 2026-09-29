@@ -19,19 +19,20 @@ How to pick up work in this repo.
 
 ## Checks
 
-Same three commands as CI:
+Local mirror of CI (run before every push):
+
+```bash
+./scripts/check.sh
+```
+
+Same steps individually:
 
 ```bash
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
-```
-
-ADR-0006 guard (core stays terminal-free):
-
-```bash
-cargo tree -p wiki-reader-core -e normal
-# must not list ratatui or crossterm
+python3 scripts/link-check.py
+cargo tree -p wiki-reader-core -e normal  # must not list ratatui or crossterm (ADR-0006)
 ```
 
 Quickstart:

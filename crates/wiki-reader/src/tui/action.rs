@@ -22,8 +22,26 @@ pub enum Action {
     GoToPage(PageKey),
     /// Toggle a nav group.
     ToggleGroup(NodeId),
-    /// Activate the search row (stub until P1-10).
+    /// Activate the search overlay.
     OpenSearch,
+    /// Close search overlay without navigating.
+    CloseSearch,
+    /// Type a character into the search field.
+    SearchChar(char),
+    /// Backspace in search field.
+    SearchBackspace,
+    /// Move selection in search results.
+    SearchSelectDelta(i32),
+    /// Toggle Pages / Text mode.
+    SearchToggleMode,
+    /// Activate the selected search result.
+    SearchActivate,
+    /// Activate search result by index (mouse).
+    SearchActivateIndex(usize),
+    /// Cycle to next in-page search match (`n`).
+    SearchNextMatch,
+    /// Cycle to previous in-page search match (`N`).
+    SearchPrevMatch,
     /// Focus the side nav pane.
     FocusNav,
     /// Focus the viewer pane.
@@ -66,6 +84,16 @@ pub enum Action {
     ViewerTab,
     /// Viewer Tab cycle backward.
     ViewerBackTab,
+    /// Viewer Enter — follow link or footer action.
+    ViewerActivate,
+    /// Follow a link by id (mouse).
+    FollowLinkId(u32),
+    /// Confirm opening a pending external URL.
+    ConfirmOpen,
+    /// Decline external URL prompt.
+    ConfirmDecline,
+    /// Toggle raw / rendered view (`r`).
+    ToggleViewMode,
     /// No-op / ignored.
     #[allow(dead_code)]
     None,

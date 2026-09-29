@@ -9,6 +9,7 @@ pub mod index;
 pub mod nav;
 pub mod parse;
 pub mod provider;
+pub mod search;
 pub mod watch;
 
 pub use error::Error;

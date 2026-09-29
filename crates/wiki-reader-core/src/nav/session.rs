@@ -10,7 +10,7 @@ use crate::index::Index;
 use crate::provider::PageKey;
 
 use super::resolve::{Target, resolve};
-use super::tree::{NavTree, NodeId};
+use super::tree::{NavItem, NavTree, NodeId};
 
 /// How a navigation should affect tabs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,9 +36,9 @@ pub enum ViewMode {
 /// Viewer cursor/scroll captured before a navigation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ViewState {
-    /// Viewer cursor line.
+    /// 0-based **source** line (stable across raw/rendered).
     pub cursor_line: u32,
-    /// Viewer scroll offset.
+    /// Viewer scroll offset (display lines; approximate across modes).
     pub scroll: u32,
 }
 
@@ -49,7 +49,7 @@ pub struct Location {
     pub page: PageKey,
     /// Optional heading slug.
     pub anchor: Option<String>,
-    /// Viewer cursor line (restored on back).
+    /// 0-based **source** line (restored on back).
     pub cursor_line: u32,
     /// Viewer scroll offset (restored on back).
     pub scroll: u32,
@@ -113,6 +113,8 @@ pub enum Effect {
     Notice(String),
     /// Confirm before opening an external URL.
     ConfirmExternal(String),
+    /// Current page no longer exists; keep history for Back.
+    PageRemoved,
 }
 
 /// Pure navigation state machine (no terminal deps).
@@ -176,6 +178,43 @@ impl Navigator {
     #[must_use]
     pub fn index(&self) -> &Index {
         &self.index
+    }
+
+    /// Set viewer mode on the current history entry.
+    pub fn set_view_mode(&mut self, mode: ViewMode) {
+        self.tabs[self.active].current_mut().mode = mode;
+    }
+
+    /// Replace the index after a filesystem change; preserve tabs/history and live view.
+    #[must_use]
+    pub fn reindex(&mut self, index: Index, view: ViewState) -> Vec<Effect> {
+        self.save_view(view);
+        let cur = self.tab().current().page.clone();
+        self.index = index;
+        self.nav.tree = NavTree::build(&self.index);
+
+        let ids = collect_node_ids(&self.nav.tree.items);
+        self.nav.expanded.retain(|id| ids.contains(id));
+
+        if let NavStop::Node(id) = &self.nav.cursor
+            && !ids.contains(id)
+        {
+            self.nav.cursor = NavStop::Search;
+        }
+
+        if !self.index.pages.contains_key(&cur) {
+            self.notice = Some("page removed".into());
+            // Keep history so Back still works; do not LoadPage a missing file.
+            return vec![Effect::PageRemoved];
+        }
+        self.notice = None;
+        expand_ancestors(&self.nav.tree, &cur, &mut self.nav.expanded);
+        // Same-page reload: restore live cursor/scroll — do not re-apply the anchor.
+        vec![
+            Effect::LoadPage(cur.clone()),
+            Effect::RevealInTree(cur),
+            Effect::ScrollTo(None),
+        ]
     }
 
     /// Open tabs.
@@ -346,6 +385,7 @@ impl Navigator {
             return Vec::new();
         }
         tab.cursor -= 1;
+        self.notice = None;
         self.effects_for_current()
     }
 
@@ -357,6 +397,7 @@ impl Navigator {
             return Vec::new();
         }
         tab.cursor += 1;
+        self.notice = None;
         self.effects_for_current()
     }
 
@@ -425,6 +466,27 @@ impl Navigator {
             Effect::RevealInTree(page),
             Effect::ScrollTo(anchor),
         ]
+    }
+}
+
+fn collect_node_ids(items: &[NavItem]) -> HashSet<NodeId> {
+    let mut ids = HashSet::new();
+    collect_node_ids_into(items, &mut ids);
+    ids.insert(NodeId::OtherPages);
+    ids
+}
+
+fn collect_node_ids_into(items: &[NavItem], ids: &mut HashSet<NodeId>) {
+    for item in items {
+        match item {
+            NavItem::Page { id, .. } => {
+                ids.insert(id.clone());
+            }
+            NavItem::Group { id, children, .. } => {
+                ids.insert(id.clone());
+                collect_node_ids_into(children, ids);
+            }
+        }
     }
 }
 
@@ -711,6 +773,77 @@ mod tests {
             .filter(|e| matches!(e, Effect::Notice(_)))
             .collect();
         assert_eq!(notices.len(), 1, "effects={effects:?}");
+    }
+
+    #[test]
+    fn reindex_keeps_history_when_page_still_exists() {
+        let mut nav = worked();
+        nav.go_to_page(key("architecture/README.md"), ViewState::default());
+        let index = nav.index().clone();
+        let effects = nav.reindex(index, ViewState::default());
+        assert!(effects.iter().any(|e| matches!(e, Effect::LoadPage(_))));
+        assert!(
+            effects.iter().any(|e| matches!(e, Effect::ScrollTo(None))),
+            "reindex must restore view, not re-apply anchor: {effects:?}"
+        );
+        assert_eq!(nav.tab().history.len(), 2);
+    }
+
+    #[test]
+    fn reindex_anchored_page_keeps_saved_cursor() {
+        let mut nav = worked();
+        nav.go_to_page(key("README.md"), ViewState::default());
+        // Navigate via anchor then move the live cursor away from the heading.
+        nav.navigate(
+            Target::Anchor("worked-example-wiki".into()),
+            Disposition::Replace,
+            ViewState::default(),
+        );
+        assert!(nav.tab().current().anchor.is_some());
+        let index = nav.index().clone();
+        let effects = nav.reindex(index, view(26, 10));
+        assert!(
+            effects.iter().any(|e| matches!(e, Effect::ScrollTo(None))),
+            "anchored reload must not ScrollTo(Some): {effects:?}"
+        );
+        assert!(
+            !effects
+                .iter()
+                .any(|e| matches!(e, Effect::ScrollTo(Some(_))))
+        );
+        assert_eq!(nav.tab().current().cursor_line, 26);
+        assert_eq!(nav.tab().current().scroll, 10);
+    }
+
+    #[test]
+    fn reindex_missing_page_emits_page_removed() {
+        let mut nav = worked();
+        nav.go_to_page(key("architecture/README.md"), ViewState::default());
+        // Empty-ish index: rebuild from a tiny temp collection without that page.
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("only.md"), "# only\n").unwrap();
+        let index = Index::build(&FsProvider::open(dir.path()).unwrap()).unwrap();
+        let effects = nav.reindex(index, ViewState::default());
+        assert!(
+            matches!(effects.as_slice(), [Effect::PageRemoved]),
+            "{effects:?}"
+        );
+        assert_eq!(nav.notice(), Some("page removed"));
+        // History preserved for Back.
+        assert!(nav.tab().history.len() >= 2);
+    }
+
+    #[test]
+    fn back_clears_stale_notice() {
+        let mut nav = worked();
+        nav.go_to_page(key("architecture/README.md"), ViewState::default());
+        nav.follow_link(
+            "design-system/tokens.md#missing-anchor",
+            ViewState::default(),
+        );
+        assert!(nav.notice().is_some());
+        nav.back(ViewState::default());
+        assert!(nav.notice().is_none());
     }
 
     #[test]

@@ -71,15 +71,12 @@ fn install_panic_hook() {
 }
 
 fn run_loop(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
-    let mut last_width = 80u16;
     loop {
-        terminal.draw(|frame| {
-            last_width = frame.area().width;
-            draw(frame, app);
-        })?;
+        terminal.draw(|frame| draw(frame, app))?;
         if app.quit {
             return Ok(());
         }
+        app.poll_watcher();
         if event::poll(std::time::Duration::from_millis(250))? {
             match event::read()? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => {
@@ -87,26 +84,12 @@ fn run_loop(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
                         keymap::map(key, app.focus, app.input_mode, app.chord);
                     app.chord = next_chord;
                     if let Some(action) = action {
-                        let nav_action = matches!(
-                            action,
-                            Action::GoToPage(_) | Action::PrevPage | Action::NextPage
-                        );
                         app.update(action);
-                        if nav_action {
-                            app.close_overlay_after_nav(last_width);
-                        }
                     }
                 }
                 Event::Mouse(mouse) => {
                     if let Some(action) = apply_mouse(app, mouse) {
-                        let nav_action = matches!(
-                            action,
-                            Action::GoToPage(_) | Action::PrevPage | Action::NextPage
-                        );
                         app.update(action);
-                        if nav_action {
-                            app.close_overlay_after_nav(last_width);
-                        }
                     }
                 }
                 _ => {}
@@ -135,7 +118,7 @@ pub(crate) fn apply_mouse(
                         _ => {}
                     }
                 }
-                Hit::ViewerLine(_) | Hit::FocusViewer | Hit::Prev | Hit::Next => {
+                Hit::Link(_) | Hit::ViewerLine(_) | Hit::FocusViewer | Hit::Prev | Hit::Next => {
                     app.update(Action::FocusViewer);
                 }
                 _ => {}

@@ -139,7 +139,7 @@ fn nav_toggle_hides_at_120_and_fresh_60_has_no_overlay() {
     let root = fixture();
     let mut wide = App::new(&root).unwrap();
     let _ = draw_app(&mut wide, 120, 24);
-    assert_eq!(wide.nav_visible, Some(true));
+    assert!(wide.nav_visible);
     assert!(
         wide.hit_map
             .entries()
@@ -148,7 +148,7 @@ fn nav_toggle_hides_at_120_and_fresh_60_has_no_overlay() {
     );
     wide.update(Action::ToggleNav);
     let _ = draw_app(&mut wide, 120, 24);
-    assert_eq!(wide.nav_visible, Some(false));
+    assert!(!wide.nav_visible);
     assert!(
         !wide
             .hit_map
@@ -167,7 +167,7 @@ fn nav_toggle_hides_at_120_and_fresh_60_has_no_overlay() {
 
     let mut narrow = App::new(&root).unwrap();
     let _ = draw_app(&mut narrow, 60, 24);
-    assert_eq!(narrow.nav_visible, Some(false));
+    assert!(!narrow.nav_visible);
     assert!(
         !narrow
             .hit_map
@@ -373,20 +373,20 @@ fn nav_k4_steps_and_activate() {
 fn viewer_cursor_scroll_and_back_restore() {
     let root = fixture();
     let mut app = App::new(&root).unwrap();
+    let _ = draw_app(&mut app, 100, 24);
     app.update(Action::FocusViewer);
-    app.update(Action::ViewerDown);
-    app.update(Action::ViewerDown);
-    assert_eq!(app.cursor_line, 2);
-    let scroll_before = app.scroll;
+    // Skip frontmatter box lines so source_map is unique for this cursor.
+    for _ in 0..12 {
+        app.update(Action::ViewerDown);
+    }
+    let source = app.doc.source_cursor(app.cursor_line);
+    assert!(source > 0, "expected body source line, got {source}");
     app.update(Action::GoToPage(PageKey {
         collection_id: "worked-example".into(),
         relative_path: PathBuf::from("architecture/README.md"),
     }));
-    // Leave with view state saved on navigate from README... we navigated from root
-    // with cursor 2; go back.
     app.update(Action::Back);
-    assert_eq!(app.cursor_line, 2);
-    assert_eq!(app.scroll, scroll_before);
+    assert_eq!(app.doc.source_cursor(app.cursor_line), source);
 }
 
 #[test]
@@ -437,7 +437,8 @@ fn search_row_is_nav_stop_with_cursor() {
     assert!(matches!(app.navigator.nav().cursor, NavStop::Search));
     // Status/search activate.
     app.update(Action::NavActivate);
-    assert!(app.message.contains("search"));
+    assert!(app.search.is_some());
+    assert_eq!(app.input_mode, crate::tui::keymap::InputMode::Overlay);
 }
 
 #[test]
@@ -611,4 +612,428 @@ fn tab_cycle_through_app_includes_footer() {
     }
     assert!(saw_footer, "Tab cycle should reach footer buttons");
     let _ = draw_app(&mut app, 100, 24);
+}
+
+#[test]
+fn nav_visibility_reseeds_on_resize_without_user_toggle() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let _ = draw_app(&mut app, 60, 24);
+    assert!(!app.nav_visible);
+    let _ = draw_app(&mut app, 120, 24);
+    assert!(app.nav_visible);
+    let _ = draw_app(&mut app, 60, 24);
+    assert!(!app.nav_visible);
+}
+
+#[test]
+fn overlay_closes_after_nav_activate_at_narrow_width() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let _ = draw_app(&mut app, 60, 24);
+    app.update(Action::ToggleNav);
+    assert!(app.nav_visible);
+    app.update(Action::FocusNav);
+    app.navigator.set_nav_cursor(NodeId::Page(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/README.md"),
+    }));
+    app.update(Action::NavActivate);
+    assert!(!app.nav_visible);
+}
+
+#[test]
+fn nav_scroll_clamped_after_collapse_long_tree() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/deep-tree");
+    let mut app = App::new(&root).unwrap();
+    let _ = draw_app(&mut app, 120, 12);
+    app.navigator
+        .set_group_expanded(NodeId::Group(PathBuf::from("l1")), true);
+    app.navigator
+        .set_group_expanded(NodeId::Group(PathBuf::from("l1/l2")), true);
+    app.navigator
+        .set_group_expanded(NodeId::Group(PathBuf::from("l1/l2/l3")), true);
+    app.nav_scroll = 100;
+    app.navigator
+        .set_group_expanded(NodeId::Group(PathBuf::from("l1/l2/l3")), false);
+    app.navigator
+        .set_group_expanded(NodeId::Group(PathBuf::from("l1/l2")), false);
+    app.navigator
+        .set_group_expanded(NodeId::Group(PathBuf::from("l1")), false);
+    app.clamp_nav_scroll();
+    let n = app.nav_rows().len();
+    let vh = usize::from(app.nav_viewport.max(1));
+    let max = n.saturating_sub(vh);
+    assert!(usize::from(app.nav_scroll) <= max);
+}
+
+#[test]
+fn view_mode_toggle_round_trips_raw_and_rendered() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let _ = draw_app(&mut app, 100, 24);
+    assert!(matches!(
+        app.doc,
+        crate::tui::page_doc::PageDoc::Rendered(_)
+    ));
+    for _ in 0..12 {
+        app.update(Action::ViewerDown);
+    }
+    let source = app.doc.source_cursor(app.cursor_line);
+    assert!(source > 0);
+    app.update(Action::ToggleViewMode);
+    assert!(matches!(app.doc, crate::tui::page_doc::PageDoc::Raw(_)));
+    assert_eq!(app.doc.source_cursor(app.cursor_line), source);
+    app.update(Action::ToggleViewMode);
+    assert!(matches!(
+        app.doc,
+        crate::tui::page_doc::PageDoc::Rendered(_)
+    ));
+    assert_eq!(app.doc.source_cursor(app.cursor_line), source);
+}
+
+fn link_chain_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/link-chain")
+}
+
+#[test]
+fn link_chain_ten_links_ten_backs_one_tab() {
+    let root = link_chain_root();
+    let mut app = App::new(&root).unwrap();
+    app.cursor_line = 1;
+    app.scroll = 0;
+    for i in 1..=10 {
+        app.follow_link_target(&format!("{i:02}.md"));
+    }
+    assert_eq!(app.navigator.tab_count(), 1);
+    assert_eq!(app.navigator.tab().history.len(), 11);
+    assert_eq!(
+        app.navigator.tab().current().page.relative_path,
+        PathBuf::from("10.md")
+    );
+    for _ in 0..10 {
+        app.update(Action::Back);
+    }
+    assert_eq!(
+        app.navigator.tab().current().page.relative_path,
+        PathBuf::from("README.md")
+    );
+    assert_eq!(app.cursor_line, 1);
+    assert_eq!(app.scroll, 0);
+}
+
+#[test]
+fn click_link_glyph_follows_page() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/README.md"),
+    }));
+    let _ = draw_app(&mut app, 120, 24);
+    let tokens_id = app
+        .doc
+        .link_spans()
+        .iter()
+        .find(|s| s.raw_target.contains("tokens.md"))
+        .expect("tokens link")
+        .id
+        .0;
+    let link_rect = app
+        .hit_map
+        .entries()
+        .iter()
+        .find(|(_, h)| matches!(h, Hit::Link(id) if *id == tokens_id))
+        .map(|(r, _)| *r)
+        .expect("tokens link hit rect");
+    assert!(link_rect.width > 0, "link hit width {link_rect:?}");
+    let col = link_rect.x.saturating_add(link_rect.width / 2);
+    assert!(matches!(
+        app.hit_map.hit_at(col, link_rect.y),
+        Some(Hit::Link(_))
+    ));
+    let action = apply_mouse(
+        &mut app,
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: col,
+            row: link_rect.y,
+            modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+        },
+    );
+    let action = action.expect("mouse action");
+    assert!(matches!(action, Action::FollowLinkId(id) if id == tokens_id));
+    app.update(action);
+    assert_eq!(
+        app.navigator.tab().current().page.relative_path,
+        PathBuf::from("architecture/design-system/tokens.md")
+    );
+}
+
+#[derive(Default)]
+struct LogOpener(std::sync::Arc<std::sync::Mutex<Vec<String>>>);
+
+impl crate::tui::opener::Opener for LogOpener {
+    fn open(&self, url: &str) -> std::io::Result<()> {
+        self.0.lock().unwrap().push(url.to_owned());
+        Ok(())
+    }
+}
+
+#[test]
+fn external_confirm_opens_with_recording_opener() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let log = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    app.opener = Box::new(LogOpener(log.clone()));
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("README.md"),
+    }));
+    app.follow_link_target("https://example.com/wiki");
+    assert_eq!(app.input_mode, crate::tui::keymap::InputMode::Confirm);
+    app.update(Action::ConfirmOpen);
+    assert_eq!(
+        log.lock().unwrap().as_slice(),
+        &["https://example.com/wiki".to_owned()]
+    );
+}
+
+#[test]
+fn page_removed_placeholder_survives_keypress() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.apply_effects(vec![wiki_reader_core::nav::Effect::PageRemoved]);
+    assert!(app.page_missing);
+    assert_eq!(app.message, "page removed");
+    let body = app.doc.lines().join("\n");
+    assert!(body.to_lowercase().contains("page removed"), "{body}");
+    app.update(Action::ViewerDown);
+    assert!(
+        app.page_missing,
+        "page_missing must stick across cursor moves"
+    );
+    assert_eq!(app.message, "page removed");
+    assert!(
+        app.doc
+            .lines()
+            .join("\n")
+            .to_lowercase()
+            .contains("page removed")
+    );
+}
+
+#[test]
+fn dirty_during_rebuild_queues_second() {
+    use std::sync::mpsc;
+    use wiki_reader_core::Index;
+
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let (tx, rx) = mpsc::channel();
+    app.rebuild_rx = Some(rx);
+    app.note_watcher_dirty(true);
+    assert!(app.rebuild_pending, "dirty while rebuilding must queue");
+    assert!(
+        app.rebuild_rx.is_some(),
+        "must not spawn a second channel yet"
+    );
+
+    let index = Index::build(&app.provider).unwrap();
+    tx.send(Ok(index)).unwrap();
+    app.poll_watcher();
+    assert!(
+        !app.rebuild_pending,
+        "pending flag cleared when second rebuild starts"
+    );
+    assert!(
+        app.rebuild_rx.is_some(),
+        "second rebuild must start after the first finishes"
+    );
+    if let Some(rx) = app.rebuild_rx.take() {
+        let _ = rx.recv_timeout(std::time::Duration::from_secs(5));
+    }
+}
+
+#[test]
+fn search_matches_survive_toggle_and_resize() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::OpenSearch);
+    app.update(Action::SearchToggleMode); // Text
+    for c in "token".chars() {
+        app.update(Action::SearchChar(c));
+    }
+    assert!(app.search.as_ref().is_some_and(|s| !s.text_hits.is_empty()));
+    app.update(Action::SearchActivate);
+    assert!(!app.search_matches.is_empty());
+    let sources = app.search_matches.clone();
+    let idx = app.search_match_idx;
+    let before = app.search_matches[idx];
+
+    app.update(Action::ToggleViewMode);
+    assert_eq!(app.search_matches, sources, "source matches must persist");
+    assert_eq!(app.search_match_idx, idx);
+    assert_eq!(
+        app.match_highlight,
+        Some(app.doc.display_cursor(before)),
+        "highlight remapped to display after toggle"
+    );
+    app.update(Action::SearchNextMatch);
+    let after_n = app.search_matches[app.search_match_idx];
+    assert_eq!(
+        app.match_highlight,
+        Some(app.doc.display_cursor(after_n)),
+        "n lands on remapped display line"
+    );
+
+    // Resize re-layout keeps source matches.
+    app.layout_width = 0;
+    app.ensure_layout_width(40);
+    assert_eq!(app.search_matches, sources);
+    assert_eq!(
+        app.match_highlight,
+        Some(
+            app.doc
+                .display_cursor(app.search_matches[app.search_match_idx])
+        )
+    );
+}
+
+#[test]
+fn search_matches_dedupe_collapsed_display_lines() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    // Force two source lines that map to the same display line.
+    app.search_matches = vec![0, 0];
+    app.search_match_page = Some(app.navigator.tab().current().page.clone());
+    app.store_search_matches(vec![5, 6, 6, 7], 5);
+    let displays: Vec<u32> = app
+        .search_matches
+        .iter()
+        .map(|&s| app.doc.display_cursor(s))
+        .collect();
+    assert!(
+        displays.windows(2).all(|w| w[0] != w[1]),
+        "consecutive identical display lines must be deduped: {displays:?}"
+    );
+}
+
+#[test]
+fn reindex_anchored_keeps_cursor_via_scroll_none() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("README.md"),
+    }));
+    let max = u32::try_from(app.doc.lines().len().saturating_sub(1)).unwrap_or(0);
+    app.cursor_line = app.cursor_line.saturating_add(5).min(max);
+    let view = app.view_state();
+    let saved_source = view.cursor_line;
+    let index = app.navigator.index().clone();
+    let effects = app.navigator.reindex(index, view);
+    assert!(
+        effects
+            .iter()
+            .any(|e| matches!(e, wiki_reader_core::nav::Effect::ScrollTo(None))),
+        "{effects:?}"
+    );
+    assert!(
+        !effects
+            .iter()
+            .any(|e| matches!(e, wiki_reader_core::nav::Effect::ScrollTo(Some(_))))
+    );
+    app.apply_effects(effects);
+    assert_eq!(
+        app.navigator.tab().current().cursor_line,
+        saved_source,
+        "location keeps saved source cursor"
+    );
+    assert_eq!(
+        app.cursor_line,
+        app.doc.display_cursor(saved_source),
+        "viewer restores from saved source cursor"
+    );
+}
+
+#[test]
+fn search_n_n_wrap_and_highlight() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::OpenSearch);
+    app.update(Action::SearchToggleMode); // Text
+    for c in "token".chars() {
+        app.update(Action::SearchChar(c));
+    }
+    assert!(
+        app.search.as_ref().is_some_and(|s| !s.text_hits.is_empty()),
+        "expected text hits"
+    );
+    app.update(Action::SearchActivate);
+    assert!(!app.search_matches.is_empty());
+    assert!(app.match_highlight.is_some());
+    let n = app.search_matches.len();
+    assert!(app.message.contains(&format!("1/{n}")) || app.message.contains(&format!("/{n}")));
+    // Wrap around with n/N
+    for _ in 0..n {
+        app.update(Action::SearchNextMatch);
+    }
+    assert_eq!(app.search_match_idx, 0);
+    app.update(Action::SearchPrevMatch);
+    assert_eq!(app.search_match_idx, n.saturating_sub(1));
+    // Cursor move clears highlight
+    app.update(Action::ViewerDown);
+    assert!(app.match_highlight.is_none());
+    assert!(app.search_matches.is_empty());
+}
+
+#[test]
+fn search_click_result_and_outside() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let prev_cursor = app.cursor_line;
+    app.update(Action::OpenSearch);
+    for c in "token".chars() {
+        app.update(Action::SearchChar(c));
+    }
+    let backend = TestBackend::new(100, 30);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|f| draw(f, &mut app)).unwrap();
+    let result_hit = app
+        .hit_map
+        .entries()
+        .iter()
+        .find(|(_, h)| matches!(h, Hit::SearchResult(0)));
+    assert!(result_hit.is_some(), "expected SearchResult hit");
+    // Click outside closes and restores cursor.
+    app.update(Action::CloseSearch);
+    assert!(app.search.is_none());
+    assert_eq!(app.cursor_line, prev_cursor);
+}
+
+#[test]
+fn search_pages_projection_token_opens_tokens() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::OpenSearch);
+    for c in "projection token".chars() {
+        app.update(Action::SearchChar(c));
+    }
+    let hits = app.search.as_ref().map(|s| s.page_hits.clone()).unwrap();
+    assert!(
+        hits.iter()
+            .any(|h| h.page.relative_path.to_string_lossy().contains("tokens")),
+        "{hits:?}"
+    );
+    app.update(Action::SearchActivate);
+    assert!(
+        app.navigator
+            .tab()
+            .current()
+            .page
+            .relative_path
+            .to_string_lossy()
+            .contains("tokens")
+    );
 }

@@ -27,6 +27,12 @@ pub enum Hit {
     Next,
     /// Viewer body line (0-based source line index).
     ViewerLine(u32),
+    /// Link segment (`LinkId.0`).
+    Link(u32),
+    /// Search overlay result row.
+    SearchResult(usize),
+    /// Click outside the search panel (dismiss).
+    SearchDismiss,
     /// Click focuses the nav pane.
     FocusNav,
     /// Click focuses the viewer pane.
@@ -82,6 +88,9 @@ impl HitMap {
             Hit::NavGroupToggle(id) => Action::ToggleGroup(id.clone()),
             Hit::NavSearchRow => Action::OpenSearch,
             Hit::ViewerLine(line) => Action::SetCursorLine(*line),
+            Hit::Link(id) => Action::FollowLinkId(*id),
+            Hit::SearchResult(i) => Action::SearchActivateIndex(*i),
+            Hit::SearchDismiss => Action::CloseSearch,
             Hit::FocusNav => Action::FocusNav,
             Hit::FocusViewer => Action::FocusViewer,
         }

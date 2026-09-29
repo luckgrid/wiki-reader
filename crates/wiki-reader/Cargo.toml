@@ -17,6 +17,7 @@ path = "examples/keylog.rs"
 [dependencies]
 clap = { workspace = true }
 ratatui = { workspace = true }
+syntect = { workspace = true }
 wiki-reader-core = { workspace = true }
 wiki-reader-render = { workspace = true }
 

@@ -76,7 +76,9 @@ In order, for a link target `t` written in page `p`:
 
 Anchors that don't exist resolve to the page with a footer notice. The link isn't treated as broken.
 
-Links to existing non-markdown files, and `?query` suffixes on otherwise-valid targets, currently resolve as `Unresolved` (shown as broken). UX for those cases is deferred to P1-09.
+**Query strings:** `?…` suffixes on path targets are stripped before rules 3–4 (e.g. `page.md?edit=1` resolves like `page.md`).
+
+**Non-markdown files:** If the path points at an existing non-`.md` file under the collection, the link is styled as broken; following it leaves history unchanged and the status bar shows `not a markdown page`.
 
 ## Side nav tree construction
 

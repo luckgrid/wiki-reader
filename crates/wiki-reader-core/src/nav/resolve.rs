@@ -53,6 +53,7 @@ pub fn resolve(t: &str, from: &PageKey, index: &Index) -> ResolveOutcome {
     }
 
     let (path_part, anchor) = split_anchor(t);
+    let path_part = strip_query(path_part);
 
     // 3–5: try as written, then URL-decoded once.
     if let Some(key) = resolve_path(path_part, from, index) {
@@ -120,6 +121,31 @@ fn split_anchor(t: &str) -> (&str, Option<&str>) {
         Some((path, anchor)) => (path, Some(anchor)),
         None => (t, None),
     }
+}
+
+fn strip_query(path: &str) -> &str {
+    path.split_once('?').map_or(path, |(p, _)| p)
+}
+
+/// Relative path when a target does not resolve to an indexed markdown page.
+#[must_use]
+pub fn unresolved_relative_path(t: &str, from: &PageKey) -> Option<PathBuf> {
+    let t = t.trim();
+    if t.is_empty() || has_scheme(t) || t.starts_with('#') {
+        return None;
+    }
+    let (path_part, _) = split_anchor(t);
+    let path_part = strip_query(path_part);
+    if path_part.is_empty() {
+        return None;
+    }
+    let joined = if path_part.starts_with('/') {
+        PathBuf::from(path_part.trim_start_matches('/'))
+    } else {
+        let page_dir = from.relative_path.parent().unwrap_or_else(|| Path::new(""));
+        page_dir.join(path_part)
+    };
+    normalize_dots(&joined)
 }
 
 fn has_scheme(t: &str) -> bool {
@@ -208,6 +234,14 @@ mod tests {
             collection_id: collection.into(),
             relative_path: PathBuf::from(path),
         }
+    }
+
+    #[test]
+    fn query_suffix_stripped_before_resolve() {
+        let index = index_at("../../fixtures/worked-example");
+        let from = key("worked-example", "architecture/README.md");
+        let out = resolve("design-system/tokens.md?edit=1", &from, &index);
+        assert!(matches!(out.target, Target::Page(_, None)));
     }
 
     #[test]
