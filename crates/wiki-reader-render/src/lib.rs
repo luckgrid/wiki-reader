@@ -181,23 +181,53 @@ mod tests {
     #[test]
     fn table_fair_share_separator_and_width() {
         let src = "| short | a_very_long_header_cell |\n| --- | --- |\n| 1 | 2 |\n";
-        for width in [40_u16, 80] {
+        for width in [40_u16, 60, 80] {
             let doc = render_src(src, width);
             let plain = doc.lines.join("\n");
+            let table_lines: Vec<&String> = doc
+                .lines
+                .iter()
+                .filter(|l| l.contains('│') || l.contains('┼') || l.contains('├'))
+                .collect();
             assert!(
-                doc.lines.iter().any(|l| l.contains('┼') || l.contains('─')),
+                table_lines
+                    .iter()
+                    .any(|l| l.contains('┼') || l.contains('├')),
                 "w={width}: missing header separator: {plain}"
             );
             assert!(
-                doc.lines
-                    .iter()
-                    .all(|l| l.width() <= usize::from(width) + 2),
+                table_lines.iter().all(|l| l.width() <= usize::from(width)),
                 "w={width}: row exceeds width: {plain}"
             );
+            let widths: Vec<usize> = table_lines.iter().map(|l| l.width()).collect();
             assert!(
-                doc.lines.iter().any(|l| l.contains('…') || l.contains('│')),
-                "w={width}: expected table cells: {plain}"
+                widths.windows(2).all(|w| w[0] == w[1]),
+                "w={width}: row/sep width mismatch {widths:?}: {plain}"
             );
+            // Junction columns: find │ positions on a data row and ┼/┤ on sep.
+            if let (Some(data), Some(sep)) = (
+                table_lines
+                    .iter()
+                    .find(|l| l.contains('│') && !l.contains('┼')),
+                table_lines
+                    .iter()
+                    .find(|l| l.contains('┼') || l.contains('├')),
+            ) {
+                let data_borders: Vec<usize> = data
+                    .char_indices()
+                    .filter(|(_, c)| *c == '│')
+                    .map(|(i, _)| data[..i].width())
+                    .collect();
+                let sep_borders: Vec<usize> = sep
+                    .char_indices()
+                    .filter(|(_, c)| matches!(*c, '├' | '┼' | '┤'))
+                    .map(|(i, _)| sep[..i].width())
+                    .collect();
+                assert_eq!(
+                    data_borders, sep_borders,
+                    "w={width}: border columns misaligned data={data:?} sep={sep:?}"
+                );
+            }
         }
     }
 
@@ -290,20 +320,52 @@ mod tests {
     }
 
     #[test]
-    fn render_timing_50kb_ceiling() {
+    fn render_scaling_not_quadratic() {
         use std::time::Instant;
         let chunk = "# H\n\nPara with [link](https://ex.com) and a list:\n\n- a\n- b\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\n```\ncode\n```\n\n";
-        let src = chunk.repeat(400); // ≈ 50 KB
-        let src_len = src.len();
-        assert!(src_len >= 40_000, "fixture too small: {src_len}");
+        let small = chunk.repeat(200); // ≈ 25 KB
+        let large = chunk.repeat(400); // ≈ 50 KB
+        assert!(small.len() * 2 <= large.len() + chunk.len());
+
+        // Warm caches / allocator.
+        let _ = render_src(chunk, 80);
+
+        let t_small = {
+            let start = Instant::now();
+            let doc = render_src(&small, 80);
+            assert!(!doc.lines.is_empty());
+            start.elapsed()
+        };
+        let t_large = {
+            let start = Instant::now();
+            let doc = render_src(&large, 80);
+            assert!(!doc.lines.is_empty());
+            start.elapsed()
+        };
+        let ratio = t_large.as_secs_f64() / t_small.as_secs_f64().max(1e-9);
+        // Quadratic was ~4× per doubling; allow headroom for debug allocator noise.
+        assert!(
+            ratio < 3.0,
+            "doubling input slowed render {ratio:.2}× (small={t_small:?}, large={t_large:?}); expected < 3×"
+        );
+    }
+
+    /// Manual / release budget: `cargo test -p wiki-reader-render --release -- --ignored`
+    #[test]
+    #[ignore = "release budget; run with --ignored --release"]
+    fn render_budget_50kb_under_20ms() {
+        use std::time::Instant;
+        let chunk = "# H\n\nPara with [link](https://ex.com) and a list:\n\n- a\n- b\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\n```\ncode\n```\n\n";
+        let src = chunk.repeat(400);
+        assert!(src.len() >= 40_000);
+        let _ = render_src(chunk, 80);
         let start = Instant::now();
         let doc = render_src(&src, 80);
         let elapsed = start.elapsed();
         assert!(!doc.lines.is_empty());
-        // CI-safe generous ceiling. Manual budget on a laptop: < 20 ms (release).
         assert!(
-            elapsed.as_millis() < 30_000,
-            "render took {elapsed:?}, expected < 30s"
+            elapsed.as_millis() < 20,
+            "render took {elapsed:?}, expected < 20ms (release)"
         );
     }
 }

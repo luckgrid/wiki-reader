@@ -123,23 +123,45 @@ mod tests {
     use std::time::Instant;
 
     #[test]
-    fn highlight_timing_sanity() {
-        // ~50 KB of markdown-ish text.
+    fn highlight_scaling_not_quadratic() {
         let chunk =
             "# Heading\n\nParagraph with `code` and **bold**.\n\n```rust\nfn main() {}\n```\n\n";
-        let source = chunk.repeat(700); // ≈ 50 KB
-        let source_len = source.len();
-        assert!(source_len >= 40_000, "fixture too small: {source_len}");
-        // Warm OnceLock first so the ceiling measures highlight work, not asset load.
+        let small = chunk.repeat(350);
+        let large = chunk.repeat(700);
+        let _ = highlight_markdown("warm");
+        let t_small = {
+            let start = Instant::now();
+            assert!(!highlight_markdown(&small).is_empty());
+            start.elapsed()
+        };
+        let t_large = {
+            let start = Instant::now();
+            assert!(!highlight_markdown(&large).is_empty());
+            start.elapsed()
+        };
+        let ratio = t_large.as_secs_f64() / t_small.as_secs_f64().max(1e-9);
+        assert!(
+            ratio < 3.0,
+            "doubling input slowed highlight {ratio:.2}× (small={t_small:?}, large={t_large:?})"
+        );
+    }
+
+    /// Manual / release budget: `cargo test -p wiki-reader --release -- highlight_budget --ignored`
+    #[test]
+    #[ignore = "release budget; run with --ignored --release"]
+    fn highlight_budget_50kb_under_20ms() {
+        let chunk =
+            "# Heading\n\nParagraph with `code` and **bold**.\n\n```rust\nfn main() {}\n```\n\n";
+        let source = chunk.repeat(700);
+        assert!(source.len() >= 40_000);
         let _ = highlight_markdown("warm");
         let start = Instant::now();
         let lines = highlight_markdown(&source);
         let elapsed = start.elapsed();
         assert!(!lines.is_empty());
-        // CI-safe generous ceiling (debug syntect is slow; manual budget < 20 ms release).
         assert!(
-            elapsed.as_millis() < 30_000,
-            "highlight took {elapsed:?}, expected < 30s"
+            elapsed.as_millis() < 20,
+            "highlight took {elapsed:?}, expected < 20ms (release)"
         );
     }
 }

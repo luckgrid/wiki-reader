@@ -127,11 +127,12 @@ pub fn render(
         | Options::ENABLE_STRIKETHROUGH
         | Options::ENABLE_FOOTNOTES
         | Options::ENABLE_GFM;
+    let line_starts = line_start_offsets(&body);
     for (event, range) in Parser::new_ext(&body, options).into_offset_iter() {
-        let src = offset_to_line(&body, body_line_offset, range.start);
+        let src = offset_to_line(&line_starts, body_line_offset, range.start);
         // Closing tags span the whole construct; prefer end for fence close etc.
         let src_end = offset_to_line(
-            &body,
+            &line_starts,
             body_line_offset,
             range.end.saturating_sub(1).max(range.start),
         );
@@ -784,12 +785,20 @@ fn strip_fm(source: &str) -> Option<String> {
     None
 }
 
-fn offset_to_line(body: &str, body_line_offset: u32, byte: usize) -> u32 {
-    let mut byte = byte.min(body.len());
-    while byte > 0 && !body.is_char_boundary(byte) {
-        byte -= 1;
+fn line_start_offsets(text: &str) -> Vec<usize> {
+    let mut starts = vec![0];
+    for (i, b) in text.bytes().enumerate() {
+        if b == b'\n' {
+            starts.push(i + 1);
+        }
     }
-    let idx = body[..byte].bytes().filter(|&b| b == b'\n').count();
+    starts
+}
+
+fn offset_to_line(line_starts: &[usize], body_line_offset: u32, byte: usize) -> u32 {
+    let idx = line_starts
+        .partition_point(|&s| s <= byte)
+        .saturating_sub(1);
     body_line_offset + u32::try_from(idx).unwrap_or(0)
 }
 
@@ -885,10 +894,8 @@ fn parse_alert_prefix(t: &str) -> Option<(&str, &str)> {
 }
 
 fn fair_share_widths(rows: &[Vec<String>], cols: usize, total_width: usize) -> Vec<usize> {
-    // │ cell │ cell │ → borders = cols+1, plus one space pad each side of cell (= 2*cols)
-    let chrome = cols
-        .saturating_add(1)
-        .saturating_add(cols.saturating_mul(2));
+    // │ {cell}│ × cols → borders = cols+1, one leading space per cell (= cols)
+    let chrome = cols.saturating_add(1).saturating_add(cols);
     let avail = total_width.saturating_sub(chrome).max(cols);
     let natural: Vec<usize> = (0..cols)
         .map(|c| {
@@ -948,9 +955,10 @@ fn format_table_row(row: &[String], widths: &[usize]) -> String {
 }
 
 fn format_table_separator(widths: &[usize]) -> String {
+    // Match data row inter-border gap: one leading space + w content chars.
     let mut out = String::from("├");
     for (i, &w) in widths.iter().enumerate() {
-        out.push_str(&"─".repeat(w.saturating_add(2)));
+        out.push_str(&"─".repeat(w.saturating_add(1)));
         if i + 1 == widths.len() {
             out.push('┤');
         } else {
