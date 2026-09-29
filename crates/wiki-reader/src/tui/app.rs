@@ -11,7 +11,7 @@ use ratatui::crossterm::event::{
 };
 use ratatui::crossterm::execute;
 use wiki_reader_core::Index;
-use wiki_reader_core::nav::{Effect, Navigator, NodeId, ViewState};
+use wiki_reader_core::nav::{Effect, NavStop, Navigator, NodeId, ViewState};
 use wiki_reader_core::provider::{CollectionProvider, FsProvider, PageKey};
 
 use super::action::Action;
@@ -35,8 +35,6 @@ pub struct App {
     pub nav_visible: Option<bool>,
     /// Side nav scroll offset (rows below the search line).
     pub nav_scroll: u16,
-    /// When true, the ⌕ Search… row is the nav cursor (not a `NodeId`).
-    pub nav_on_search: bool,
     /// Current viewer document.
     pub doc: RawDoc,
     /// Viewer cursor (0-based source line index).
@@ -77,7 +75,6 @@ impl App {
             // Seeded from terminal width on first draw (≥80 shown, &lt;80 hidden).
             nav_visible: None,
             nav_scroll: 0,
-            nav_on_search: false,
             doc: RawDoc::from_source("", None),
             cursor_line: 0,
             scroll: 0,
@@ -108,6 +105,13 @@ impl App {
 
     /// Pure state update (unit-testable without a terminal).
     pub fn update(&mut self, action: Action) {
+        // Transient notices clear on the next key/action (Tab keeps focus target).
+        if !matches!(
+            action,
+            Action::None | Action::ViewerTab | Action::ViewerBackTab
+        ) {
+            self.message.clear();
+        }
         match action {
             Action::Quit => self.quit = true,
             Action::ToggleNav => {
@@ -140,6 +144,7 @@ impl App {
                 self.navigator.set_group_expanded(id, open);
             }
             Action::OpenSearch => {
+                self.navigator.set_nav_stop(NavStop::Search);
                 self.message = "search: coming in P1-10".into();
             }
             Action::FocusNav => {
@@ -162,11 +167,14 @@ impl App {
                 }
             }
             Action::SetCursorLine(line) => {
+                if self.focus != FocusPane::Viewer {
+                    self.navigator.nav_focus_lost();
+                    self.focus = FocusPane::Viewer;
+                }
                 let max =
                     u32::try_from(self.doc.lines().len().saturating_sub(1)).unwrap_or(u32::MAX);
                 self.cursor_line = line.min(max);
                 self.focused_item = None;
-                self.focus = FocusPane::Viewer;
             }
             Action::NavStepUp => self.nav_step(-1),
             Action::NavStepDown => self.nav_step(1),
@@ -208,19 +216,21 @@ impl App {
         side_nav::visible_rows(&self.navigator.nav().tree, &self.navigator.nav().expanded)
     }
 
+    fn on_search(&self) -> bool {
+        matches!(self.navigator.nav().cursor, NavStop::Search)
+    }
+
     fn nav_cursor_index(&self, rows: &[side_nav::NavRow]) -> Option<usize> {
-        if self.nav_on_search {
-            return None; // search is before rows
+        match &self.navigator.nav().cursor {
+            NavStop::Search => None,
+            NavStop::Node(cur) => rows.iter().position(|r| &r.id == cur),
         }
-        let cur = self.navigator.nav().cursor.as_ref()?;
-        rows.iter().position(|r| &r.id == cur)
     }
 
     fn nav_step(&mut self, dir: i32) {
         let rows = self.nav_rows();
-        // Positions: 0 = search, 1..len = rows[0..]
         let len = rows.len() + 1;
-        let cur = if self.nav_on_search {
+        let cur = if self.on_search() {
             0usize
         } else {
             self.nav_cursor_index(&rows).map_or(1, |i| i + 1)
@@ -231,9 +241,8 @@ impl App {
             (cur + 1).min(len.saturating_sub(1))
         };
         if next == 0 {
-            self.nav_on_search = true;
+            self.navigator.set_nav_stop(NavStop::Search);
         } else if let Some(row) = rows.get(next - 1) {
-            self.nav_on_search = false;
             self.navigator.set_nav_cursor(row.id.clone());
         }
         self.ensure_nav_cursor_visible();
@@ -241,26 +250,25 @@ impl App {
 
     fn nav_jump_group(&mut self, dir: i32) {
         let rows = self.nav_rows();
-        let cur = if self.nav_on_search {
+        let cur = if self.on_search() {
             0usize
         } else {
             self.nav_cursor_index(&rows).map_or(1, |i| i + 1)
         };
         if dir < 0 {
             if cur <= 1 {
-                self.nav_on_search = true;
+                self.navigator.set_nav_stop(NavStop::Search);
             } else {
                 let mut found = false;
                 for pos in (1..cur).rev() {
                     if rows[pos - 1].is_group {
-                        self.nav_on_search = false;
                         self.navigator.set_nav_cursor(rows[pos - 1].id.clone());
                         found = true;
                         break;
                     }
                 }
                 if !found {
-                    self.nav_on_search = true;
+                    self.navigator.set_nav_stop(NavStop::Search);
                 }
             }
         } else {
@@ -270,7 +278,6 @@ impl App {
                     continue;
                 }
                 if row.is_group {
-                    self.nav_on_search = false;
                     self.navigator.set_nav_cursor(row.id.clone());
                     break;
                 }
@@ -280,10 +287,7 @@ impl App {
     }
 
     fn nav_expand(&mut self) {
-        if self.nav_on_search {
-            return;
-        }
-        let Some(id) = self.navigator.nav().cursor.clone() else {
+        let NavStop::Node(id) = self.navigator.nav().cursor.clone() else {
             return;
         };
         if matches!(id, NodeId::Group(_) | NodeId::OtherPages) {
@@ -292,47 +296,38 @@ impl App {
     }
 
     fn nav_collapse(&mut self) {
-        if self.nav_on_search {
-            return;
-        }
-        let Some(id) = self.navigator.nav().cursor.clone() else {
+        let NavStop::Node(id) = self.navigator.nav().cursor.clone() else {
             return;
         };
-        match &id {
-            NodeId::Group(_) | NodeId::OtherPages
-                if self.navigator.nav().expanded.contains(&id) =>
-            {
-                self.navigator.set_group_expanded(id, false);
-            }
-            NodeId::Page(key) => {
-                if let Some(parent) = key
-                    .relative_path
-                    .parent()
-                    .filter(|p| !p.as_os_str().is_empty())
-                {
-                    self.navigator
-                        .set_nav_cursor(NodeId::Group(parent.to_path_buf()));
+        match id {
+            NodeId::Group(_) | NodeId::OtherPages => {
+                if self.navigator.nav().expanded.contains(&id) {
+                    self.navigator.set_group_expanded(id, false);
+                } else if let Some(parent) = self.navigator.nav().tree.parent_group(&id) {
+                    self.navigator.set_nav_cursor(parent);
+                    self.ensure_nav_cursor_visible();
                 }
             }
-            _ => {}
+            NodeId::Page(key) => {
+                if let Some(parent) = self.navigator.nav().tree.parent_group(&NodeId::Page(key)) {
+                    self.navigator.set_nav_cursor(parent);
+                    self.ensure_nav_cursor_visible();
+                }
+            }
         }
     }
 
     fn nav_activate(&mut self) {
-        if self.nav_on_search {
-            self.message = "search: coming in P1-10".into();
-            return;
-        }
-        let Some(id) = self.navigator.nav().cursor.clone() else {
-            return;
-        };
-        match id {
-            NodeId::Page(key) => {
+        match self.navigator.nav().cursor.clone() {
+            NavStop::Search => {
+                self.message = "search: coming in P1-10".into();
+            }
+            NavStop::Node(NodeId::Page(key)) => {
                 self.navigator.set_nav_cursor(NodeId::Page(key.clone()));
                 let effects = self.navigator.go_to_page(key, self.view_state());
                 self.apply_effects(effects);
             }
-            other => {
+            NavStop::Node(other) => {
                 let open = !self.navigator.nav().expanded.contains(&other);
                 self.navigator.set_group_expanded(other, open);
             }
@@ -366,6 +361,12 @@ impl App {
         }
         if let Some(n) = self.navigator.notice() {
             self.message = n.to_owned();
+        }
+        // Navigation while nav is focused: cursor follows the current page.
+        if self.focus == FocusPane::Nav {
+            let page = self.navigator.tab().current().page.clone();
+            self.navigator.set_nav_cursor(NodeId::Page(page.clone()));
+            self.reveal_page_in_nav(&page);
         }
     }
 
@@ -441,7 +442,7 @@ impl App {
     }
 
     fn ensure_nav_cursor_visible(&mut self) {
-        if self.nav_on_search {
+        if self.on_search() {
             self.nav_scroll = 0;
             return;
         }
@@ -509,14 +510,7 @@ impl App {
             self.cursor_line = it.line;
             self.ensure_cursor_visible();
         }
-        let page = &self.navigator.tab().current().page;
-        self.message = match it.kind {
-            super::viewer_doc::FocusKind::Link => {
-                format_target(&it.target, page, self.navigator.index())
-            }
-            super::viewer_doc::FocusKind::FooterPrev => "‹ prev".into(),
-            super::viewer_doc::FocusKind::FooterNext => "next ›".into(),
-        };
+        // Focused-item target is derived at draw time (not stored in `message`).
     }
 
     fn close_overlay_after_nav(&mut self, term_width: u16) {
@@ -619,8 +613,26 @@ fn run_loop(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
 fn apply_mouse(app: &mut App, mouse: ratatui::crossterm::event::MouseEvent) -> Option<Action> {
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) => {
-            let hit = app.hit_map.hit_at(mouse.column, mouse.row)?;
-            Some(HitMap::action_for(hit))
+            let hit = app.hit_map.hit_at(mouse.column, mouse.row)?.clone();
+            // Click focuses the pane before the primary action (K1 / stale-cursor).
+            match &hit {
+                Hit::NavItem(_) | Hit::NavGroupToggle(_) | Hit::NavSearchRow | Hit::FocusNav => {
+                    app.update(Action::FocusNav);
+                    // Move nav cursor to the clicked row when applicable.
+                    match &hit {
+                        Hit::NavItem(id) | Hit::NavGroupToggle(id) => {
+                            app.navigator.set_nav_cursor(id.clone());
+                        }
+                        Hit::NavSearchRow => app.navigator.set_nav_stop(NavStop::Search),
+                        _ => {}
+                    }
+                }
+                Hit::ViewerLine(_) | Hit::FocusViewer | Hit::Prev | Hit::Next => {
+                    app.update(Action::FocusViewer);
+                }
+                _ => {}
+            }
+            Some(HitMap::action_for(&hit))
         }
         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
             let over_nav = app.hit_map.entries().iter().any(|(r, h)| {
@@ -711,7 +723,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
             &nav.tree,
             &nav.expanded,
             &page,
-            nav.cursor.as_ref(),
+            &nav.cursor,
             app.nav_scroll,
             app.focus == FocusPane::Nav,
             &theme,
@@ -722,6 +734,12 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     let total = u32::try_from(app.doc.lines().len().max(1)).unwrap_or(1);
     let pct = ((app.scroll.saturating_add(1)) * 100) / total;
     let path = page.relative_path.display().to_string();
+    let focus_target = focused_status_message(app);
+    let status_msg = if !app.message.is_empty() {
+        app.message.as_str()
+    } else {
+        focus_target.as_str()
+    };
     status::draw(
         frame,
         regions.status,
@@ -733,10 +751,28 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
             words: app.doc.word_count(),
             minutes: status::reading_minutes(app.doc.word_count()),
             updated: app.doc.updated(),
-            message: &app.message,
+            message: status_msg,
         },
         &theme,
     );
+}
+
+fn focused_status_message(app: &App) -> String {
+    let Some(i) = app.focused_item else {
+        return String::new();
+    };
+    let items = app.focus_list();
+    let Some(it) = items.get(i) else {
+        return String::new();
+    };
+    let page = &app.navigator.tab().current().page;
+    match it.kind {
+        super::viewer_doc::FocusKind::Link => {
+            format_target(&it.target, page, app.navigator.index())
+        }
+        super::viewer_doc::FocusKind::FooterPrev => "‹ prev".into(),
+        super::viewer_doc::FocusKind::FooterNext => "next ›".into(),
+    }
 }
 
 #[cfg(test)]
@@ -1072,7 +1108,7 @@ mod tests {
         app.update(Action::FocusNav);
         assert_eq!(
             app.navigator.nav().cursor,
-            Some(NodeId::Page(current)),
+            NavStop::Node(NodeId::Page(current)),
             "stale-cursor should jump to current page"
         );
     }
@@ -1082,11 +1118,13 @@ mod tests {
         let root = fixture();
         let mut app = App::new(&root).unwrap();
         app.update(Action::FocusNav);
-        app.nav_on_search = true;
+        app.navigator.set_nav_stop(NavStop::Search);
         app.update(Action::NavStepDown);
-        assert!(!app.nav_on_search);
+        assert!(!matches!(app.navigator.nav().cursor, NavStop::Search));
         app.update(Action::NavJumpDown);
-        let id = app.navigator.nav().cursor.clone().unwrap();
+        let NavStop::Node(id) = app.navigator.nav().cursor.clone() else {
+            panic!("expected node");
+        };
         assert!(matches!(id, NodeId::Group(_)));
         app.update(Action::NavExpand);
         assert!(app.navigator.nav().expanded.contains(&id));
@@ -1124,6 +1162,129 @@ mod tests {
         app.focused_item = Some(0);
         app.update(Action::ViewerDown);
         assert_eq!(app.focused_item, None);
+    }
+
+    #[test]
+    fn leaf_readme_left_uses_parent_group() {
+        let root = fixture();
+        let mut app = App::new(&root).unwrap();
+        // tokens.md sits under architecture/design-system group.
+        app.update(Action::GoToPage(PageKey {
+            collection_id: "worked-example".into(),
+            relative_path: PathBuf::from("architecture/design-system/tokens.md"),
+        }));
+        app.update(Action::FocusNav);
+        app.update(Action::NavCollapse); // ← on a page → parent group
+        assert_eq!(
+            app.navigator.nav().cursor,
+            NavStop::Node(NodeId::Group(PathBuf::from("architecture/design-system")))
+        );
+        // Folded leaf: go to a top-level-ish page and ← should not invent phantom groups.
+        app.update(Action::GoToPage(PageKey {
+            collection_id: "worked-example".into(),
+            relative_path: PathBuf::from("README.md"),
+        }));
+        app.update(Action::FocusNav);
+        let before = app.navigator.nav().cursor.clone();
+        app.update(Action::NavCollapse);
+        assert_eq!(app.navigator.nav().cursor, before);
+    }
+
+    #[test]
+    fn search_row_is_nav_stop_with_cursor() {
+        let root = fixture();
+        let mut app = App::new(&root).unwrap();
+        app.update(Action::FocusNav);
+        app.navigator.set_nav_stop(NavStop::Search);
+        let _ = draw_app(&mut app, 120, 24);
+        assert!(matches!(app.navigator.nav().cursor, NavStop::Search));
+        // Status/search activate.
+        app.update(Action::NavActivate);
+        assert!(app.message.contains("search"));
+    }
+
+    #[test]
+    fn nav_row_click_focuses_nav_pane() {
+        let root = fixture();
+        let target = PageKey {
+            collection_id: "worked-example".into(),
+            relative_path: PathBuf::from("decisions/0001-stack.md"),
+        };
+        let mut app = App::new(&root).unwrap();
+        app.navigator
+            .set_group_expanded(NodeId::Group(PathBuf::from("decisions")), true);
+        let _ = draw_app(&mut app, 120, 30);
+        let (x, y) = app
+            .hit_map
+            .entries()
+            .iter()
+            .find(|(_, h)| matches!(h, Hit::NavItem(NodeId::Page(k)) if k == &target))
+            .map(|(r, _)| (r.x, r.y))
+            .expect("nav item");
+        let mouse = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: x,
+            row: y,
+            modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+        };
+        if let Some(a) = apply_mouse(&mut app, mouse) {
+            app.update(a);
+        }
+        assert_eq!(app.focus, FocusPane::Nav);
+        // Stale-cursor path: leaving and returning should keep nav focus machinery.
+        app.update(Action::FocusViewer);
+        assert_eq!(app.focus, FocusPane::Viewer);
+        let _ = draw_app(&mut app, 120, 30);
+        let (vx, vy) = app
+            .hit_map
+            .entries()
+            .iter()
+            .find(|(_, h)| matches!(h, Hit::ViewerLine(_)))
+            .map(|(r, _)| (r.x, r.y))
+            .expect("viewer line");
+        let mouse = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: vx,
+            row: vy,
+            modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+        };
+        if let Some(a) = apply_mouse(&mut app, mouse) {
+            app.update(a);
+        }
+        assert_eq!(app.focus, FocusPane::Viewer);
+    }
+
+    #[test]
+    fn status_message_clears_on_arrow_and_survives_narrow() {
+        let root = fixture();
+        let mut app = App::new(&root).unwrap();
+        app.message = "→ #heading".into();
+        app.update(Action::ViewerDown);
+        assert!(app.message.is_empty());
+
+        app.update(Action::ViewerTab);
+        let _ = draw_app(&mut app, 60, 24);
+        // At 60 cols, status still draws (message or focus target may be empty if no links).
+        assert!(
+            app.hit_map
+                .entries()
+                .iter()
+                .any(|(r, _)| r.y == 23 || r.height > 0)
+        );
+    }
+
+    #[test]
+    fn nav_cursor_follows_page_when_nav_focused() {
+        let root = fixture();
+        let mut app = App::new(&root).unwrap();
+        app.update(Action::FocusNav);
+        app.navigator.set_nav_stop(NavStop::Search);
+        app.update(Action::NextPage);
+        let page = app.navigator.tab().current().page.clone();
+        assert_eq!(
+            app.navigator.nav().cursor,
+            NavStop::Node(NodeId::Page(page))
+        );
     }
 
     #[test]

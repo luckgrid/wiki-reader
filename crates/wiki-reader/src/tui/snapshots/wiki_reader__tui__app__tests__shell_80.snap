@@ -7,7 +7,7 @@ Buffer {
     content: [
         "Worked Example Wiki                                                          ◫ ✕",
         "┌Nav─────────────────────┐┌Viewer──────────────────────────────────────────────┐",
-        "│⌕ Search…               ││---                                                 │",
+        "│ ⌕ Search…              ││---                                                 │",
         "│▌● Worked Example Wiki  ││id: FX-ROOT                                         │",
         "│ ▸ Architecture Overview││title: Worked Example Wiki                          │",
         "│ ▸ Decisions            ││summary: Minimal fixture collection for wiki-reader │",
@@ -37,7 +37,7 @@ Buffer {
         x: 0, y: 1, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
         x: 26, y: 1, fg: Cyan, bg: Reset, underline: Reset, modifier: BOLD,
         x: 0, y: 2, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
-        x: 10, y: 2, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 11, y: 2, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
         x: 25, y: 2, fg: DarkGray, bg: Reset, underline: Reset, modifier: NONE,
         x: 26, y: 2, fg: Cyan, bg: Reset, underline: Reset, modifier: BOLD,
         x: 27, y: 2, fg: Reset, bg: Rgb(40, 40, 50), underline: Reset, modifier: NONE,
