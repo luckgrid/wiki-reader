@@ -31,8 +31,8 @@ pub struct App {
     pub provider: FsProvider,
     /// Focused pane.
     pub focus: FocusPane,
-    /// Side nav visible (or overlay forced open).
-    pub nav_open: bool,
+    /// Side nav visible (docked ≥80 cols, overlay &lt;80). `None` until first draw seeds from width.
+    pub nav_visible: Option<bool>,
     /// Side nav scroll offset (rows below the search line).
     pub nav_scroll: u16,
     /// When true, the ⌕ Search… row is the nav cursor (not a `NodeId`).
@@ -70,7 +70,8 @@ impl App {
             navigator,
             provider,
             focus: FocusPane::Viewer,
-            nav_open: true,
+            // Seeded from terminal width on first draw (≥80 shown, &lt;80 hidden).
+            nav_visible: None,
             nav_scroll: 0,
             nav_on_search: false,
             doc: RawDoc::from_source("", None),
@@ -103,7 +104,8 @@ impl App {
         match action {
             Action::Quit => self.quit = true,
             Action::ToggleNav => {
-                self.nav_open = !self.nav_open;
+                let cur = self.nav_visible.unwrap_or(false);
+                self.nav_visible = Some(!cur);
             }
             Action::PrevPage | Action::NextPage => {
                 let effects = if matches!(action, Action::PrevPage) {
@@ -455,7 +457,7 @@ impl App {
 
     fn close_overlay_after_nav(&mut self, term_width: u16) {
         if term_width < 80 {
-            self.nav_open = false;
+            self.nav_visible = Some(false);
         }
     }
 }
@@ -594,7 +596,10 @@ fn apply_mouse(app: &mut App, mouse: ratatui::crossterm::event::MouseEvent) -> O
 pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     app.hit_map.clear();
     let area = frame.area();
-    let regions = layout::split(area, app.nav_open);
+    if app.nav_visible.is_none() {
+        app.nav_visible = Some(area.width >= 80);
+    }
+    let regions = layout::split(area, app.nav_visible.unwrap_or(false));
     let theme = app.theme;
     let page = app.navigator.tab().current().page.clone();
     let crumbs = app.navigator.nav().tree.breadcrumb(&page);
@@ -679,13 +684,29 @@ mod tests {
 
     fn render_at(root: &Path, width: u16, height: u16) -> String {
         let mut app = App::new(root).expect("app");
-        if width < 80 {
-            app.nav_open = false;
-        }
         let backend = TestBackend::new(width, height);
         let mut terminal = Terminal::new(backend).expect("terminal");
         terminal.draw(|frame| draw(frame, &mut app)).expect("draw");
         format!("{:?}", terminal.backend().buffer())
+    }
+
+    /// Find the first cell whose symbol contains `needle`; return its (x, y).
+    fn find_glyph(buf: &ratatui::buffer::Buffer, needle: &str) -> Option<(u16, u16)> {
+        for y in 0..buf.area.height {
+            for x in 0..buf.area.width {
+                if buf[(x, y)].symbol().contains(needle) {
+                    return Some((x, y));
+                }
+            }
+        }
+        None
+    }
+
+    fn draw_app(app: &mut App, width: u16, height: u16) -> Terminal<TestBackend> {
+        let backend = TestBackend::new(width, height);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+        terminal.draw(|frame| draw(frame, app)).expect("draw");
+        terminal
     }
 
     fn click_at(app: &mut App, x: u16, y: u16) -> Option<Action> {
@@ -706,24 +727,112 @@ mod tests {
     fn hit_map_rebuilds_and_quit_click() {
         let root = fixture();
         let mut app = App::new(&root).unwrap();
-        let backend = TestBackend::new(100, 24);
-        let mut terminal = Terminal::new(backend).unwrap();
-        terminal.draw(|f| draw(f, &mut app)).unwrap();
-        let (qx, qy) = {
-            let quit_hit = app
-                .hit_map
-                .entries()
-                .iter()
-                .rev()
-                .find(|(_, h)| matches!(h, Hit::Quit));
-            assert!(quit_hit.is_some(), "quit hit missing");
-            let rect = quit_hit.unwrap().0;
-            (rect.x, rect.y)
-        };
+        let terminal = draw_app(&mut app, 100, 24);
+        let (qx, qy) = find_glyph(terminal.backend().buffer(), "✕").expect("✕ glyph");
+        assert_eq!(
+            app.hit_map.hit_at(qx, qy),
+            Some(&Hit::Quit),
+            "✕ column must hit Quit"
+        );
         let action = click_at(&mut app, qx, qy);
         assert_eq!(action, Some(Action::Quit));
         app.update(Action::Quit);
         assert!(app.quit);
+    }
+
+    #[test]
+    fn header_icon_glyphs_hit_their_actions() {
+        let root = fixture();
+        let mut app = App::new(&root).unwrap();
+        let terminal = draw_app(&mut app, 120, 24);
+        let buf = terminal.backend().buffer();
+        let (tx, ty) = find_glyph(buf, "◫").expect("◫");
+        let (qx, qy) = find_glyph(buf, "✕").expect("✕");
+        assert_eq!(app.hit_map.hit_at(tx, ty), Some(&Hit::NavToggle));
+        assert_eq!(app.hit_map.hit_at(qx, qy), Some(&Hit::Quit));
+    }
+
+    #[test]
+    fn breadcrumb_glyph_click_navigates() {
+        let root = fixture();
+        let mut app = App::new(&root).unwrap();
+        app.update(Action::GoToPage(PageKey {
+            collection_id: "worked-example".into(),
+            relative_path: PathBuf::from("architecture/design-system/tokens.md"),
+        }));
+        let terminal = draw_app(&mut app, 120, 24);
+        let buf = terminal.backend().buffer();
+        // Find "Architecture" crumb text in the header row (y=0).
+        let mut ax = None;
+        for x in 0..buf.area.width {
+            if buf[(x, 0)].symbol().starts_with('A') {
+                // Walk to confirm "Architecture" run.
+                let mut s = String::new();
+                for dx in 0..12 {
+                    if x + dx < buf.area.width {
+                        s.push_str(buf[(x + dx, 0)].symbol());
+                    }
+                }
+                if s.starts_with("Architecture") {
+                    ax = Some(x);
+                    break;
+                }
+            }
+        }
+        let ax = ax.expect("Architecture crumb glyph");
+        let hit = app.hit_map.hit_at(ax, 0).expect("crumb hit");
+        assert!(
+            matches!(hit, Hit::Breadcrumb(k) if k.relative_path.ends_with("architecture/README.md")),
+            "got {hit:?}"
+        );
+        app.update(HitMap::action_for(hit));
+        assert_eq!(
+            app.navigator.tab().current().page.relative_path,
+            PathBuf::from("architecture/README.md")
+        );
+    }
+
+    #[test]
+    fn nav_toggle_hides_at_120_and_fresh_60_has_no_overlay() {
+        let root = fixture();
+        let mut wide = App::new(&root).unwrap();
+        let _ = draw_app(&mut wide, 120, 24);
+        assert_eq!(wide.nav_visible, Some(true));
+        assert!(
+            wide.hit_map
+                .entries()
+                .iter()
+                .any(|(_, h)| matches!(h, Hit::NavItem(_)))
+        );
+        wide.update(Action::ToggleNav);
+        let _ = draw_app(&mut wide, 120, 24);
+        assert_eq!(wide.nav_visible, Some(false));
+        assert!(
+            !wide
+                .hit_map
+                .entries()
+                .iter()
+                .any(|(_, h)| matches!(h, Hit::NavItem(_) | Hit::NavSearchRow))
+        );
+        // Viewer should be wider with nav hidden (no FocusNav pane hits spanning left).
+        let viewer_w = wide
+            .hit_map
+            .entries()
+            .iter()
+            .find_map(|(r, h)| matches!(h, Hit::FocusViewer).then_some(r.width))
+            .unwrap_or(0);
+        assert!(viewer_w >= 110, "viewer width {viewer_w}");
+
+        let mut narrow = App::new(&root).unwrap();
+        let _ = draw_app(&mut narrow, 60, 24);
+        assert_eq!(narrow.nav_visible, Some(false));
+        assert!(
+            !narrow
+                .hit_map
+                .entries()
+                .iter()
+                .any(|(_, h)| matches!(h, Hit::NavItem(_) | Hit::NavSearchRow))
+        );
     }
 
     #[test]
@@ -781,15 +890,15 @@ mod tests {
 
     #[test]
     fn breadcrumb_click_navigates() {
+        // Kept as hit-map variant lookup; glyph-coordinate coverage is in
+        // `breadcrumb_glyph_click_navigates`.
         let root = fixture();
         let mut app = App::new(&root).unwrap();
         app.update(Action::GoToPage(PageKey {
             collection_id: "worked-example".into(),
             relative_path: PathBuf::from("architecture/design-system/tokens.md"),
         }));
-        let backend = TestBackend::new(120, 24);
-        let mut terminal = Terminal::new(backend).unwrap();
-        terminal.draw(|f| draw(f, &mut app)).unwrap();
+        let _ = draw_app(&mut app, 120, 24);
         let action = {
             let crumb = app.hit_map.entries().iter().find(|(_, h)| {
                 matches!(h, Hit::Breadcrumb(k) if k.relative_path.ends_with("architecture/README.md"))
