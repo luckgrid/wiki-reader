@@ -315,10 +315,7 @@ fn run_loop(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
     }
 }
 
-fn mouse_to_action(
-    app: &App,
-    mouse: ratatui::crossterm::event::MouseEvent,
-) -> Option<Action> {
+fn mouse_to_action(app: &App, mouse: ratatui::crossterm::event::MouseEvent) -> Option<Action> {
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) => {
             let hit = app.hit_map.hit_at(mouse.column, mouse.row)?;
@@ -422,9 +419,7 @@ mod tests {
         }
         let backend = TestBackend::new(width, height);
         let mut terminal = Terminal::new(backend).expect("terminal");
-        terminal
-            .draw(|frame| draw(frame, &mut app))
-            .expect("draw");
+        terminal.draw(|frame| draw(frame, &mut app)).expect("draw");
         format!("{:?}", terminal.backend().buffer())
     }
 
