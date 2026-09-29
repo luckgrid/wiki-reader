@@ -137,7 +137,7 @@ impl RawDoc {
             )
         };
         let link_spans = link_spans_from_md(&lines, &md_links, from, index, provider);
-        let highlights = crate::tui::highlight::highlight_markdown(source);
+        // ponytail: highlights filled async by App; draw falls back to plain until then
         Self {
             lines,
             blocks,
@@ -145,8 +145,13 @@ impl RawDoc {
             links: link_spans,
             word_count,
             updated,
-            highlights,
+            highlights: Vec::new(),
         }
+    }
+
+    /// Replace syntect highlights (from a background job).
+    pub fn set_highlights(&mut self, highlights: Vec<Vec<crate::tui::highlight::HlSpan>>) {
+        self.highlights = highlights;
     }
 
     /// Raw target for a link id.

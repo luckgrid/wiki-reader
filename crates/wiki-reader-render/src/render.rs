@@ -813,7 +813,27 @@ fn line_start_offsets(text: &str) -> Vec<usize> {
     starts
 }
 
+#[cfg(test)]
+use std::cell::Cell;
+
+#[cfg(test)]
+thread_local! {
+    static OFFSET_LOOKUPS: Cell<usize> = const { Cell::new(0) };
+}
+
+#[cfg(test)]
+fn reset_offset_lookups() {
+    OFFSET_LOOKUPS.with(|c| c.set(0));
+}
+
+#[cfg(test)]
+fn take_offset_lookups() -> usize {
+    OFFSET_LOOKUPS.with(|c| c.replace(0))
+}
+
 fn offset_to_line(line_starts: &[usize], body_line_offset: u32, byte: usize) -> u32 {
+    #[cfg(test)]
+    OFFSET_LOOKUPS.with(|c| c.set(c.get().saturating_add(1)));
     let idx = line_starts
         .partition_point(|&s| s <= byte)
         .saturating_sub(1);
@@ -987,4 +1007,67 @@ fn format_table_separator(widths: &[usize]) -> String {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod offset_line_tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::path::Path;
+
+    fn empty_key() -> PageKey {
+        PageKey {
+            collection_id: "t".into(),
+            relative_path: Path::new("x.md").into(),
+        }
+    }
+
+    fn empty_index() -> Index {
+        Index {
+            collection_id: "t".into(),
+            pages: HashMap::default(),
+            edges: vec![],
+            by_from: HashMap::default(),
+            by_to: HashMap::default(),
+            by_id: HashMap::default(),
+            by_path: HashMap::default(),
+            diagnostics: vec![],
+        }
+    }
+
+    #[test]
+    fn offset_to_line_uses_partition_point_over_line_starts() {
+        let text = "a\nbb\nccc\n";
+        let starts = line_start_offsets(text);
+        assert_eq!(starts, vec![0, 2, 5, 9]);
+        assert_eq!(offset_to_line(&starts, 0, 0), 0);
+        assert_eq!(offset_to_line(&starts, 0, 1), 0);
+        assert_eq!(offset_to_line(&starts, 0, 2), 1);
+        assert_eq!(offset_to_line(&starts, 0, 5), 2);
+        assert_eq!(offset_to_line(&starts, 1, 5), 3);
+    }
+
+    #[test]
+    fn offset_to_line_lookups_scale_linearly_with_input() {
+        let chunk = "# H\n\nPara with [link](https://ex.com) and a list:\n\n- a\n- b\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\n```\ncode\n```\n\n";
+        let small = chunk.repeat(200);
+        let large = chunk.repeat(400);
+        let index = empty_index();
+        let key = empty_key();
+
+        reset_offset_lookups();
+        let _ = render(&small, None, &key, &index, 80);
+        let small_lookups = take_offset_lookups();
+
+        reset_offset_lookups();
+        let _ = render(&large, None, &key, &index, 80);
+        let large_lookups = take_offset_lookups();
+
+        assert!(small_lookups > 0);
+        // doubling input ≤ 2.2× lookups ⇔ 10 * large ≤ 22 * small
+        assert!(
+            large_lookups.saturating_mul(10) <= small_lookups.saturating_mul(22),
+            "doubling input grew offset→line lookups (small={small_lookups}, large={large_lookups}); expected ≤ 2.2×"
+        );
+    }
 }

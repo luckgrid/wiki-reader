@@ -692,6 +692,36 @@ fn view_mode_toggle_round_trips_raw_and_rendered() {
     assert_eq!(app.doc.source_cursor(app.cursor_line), source);
 }
 
+#[test]
+fn toggling_raw_does_not_sync_highlight_whole_page() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let _ = draw_app(&mut app, 100, 24);
+    app.update(Action::ToggleViewMode);
+    assert!(matches!(app.doc, crate::tui::page_doc::PageDoc::Raw(_)));
+    if let crate::tui::page_doc::PageDoc::Raw(doc) = &app.doc {
+        assert!(
+            doc.highlights.is_empty(),
+            "raw must paint plain until the worker finishes"
+        );
+    }
+    for _ in 0..50 {
+        app.poll_watcher();
+        if let crate::tui::page_doc::PageDoc::Raw(doc) = &app.doc
+            && !doc.highlights.is_empty()
+        {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    if let crate::tui::page_doc::PageDoc::Raw(doc) = &app.doc {
+        assert!(
+            !doc.highlights.is_empty(),
+            "background highlight should apply after poll"
+        );
+    }
+}
+
 fn link_chain_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/link-chain")
 }

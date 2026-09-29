@@ -385,41 +385,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn render_scaling_not_quadratic() {
-        use std::time::{Duration, Instant};
-        let chunk = "# H\n\nPara with [link](https://ex.com) and a list:\n\n- a\n- b\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\n```\ncode\n```\n\n";
-        let small = chunk.repeat(200); // ≈ 25 KB
-        let large = chunk.repeat(400); // ≈ 50 KB
-        assert!(small.len() * 2 <= large.len() + chunk.len());
-
-        // Warm caches / allocator on the real sizes (CI macOS is noisy).
-        let _ = render_src(chunk, 80);
-        let _ = render_src(&small, 80);
-
-        let timed = |src: &str| -> Duration {
-            let start = Instant::now();
-            let doc = render_src(src, 80);
-            assert!(!doc.lines.is_empty());
-            start.elapsed()
-        };
-        // Best paired ratio of three: contested cores inflate a single shot.
-        // Quadratic ≈ 4× per doubling; 3.5 leaves CI headroom without hiding O(n²).
-        let (ratio, t_small, t_large) = (0..3)
-            .map(|_| {
-                let t_s = timed(&small);
-                let t_l = timed(&large);
-                let r = t_l.as_secs_f64() / t_s.as_secs_f64().max(1e-9);
-                (r, t_s, t_l)
-            })
-            .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
-            .unwrap();
-        assert!(
-            ratio < 3.5,
-            "doubling input slowed render {ratio:.2}× (small={t_small:?}, large={t_large:?}); expected < 3.5×"
-        );
-    }
-
     /// Manual / release budget: `cargo test -p wiki-reader-render --release -- --ignored`
     #[test]
     #[ignore = "release budget; run with --ignored --release"]
