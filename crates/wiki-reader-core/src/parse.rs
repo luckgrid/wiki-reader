@@ -106,6 +106,11 @@ pub struct ParsedPage {
     pub headings: Vec<Heading>,
     /// Markdown links (code-fence aware).
     pub links: Vec<MdLink>,
+    /// 1-based source lines of each top-level block start (heading, paragraph,
+    /// list, code, table, quote, rule).
+    pub blocks: Vec<u32>,
+    /// Word count of the body excluding frontmatter and code blocks.
+    pub word_count: u32,
     /// Non-fatal parse issues.
     pub diagnostics: Vec<Diagnostic>,
 }
@@ -115,13 +120,15 @@ pub struct ParsedPage {
 pub fn parse(source: &str) -> ParsedPage {
     let mut diagnostics = Vec::new();
     let (frontmatter, body, body_line_offset) = split_frontmatter(source, &mut diagnostics);
-    let (h1, headings, links) = walk_markdown(&body, body_line_offset);
+    let (h1, headings, links, blocks, word_count) = walk_markdown(&body, body_line_offset);
     ParsedPage {
         frontmatter,
         body,
         h1,
         headings,
         links,
+        blocks,
+        word_count,
         diagnostics,
     }
 }
@@ -485,7 +492,10 @@ fn apply_frontmatter_key(
     }
 }
 
-fn walk_markdown(body: &str, body_line_offset: u32) -> (Option<String>, Vec<Heading>, Vec<MdLink>) {
+fn walk_markdown(
+    body: &str,
+    body_line_offset: u32,
+) -> (Option<String>, Vec<Heading>, Vec<MdLink>, Vec<u32>, u32) {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_TABLES);
     options.insert(Options::ENABLE_TASKLISTS);
@@ -503,90 +513,213 @@ fn walk_markdown(body: &str, body_line_offset: u32) -> (Option<String>, Vec<Head
     let mut h1 = None;
     let mut headings = Vec::new();
     let mut links = Vec::new();
+    let mut blocks = Vec::new();
     let mut used_slugs: HashSet<String> = HashSet::new();
-
     let mut in_code_block = false;
     let mut list_depth: u32 = 0;
+    let mut block_depth: u32 = 0;
     let mut in_heading: Option<(u8, u32, String)> = None;
-    let mut in_link: Option<(String, String, u32)> = None; // target, text, line
+    let mut in_link: Option<(String, String, u32)> = None;
+    let mut word_buf = String::new();
 
     for (event, range) in Parser::new_ext(body, options).into_offset_iter() {
         match event {
-            Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(_) | CodeBlockKind::Indented)) => {
-                in_code_block = true;
+            Event::Start(tag) if !in_code_block || matches!(tag, Tag::CodeBlock(_)) => {
+                handle_block_start(
+                    &tag,
+                    range.start,
+                    &offset_to_line,
+                    &mut blocks,
+                    &mut block_depth,
+                    &mut list_depth,
+                    &mut in_code_block,
+                    &mut in_heading,
+                    &mut in_link,
+                );
             }
-            Event::End(TagEnd::CodeBlock) => {
-                in_code_block = false;
+            Event::End(tag_end) => {
+                handle_block_end(
+                    tag_end,
+                    &mut block_depth,
+                    &mut list_depth,
+                    &mut in_code_block,
+                    &mut in_heading,
+                    &mut h1,
+                    &mut headings,
+                    &mut used_slugs,
+                    &mut in_link,
+                    &mut links,
+                );
             }
-            Event::Start(Tag::List(_)) if !in_code_block => {
-                list_depth = list_depth.saturating_add(1);
-            }
-            Event::End(TagEnd::List(_)) if !in_code_block => {
-                list_depth = list_depth.saturating_sub(1);
-            }
-            Event::Start(Tag::Heading { level, .. }) if !in_code_block => {
-                in_heading = Some((level as u8, offset_to_line(range.start), String::new()));
-            }
-            Event::End(TagEnd::Heading(_)) => {
-                if let Some((level, source_line, text)) = in_heading.take() {
-                    let text = text.trim().to_owned();
-                    if level == 1 && h1.is_none() {
-                        h1 = Some(text.clone());
-                    }
-                    let base = github_slug(&text);
-                    let slug = unique_slug(&base, &mut used_slugs);
-                    headings.push(Heading {
-                        level,
-                        text,
-                        slug,
-                        source_line,
-                    });
-                }
-            }
-            Event::Start(Tag::Link { dest_url, .. }) if !in_code_block => {
-                in_link = Some((
-                    dest_url.into_string(),
-                    String::new(),
-                    offset_to_line(range.start),
-                ));
-            }
-            Event::End(TagEnd::Link) => {
-                if let Some((target, text, source_line)) = in_link.take() {
-                    let kind = if is_external(&target) {
-                        MdLinkKind::External
-                    } else {
-                        MdLinkKind::Link
-                    };
-                    links.push(MdLink {
-                        text: text.trim().to_owned(),
-                        target,
-                        source_line,
-                        kind,
-                        depth: list_depth,
-                    });
-                }
+            Event::Rule if !in_code_block && block_depth == 0 => {
+                push_block_line(&mut blocks, offset_to_line(range.start));
             }
             Event::Text(t) | Event::Code(t) => {
-                if let Some((_, _, ref mut text)) = in_heading {
-                    text.push_str(&t);
-                }
-                if let Some((_, ref mut text, _)) = in_link {
-                    text.push_str(&t);
-                }
+                append_inline(
+                    &t,
+                    &mut in_heading,
+                    &mut in_link,
+                    in_code_block,
+                    &mut word_buf,
+                );
             }
             Event::SoftBreak | Event::HardBreak => {
-                if let Some((_, _, ref mut text)) = in_heading {
-                    text.push(' ');
-                }
-                if let Some((_, ref mut text, _)) = in_link {
-                    text.push(' ');
-                }
+                append_break(&mut in_heading, &mut in_link, in_code_block, &mut word_buf);
             }
             _ => {}
         }
     }
 
-    (h1, headings, links)
+    let word_count = u32::try_from(word_buf.split_whitespace().count()).unwrap_or(u32::MAX);
+    (h1, headings, links, blocks, word_count)
+}
+
+fn push_block_line(blocks: &mut Vec<u32>, line: u32) {
+    if blocks.last() != Some(&line) {
+        blocks.push(line);
+    }
+}
+
+fn enter_top_block(blocks: &mut Vec<u32>, block_depth: &mut u32, line: u32) {
+    if *block_depth == 0 {
+        push_block_line(blocks, line);
+    }
+    *block_depth = block_depth.saturating_add(1);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn handle_block_start(
+    tag: &Tag<'_>,
+    start: usize,
+    offset_to_line: &dyn Fn(usize) -> u32,
+    blocks: &mut Vec<u32>,
+    block_depth: &mut u32,
+    list_depth: &mut u32,
+    in_code_block: &mut bool,
+    in_heading: &mut Option<(u8, u32, String)>,
+    in_link: &mut Option<(String, String, u32)>,
+) {
+    match tag {
+        Tag::CodeBlock(CodeBlockKind::Fenced(_) | CodeBlockKind::Indented) => {
+            enter_top_block(blocks, block_depth, offset_to_line(start));
+            *in_code_block = true;
+        }
+        Tag::List(_) if !*in_code_block => {
+            enter_top_block(blocks, block_depth, offset_to_line(start));
+            *list_depth = list_depth.saturating_add(1);
+        }
+        Tag::Heading { level, .. } if !*in_code_block => {
+            let line = offset_to_line(start);
+            enter_top_block(blocks, block_depth, line);
+            *in_heading = Some((*level as u8, line, String::new()));
+        }
+        Tag::Paragraph | Tag::BlockQuote(_) | Tag::Table(_) if !*in_code_block => {
+            enter_top_block(blocks, block_depth, offset_to_line(start));
+        }
+        Tag::Link { dest_url, .. } if !*in_code_block => {
+            *in_link = Some((dest_url.to_string(), String::new(), offset_to_line(start)));
+        }
+        _ => {}
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn handle_block_end(
+    tag_end: TagEnd,
+    block_depth: &mut u32,
+    list_depth: &mut u32,
+    in_code_block: &mut bool,
+    in_heading: &mut Option<(u8, u32, String)>,
+    h1: &mut Option<String>,
+    headings: &mut Vec<Heading>,
+    used_slugs: &mut HashSet<String>,
+    in_link: &mut Option<(String, String, u32)>,
+    links: &mut Vec<MdLink>,
+) {
+    match tag_end {
+        TagEnd::CodeBlock => {
+            *in_code_block = false;
+            *block_depth = block_depth.saturating_sub(1);
+        }
+        TagEnd::List(_) => {
+            *list_depth = list_depth.saturating_sub(1);
+            *block_depth = block_depth.saturating_sub(1);
+        }
+        TagEnd::Heading(_) => {
+            *block_depth = block_depth.saturating_sub(1);
+            if let Some((level, source_line, text)) = in_heading.take() {
+                let text = text.trim().to_owned();
+                if level == 1 && h1.is_none() {
+                    *h1 = Some(text.clone());
+                }
+                let slug = unique_slug(&github_slug(&text), used_slugs);
+                headings.push(Heading {
+                    level,
+                    text,
+                    slug,
+                    source_line,
+                });
+            }
+        }
+        TagEnd::Paragraph | TagEnd::BlockQuote(_) | TagEnd::Table => {
+            *block_depth = block_depth.saturating_sub(1);
+        }
+        TagEnd::Link => {
+            if let Some((target, text, source_line)) = in_link.take() {
+                let kind = if is_external(&target) {
+                    MdLinkKind::External
+                } else {
+                    MdLinkKind::Link
+                };
+                links.push(MdLink {
+                    text: text.trim().to_owned(),
+                    target,
+                    source_line,
+                    kind,
+                    depth: *list_depth,
+                });
+            }
+        }
+        _ => {}
+    }
+}
+
+fn append_inline(
+    t: &str,
+    in_heading: &mut Option<(u8, u32, String)>,
+    in_link: &mut Option<(String, String, u32)>,
+    in_code_block: bool,
+    word_buf: &mut String,
+) {
+    if let Some((_, _, text)) = in_heading {
+        text.push_str(t);
+    }
+    if let Some((_, text, _)) = in_link {
+        text.push_str(t);
+    }
+    if !in_code_block {
+        if !word_buf.is_empty() {
+            word_buf.push(' ');
+        }
+        word_buf.push_str(t);
+    }
+}
+
+fn append_break(
+    in_heading: &mut Option<(u8, u32, String)>,
+    in_link: &mut Option<(String, String, u32)>,
+    in_code_block: bool,
+    word_buf: &mut String,
+) {
+    if let Some((_, _, text)) = in_heading {
+        text.push(' ');
+    }
+    if let Some((_, text, _)) = in_link {
+        text.push(' ');
+    }
+    if !in_code_block {
+        word_buf.push(' ');
+    }
 }
 
 fn line_start_offsets(text: &str) -> Vec<usize> {
@@ -766,5 +899,36 @@ mod tests {
         );
         assert_eq!(page.h1.as_deref(), Some("Worked Example Wiki"));
         assert!(!page.links.is_empty());
+    }
+
+    #[test]
+    fn blocks_and_word_count_exclude_frontmatter_and_code() {
+        let src = "\
+---
+title: MetaOne MetaTwo MetaThree
+---
+
+# Heading One
+
+Intro paragraph with five words here.
+
+```
+code fence words ignored entirely
+```
+
+- list item alpha
+";
+        let page = parse(src);
+        // heading, paragraph, code, list
+        assert!(
+            page.blocks.len() >= 4,
+            "expected ≥4 top-level blocks, got {:?}",
+            page.blocks
+        );
+        assert_eq!(page.blocks[0], page.headings[0].source_line);
+        // "Heading One" (2) + "Intro paragraph with five words here" (6) + "list item alpha" (3) = 11
+        assert_eq!(page.word_count, 11);
+        // Frontmatter words not counted.
+        assert!(!page.body.contains("MetaOne"));
     }
 }
