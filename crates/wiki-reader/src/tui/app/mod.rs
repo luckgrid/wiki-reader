@@ -41,6 +41,8 @@ pub struct App {
     pub nav_user_override: bool,
     /// Last drawn terminal width (for overlay close on navigation).
     pub term_width: u16,
+    /// Viewer text column width used for the current rendered layout (`min(inner, 100)`).
+    pub layout_width: u16,
     /// Previous frame wide (≥80) vs narrow; `None` until first draw.
     nav_width_regime: Option<bool>,
     /// Side nav scroll offset (rows below the search line).
@@ -93,6 +95,7 @@ impl App {
             nav_visible: false,
             nav_user_override: false,
             term_width: 80,
+            layout_width: 0,
             nav_width_regime: None,
             nav_scroll: 0,
             doc: PageDoc::Raw(RawDoc::from_source("", None)),
@@ -311,7 +314,7 @@ impl App {
                 let index = self.navigator.index();
                 let page = index.pages.get(key);
                 let mode = self.navigator.tab().current().mode;
-                let width = self.term_width.max(40);
+                let width = self.layout_width.max(20);
                 self.doc = match mode {
                     ViewMode::Raw => PageDoc::Raw(RawDoc::from_source_ctx(
                         &src,
@@ -327,6 +330,51 @@ impl App {
                 self.cursor_line = 0;
                 self.scroll = 0;
                 self.focused_item = None;
+            }
+            Err(err) => {
+                self.message = format!("read failed: {err}");
+            }
+        }
+    }
+
+    /// Re-lay out the rendered page when the viewer text width changes.
+    pub(crate) fn ensure_layout_width(&mut self, text_width: u16) {
+        let w = text_width.max(20).min(100);
+        if self.layout_width == w {
+            return;
+        }
+        self.layout_width = w;
+        if matches!(self.navigator.tab().current().mode, ViewMode::Rendered) {
+            let key = self.navigator.tab().current().page.clone();
+            let cursor = self.cursor_line;
+            let scroll = self.scroll;
+            self.reload_page_keeping_view(&key, cursor, scroll);
+        }
+    }
+
+    fn reload_page_keeping_view(&mut self, key: &PageKey, cursor: u32, scroll: u32) {
+        match self.provider.read(key) {
+            Ok(src) => {
+                let index = self.navigator.index();
+                let page = index.pages.get(key);
+                let mode = self.navigator.tab().current().mode;
+                let width = self.layout_width.max(20);
+                self.doc = match mode {
+                    ViewMode::Raw => PageDoc::Raw(RawDoc::from_source_ctx(
+                        &src,
+                        page,
+                        Some(key),
+                        Some(index),
+                        Some(&self.provider),
+                    )),
+                    ViewMode::Rendered => {
+                        PageDoc::Rendered(RenderedViewerDoc::build(&src, page, key, index, width))
+                    }
+                };
+                let max = u32::try_from(self.doc.lines().len().saturating_sub(1)).unwrap_or(0);
+                self.cursor_line = cursor.min(max);
+                self.scroll = scroll.min(max);
+                self.ensure_cursor_visible();
             }
             Err(err) => {
                 self.message = format!("read failed: {err}");

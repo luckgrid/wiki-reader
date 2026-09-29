@@ -24,6 +24,7 @@ pub struct LinkSpan {
     pub raw_target: String,
     /// Styling bucket.
     pub class: LinkClass,
-    /// Visible segments: source line (0-based), display columns `[start, end)`.
+    /// Visible segments: line index in the current view (0-based rendered or
+    /// source line for raw), display columns `[start, end)`.
     pub segments: Vec<(u32, (u16, u16))>,
 }
