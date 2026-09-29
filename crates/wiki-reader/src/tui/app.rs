@@ -47,6 +47,10 @@ pub struct App {
     pub focused_item: Option<usize>,
     /// Status / notice message.
     pub message: String,
+    /// Visible viewer body rows (from last layout).
+    pub viewer_rows: u16,
+    /// Visible nav tree rows below the search line (from last layout).
+    pub nav_viewport: u16,
     /// Last frame hit map.
     pub hit_map: HitMap,
     /// Theme tokens.
@@ -79,6 +83,9 @@ impl App {
             scroll: 0,
             focused_item: None,
             message: String::new(),
+            // ponytail: defaults until first draw; layout overwrites each frame
+            viewer_rows: 20,
+            nav_viewport: 20,
             hit_map: HitMap::default(),
             theme: Theme::default(),
             quit: false,
@@ -172,18 +179,24 @@ impl App {
             Action::ViewerDown => self.viewer_move_line(1),
             Action::ViewerBlockUp => self.viewer_block(-1),
             Action::ViewerBlockDown => self.viewer_block(1),
-            Action::ViewerPageUp => self.viewer_move_line(-20),
-            Action::ViewerPageDown => self.viewer_move_line(20),
+            Action::ViewerPageUp => {
+                let step = i32::from(self.viewer_rows.saturating_sub(1).max(1));
+                self.viewer_move_line(-step);
+            }
+            Action::ViewerPageDown => {
+                let step = i32::from(self.viewer_rows.saturating_sub(1).max(1));
+                self.viewer_move_line(step);
+            }
             Action::ViewerHome => {
                 self.focused_item = None;
                 self.cursor_line = 0;
-                self.ensure_cursor_visible(20);
+                self.ensure_cursor_visible();
             }
             Action::ViewerEnd => {
                 self.focused_item = None;
                 let max = u32::try_from(self.doc.lines().len().saturating_sub(1)).unwrap_or(0);
                 self.cursor_line = max;
-                self.ensure_cursor_visible(20);
+                self.ensure_cursor_visible();
             }
             Action::ViewerTab => self.viewer_tab(false),
             Action::ViewerBackTab => self.viewer_tab(true),
@@ -223,6 +236,7 @@ impl App {
             self.nav_on_search = false;
             self.navigator.set_nav_cursor(row.id.clone());
         }
+        self.ensure_nav_cursor_visible();
     }
 
     fn nav_jump_group(&mut self, dir: i32) {
@@ -235,16 +249,20 @@ impl App {
         if dir < 0 {
             if cur <= 1 {
                 self.nav_on_search = true;
-                return;
-            }
-            for pos in (1..cur).rev() {
-                if rows[pos - 1].is_group {
-                    self.nav_on_search = false;
-                    self.navigator.set_nav_cursor(rows[pos - 1].id.clone());
-                    return;
+            } else {
+                let mut found = false;
+                for pos in (1..cur).rev() {
+                    if rows[pos - 1].is_group {
+                        self.nav_on_search = false;
+                        self.navigator.set_nav_cursor(rows[pos - 1].id.clone());
+                        found = true;
+                        break;
+                    }
+                }
+                if !found {
+                    self.nav_on_search = true;
                 }
             }
-            self.nav_on_search = true;
         } else {
             for (idx, row) in rows.iter().enumerate() {
                 let pos = idx + 1;
@@ -254,10 +272,11 @@ impl App {
                 if row.is_group {
                     self.nav_on_search = false;
                     self.navigator.set_nav_cursor(row.id.clone());
-                    return;
+                    break;
                 }
             }
         }
+        self.ensure_nav_cursor_visible();
     }
 
     fn nav_expand(&mut self) {
@@ -324,7 +343,9 @@ impl App {
         for effect in effects {
             match effect {
                 Effect::LoadPage(key) => self.load_page(&key),
-                Effect::RevealInTree(_) => {}
+                Effect::RevealInTree(page) => {
+                    self.reveal_page_in_nav(&page);
+                }
                 Effect::ScrollTo(anchor) => {
                     if let Some(slug) = anchor {
                         if let Some(line) = self.anchor_line(&slug) {
@@ -373,7 +394,7 @@ impl App {
         let cur = i64::from(self.cursor_line);
         let next = (cur + i64::from(delta)).clamp(0, max);
         self.cursor_line = u32::try_from(next).unwrap_or(0);
-        self.ensure_cursor_visible(20);
+        self.ensure_cursor_visible();
     }
 
     fn viewer_block(&mut self, dir: i32) {
@@ -394,15 +415,58 @@ impl App {
                 self.cursor_line = b.saturating_sub(1);
             }
         }
-        self.ensure_cursor_visible(20);
+        self.ensure_cursor_visible();
     }
 
-    fn ensure_cursor_visible(&mut self, page_h: u32) {
+    fn ensure_cursor_visible(&mut self) {
+        let page_h = u32::from(self.viewer_rows.max(1));
         if self.cursor_line < self.scroll {
             self.scroll = self.cursor_line;
         } else if self.cursor_line >= self.scroll.saturating_add(page_h) {
             self.scroll = self.cursor_line.saturating_sub(page_h.saturating_sub(1));
         }
+        self.clamp_viewer_scroll();
+    }
+
+    fn clamp_viewer_scroll(&mut self) {
+        let max = u32::try_from(self.doc.lines().len().saturating_sub(1)).unwrap_or(0);
+        self.scroll = self.scroll.min(max);
+    }
+
+    fn reveal_page_in_nav(&mut self, page: &PageKey) {
+        let rows = self.nav_rows();
+        if let Some(idx) = rows.iter().position(|r| r.id == NodeId::Page(page.clone())) {
+            self.scroll_nav_to_index(idx);
+        }
+    }
+
+    fn ensure_nav_cursor_visible(&mut self) {
+        if self.nav_on_search {
+            self.nav_scroll = 0;
+            return;
+        }
+        let rows = self.nav_rows();
+        if let Some(idx) = self.nav_cursor_index(&rows) {
+            self.scroll_nav_to_index(idx);
+        }
+    }
+
+    fn scroll_nav_to_index(&mut self, idx: usize) {
+        let vh = usize::from(self.nav_viewport.max(1));
+        let scroll = usize::from(self.nav_scroll);
+        if idx < scroll {
+            self.nav_scroll = u16::try_from(idx).unwrap_or(0);
+        } else if idx >= scroll.saturating_add(vh) {
+            self.nav_scroll = u16::try_from(idx.saturating_add(1).saturating_sub(vh)).unwrap_or(0);
+        }
+        self.clamp_nav_scroll();
+    }
+
+    fn clamp_nav_scroll(&mut self) {
+        let n = self.nav_rows().len();
+        let vh = usize::from(self.nav_viewport.max(1));
+        let max = n.saturating_sub(vh);
+        self.nav_scroll = self.nav_scroll.min(u16::try_from(max).unwrap_or(0));
     }
 
     fn focus_list(&self) -> Vec<FocusItem> {
@@ -443,7 +507,7 @@ impl App {
         };
         if it.line < u32::MAX - 1 {
             self.cursor_line = it.line;
-            self.ensure_cursor_visible(20);
+            self.ensure_cursor_visible();
         }
         let page = &self.navigator.tab().current().page;
         self.message = match it.kind {
@@ -579,12 +643,14 @@ fn apply_mouse(app: &mut App, mouse: ratatui::crossterm::event::MouseEvent) -> O
                 } else {
                     app.nav_scroll.saturating_add(1)
                 };
+                app.clamp_nav_scroll();
             } else {
                 app.scroll = if up {
                     app.scroll.saturating_sub(1)
                 } else {
                     app.scroll.saturating_add(1)
                 };
+                app.clamp_viewer_scroll();
             }
             None
         }
@@ -600,6 +666,9 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         app.nav_visible = Some(area.width >= 80);
     }
     let regions = layout::split(area, app.nav_visible.unwrap_or(false));
+    app.viewer_rows = regions.viewer.height.max(1);
+    // Borders (2) + search row (1); remaining rows show the tree.
+    app.nav_viewport = regions.side_nav.height.saturating_sub(3).max(1);
     let theme = app.theme;
     let page = app.navigator.tab().current().page.clone();
     let crumbs = app.navigator.nav().tree.breadcrumb(&page);
@@ -1055,5 +1124,71 @@ mod tests {
         app.focused_item = Some(0);
         app.update(Action::ViewerDown);
         assert_eq!(app.focused_item, None);
+    }
+
+    #[test]
+    fn viewer_cursor_stays_in_viewport_at_short_height() {
+        let root = fixture();
+        for height in [12u16, 24] {
+            let mut app = App::new(&root).unwrap();
+            let _ = draw_app(&mut app, 100, height);
+            let rows = u32::from(app.viewer_rows);
+            assert!(rows >= 1);
+            for _ in 0..30 {
+                app.update(Action::ViewerDown);
+            }
+            assert!(
+                app.cursor_line >= app.scroll && app.cursor_line < app.scroll.saturating_add(rows),
+                "h={height}: cursor {} not in [{}, {})",
+                app.cursor_line,
+                app.scroll,
+                app.scroll.saturating_add(rows)
+            );
+        }
+    }
+
+    #[test]
+    fn wheel_scroll_clamps_to_doc() {
+        let root = fixture();
+        let mut app = App::new(&root).unwrap();
+        let _ = draw_app(&mut app, 100, 24);
+        let max = u32::try_from(app.doc.lines().len().saturating_sub(1)).unwrap_or(0);
+        let mouse = MouseEvent {
+            kind: MouseEventKind::ScrollDown,
+            column: 50,
+            row: 10,
+            modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+        };
+        for _ in 0..500 {
+            let _ = apply_mouse(&mut app, mouse);
+        }
+        assert!(app.scroll <= max, "scroll {} > max {max}", app.scroll);
+    }
+
+    #[test]
+    fn next_page_keeps_current_row_visible_in_nav() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../wiki");
+        if !root.exists() {
+            return;
+        }
+        let mut app = App::new(&root).unwrap();
+        let _ = draw_app(&mut app, 120, 24);
+        for _ in 0..20 {
+            app.update(Action::NextPage);
+            let _ = draw_app(&mut app, 120, 24);
+            let page = app.navigator.tab().current().page.clone();
+            let rows = app.nav_rows();
+            let Some(idx) = rows.iter().position(|r| r.id == NodeId::Page(page.clone())) else {
+                continue;
+            };
+            let scroll = usize::from(app.nav_scroll);
+            let vh = usize::from(app.nav_viewport);
+            assert!(
+                idx >= scroll && idx < scroll + vh,
+                "page {:?} at idx {idx} not in nav viewport [{scroll}, {})",
+                page.relative_path,
+                scroll + vh
+            );
+        }
     }
 }
