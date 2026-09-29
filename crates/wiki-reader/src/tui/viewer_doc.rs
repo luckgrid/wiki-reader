@@ -2,9 +2,10 @@
 
 use wiki_reader_core::Index;
 use wiki_reader_core::index::Page;
-use wiki_reader_core::nav::resolve;
+use wiki_reader_core::nav::{Target, resolve, unresolved_relative_path};
 use wiki_reader_core::parse::{self, MdLink};
-use wiki_reader_core::provider::PageKey;
+use wiki_reader_core::provider::{FsProvider, PageKey};
+use wiki_reader_render::{LinkClass, LinkId, LinkSpan};
 
 /// Kind of a Tab-cycle focus item.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,6 +29,8 @@ pub struct FocusItem {
     pub kind: FocusTarget,
     /// Raw target string (path, url, or empty for footer).
     pub target: String,
+    /// Link id when `kind == Link`.
+    pub link_id: Option<LinkId>,
 }
 
 impl FocusItem {
@@ -49,8 +52,24 @@ pub trait ViewerDoc {
     fn block_starts(&self) -> &[u32];
     /// Line (1-based) for a heading slug.
     fn anchor_line(&self, slug: &str) -> Option<u32>;
+    /// Interactive link geometry.
+    fn link_spans(&self) -> &[LinkSpan];
     /// Tab-cycle items (links + footer slots filled by the app).
-    fn focus_items(&self) -> Vec<FocusItem>;
+    fn focus_items(&self) -> Vec<FocusItem> {
+        self.link_spans()
+            .iter()
+            .map(|s| {
+                let (line, cols) = s.segments.first().copied().unwrap_or((0, (0, 0)));
+                FocusItem {
+                    line: Some(line),
+                    cols,
+                    kind: FocusTarget::Link,
+                    target: s.raw_target.clone(),
+                    link_id: Some(s.id),
+                }
+            })
+            .collect()
+    }
 }
 
 /// Raw source document backed by provider text + parsed metadata.
@@ -59,7 +78,7 @@ pub struct RawDoc {
     lines: Vec<String>,
     blocks: Vec<u32>,
     headings: Vec<(String, u32)>,
-    items: Vec<FocusItem>,
+    links: Vec<LinkSpan>,
     word_count: u32,
     updated: String,
 }
@@ -68,20 +87,28 @@ impl RawDoc {
     /// Build from raw source and the indexed page (if any).
     #[must_use]
     pub fn from_source(source: &str, page: Option<&Page>) -> Self {
+        Self::from_source_ctx(source, page, None, None, None)
+    }
+
+    /// Build with link resolution context (normal app load path).
+    #[must_use]
+    pub fn from_source_ctx(
+        source: &str,
+        page: Option<&Page>,
+        from: Option<&PageKey>,
+        index: Option<&Index>,
+        provider: Option<&FsProvider>,
+    ) -> Self {
         let lines: Vec<String> = source.lines().map(str::to_owned).collect();
-        let (blocks, headings, items, word_count, updated) = if let Some(p) = page {
-            let blocks = p.parsed.blocks.clone();
-            let headings = p
-                .parsed
-                .headings
-                .iter()
-                .map(|h| (h.slug.clone(), h.source_line))
-                .collect();
-            let items = link_items(&lines, &p.parsed.links);
+        let (blocks, headings, md_links, word_count, updated) = if let Some(p) = page {
             (
-                blocks,
-                headings,
-                items,
+                p.parsed.blocks.clone(),
+                p.parsed
+                    .headings
+                    .iter()
+                    .map(|h| (h.slug.clone(), h.source_line))
+                    .collect(),
+                p.parsed.links.clone(),
                 p.parsed.word_count,
                 p.parsed
                     .frontmatter
@@ -91,16 +118,14 @@ impl RawDoc {
             )
         } else {
             let parsed = parse::parse(source);
-            let headings = parsed
-                .headings
-                .iter()
-                .map(|h| (h.slug.clone(), h.source_line))
-                .collect();
-            let items = link_items(&lines, &parsed.links);
             (
                 parsed.blocks,
-                headings,
-                items,
+                parsed
+                    .headings
+                    .iter()
+                    .map(|h| (h.slug.clone(), h.source_line))
+                    .collect(),
+                parsed.links,
                 parsed.word_count,
                 parsed
                     .frontmatter
@@ -109,14 +134,24 @@ impl RawDoc {
                     .unwrap_or_else(|| "—".into()),
             )
         };
+        let link_spans = link_spans_from_md(&lines, &md_links, from, index, provider);
         Self {
             lines,
             blocks,
             headings,
-            items,
+            links: link_spans,
             word_count,
             updated,
         }
+    }
+
+    /// Raw target for a link id.
+    #[must_use]
+    pub fn link_target(&self, id: LinkId) -> Option<&str> {
+        self.links
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.raw_target.as_str())
     }
 
     /// Word count for the status bar.
@@ -148,29 +183,26 @@ impl ViewerDoc for RawDoc {
             .map(|(_, line)| *line)
     }
 
-    fn focus_items(&self) -> Vec<FocusItem> {
-        self.items.clone()
+    fn link_spans(&self) -> &[LinkSpan] {
+        &self.links
     }
 }
 
-fn display_col_at(line: &str, byte_offset: usize) -> u16 {
-    let mut col = 0u16;
-    let mut i = 0usize;
-    for ch in line.chars() {
-        if i >= byte_offset {
-            break;
-        }
-        let w = u16::try_from(ratatui::text::Span::raw(ch.to_string()).width()).unwrap_or(1);
-        col = col.saturating_add(w.max(1));
-        i += ch.len_utf8();
-    }
-    col
-}
-
-fn link_items(lines: &[String], md_links: &[MdLink]) -> Vec<FocusItem> {
+fn link_spans_from_md(
+    lines: &[String],
+    md_links: &[MdLink],
+    from: Option<&PageKey>,
+    index: Option<&Index>,
+    _provider: Option<&FsProvider>,
+) -> Vec<LinkSpan> {
     md_links
         .iter()
-        .map(|md| {
+        .enumerate()
+        .map(|(i, md)| {
+            let class = match (from, index) {
+                (Some(f), Some(idx)) => link_class(&md.target, f, idx),
+                _ => LinkClass::Internal,
+            };
             let line_idx = usize::try_from(md.source_line.saturating_sub(1)).unwrap_or(0);
             let cols = match lines.get(line_idx) {
                 Some(line) => {
@@ -188,19 +220,54 @@ fn link_items(lines: &[String], md_links: &[MdLink]) -> Vec<FocusItem> {
                 }
                 None => (0, 0),
             };
-            FocusItem {
-                line: Some(md.source_line.saturating_sub(1)),
-                cols,
-                kind: FocusTarget::Link,
-                target: md.target.clone(),
+            LinkSpan {
+                id: LinkId(u32::try_from(i).unwrap_or(u32::MAX)),
+                raw_target: md.target.clone(),
+                class,
+                segments: vec![(md.source_line.saturating_sub(1), cols)],
             }
         })
         .collect()
 }
 
-/// Format a resolved target for the status bar.
+fn link_class(raw: &str, from: &PageKey, index: &Index) -> LinkClass {
+    let outcome = resolve(raw, from, index);
+    match outcome.target {
+        Target::External(_) => LinkClass::External,
+        Target::Unresolved(_) => LinkClass::Broken,
+        _ => LinkClass::Internal,
+    }
+}
+
+fn display_col_at(line: &str, byte_offset: usize) -> u16 {
+    let mut col = 0u16;
+    let mut i = 0usize;
+    for ch in line.chars() {
+        if i >= byte_offset {
+            break;
+        }
+        let w = u16::try_from(ratatui::text::Span::raw(ch.to_string()).width()).unwrap_or(1);
+        col = col.saturating_add(w.max(1));
+        i += ch.len_utf8();
+    }
+    col
+}
+
+/// Format a resolved target for the status bar (no provider hint).
 #[must_use]
+#[allow(dead_code)] // callers use `format_target_with_provider`
 pub fn format_target(raw: &str, from: &PageKey, index: &Index) -> String {
+    format_target_with_provider(raw, from, index, None)
+}
+
+/// Status text for a link, including non-markdown file hints.
+#[must_use]
+pub fn format_target_with_provider(
+    raw: &str,
+    from: &PageKey,
+    index: &Index,
+    provider: Option<&FsProvider>,
+) -> String {
     let outcome = resolve(raw, from, index);
     match outcome.target {
         wiki_reader_core::nav::Target::Page(key, anchor) => {
@@ -212,7 +279,15 @@ pub fn format_target(raw: &str, from: &PageKey, index: &Index) -> String {
         }
         wiki_reader_core::nav::Target::Anchor(a) => format!("→ #{a}"),
         wiki_reader_core::nav::Target::External(url) => format!("↗ {url}"),
-        wiki_reader_core::nav::Target::Unresolved(u) => format!("? not found: {u}"),
+        wiki_reader_core::nav::Target::Unresolved(u) => {
+            if let (Some(p), Some(rel)) = (provider, unresolved_relative_path(raw, from))
+                && p.non_markdown_file_exists(&rel)
+            {
+                "not a markdown page".into()
+            } else {
+                format!("? not found: {u}")
+            }
+        }
     }
 }
 
@@ -272,6 +347,7 @@ pub mod cycle {
 mod tests {
     use super::cycle::{next_after, step};
     use super::*;
+    use std::path::PathBuf;
     use wiki_reader_core::provider::CollectionProvider;
 
     #[test]
@@ -307,35 +383,34 @@ more words here
                 cols: (0, 1),
                 kind: FocusTarget::Link,
                 target: "a".into(),
+                link_id: Some(LinkId(0)),
             },
             FocusItem {
                 line: Some(5),
                 cols: (0, 1),
                 kind: FocusTarget::Link,
                 target: "b".into(),
+                link_id: Some(LinkId(1)),
             },
             FocusItem {
                 line: None,
                 cols: (0, 1),
                 kind: FocusTarget::FooterPrev,
                 target: String::new(),
+                link_id: None,
             },
             FocusItem {
                 line: None,
                 cols: (0, 1),
                 kind: FocusTarget::FooterNext,
                 target: String::new(),
+                link_id: None,
             },
         ];
-        // After cursor line 3 → first item with line > 3 = index 1
         assert_eq!(next_after(&items, 3, false), Some(1));
-        // Wrap forward from end
         assert_eq!(step(&items, Some(3), false), Some(0));
-        // Wrap backward
         assert_eq!(step(&items, Some(0), true), Some(3));
-        // Start after cursor
         assert_eq!(next_after(&items, 0, false), Some(0));
-        // Clear on arrow is App responsibility (focused_item = None in viewer_move_line).
     }
 
     #[test]
@@ -346,14 +421,14 @@ more words here
         let index = wiki_reader_core::Index::build(&provider).unwrap();
         let key = wiki_reader_core::provider::PageKey {
             collection_id: index.collection_id.clone(),
-            relative_path: std::path::PathBuf::from("README.md"),
+            relative_path: PathBuf::from("README.md"),
         };
         let src = provider.read(&key).unwrap();
         let page = index.pages.get(&key);
-        let doc = RawDoc::from_source(&src, page);
+        let doc = RawDoc::from_source_ctx(&src, page, Some(&key), Some(&index), Some(&provider));
         assert!(
-            !doc.focus_items().is_empty(),
-            "expected link items on broken-links README"
+            !doc.link_spans().is_empty(),
+            "expected link spans on broken-links README"
         );
     }
 }

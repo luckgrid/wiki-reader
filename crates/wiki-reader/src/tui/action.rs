@@ -66,6 +66,16 @@ pub enum Action {
     ViewerTab,
     /// Viewer Tab cycle backward.
     ViewerBackTab,
+    /// Viewer Enter — follow link or footer action.
+    ViewerActivate,
+    /// Follow a link by id (mouse).
+    FollowLinkId(u32),
+    /// Confirm opening a pending external URL.
+    ConfirmOpen,
+    /// Decline external URL prompt.
+    ConfirmDecline,
+    /// Toggle raw / rendered view (`r`).
+    ToggleViewMode,
     /// No-op / ignored.
     #[allow(dead_code)]
     None,

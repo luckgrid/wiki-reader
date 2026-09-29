@@ -7,16 +7,14 @@ use crate::tui::focus::FocusPane;
 use crate::tui::layout;
 use crate::tui::regions::status::StatusModel;
 use crate::tui::regions::{footer, header, side_nav, status, viewer};
-use crate::tui::viewer_doc::{FocusTarget, ViewerDoc, format_target};
+use crate::tui::viewer_doc::{FocusTarget, ViewerDoc, format_target_with_provider};
 
 /// Draw all regions and rebuild the hit map.
 pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     app.hit_map.clear();
     let area = frame.area();
-    if app.nav_visible.is_none() {
-        app.nav_visible = Some(area.width >= 80);
-    }
-    let regions = layout::split(area, app.nav_visible.unwrap_or(false));
+    app.sync_nav_for_width(area.width);
+    let regions = layout::split(area, app.nav_visible);
     app.viewer_rows = regions.viewer.height.max(1);
     // Borders (2) + search row (1); remaining rows show the tree.
     app.nav_viewport = regions.side_nav.height.saturating_sub(3).max(1);
@@ -34,6 +32,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         frame,
         regions.viewer,
         app.doc.lines(),
+        app.doc.link_spans(),
         app.scroll,
         app.cursor_line,
         app.focus == FocusPane::Viewer,
@@ -115,7 +114,12 @@ fn focused_status_message(app: &App) -> String {
     };
     let page = &app.navigator.tab().current().page;
     match it.kind {
-        FocusTarget::Link => format_target(&it.target, page, app.navigator.index()),
+        FocusTarget::Link => format_target_with_provider(
+            &it.target,
+            page,
+            app.navigator.index(),
+            Some(&app.provider),
+        ),
         FocusTarget::FooterPrev => "‹ prev".into(),
         FocusTarget::FooterNext => "next ›".into(),
     }

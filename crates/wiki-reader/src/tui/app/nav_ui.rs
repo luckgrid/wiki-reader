@@ -87,6 +87,7 @@ impl App {
         };
         if matches!(id, NodeId::Group(_) | NodeId::OtherPages) {
             self.navigator.set_group_expanded(id, true);
+            self.clamp_nav_scroll();
         }
     }
 
@@ -98,6 +99,7 @@ impl App {
             NodeId::Group(_) | NodeId::OtherPages => {
                 if self.navigator.nav().expanded.contains(&id) {
                     self.navigator.set_group_expanded(id, false);
+                    self.clamp_nav_scroll();
                 } else if let Some(parent) = self.navigator.nav().tree.parent_group(&id) {
                     self.navigator.set_nav_cursor(parent);
                     self.ensure_nav_cursor_visible();
@@ -125,6 +127,7 @@ impl App {
             NavStop::Node(other) => {
                 let open = !self.navigator.nav().expanded.contains(&other);
                 self.navigator.set_group_expanded(other, open);
+                self.clamp_nav_scroll();
             }
         }
     }

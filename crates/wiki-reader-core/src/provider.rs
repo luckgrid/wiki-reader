@@ -129,6 +129,20 @@ impl CollectionProvider for FsProvider {
 }
 
 impl FsProvider {
+    /// True when `relative` points at a regular non-markdown file under the collection root.
+    #[must_use]
+    pub fn non_markdown_file_exists(&self, relative: &Path) -> bool {
+        if relative.is_absolute()
+            || relative
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
+            return false;
+        }
+        let abs = self.root.join(relative);
+        abs.is_file() && !is_markdown(&abs)
+    }
+
     fn resolve(&self, relative: &Path) -> Result<PathBuf, Error> {
         if relative.is_absolute()
             || relative

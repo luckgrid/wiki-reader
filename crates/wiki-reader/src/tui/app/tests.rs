@@ -139,7 +139,7 @@ fn nav_toggle_hides_at_120_and_fresh_60_has_no_overlay() {
     let root = fixture();
     let mut wide = App::new(&root).unwrap();
     let _ = draw_app(&mut wide, 120, 24);
-    assert_eq!(wide.nav_visible, Some(true));
+    assert!(wide.nav_visible);
     assert!(
         wide.hit_map
             .entries()
@@ -148,7 +148,7 @@ fn nav_toggle_hides_at_120_and_fresh_60_has_no_overlay() {
     );
     wide.update(Action::ToggleNav);
     let _ = draw_app(&mut wide, 120, 24);
-    assert_eq!(wide.nav_visible, Some(false));
+    assert!(!wide.nav_visible);
     assert!(
         !wide
             .hit_map
@@ -167,7 +167,7 @@ fn nav_toggle_hides_at_120_and_fresh_60_has_no_overlay() {
 
     let mut narrow = App::new(&root).unwrap();
     let _ = draw_app(&mut narrow, 60, 24);
-    assert_eq!(narrow.nav_visible, Some(false));
+    assert!(!narrow.nav_visible);
     assert!(
         !narrow
             .hit_map
@@ -611,4 +611,179 @@ fn tab_cycle_through_app_includes_footer() {
     }
     assert!(saw_footer, "Tab cycle should reach footer buttons");
     let _ = draw_app(&mut app, 100, 24);
+}
+
+#[test]
+fn nav_visibility_reseeds_on_resize_without_user_toggle() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let _ = draw_app(&mut app, 60, 24);
+    assert!(!app.nav_visible);
+    let _ = draw_app(&mut app, 120, 24);
+    assert!(app.nav_visible);
+    let _ = draw_app(&mut app, 60, 24);
+    assert!(!app.nav_visible);
+}
+
+#[test]
+fn overlay_closes_after_nav_activate_at_narrow_width() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let _ = draw_app(&mut app, 60, 24);
+    app.update(Action::ToggleNav);
+    assert!(app.nav_visible);
+    app.update(Action::FocusNav);
+    app.navigator.set_nav_cursor(NodeId::Page(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/README.md"),
+    }));
+    app.update(Action::NavActivate);
+    assert!(!app.nav_visible);
+}
+
+#[test]
+fn nav_scroll_clamped_after_collapse_long_tree() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/deep-tree");
+    let mut app = App::new(&root).unwrap();
+    let _ = draw_app(&mut app, 120, 12);
+    app.navigator
+        .set_group_expanded(NodeId::Group(PathBuf::from("l1")), true);
+    app.navigator
+        .set_group_expanded(NodeId::Group(PathBuf::from("l1/l2")), true);
+    app.navigator
+        .set_group_expanded(NodeId::Group(PathBuf::from("l1/l2/l3")), true);
+    app.nav_scroll = 100;
+    app.navigator
+        .set_group_expanded(NodeId::Group(PathBuf::from("l1/l2/l3")), false);
+    app.navigator
+        .set_group_expanded(NodeId::Group(PathBuf::from("l1/l2")), false);
+    app.navigator
+        .set_group_expanded(NodeId::Group(PathBuf::from("l1")), false);
+    app.clamp_nav_scroll();
+    let n = app.nav_rows().len();
+    let vh = usize::from(app.nav_viewport.max(1));
+    let max = n.saturating_sub(vh);
+    assert!(usize::from(app.nav_scroll) <= max);
+}
+
+#[test]
+fn view_mode_toggle_round_trips_raw_and_rendered() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let _ = draw_app(&mut app, 100, 24);
+    assert!(matches!(app.doc, crate::tui::page_doc::PageDoc::Raw(_)));
+    app.update(Action::ToggleViewMode);
+    assert!(matches!(
+        app.doc,
+        crate::tui::page_doc::PageDoc::Rendered(_)
+    ));
+    app.update(Action::ToggleViewMode);
+    assert!(matches!(app.doc, crate::tui::page_doc::PageDoc::Raw(_)));
+}
+
+fn link_chain_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/link-chain")
+}
+
+#[test]
+fn link_chain_ten_links_ten_backs_one_tab() {
+    let root = link_chain_root();
+    let mut app = App::new(&root).unwrap();
+    app.cursor_line = 1;
+    app.scroll = 0;
+    for i in 1..=10 {
+        app.follow_link_target(&format!("{i:02}.md"));
+    }
+    assert_eq!(app.navigator.tab_count(), 1);
+    assert_eq!(app.navigator.tab().history.len(), 11);
+    assert_eq!(
+        app.navigator.tab().current().page.relative_path,
+        PathBuf::from("10.md")
+    );
+    for _ in 0..10 {
+        app.update(Action::Back);
+    }
+    assert_eq!(
+        app.navigator.tab().current().page.relative_path,
+        PathBuf::from("README.md")
+    );
+    assert_eq!(app.cursor_line, 1);
+    assert_eq!(app.scroll, 0);
+}
+
+#[test]
+fn click_link_glyph_follows_page() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/README.md"),
+    }));
+    let _ = draw_app(&mut app, 120, 24);
+    let tokens_id = app
+        .doc
+        .link_spans()
+        .iter()
+        .find(|s| s.raw_target.contains("tokens.md"))
+        .expect("tokens link")
+        .id
+        .0;
+    let link_rect = app
+        .hit_map
+        .entries()
+        .iter()
+        .find(|(_, h)| matches!(h, Hit::Link(id) if *id == tokens_id))
+        .map(|(r, _)| *r)
+        .expect("tokens link hit rect");
+    assert!(link_rect.width > 0, "link hit width {link_rect:?}");
+    let col = link_rect.x.saturating_add(link_rect.width / 2);
+    assert!(matches!(
+        app.hit_map.hit_at(col, link_rect.y),
+        Some(Hit::Link(_))
+    ));
+    let action = apply_mouse(
+        &mut app,
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: col,
+            row: link_rect.y,
+            modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+        },
+    );
+    let action = action.expect("mouse action");
+    assert!(matches!(action, Action::FollowLinkId(id) if id == tokens_id));
+    app.update(action);
+    assert_eq!(
+        app.navigator.tab().current().page.relative_path,
+        PathBuf::from("architecture/design-system/tokens.md")
+    );
+}
+
+#[derive(Default)]
+struct LogOpener(std::sync::Arc<std::sync::Mutex<Vec<String>>>);
+
+impl crate::tui::opener::Opener for LogOpener {
+    fn open(&self, url: &str) -> std::io::Result<()> {
+        self.0.lock().unwrap().push(url.to_owned());
+        Ok(())
+    }
+}
+
+#[test]
+fn external_confirm_opens_with_recording_opener() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let log = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    app.opener = Box::new(LogOpener(log.clone()));
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("README.md"),
+    }));
+    app.follow_link_target("https://example.com/wiki");
+    assert_eq!(app.input_mode, crate::tui::keymap::InputMode::Confirm);
+    app.update(Action::ConfirmOpen);
+    assert_eq!(
+        log.lock().unwrap().as_slice(),
+        &["https://example.com/wiki".to_owned()]
+    );
 }

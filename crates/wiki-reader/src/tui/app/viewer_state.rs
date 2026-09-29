@@ -1,6 +1,7 @@
 //! Viewer cursor, scroll, and Tab-cycle state.
 
 use super::App;
+use crate::tui::action::Action;
 use crate::tui::viewer_doc::{FocusItem, FocusTarget, ViewerDoc, cycle};
 
 impl App {
@@ -59,6 +60,7 @@ impl App {
                 cols: (0, 1),
                 kind: FocusTarget::FooterPrev,
                 target: String::new(),
+                link_id: None,
             });
         }
         if tree.next(current).is_some() {
@@ -67,6 +69,7 @@ impl App {
                 cols: (0, 1),
                 kind: FocusTarget::FooterNext,
                 target: String::new(),
+                link_id: None,
             });
         }
         items
@@ -90,5 +93,47 @@ impl App {
             self.ensure_cursor_visible();
         }
         // Focused-item target is derived at draw time (not stored in `message`).
+    }
+
+    pub(crate) fn viewer_activate(&mut self) {
+        let items = self.focus_list();
+        if let Some(i) = self.focused_item {
+            let Some(it) = items.get(i) else {
+                return;
+            };
+            match it.kind {
+                FocusTarget::FooterPrev => self.update(Action::PrevPage),
+                FocusTarget::FooterNext => self.update(Action::NextPage),
+                FocusTarget::Link => self.follow_link_target(&it.target),
+            }
+            return;
+        }
+        let line = self.cursor_line;
+        let on_line: Vec<_> = self
+            .doc
+            .link_spans()
+            .iter()
+            .filter(|s| s.segments.iter().any(|(l, _)| *l == line))
+            .collect();
+        if on_line.len() == 1 {
+            let raw = on_line[0].raw_target.clone();
+            self.follow_link_target(&raw);
+        }
+    }
+
+    pub(crate) fn follow_link_target(&mut self, raw: &str) {
+        let effects = self.navigator.follow_link(raw, self.view_state());
+        self.apply_effects(effects);
+    }
+
+    pub(crate) fn follow_link_id(&mut self, id: u32) {
+        let Some(raw) = self
+            .doc
+            .link_target(wiki_reader_render::LinkId(id))
+            .map(str::to_owned)
+        else {
+            return;
+        };
+        self.follow_link_target(&raw);
     }
 }

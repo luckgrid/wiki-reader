@@ -151,7 +151,7 @@ impl Navigator {
             anchor: None,
             cursor_line: 0,
             scroll: 0,
-            mode: ViewMode::Rendered,
+            mode: ViewMode::Raw,
         };
         let mut expanded = HashSet::new();
         expand_ancestors(&tree, &start, &mut expanded);
@@ -176,6 +176,25 @@ impl Navigator {
     #[must_use]
     pub fn index(&self) -> &Index {
         &self.index
+    }
+
+    /// Set viewer mode on the current history entry.
+    pub fn set_view_mode(&mut self, mode: ViewMode) {
+        self.tabs[self.active].current_mut().mode = mode;
+    }
+
+    /// Replace the index after a filesystem change; preserve tabs/history.
+    #[must_use]
+    pub fn reindex(&mut self, index: Index) -> Vec<Effect> {
+        let cur = self.tab().current().page.clone();
+        self.index = index;
+        self.nav.tree = NavTree::build(&self.index);
+        if !self.index.pages.contains_key(&cur) {
+            self.notice = Some("page removed".into());
+            return vec![Effect::Notice("page removed".into())];
+        }
+        expand_ancestors(&self.nav.tree, &cur, &mut self.nav.expanded);
+        self.effects_for_current()
     }
 
     /// Open tabs.
@@ -346,6 +365,7 @@ impl Navigator {
             return Vec::new();
         }
         tab.cursor -= 1;
+        self.notice = None;
         self.effects_for_current()
     }
 
@@ -357,6 +377,7 @@ impl Navigator {
             return Vec::new();
         }
         tab.cursor += 1;
+        self.notice = None;
         self.effects_for_current()
     }
 
@@ -711,6 +732,29 @@ mod tests {
             .filter(|e| matches!(e, Effect::Notice(_)))
             .collect();
         assert_eq!(notices.len(), 1, "effects={effects:?}");
+    }
+
+    #[test]
+    fn reindex_keeps_history_when_page_still_exists() {
+        let mut nav = worked();
+        nav.go_to_page(key("architecture/README.md"), ViewState::default());
+        let index = nav.index().clone();
+        let effects = nav.reindex(index);
+        assert!(effects.iter().any(|e| matches!(e, Effect::LoadPage(_))));
+        assert_eq!(nav.tab().history.len(), 2);
+    }
+
+    #[test]
+    fn back_clears_stale_notice() {
+        let mut nav = worked();
+        nav.go_to_page(key("architecture/README.md"), ViewState::default());
+        nav.follow_link(
+            "design-system/tokens.md#missing-anchor",
+            ViewState::default(),
+        );
+        assert!(nav.notice().is_some());
+        nav.back(ViewState::default());
+        assert!(nav.notice().is_none());
     }
 
     #[test]

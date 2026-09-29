@@ -24,6 +24,12 @@ pub struct Theme {
     pub cursor_line: Color,
     /// Focused Tab-cycle item.
     pub focus_item: Color,
+    /// Internal link text.
+    pub link: Color,
+    /// Broken / unresolved link.
+    pub link_broken: Color,
+    /// External link.
+    pub link_external: Color,
 }
 
 impl Default for Theme {
@@ -38,6 +44,9 @@ impl Default for Theme {
             accent: Color::Cyan,
             cursor_line: Color::Rgb(40, 40, 50),
             focus_item: Color::Yellow,
+            link: Color::Blue,
+            link_broken: Color::Red,
+            link_external: Color::Magenta,
         }
     }
 }
@@ -59,6 +68,17 @@ impl Theme {
     #[must_use]
     pub fn accent(&self) -> Style {
         Style::default().fg(self.accent)
+    }
+
+    /// Link text style by resolved class.
+    #[must_use]
+    pub fn link_class(&self, class: wiki_reader_render::LinkClass) -> Style {
+        let fg = match class {
+            wiki_reader_render::LinkClass::Internal => self.link,
+            wiki_reader_render::LinkClass::Broken => self.link_broken,
+            wiki_reader_render::LinkClass::External => self.link_external,
+        };
+        Style::default().fg(fg)
     }
 
     /// Border for a pane; `focused` uses `border_focus`.

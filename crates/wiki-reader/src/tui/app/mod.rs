@@ -10,8 +10,12 @@ use super::action::Action;
 use super::focus::FocusPane;
 use super::hit::HitMap;
 use super::keymap::{Chord, InputMode};
+use super::opener::{Opener, SystemOpener};
+use super::page_doc::PageDoc;
+use super::rendered_doc::RenderedViewerDoc;
 use super::theme::Theme;
 use super::viewer_doc::{RawDoc, ViewerDoc};
+use wiki_reader_core::nav::ViewMode;
 
 mod draw;
 mod events;
@@ -31,12 +35,18 @@ pub struct App {
     pub provider: FsProvider,
     /// Focused pane.
     pub focus: FocusPane,
-    /// Side nav visible (docked ≥80 cols, overlay &lt;80). `None` until first draw seeds from width.
-    pub nav_visible: Option<bool>,
+    /// Side nav visible (docked ≥80 cols, overlay &lt;80).
+    pub nav_visible: bool,
+    /// User toggled `b`/◫; cleared when width crosses the 80-col boundary.
+    pub nav_user_override: bool,
+    /// Last drawn terminal width (for overlay close on navigation).
+    pub term_width: u16,
+    /// Previous frame wide (≥80) vs narrow; `None` until first draw.
+    nav_width_regime: Option<bool>,
     /// Side nav scroll offset (rows below the search line).
     pub nav_scroll: u16,
     /// Current viewer document.
-    pub doc: RawDoc,
+    pub doc: PageDoc,
     /// Viewer cursor (0-based source line index).
     pub cursor_line: u32,
     /// Viewer scroll offset (lines from top).
@@ -59,6 +69,10 @@ pub struct App {
     pub chord: Chord,
     /// Input mode (Normal vs Overlay).
     pub input_mode: InputMode,
+    /// URL awaiting y/N confirmation.
+    pub pending_external: Option<String>,
+    /// External link opener (swappable in tests).
+    pub(crate) opener: Box<dyn Opener>,
 }
 
 impl App {
@@ -76,10 +90,12 @@ impl App {
             navigator,
             provider,
             focus: FocusPane::Viewer,
-            // Seeded from terminal width on first draw (≥80 shown, &lt;80 hidden).
-            nav_visible: None,
+            nav_visible: false,
+            nav_user_override: false,
+            term_width: 80,
+            nav_width_regime: None,
             nav_scroll: 0,
-            doc: RawDoc::from_source("", None),
+            doc: PageDoc::Raw(RawDoc::from_source("", None)),
             cursor_line: 0,
             scroll: 0,
             focused_item: None,
@@ -92,6 +108,8 @@ impl App {
             quit: false,
             chord: Chord::None,
             input_mode: InputMode::Normal,
+            pending_external: None,
+            opener: Box::new(SystemOpener),
         };
         let page = app.navigator.tab().current().page.clone();
         app.apply_effects(vec![
@@ -122,8 +140,8 @@ impl App {
         match action {
             Action::Quit => self.quit = true,
             Action::ToggleNav => {
-                let cur = self.nav_visible.unwrap_or(false);
-                self.nav_visible = Some(!cur);
+                self.nav_user_override = true;
+                self.nav_visible = !self.nav_visible;
             }
             Action::PrevPage | Action::NextPage => {
                 let effects = if matches!(action, Action::PrevPage) {
@@ -149,6 +167,7 @@ impl App {
             Action::ToggleGroup(id) => {
                 let open = !self.navigator.nav().expanded.contains(&id);
                 self.navigator.set_group_expanded(id, open);
+                self.clamp_nav_scroll();
             }
             Action::OpenSearch => {
                 self.navigator.set_nav_stop(NavStop::Search);
@@ -215,11 +234,37 @@ impl App {
             }
             Action::ViewerTab => self.viewer_tab(false),
             Action::ViewerBackTab => self.viewer_tab(true),
+            Action::ViewerActivate => self.viewer_activate(),
+            Action::FollowLinkId(id) => self.follow_link_id(id),
+            Action::ConfirmOpen => {
+                if let Some(url) = self.pending_external.take() {
+                    let _ = self.opener.open(&url);
+                }
+                self.input_mode = InputMode::Normal;
+                self.message.clear();
+            }
+            Action::ConfirmDecline => {
+                self.pending_external = None;
+                self.input_mode = InputMode::Normal;
+                self.message.clear();
+            }
+            Action::ToggleViewMode => self.toggle_view_mode(),
             Action::None => {}
         }
     }
 
+    fn toggle_view_mode(&mut self) {
+        let key = self.navigator.tab().current().page.clone();
+        let new_mode = match self.navigator.tab().current().mode {
+            ViewMode::Rendered => ViewMode::Raw,
+            ViewMode::Raw => ViewMode::Rendered,
+        };
+        self.navigator.set_view_mode(new_mode);
+        self.load_page(&key);
+    }
+
     pub(crate) fn apply_effects(&mut self, effects: Vec<Effect>) {
+        let page_changed = effects.iter().any(|e| matches!(e, Effect::LoadPage(_)));
         for effect in effects {
             match effect {
                 Effect::LoadPage(key) => self.load_page(&key),
@@ -240,7 +285,9 @@ impl App {
                 }
                 Effect::Notice(msg) => self.message = msg,
                 Effect::ConfirmExternal(url) => {
-                    self.message = format!("open {url}? (confirm later)");
+                    self.pending_external = Some(url.clone());
+                    self.input_mode = InputMode::Confirm;
+                    self.message = format!("open {url}? [y/N]");
                 }
             }
         }
@@ -253,13 +300,30 @@ impl App {
             self.navigator.set_nav_cursor(NodeId::Page(page.clone()));
             self.reveal_page_in_nav(&page);
         }
+        if page_changed && self.term_width < 80 {
+            self.nav_visible = false;
+        }
     }
 
     pub(crate) fn load_page(&mut self, key: &PageKey) {
         match self.provider.read(key) {
             Ok(src) => {
-                let page = self.navigator.index().pages.get(key);
-                self.doc = RawDoc::from_source(&src, page);
+                let index = self.navigator.index();
+                let page = index.pages.get(key);
+                let mode = self.navigator.tab().current().mode;
+                let width = self.term_width.max(40);
+                self.doc = match mode {
+                    ViewMode::Raw => PageDoc::Raw(RawDoc::from_source_ctx(
+                        &src,
+                        page,
+                        Some(key),
+                        Some(index),
+                        Some(&self.provider),
+                    )),
+                    ViewMode::Rendered => {
+                        PageDoc::Rendered(RenderedViewerDoc::build(&src, page, key, index, width))
+                    }
+                };
                 self.cursor_line = 0;
                 self.scroll = 0;
                 self.focused_item = None;
@@ -274,9 +338,22 @@ impl App {
         self.doc.anchor_line(slug)
     }
 
-    pub(crate) fn close_overlay_after_nav(&mut self, term_width: u16) {
-        if term_width < 80 {
-            self.nav_visible = Some(false);
+    /// Sync side-nav visibility with terminal width (called each frame from draw).
+    pub(crate) fn sync_nav_for_width(&mut self, width: u16) {
+        self.term_width = width;
+        let wide = width >= 80;
+        match self.nav_width_regime {
+            None => {
+                self.nav_visible = wide;
+                self.nav_width_regime = Some(wide);
+            }
+            Some(prev) if prev != wide => {
+                self.nav_user_override = false;
+                self.nav_visible = wide;
+                self.nav_width_regime = Some(wide);
+            }
+            Some(_) if !self.nav_user_override => self.nav_visible = wide,
+            Some(_) => {}
         }
     }
 }

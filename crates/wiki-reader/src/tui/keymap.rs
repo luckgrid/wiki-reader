@@ -13,6 +13,8 @@ pub enum InputMode {
     Normal,
     /// Overlay text input (search): plain letters type into the field.
     Overlay,
+    /// External URL open confirmation in the status bar.
+    Confirm,
 }
 
 /// Chord / pending-key state for multi-key sequences (`gg`).
@@ -43,6 +45,14 @@ pub fn map(
         return (None, Chord::None);
     }
 
+    if mode == InputMode::Confirm {
+        return match key.code {
+            KeyCode::Char('y' | 'Y') => (Some(Action::ConfirmOpen), Chord::None),
+            KeyCode::Char('n' | 'N') | KeyCode::Esc => (Some(Action::ConfirmDecline), Chord::None),
+            _ => (None, Chord::None),
+        };
+    }
+
     // `gg` chord (viewer home). Lone `g` waits; other keys cancel.
     if matches!(key.code, KeyCode::Char('g')) && !key.modifiers.contains(KeyModifiers::SHIFT) {
         return match chord {
@@ -67,6 +77,7 @@ pub fn map_global(key: KeyEvent) -> Option<Action> {
     match key.code {
         KeyCode::Char('q') => Some(Action::Quit),
         KeyCode::Char('b') => Some(Action::ToggleNav),
+        KeyCode::Char('r') => Some(Action::ToggleViewMode),
         KeyCode::Char('[') => Some(Action::PrevPage),
         KeyCode::Char(']') => Some(Action::NextPage),
         KeyCode::Backspace => Some(Action::Back),
@@ -111,6 +122,7 @@ pub fn map_pane(key: KeyEvent, focus: FocusPane) -> Option<Action> {
             KeyCode::BackTab => Some(Action::ViewerBackTab),
             KeyCode::Tab if shift => Some(Action::ViewerBackTab),
             KeyCode::Tab => Some(Action::ViewerTab),
+            KeyCode::Enter => Some(Action::ViewerActivate),
             _ => None,
         },
     }
