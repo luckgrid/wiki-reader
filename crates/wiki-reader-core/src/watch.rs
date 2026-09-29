@@ -111,15 +111,16 @@ pub fn path_is_relevant(root: &Path, path: &Path) -> bool {
     if is_markdown(path) {
         return true;
     }
-    // Directory rename/delete under the collection (not the root itself — FSEvents
-    // often reports the parent dir when a non-md file changes).
+    // Non-markdown files (.txt, etc.) never dirty — including when FSEvents also
+    // reports a parent directory for the write.
+    if path.extension().is_some() {
+        return false;
+    }
+    // Extension-less path: directory rename/delete under the collection (not root).
     let Ok(rel) = path.strip_prefix(root) else {
         return false;
     };
-    if rel.as_os_str().is_empty() {
-        return false;
-    }
-    path.is_dir() || path.extension().is_none()
+    !rel.as_os_str().is_empty()
 }
 
 #[cfg(test)]
@@ -167,20 +168,22 @@ mod tests {
     fn git_and_txt_writes_do_not_set_dirty() {
         let dir = tempdir().unwrap();
         let root = dir.path();
-        fs::write(root.join("a.md"), "# a\n").unwrap();
+        // No .md in the tree: late FSEvents for existing pages must not flake this.
         let git = root.join(".git");
         fs::create_dir(&git).unwrap();
         let watcher = start_test(root);
-        thread::sleep(TEST_DEBOUNCE);
+        thread::sleep(TEST_DEBOUNCE.saturating_mul(2));
         let _ = watcher.poll_dirty();
 
         fs::write(git.join("HEAD"), "ref: refs/heads/main\n").unwrap();
         fs::write(root.join("notes.txt"), "nope\n").unwrap();
-        thread::sleep(TEST_DEBOUNCE.saturating_mul(2));
-        assert!(
-            !watcher.poll_dirty().dirty,
-            ".git / .txt must not set dirty"
-        );
+        for _ in 0..6 {
+            thread::sleep(TEST_DEBOUNCE);
+            assert!(
+                !watcher.poll_dirty().dirty,
+                ".git / .txt must not set dirty"
+            );
+        }
     }
 
     #[test]
