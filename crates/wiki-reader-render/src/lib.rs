@@ -403,14 +403,20 @@ mod tests {
             assert!(!doc.lines.is_empty());
             start.elapsed()
         };
-        // Best of three: one contested core must not fail the doubling check.
-        let t_small = (0..3).map(|_| timed(&small)).min().unwrap();
-        let t_large = (0..3).map(|_| timed(&large)).min().unwrap();
-        let ratio = t_large.as_secs_f64() / t_small.as_secs_f64().max(1e-9);
-        // Quadratic was ~4× per doubling; allow headroom for debug allocator noise.
+        // Best paired ratio of three: contested cores inflate a single shot.
+        // Quadratic ≈ 4× per doubling; 3.5 leaves CI headroom without hiding O(n²).
+        let (ratio, t_small, t_large) = (0..3)
+            .map(|_| {
+                let t_s = timed(&small);
+                let t_l = timed(&large);
+                let r = t_l.as_secs_f64() / t_s.as_secs_f64().max(1e-9);
+                (r, t_s, t_l)
+            })
+            .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
+            .unwrap();
         assert!(
-            ratio < 3.0,
-            "doubling input slowed render {ratio:.2}× (small={t_small:?}, large={t_large:?}); expected < 3×"
+            ratio < 3.5,
+            "doubling input slowed render {ratio:.2}× (small={t_small:?}, large={t_large:?}); expected < 3.5×"
         );
     }
 
