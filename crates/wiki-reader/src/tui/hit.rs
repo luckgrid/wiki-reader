@@ -87,8 +87,7 @@ impl HitMap {
         }
     }
 
-    /// Entries for tests.
-    #[cfg(test)]
+    /// Entries (tests + wheel pane detection).
     #[must_use]
     pub fn entries(&self) -> &[(Rect, Hit)] {
         &self.entries
