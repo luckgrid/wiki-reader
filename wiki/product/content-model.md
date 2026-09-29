@@ -14,7 +14,7 @@ What counts as a page, link, ID, and relationship; frontmatter conventions wiki-
 
 ## Collection
 
-A root directory (or several, see R25). A page is any `.md`/`.markdown` file not excluded by `.gitignore` or config `exclude` globs. Dot-directories are included unless ignored, since records often live in places like `.planning/`.
+A root directory (or several, see R25). A page is any `.md`/`.markdown` file not excluded by `.gitignore` or config `exclude` globs. Dot-directories are included unless ignored, since records often live in places like `.planning/`. Symlinked `.md` files are skipped (`follow_links` is off), so a page must be a regular file under the collection root.
 
 ## Page identity
 
