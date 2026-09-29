@@ -3,7 +3,7 @@ id: WR-LIBS
 title: Prior art & libraries
 summary: Existing tools worth learning from and the libraries wiki-reader builds on.
 status: draft
-updated: 2026-09-28
+updated: 2026-09-29
 related: [overview, rendering]
 nav_order: 4
 ---
@@ -50,11 +50,11 @@ Tried as-is inside herdr. **Kept:** it's markdown-only, reads far better than su
 | Markdown parsing | `pulldown-cmark` | Same parser markdown-reader uses, which keeps the render port simple. Enable tables, tasklists, strikethrough, footnotes; check its wikilink option. Alternative: `comrak` (full AST with sourcepos, wikilinks/front-matter extensions) if the event model gets painful. |
 | Frontmatter | own splitter + `toml` + a maintained YAML crate | `serde_yaml` is archived. Evaluate current maintained options at scaffold time. |
 | File discovery | `ignore` | `.gitignore`-aware walking (from ripgrep) |
-| Watching | `notify` + `notify-debouncer-full` (or `-mini`) | |
+| Watching | `notify` + `notify-debouncer-mini` | Markdown-path filtered; rebuild off UI thread |
 | Regex (IDs) | `regex` | |
 | Globs | `globset` | Path rules, `applies_to` |
 | Git | shell out to `git` in POC → `gix` later | Shelling out is simpler and good enough at ~2 s refresh |
-| Fuzzy match | `nucleo` | Helix's matcher; fast on large lists |
+| Fuzzy match | hand-rolled subsequence scorer | `nucleo` considered for Helix-class fuzzy; skipped — current scorer covers `tkn`→token and multi-word any-order pages (`projection token` → Token Projection). Revisit if lists get huge. |
 | Full-text search | in-memory scan (POC) → `tantivy` only if needed | |
 | Config | `serde` + `toml` (+ `figment` if layering gets complex) | |
 | Paths | `directories` / `dirs` | XDG config/state/cache |

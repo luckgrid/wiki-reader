@@ -36,7 +36,7 @@ wiki-reader/
 │   │   ├── parse/             # frontmatter split, pulldown-cmark walk, links, headings
 │   │   ├── index/             # pages, headings, edges (links/backlinks), search
 │   │   ├── nav/               # link resolution, NavTree build (titles, folding, order), prev/next
-│   │   ├── watch/             # notify-debouncer → IndexEvent
+│   │   ├── watch/             # notify-debouncer-mini → markdown dirty flag
 │   │   └── config/
 │   ├── wiki-reader-render/    # markdown → RenderedDoc (lines + link spans + source map)
 │   └── wiki-reader/           # binary: TUI app
