@@ -71,6 +71,13 @@ impl ViewerDoc for PageDoc {
         }
     }
 
+    fn heading_lines(&self) -> Vec<u32> {
+        match self {
+            Self::Raw(d) => d.heading_lines(),
+            Self::Rendered(d) => d.heading_lines(),
+        }
+    }
+
     fn anchor_line(&self, slug: &str) -> Option<u32> {
         match self {
             Self::Raw(d) => d.anchor_line(slug),

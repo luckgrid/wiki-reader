@@ -72,6 +72,10 @@ pub enum Action {
     ViewerBlockUp,
     /// Viewer block jump down.
     ViewerBlockDown,
+    /// Jump to previous heading (`Alt+Shift+↑`).
+    ViewerHeadingUp,
+    /// Jump to next heading (`Alt+Shift+↓`).
+    ViewerHeadingDown,
     /// Viewer page up.
     ViewerPageUp,
     /// Viewer page down.

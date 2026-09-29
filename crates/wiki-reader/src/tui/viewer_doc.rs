@@ -50,6 +50,8 @@ pub trait ViewerDoc {
     fn lines(&self) -> &[String];
     /// Top-level block start lines (1-based source).
     fn block_starts(&self) -> &[u32];
+    /// Heading display lines (1-based), document order.
+    fn heading_lines(&self) -> Vec<u32>;
     /// Line (1-based) for a heading slug.
     fn anchor_line(&self, slug: &str) -> Option<u32>;
     /// Interactive link geometry.
@@ -183,6 +185,10 @@ impl ViewerDoc for RawDoc {
 
     fn block_starts(&self) -> &[u32] {
         &self.blocks
+    }
+
+    fn heading_lines(&self) -> Vec<u32> {
+        self.headings.iter().map(|(_, line)| *line).collect()
     }
 
     fn anchor_line(&self, slug: &str) -> Option<u32> {
