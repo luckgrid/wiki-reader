@@ -813,27 +813,7 @@ fn line_start_offsets(text: &str) -> Vec<usize> {
     starts
 }
 
-#[cfg(test)]
-use std::cell::Cell;
-
-#[cfg(test)]
-thread_local! {
-    static OFFSET_LOOKUPS: Cell<usize> = const { Cell::new(0) };
-}
-
-#[cfg(test)]
-fn reset_offset_lookups() {
-    OFFSET_LOOKUPS.with(|c| c.set(0));
-}
-
-#[cfg(test)]
-fn take_offset_lookups() -> usize {
-    OFFSET_LOOKUPS.with(|c| c.replace(0))
-}
-
 fn offset_to_line(line_starts: &[usize], body_line_offset: u32, byte: usize) -> u32 {
-    #[cfg(test)]
-    OFFSET_LOOKUPS.with(|c| c.set(c.get().saturating_add(1)));
     let idx = line_starts
         .partition_point(|&s| s <= byte)
         .saturating_sub(1);
@@ -1047,27 +1027,25 @@ mod offset_line_tests {
         assert_eq!(offset_to_line(&starts, 1, 5), 3);
     }
 
+    /// Wall-clock ceiling: per-call newline scans over ~170 KB blow past 10 s in
+    /// debug; the indexed lookup finishes in ~100 ms. Call-count tests cannot
+    /// catch that regression (lookups stay linear either way).
     #[test]
-    fn offset_to_line_lookups_scale_linearly_with_input() {
+    fn render_large_page_finishes_under_ceiling() {
+        use std::time::Instant;
         let chunk = "# H\n\nPara with [link](https://ex.com) and a list:\n\n- a\n- b\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\n```\ncode\n```\n\n";
-        let small = chunk.repeat(200);
-        let large = chunk.repeat(400);
+        let src = chunk.repeat(1700);
+        assert!(src.len() >= 160_000, "fixture too small ({})", src.len());
         let index = empty_index();
         let key = empty_key();
-
-        reset_offset_lookups();
-        let _ = render(&small, None, &key, &index, 80);
-        let small_lookups = take_offset_lookups();
-
-        reset_offset_lookups();
-        let _ = render(&large, None, &key, &index, 80);
-        let large_lookups = take_offset_lookups();
-
-        assert!(small_lookups > 0);
-        // doubling input ≤ 2.2× lookups ⇔ 10 * large ≤ 22 * small
+        let _ = render(chunk, None, &key, &index, 80);
+        let start = Instant::now();
+        let doc = render(&src, None, &key, &index, 80);
+        let elapsed = start.elapsed();
+        assert!(!doc.lines.is_empty());
         assert!(
-            large_lookups.saturating_mul(10) <= small_lookups.saturating_mul(22),
-            "doubling input grew offset→line lookups (small={small_lookups}, large={large_lookups}); expected ≤ 2.2×"
+            elapsed.as_secs() < 10,
+            "render took {elapsed:?}, expected < 10s (debug); quadratic offset→line would be ~100s"
         );
     }
 }

@@ -720,6 +720,70 @@ fn toggling_raw_does_not_sync_highlight_whole_page() {
     panic!("background highlight should apply after poll");
 }
 
+fn wait_raw_highlights(app: &mut App) -> usize {
+    for _ in 0..300 {
+        app.poll_watcher();
+        if let crate::tui::page_doc::PageDoc::Raw(doc) = &app.doc
+            && !doc.highlights.is_empty()
+        {
+            return doc.highlights.len();
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    panic!("background highlight should apply after poll");
+}
+
+#[test]
+fn rapid_raw_navigation_applies_only_final_page_highlight() {
+    use crate::tui::highlight::highlight_markdown;
+    let _ = highlight_markdown("warm");
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let _ = draw_app(&mut app, 100, 24);
+    app.update(Action::ToggleViewMode);
+    assert!(matches!(app.doc, crate::tui::page_doc::PageDoc::Raw(_)));
+    // Supersede the landing-page job with a different page before it can apply.
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/design-system/tokens.md"),
+    }));
+    assert!(matches!(app.doc, crate::tui::page_doc::PageDoc::Raw(_)));
+    let expected_lines = app.doc.lines().len();
+    let hl_lines = wait_raw_highlights(&mut app);
+    assert_eq!(
+        hl_lines, expected_lines,
+        "highlights must match the final page, not a superseded request"
+    );
+    assert_eq!(
+        app.navigator.tab().current().page.relative_path,
+        PathBuf::from("architecture/design-system/tokens.md")
+    );
+}
+
+#[test]
+fn superseded_highlight_does_not_overwrite_after_leaving_raw() {
+    use crate::tui::highlight::highlight_markdown;
+    let _ = highlight_markdown("warm");
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let _ = draw_app(&mut app, 100, 24);
+    app.update(Action::ToggleViewMode); // start raw highlight
+    app.update(Action::ToggleViewMode); // leave raw (cancel token)
+    assert!(matches!(
+        app.doc,
+        crate::tui::page_doc::PageDoc::Rendered(_)
+    ));
+    // Give any in-flight worker time to finish and attempt apply.
+    for _ in 0..50 {
+        app.poll_watcher();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(
+        matches!(app.doc, crate::tui::page_doc::PageDoc::Rendered(_)),
+        "superseded highlight must not change the current rendered doc"
+    );
+}
+
 fn link_chain_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/link-chain")
 }

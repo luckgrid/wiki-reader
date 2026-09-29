@@ -602,6 +602,7 @@ impl App {
     }
 
     fn spawn_highlight(&mut self, source: String) {
+        // ponytail: spawn-per-request + token; mailbox worker if rapid nav piles threads
         self.highlight_token = self.highlight_token.wrapping_add(1);
         let token = self.highlight_token;
         let (tx, rx) = mpsc::channel();
