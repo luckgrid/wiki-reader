@@ -34,6 +34,8 @@ pub struct App {
     pub nav_open: bool,
     /// Side nav scroll offset (rows below the search line).
     pub nav_scroll: u16,
+    /// When true, the ⌕ Search… row is the nav cursor (not a `NodeId`).
+    pub nav_on_search: bool,
     /// Raw page lines currently shown.
     pub lines: Vec<String>,
     /// Viewer cursor (0-based source line index).
@@ -71,6 +73,7 @@ impl App {
             focus: FocusPane::Viewer,
             nav_open: true,
             nav_scroll: 0,
+            nav_on_search: false,
             lines: Vec::new(),
             cursor_line: 0,
             scroll: 0,
@@ -100,17 +103,16 @@ impl App {
     /// Pure state update (unit-testable without a terminal).
     pub fn update(&mut self, action: Action) {
         match action {
-            Action::None => {}
             Action::Quit => self.quit = true,
             Action::ToggleNav => {
                 self.nav_open = !self.nav_open;
             }
-            Action::PrevPage => {
-                let effects = self.navigator.go_prev(self.view_state());
-                self.apply_effects(effects);
-            }
-            Action::NextPage => {
-                let effects = self.navigator.go_next(self.view_state());
+            Action::PrevPage | Action::NextPage => {
+                let effects = if matches!(action, Action::PrevPage) {
+                    self.navigator.go_prev(self.view_state())
+                } else {
+                    self.navigator.go_next(self.view_state())
+                };
                 self.apply_effects(effects);
             }
             Action::Back => {
@@ -156,6 +158,150 @@ impl App {
                 let max = u32::try_from(self.lines.len().saturating_sub(1)).unwrap_or(u32::MAX);
                 self.cursor_line = line.min(max);
                 self.focus = FocusPane::Viewer;
+            }
+            Action::NavStepUp => self.nav_step(-1),
+            Action::NavStepDown => self.nav_step(1),
+            Action::NavJumpUp => self.nav_jump_group(-1),
+            Action::NavJumpDown => self.nav_jump_group(1),
+            Action::NavExpand => self.nav_expand(),
+            Action::NavCollapse => self.nav_collapse(),
+            Action::NavActivate => self.nav_activate(),
+            // Viewer keys handled in P1-08b/c (wired in keymap already).
+            Action::ViewerUp
+            | Action::ViewerDown
+            | Action::ViewerBlockUp
+            | Action::ViewerBlockDown
+            | Action::ViewerPageUp
+            | Action::ViewerPageDown
+            | Action::ViewerHome
+            | Action::ViewerEnd
+            | Action::ViewerTab
+            | Action::ViewerBackTab
+            | Action::None => {}
+        }
+    }
+
+    fn nav_rows(&self) -> Vec<side_nav::NavRow> {
+        side_nav::visible_rows(&self.navigator.nav().tree, &self.navigator.nav().expanded)
+    }
+
+    fn nav_cursor_index(&self, rows: &[side_nav::NavRow]) -> Option<usize> {
+        if self.nav_on_search {
+            return None; // search is before rows
+        }
+        let cur = self.navigator.nav().cursor.as_ref()?;
+        rows.iter().position(|r| &r.id == cur)
+    }
+
+    fn nav_step(&mut self, dir: i32) {
+        let rows = self.nav_rows();
+        // Positions: 0 = search, 1..len = rows[0..]
+        let len = rows.len() + 1;
+        let cur = if self.nav_on_search {
+            0usize
+        } else {
+            self.nav_cursor_index(&rows).map_or(1, |i| i + 1)
+        };
+        let next = if dir < 0 {
+            cur.saturating_sub(1)
+        } else {
+            (cur + 1).min(len.saturating_sub(1))
+        };
+        if next == 0 {
+            self.nav_on_search = true;
+        } else if let Some(row) = rows.get(next - 1) {
+            self.nav_on_search = false;
+            self.navigator.set_nav_cursor(row.id.clone());
+        }
+    }
+
+    fn nav_jump_group(&mut self, dir: i32) {
+        let rows = self.nav_rows();
+        let cur = if self.nav_on_search {
+            0usize
+        } else {
+            self.nav_cursor_index(&rows).map_or(1, |i| i + 1)
+        };
+        if dir < 0 {
+            if cur <= 1 {
+                self.nav_on_search = true;
+                return;
+            }
+            for pos in (1..cur).rev() {
+                if rows[pos - 1].is_group {
+                    self.nav_on_search = false;
+                    self.navigator.set_nav_cursor(rows[pos - 1].id.clone());
+                    return;
+                }
+            }
+            self.nav_on_search = true;
+        } else {
+            for (idx, row) in rows.iter().enumerate() {
+                let pos = idx + 1;
+                if pos <= cur {
+                    continue;
+                }
+                if row.is_group {
+                    self.nav_on_search = false;
+                    self.navigator.set_nav_cursor(row.id.clone());
+                    return;
+                }
+            }
+        }
+    }
+
+    fn nav_expand(&mut self) {
+        if self.nav_on_search {
+            return;
+        }
+        let Some(id) = self.navigator.nav().cursor.clone() else {
+            return;
+        };
+        if matches!(id, NodeId::Group(_) | NodeId::OtherPages) {
+            self.navigator.set_group_expanded(id, true);
+        }
+    }
+
+    fn nav_collapse(&mut self) {
+        if self.nav_on_search {
+            return;
+        }
+        let Some(id) = self.navigator.nav().cursor.clone() else {
+            return;
+        };
+        match &id {
+            NodeId::Group(_) | NodeId::OtherPages
+                if self.navigator.nav().expanded.contains(&id) =>
+            {
+                self.navigator.set_group_expanded(id, false);
+            }
+            NodeId::Page(key) => {
+                if let Some(parent) = key.relative_path.parent().filter(|p| !p.as_os_str().is_empty()) {
+                    self.navigator
+                        .set_nav_cursor(NodeId::Group(parent.to_path_buf()));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn nav_activate(&mut self) {
+        if self.nav_on_search {
+            self.message = "search: coming in P1-10".into();
+            return;
+        }
+        let Some(id) = self.navigator.nav().cursor.clone() else {
+            return;
+        };
+        match id {
+            NodeId::Page(key) => {
+                self.navigator.set_nav_cursor(NodeId::Page(key.clone()));
+                let effects = self.navigator.go_to_page(key, self.view_state());
+                self.apply_effects(effects);
+            }
+            other => {
+                let open = !self.navigator.nav().expanded.contains(&other);
+                self.navigator.set_group_expanded(other, open);
             }
         }
     }
@@ -289,7 +435,9 @@ fn run_loop(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
         if event::poll(std::time::Duration::from_millis(250))? {
             match event::read()? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => {
-                    if let Some(action) = keymap::map_global(key) {
+                    let action =
+                        keymap::map_global(key).or_else(|| keymap::map_pane(key, app.focus));
+                    if let Some(action) = action {
                         let nav_action = matches!(
                             action,
                             Action::GoToPage(_) | Action::PrevPage | Action::NextPage
@@ -642,5 +790,45 @@ mod tests {
                 .expanded
                 .contains(&NodeId::Group(PathBuf::from("architecture/design-system")))
         );
+    }
+
+    #[test]
+    fn focus_stale_cursor_round_trip() {
+        let root = fixture();
+        let mut app = App::new(&root).unwrap();
+        app.update(Action::FocusNav);
+        app.update(Action::NavStepDown);
+        let remembered = app.navigator.nav().cursor.clone();
+        app.update(Action::FocusViewer);
+        app.update(Action::FocusNav);
+        assert_eq!(app.navigator.nav().cursor, remembered);
+
+        app.update(Action::FocusViewer);
+        app.update(Action::NextPage);
+        app.update(Action::NextPage);
+        let current = app.navigator.tab().current().page.clone();
+        app.update(Action::FocusNav);
+        assert_eq!(
+            app.navigator.nav().cursor,
+            Some(NodeId::Page(current)),
+            "stale-cursor should jump to current page"
+        );
+    }
+
+    #[test]
+    fn nav_k4_steps_and_activate() {
+        let root = fixture();
+        let mut app = App::new(&root).unwrap();
+        app.update(Action::FocusNav);
+        app.nav_on_search = true;
+        app.update(Action::NavStepDown);
+        assert!(!app.nav_on_search);
+        app.update(Action::NavJumpDown);
+        let id = app.navigator.nav().cursor.clone().unwrap();
+        assert!(matches!(id, NodeId::Group(_)));
+        app.update(Action::NavExpand);
+        assert!(app.navigator.nav().expanded.contains(&id));
+        app.update(Action::NavActivate);
+        assert!(!app.navigator.nav().expanded.contains(&id));
     }
 }
