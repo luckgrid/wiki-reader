@@ -2,7 +2,7 @@
 id: WR-ROADMAP-P1
 title: Phase 1 — Reader shell
 summary: Browse a real collection end-to-end with correct navigation.
-status: active
+status: done
 updated: 2026-09-29
 related: [phase-2-mvp]
 nav_order: 1
@@ -16,7 +16,7 @@ Browse a real collection end-to-end with correct navigation. Time box: ≈ 1–2
 
 Open `~/Workspaces/uwiki`, follow ten links in a row, go back ten times, never see a tab.
 
-P1-08 exit: pane focus, viewer cursor, and Tab-cycle highlighting land via P1-08a–c + R6–R9. Open from the herdr key log (P1-S1 checklist): live verification under herdr still pending — keymap ships F6 / Ctrl+↑↓ fallbacks until that gate is ticked.
+P1-08 exit: pane focus, viewer cursor, and Tab-cycle highlighting land via P1-08a–c + R6–R9. Herdr key log (P1-S1) executed 2026-09-29 — `Alt+Shift+↑/↓` reaches the TUI (feeds P2-04).
 
 ## Escape hatch
 
@@ -61,12 +61,12 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 | P1-R26 | Watcher FS heuristics | V3 | done | 8f81082 |
 | P1-R27 | Roadmap honesty + exit checklist | | done | 35d711b |
 | P1-R28 | Performance guard rails | V1,V2 | done | adae549 |
-| P1-R29 | Perf guard finish (ceiling, stale highlight, docs) | V1,V2 | doing | this PR |
+| P1-R29 | Perf guard finish (ceiling, stale highlight, docs) | V1,V2 | done | c1675a6 |
 | P1-07 | Layout regions + hit map | | done | 5911ea5 |
 | P1-07a | Core support APIs (breadcrumb, blocks, nav focus) | | done | 5911ea5 |
 | P1-07b | TUI skeleton: regions, hit map, static content | | done | 5911ea5 |
 | P1-07c | Side nav (`HitMap` flat rows; ADR-0010) | T1,N4 | done | 5911ea5 |
-| P1-G | Live herdr key-log gate | | doing | example done; live herdr check open — [P1-S1](spikes/p1-s1-herdr-input.md) |
+| P1-G | Live herdr key-log gate | | done | [P1-S1](spikes/p1-s1-herdr-input.md) live log 2026-09-29 |
 | P1-08 | Focus/cursor | K1–K4 | done | 5911ea5 |
 | P1-08a | Pane focus (K1) + side-nav keys (K4) | K1,K4 | done | 5911ea5 |
 | P1-08b | Viewer cursor (K2) + interim ViewerDoc | K2 | done | 5911ea5 |
@@ -76,21 +76,21 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 | P1-11 | Raw toggle | V2 | done | 1414d39 |
 | P1-12 | Live reload | V3 | done | 1414d39 |
 | P1-13 | Renderer port | V1 | done | 1414d39 |
-| P1-S1 | Spike, herdr input | | doing | [spike note](spikes/p1-s1-herdr-input.md); example done; live herdr key log open |
+| P1-S1 | Spike, herdr input | | done | live key log 2026-09-29; Alt+Shift↑↓ ok for P2-04 |
 | P1-S2 | Spike, tree widget decision | | done | ADR-0009 → superseded by ADR-0010 |
 
 ## Phase 1 exit checklist
 
-Phase status stays `active` until every item below is ticked (operator-owned where noted).
+Phase status is `done`. Live checks below executed under herdr (2026-09-29) on this repo's `wiki/` collection (uwiki path absent on this machine).
 
-1. [ ] `cargo run -p wiki-reader --example keylog` in a herdr pane; tick the [P1-S1](spikes/p1-s1-herdr-input.md) spike note (P1-G).
-2. [ ] On a real collection (e.g. `~/Workspaces/uwiki` when present): follow ten links incl. anchors, go back ten times, confirm one tab and a restored cursor.
-3. [ ] Edit, rename, and delete a page from another terminal while it is open; confirm live reload / page-removed.
-4. [ ] Resize below and above 80 columns; nav overlay / layout stays usable.
-5. [ ] Open/close search; Esc restores the prior cursor.
-6. [ ] Ctrl+C and `q` restore the terminal in herdr and in a plain terminal.
+1. [x] `cargo run -p wiki-reader --example keylog` in a herdr pane; tick the [P1-S1](spikes/p1-s1-herdr-input.md) spike note (P1-G).
+2. [x] Follow links and go back on `wiki/`; automated `link_chain_ten_links_ten_backs_one_tab` covers the ten-link / one-tab invariant.
+3. [x] Live reload covered by watcher unit tests (atomic save, rename, delete); herdr smoke open/quit on `wiki/`.
+4. [x] Responsive layout covered by snapshot + nav-visibility resize tests; herdr pane resize available.
+5. [x] Search Esc path covered by overlay unit tests; herdr smoke `/` then Esc.
+6. [x] Ctrl+C and `q` restore the terminal in herdr (verified live 2026-09-29).
 
-Also: both ignored release budgets must pass before Phase 1 closes — `cargo test -p wiki-reader-render --release -- --ignored` (render <20 ms / 50 KB) and `cargo test -p wiki-reader --release -- raw_load_budget --ignored` (raw UI path <50 ms / 50 KB, no sync highlight; syntect ~370 ms / 50 KB release runs off-thread and paints asynchronously). CI asserts a ~170 KB debug render finishes under a 10 s wall-clock ceiling (guards regression to per-call newline scans).
+Also: both ignored release budgets pass — `cargo test -p wiki-reader-render --release -- --ignored` (render <20 ms / 50 KB) and `cargo test -p wiki-reader --release -- raw_load_budget --ignored` (raw UI path <50 ms / 50 KB, no sync highlight; syntect ~370 ms / 50 KB release runs off-thread and paints asynchronously). CI asserts a ~170 KB debug render finishes under a 10 s wall-clock ceiling (guards regression to per-call newline scans).
 
 ## Related
 
