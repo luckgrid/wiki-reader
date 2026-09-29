@@ -85,10 +85,14 @@ pub struct App {
     pub(crate) watcher: Option<wiki_reader_core::watch::Watcher>,
     /// In-flight background index rebuild.
     rebuild_rx: Option<Receiver<Result<Index, String>>>,
+    /// Dirty arrived while a rebuild was in flight — start another when done.
+    rebuild_pending: bool,
     /// Sticky "page removed" until the user navigates elsewhere.
     pub(crate) page_missing: bool,
-    /// In-page search match display lines (after opening a text hit).
+    /// In-page search match **source** lines (after opening a text hit).
     pub(crate) search_matches: Vec<u32>,
+    /// Page that `search_matches` belong to (clear on navigate away).
+    search_match_page: Option<PageKey>,
     /// Index into `search_matches`.
     pub(crate) search_match_idx: usize,
     /// Display line highlighted as the current search match.
@@ -138,8 +142,10 @@ impl App {
             search: None,
             watcher,
             rebuild_rx: None,
+            rebuild_pending: false,
             page_missing: false,
             search_matches: Vec::new(),
+            search_match_page: None,
             search_match_idx: 0,
             match_highlight: None,
         };
@@ -418,8 +424,68 @@ impl App {
 
     fn clear_search_matches(&mut self) {
         self.search_matches.clear();
+        self.search_match_page = None;
         self.search_match_idx = 0;
         self.match_highlight = None;
+    }
+
+    /// Dedupe consecutive source hits that collapse to the same display line.
+    fn store_search_matches(&mut self, sources: Vec<u32>, prefer_src: u32) {
+        let mut deduped = Vec::new();
+        let mut last_display = None;
+        for src in sources {
+            let display = self.doc.display_cursor(src);
+            if last_display == Some(display) {
+                continue;
+            }
+            last_display = Some(display);
+            deduped.push(src);
+        }
+        let start_idx = deduped
+            .iter()
+            .position(|&s| s == prefer_src)
+            .or_else(|| {
+                let want = self.doc.display_cursor(prefer_src);
+                deduped
+                    .iter()
+                    .position(|&s| self.doc.display_cursor(s) == want)
+            })
+            .unwrap_or(0);
+        self.search_matches = deduped;
+        self.search_match_page = Some(self.navigator.tab().current().page.clone());
+        self.search_match_idx = start_idx.min(self.search_matches.len().saturating_sub(1));
+        self.focus_current_search_match();
+    }
+
+    fn focus_current_search_match(&mut self) {
+        let Some(&src) = self.search_matches.get(self.search_match_idx) else {
+            self.match_highlight = None;
+            return;
+        };
+        let display = self.doc.display_cursor(src);
+        self.match_highlight = Some(display);
+        self.cursor_line = display;
+        self.scroll = display;
+        self.ensure_cursor_visible();
+        self.message = format!(
+            "{}/{}",
+            self.search_match_idx.saturating_add(1),
+            self.search_matches.len()
+        );
+    }
+
+    /// Remap match highlight after raw/rendered toggle, resize, or reload.
+    fn remap_search_matches(&mut self) {
+        if self.search_matches.is_empty() {
+            self.match_highlight = None;
+            return;
+        }
+        self.search_match_idx = self
+            .search_match_idx
+            .min(self.search_matches.len().saturating_sub(1));
+        if let Some(&src) = self.search_matches.get(self.search_match_idx) {
+            self.match_highlight = Some(self.doc.display_cursor(src));
+        }
     }
 
     fn cycle_search_match(&mut self, delta: i32) {
@@ -433,17 +499,7 @@ impl App {
         let cur = i32::try_from(self.search_match_idx).unwrap_or(0);
         let next = (cur + delta).rem_euclid(n);
         self.search_match_idx = usize::try_from(next).unwrap_or(0);
-        if let Some(&line) = self.search_matches.get(self.search_match_idx) {
-            self.match_highlight = Some(line);
-            self.cursor_line = line;
-            self.scroll = line;
-            self.ensure_cursor_visible();
-            self.message = format!(
-                "{}/{}",
-                self.search_match_idx.saturating_add(1),
-                self.search_matches.len()
-            );
-        }
+        self.focus_current_search_match();
     }
 
     fn search_activate(&mut self, index: Option<usize>) {
@@ -468,37 +524,18 @@ impl App {
                     return;
                 };
                 let key = hit.page.clone();
+                let prefer = hit.line.saturating_sub(1);
                 let page_hits: Vec<u32> = overlay
                     .text_hits
                     .iter()
                     .filter(|h| h.page == key)
                     .map(|h| h.line.saturating_sub(1))
                     .collect();
-                let start_idx = page_hits
-                    .iter()
-                    .position(|&l| l == hit.line.saturating_sub(1))
-                    .unwrap_or(0);
                 self.close_search(true);
                 self.focus = FocusPane::Viewer;
                 let effects = self.navigator.go_to_page(key, self.view_state());
                 self.apply_effects(effects);
-                // Convert source lines → display after load.
-                self.search_matches = page_hits
-                    .iter()
-                    .map(|&src| self.doc.display_cursor(src))
-                    .collect();
-                self.search_match_idx = start_idx.min(self.search_matches.len().saturating_sub(1));
-                if let Some(&line) = self.search_matches.get(self.search_match_idx) {
-                    self.match_highlight = Some(line);
-                    self.cursor_line = line;
-                    self.scroll = line;
-                    self.ensure_cursor_visible();
-                    self.message = format!(
-                        "{}/{}",
-                        self.search_match_idx.saturating_add(1),
-                        self.search_matches.len()
-                    );
-                }
+                self.store_search_matches(page_hits, prefer);
             }
         }
     }
@@ -517,35 +554,59 @@ impl App {
 
     /// Poll the filesystem watcher and reindex when dirty (rebuild off UI thread).
     pub(crate) fn poll_watcher(&mut self) {
-        if let Some(rx) = &self.rebuild_rx {
-            match rx.try_recv() {
-                Ok(Ok(index)) => {
-                    self.rebuild_rx = None;
-                    let view = self.view_state();
-                    let effects = self.navigator.reindex(index, view);
-                    self.apply_effects(effects);
-                }
-                Ok(Err(err)) => {
-                    self.rebuild_rx = None;
-                    self.message = format!("reindex failed: {err}");
-                }
-                Err(TryRecvError::Empty) => {}
-                Err(TryRecvError::Disconnected) => {
-                    self.rebuild_rx = None;
-                }
+        let finished = self.poll_rebuild_rx();
+        if let Some(watcher) = self.watcher.as_ref() {
+            let poll = watcher.poll_dirty();
+            if poll.errors > 0 {
+                self.message = format!("live reload: {} watch error(s)", poll.errors);
+            }
+            self.note_watcher_dirty(poll.dirty);
+        }
+        if finished && self.rebuild_pending && self.rebuild_rx.is_none() {
+            self.rebuild_pending = false;
+            self.spawn_rebuild();
+        }
+    }
+
+    /// Apply a completed rebuild if ready. Returns true when a rebuild just finished.
+    fn poll_rebuild_rx(&mut self) -> bool {
+        let Some(rx) = &self.rebuild_rx else {
+            return false;
+        };
+        match rx.try_recv() {
+            Ok(Ok(index)) => {
+                self.rebuild_rx = None;
+                let view = self.view_state();
+                let effects = self.navigator.reindex(index, view);
+                self.apply_effects(effects);
+                true
+            }
+            Ok(Err(err)) => {
+                self.rebuild_rx = None;
+                self.message = format!("reindex failed: {err}");
+                true
+            }
+            Err(TryRecvError::Empty) => false,
+            Err(TryRecvError::Disconnected) => {
+                self.rebuild_rx = None;
+                true
             }
         }
+    }
 
-        let Some(watcher) = self.watcher.as_ref() else {
-            return;
-        };
-        let poll = watcher.poll_dirty();
-        if poll.errors > 0 {
-            self.message = format!("live reload: {} watch error(s)", poll.errors);
-        }
-        if !poll.dirty || self.rebuild_rx.is_some() {
+    /// Record dirty: start a rebuild, or queue one if already rebuilding.
+    fn note_watcher_dirty(&mut self, dirty: bool) {
+        if !dirty {
             return;
         }
+        if self.rebuild_rx.is_some() {
+            self.rebuild_pending = true;
+            return;
+        }
+        self.spawn_rebuild();
+    }
+
+    fn spawn_rebuild(&mut self) {
         let provider = self.provider.clone();
         let (tx, rx) = mpsc::channel();
         self.rebuild_rx = Some(rx);
@@ -560,8 +621,14 @@ impl App {
         for effect in effects {
             match effect {
                 Effect::LoadPage(key) => {
+                    if self.search_match_page.as_ref() != Some(&key) {
+                        self.clear_search_matches();
+                    }
                     self.page_missing = false;
                     self.load_page(&key);
+                    if self.search_match_page.as_ref() == Some(&key) {
+                        self.remap_search_matches();
+                    }
                 }
                 Effect::RevealInTree(page) => {
                     self.reveal_page_in_nav(&page);
@@ -680,6 +747,7 @@ impl App {
                 let max = u32::try_from(self.doc.lines().len().saturating_sub(1)).unwrap_or(0);
                 self.cursor_line = self.cursor_line.min(max);
                 self.scroll = self.scroll.min(max);
+                self.remap_search_matches();
                 self.ensure_cursor_visible();
             }
             Err(err) => {

@@ -824,6 +824,102 @@ fn page_removed_placeholder_survives_keypress() {
 }
 
 #[test]
+fn dirty_during_rebuild_queues_second() {
+    use std::sync::mpsc;
+    use wiki_reader_core::Index;
+
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let (tx, rx) = mpsc::channel();
+    app.rebuild_rx = Some(rx);
+    app.note_watcher_dirty(true);
+    assert!(app.rebuild_pending, "dirty while rebuilding must queue");
+    assert!(
+        app.rebuild_rx.is_some(),
+        "must not spawn a second channel yet"
+    );
+
+    let index = Index::build(&app.provider).unwrap();
+    tx.send(Ok(index)).unwrap();
+    app.poll_watcher();
+    assert!(
+        !app.rebuild_pending,
+        "pending flag cleared when second rebuild starts"
+    );
+    assert!(
+        app.rebuild_rx.is_some(),
+        "second rebuild must start after the first finishes"
+    );
+    if let Some(rx) = app.rebuild_rx.take() {
+        let _ = rx.recv_timeout(std::time::Duration::from_secs(5));
+    }
+}
+
+#[test]
+fn search_matches_survive_toggle_and_resize() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::OpenSearch);
+    app.update(Action::SearchToggleMode); // Text
+    for c in "token".chars() {
+        app.update(Action::SearchChar(c));
+    }
+    assert!(app.search.as_ref().is_some_and(|s| !s.text_hits.is_empty()));
+    app.update(Action::SearchActivate);
+    assert!(!app.search_matches.is_empty());
+    let sources = app.search_matches.clone();
+    let idx = app.search_match_idx;
+    let before = app.search_matches[idx];
+
+    app.update(Action::ToggleViewMode);
+    assert_eq!(app.search_matches, sources, "source matches must persist");
+    assert_eq!(app.search_match_idx, idx);
+    assert_eq!(
+        app.match_highlight,
+        Some(app.doc.display_cursor(before)),
+        "highlight remapped to display after toggle"
+    );
+    app.update(Action::SearchNextMatch);
+    let after_n = app.search_matches[app.search_match_idx];
+    assert_eq!(
+        app.match_highlight,
+        Some(app.doc.display_cursor(after_n)),
+        "n lands on remapped display line"
+    );
+
+    // Resize re-layout keeps source matches.
+    app.layout_width = 0;
+    app.ensure_layout_width(40);
+    assert_eq!(app.search_matches, sources);
+    assert_eq!(
+        app.match_highlight,
+        Some(
+            app.doc
+                .display_cursor(app.search_matches[app.search_match_idx])
+        )
+    );
+}
+
+#[test]
+fn search_matches_dedupe_collapsed_display_lines() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    // Force two source lines that map to the same display line.
+    app.search_matches = vec![0, 0];
+    app.search_match_page = Some(app.navigator.tab().current().page.clone());
+    app.store_search_matches(vec![5, 6, 6, 7], 5);
+    let displays: Vec<u32> = app
+        .search_matches
+        .iter()
+        .map(|&s| app.doc.display_cursor(s))
+        .collect();
+    assert!(
+        displays.windows(2).all(|w| w[0] != w[1]),
+        "consecutive identical display lines must be deduped: {displays:?}"
+    );
+}
+
+#[test]
 fn reindex_anchored_keeps_cursor_via_scroll_none() {
     let root = fixture();
     let mut app = App::new(&root).unwrap();
