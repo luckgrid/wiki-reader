@@ -139,6 +139,7 @@ pub fn render(
         state.handle(event, src, src_end);
     }
     state.finish_block();
+    state.append_backlinks(from);
 
     if state.styled.is_empty() {
         state.push_empty(body_line_offset.max(1));
@@ -699,6 +700,66 @@ impl<'a> LayoutState<'a> {
     fn finish_block(&mut self) {
         if !self.cur.is_empty() {
             self.commit_line(self.cur_src);
+        }
+    }
+
+    /// Append a "Linked from" section (B1). One entry per source page, sorted by
+    /// path, excluding self. Omitted when empty. Raw mode never calls this.
+    fn append_backlinks(&mut self, page: &PageKey) {
+        let mut sources: Vec<&PageKey> = self
+            .index
+            .backlinks(page)
+            .into_iter()
+            .filter_map(|i| self.index.edges.get(i))
+            .map(|e| &e.from)
+            .filter(|from| *from != page)
+            .collect();
+        sources.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+        sources.dedup();
+        if sources.is_empty() {
+            return;
+        }
+        let src = self.styled.last().map_or(1, |l| l.source_line.max(1));
+        self.finish_block();
+        self.commit_line(src); // blank gap
+        self.mark_block(src);
+        let heading_line = u32::try_from(self.styled.len()).unwrap_or(0);
+        self.push_span("## Linked from".into(), StyleKind::Heading(2), src);
+        self.commit_line(src);
+        self.headings.push((
+            unique_slug("linked-from", &mut self.used_slugs),
+            heading_line.saturating_add(1),
+        ));
+        for from in sources {
+            let title = self.index.pages.get(from).map_or_else(
+                || {
+                    from.relative_path.file_stem().map_or_else(
+                        || from.relative_path.display().to_string(),
+                        |s| s.to_string_lossy().into_owned(),
+                    )
+                },
+                |p| p.title.clone(),
+            );
+            let target = format!(
+                "/{}",
+                from.relative_path.to_string_lossy().replace('\\', "/")
+            );
+            self.push_span("• ".into(), StyleKind::Plain, src);
+            let start_col = u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(0);
+            let line = u32::try_from(self.styled.len()).unwrap_or(0);
+            self.push_span(title, StyleKind::Link, src);
+            let end_col =
+                u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(start_col);
+            let mut segments = Vec::new();
+            coalesce_link_segment(&mut segments, line, start_col, end_col);
+            self.links.push(LinkSpan {
+                id: LinkId(self.link_id),
+                raw_target: target,
+                class: LinkClass::Internal,
+                segments,
+            });
+            self.link_id = self.link_id.saturating_add(1);
+            self.commit_line(src);
         }
     }
 

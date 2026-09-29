@@ -385,6 +385,60 @@ mod tests {
         );
     }
 
+    #[test]
+    fn linked_from_lists_tokens_on_design_system() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/worked-example");
+        let provider = FsProvider::open(&root).unwrap();
+        let index = wiki_reader_core::Index::build(&provider).unwrap();
+        let key = PageKey {
+            collection_id: index.collection_id.clone(),
+            relative_path: std::path::PathBuf::from("architecture/design-system/README.md"),
+        };
+        let src = provider.read(&key).unwrap();
+        let page = index.pages.get(&key);
+        let doc = render(&src, page, &key, &index, 80);
+        let section = doc
+            .lines
+            .iter()
+            .position(|l| l.contains("Linked from"))
+            .expect("Linked from heading");
+        let joined = doc.lines[section..].join("\n");
+        assert!(
+            joined.contains("Token") || joined.contains("tokens"),
+            "expected tokens backlink label in {joined:?}"
+        );
+        let bl = doc
+            .links
+            .iter()
+            .find(|s| s.raw_target == "/architecture/design-system/tokens.md")
+            .expect("root-relative tokens backlink span");
+        assert_eq!(bl.class, LinkClass::Internal);
+        // Backlink segments land on/after the Linked from heading line.
+        let bl_line = bl.segments[0].0 as usize;
+        assert!(
+            bl_line > section,
+            "backlink after heading ({bl_line} > {section})"
+        );
+    }
+
+    #[test]
+    fn linked_from_omitted_when_no_backlinks() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/worked-example");
+        let provider = FsProvider::open(&root).unwrap();
+        let index = wiki_reader_core::Index::build(&provider).unwrap();
+        let key = PageKey {
+            collection_id: index.collection_id.clone(),
+            relative_path: std::path::PathBuf::from("decisions/0002-adapters.md"),
+        };
+        let src = provider.read(&key).unwrap();
+        let page = index.pages.get(&key);
+        let doc = render(&src, page, &key, &index, 80);
+        assert!(
+            !doc.lines.iter().any(|l| l.contains("Linked from")),
+            "page with no inbound edges must not emit Linked from"
+        );
+    }
+
     /// Manual / release budget: `cargo test -p wiki-reader-render --release -- --ignored`
     #[test]
     #[ignore = "release budget; run with --ignored --release"]
