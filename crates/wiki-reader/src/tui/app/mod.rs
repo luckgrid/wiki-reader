@@ -1,6 +1,7 @@
 //! App shell: state, update, render, event loop.
 
 use std::path::Path;
+use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use wiki_reader_core::Index;
 use wiki_reader_core::nav::{Effect, NavStop, Navigator, NodeId, ViewState};
@@ -30,6 +31,7 @@ mod tests;
 pub use events::run;
 
 /// Owned application state.
+#[allow(clippy::struct_excessive_bools)] // pane/nav/quit/missing flags; not a state machine yet
 pub struct App {
     /// Navigation session.
     pub navigator: Navigator,
@@ -81,6 +83,16 @@ pub struct App {
     pub search: Option<SearchOverlay>,
     /// Optional filesystem watcher (live reload).
     pub(crate) watcher: Option<wiki_reader_core::watch::Watcher>,
+    /// In-flight background index rebuild.
+    rebuild_rx: Option<Receiver<Result<Index, String>>>,
+    /// Sticky "page removed" until the user navigates elsewhere.
+    pub(crate) page_missing: bool,
+    /// In-page search match display lines (after opening a text hit).
+    pub(crate) search_matches: Vec<u32>,
+    /// Index into `search_matches`.
+    pub(crate) search_match_idx: usize,
+    /// Display line highlighted as the current search match.
+    pub(crate) match_highlight: Option<u32>,
 }
 
 impl App {
@@ -94,6 +106,10 @@ impl App {
         let provider = FsProvider::open(root)?;
         let index = Index::build(&provider)?;
         let navigator = Navigator::new(index, None)?;
+        let (watcher, watch_msg) = match wiki_reader_core::watch::Watcher::start(root) {
+            Ok(w) => (Some(w), String::new()),
+            Err(err) => (None, format!("live reload off: {err}")),
+        };
         let mut app = Self {
             navigator,
             provider,
@@ -108,7 +124,7 @@ impl App {
             cursor_line: 0,
             scroll: 0,
             focused_item: None,
-            message: String::new(),
+            message: watch_msg,
             // ponytail: defaults until first draw; layout overwrites each frame
             viewer_rows: 20,
             nav_viewport: 20,
@@ -120,7 +136,12 @@ impl App {
             pending_external: None,
             opener: Box::new(SystemOpener),
             search: None,
-            watcher: wiki_reader_core::watch::Watcher::start(root).ok(),
+            watcher,
+            rebuild_rx: None,
+            page_missing: false,
+            search_matches: Vec::new(),
+            search_match_idx: 0,
+            match_highlight: None,
         };
         let page = app.navigator.tab().current().page.clone();
         app.apply_effects(vec![
@@ -142,11 +163,45 @@ impl App {
     #[allow(clippy::too_many_lines)] // split in P1-R10
     pub fn update(&mut self, action: Action) {
         // Transient notices clear on the next key/action (Tab keeps focus target).
+        // Sticky "page removed" survives until real navigation.
+        if !self.page_missing
+            && !matches!(
+                action,
+                Action::None
+                    | Action::ViewerTab
+                    | Action::ViewerBackTab
+                    | Action::SearchNextMatch
+                    | Action::SearchPrevMatch
+            )
+        {
+            self.message.clear();
+        }
+        // Clear match highlight on any cursor move outside n/N cycling.
         if !matches!(
             action,
-            Action::None | Action::ViewerTab | Action::ViewerBackTab
+            Action::SearchNextMatch | Action::SearchPrevMatch | Action::None
+        ) && matches!(
+            action,
+            Action::ViewerUp
+                | Action::ViewerDown
+                | Action::ViewerBlockUp
+                | Action::ViewerBlockDown
+                | Action::ViewerPageUp
+                | Action::ViewerPageDown
+                | Action::ViewerHome
+                | Action::ViewerEnd
+                | Action::SetCursorLine(_)
+                | Action::GoToPage(_)
+                | Action::Back
+                | Action::Forward
+                | Action::PrevPage
+                | Action::NextPage
+                | Action::ViewerTab
+                | Action::ViewerBackTab
+                | Action::FollowLinkId(_)
+                | Action::ViewerActivate
         ) {
-            self.message.clear();
+            self.clear_search_matches();
         }
         match action {
             Action::Quit => self.quit = true,
@@ -186,7 +241,10 @@ impl App {
             Action::SearchBackspace => self.search_backspace(),
             Action::SearchSelectDelta(d) => self.search_select(d),
             Action::SearchToggleMode => self.search_toggle_mode(),
-            Action::SearchActivate => self.search_activate(),
+            Action::SearchActivate => self.search_activate(None),
+            Action::SearchActivateIndex(i) => self.search_activate(Some(i)),
+            Action::SearchNextMatch => self.cycle_search_match(1),
+            Action::SearchPrevMatch => self.cycle_search_match(-1),
             Action::FocusNav => {
                 if self.focus != FocusPane::Nav {
                     self.navigator.nav_focus_gained();
@@ -358,35 +416,89 @@ impl App {
         self.search_refresh();
     }
 
-    fn search_activate(&mut self) {
+    fn clear_search_matches(&mut self) {
+        self.search_matches.clear();
+        self.search_match_idx = 0;
+        self.match_highlight = None;
+    }
+
+    fn cycle_search_match(&mut self, delta: i32) {
+        if self.search_matches.is_empty() {
+            return;
+        }
+        let n = i32::try_from(self.search_matches.len()).unwrap_or(0);
+        if n == 0 {
+            return;
+        }
+        let cur = i32::try_from(self.search_match_idx).unwrap_or(0);
+        let next = (cur + delta).rem_euclid(n);
+        self.search_match_idx = usize::try_from(next).unwrap_or(0);
+        if let Some(&line) = self.search_matches.get(self.search_match_idx) {
+            self.match_highlight = Some(line);
+            self.cursor_line = line;
+            self.scroll = line;
+            self.ensure_cursor_visible();
+            self.message = format!(
+                "{}/{}",
+                self.search_match_idx.saturating_add(1),
+                self.search_matches.len()
+            );
+        }
+    }
+
+    fn search_activate(&mut self, index: Option<usize>) {
         let Some(overlay) = self.search.as_ref() else {
             return;
         };
+        let selected = index.unwrap_or(overlay.selected);
         match overlay.mode {
             SearchMode::Pages => {
-                let Some(hit) = overlay.page_hits.get(overlay.selected) else {
+                let Some(hit) = overlay.page_hits.get(selected) else {
                     return;
                 };
                 let key = hit.page.clone();
                 self.close_search(true);
+                self.clear_search_matches();
                 self.focus = FocusPane::Viewer;
                 let effects = self.navigator.go_to_page(key, self.view_state());
                 self.apply_effects(effects);
             }
             SearchMode::Text => {
-                let Some(hit) = overlay.text_hits.get(overlay.selected) else {
+                let Some(hit) = overlay.text_hits.get(selected) else {
                     return;
                 };
                 let key = hit.page.clone();
-                let line = hit.line.saturating_sub(1);
+                let page_hits: Vec<u32> = overlay
+                    .text_hits
+                    .iter()
+                    .filter(|h| h.page == key)
+                    .map(|h| h.line.saturating_sub(1))
+                    .collect();
+                let start_idx = page_hits
+                    .iter()
+                    .position(|&l| l == hit.line.saturating_sub(1))
+                    .unwrap_or(0);
                 self.close_search(true);
                 self.focus = FocusPane::Viewer;
                 let effects = self.navigator.go_to_page(key, self.view_state());
                 self.apply_effects(effects);
-                self.cursor_line = self.doc.display_cursor(line);
-                self.scroll = self.cursor_line;
-                self.ensure_cursor_visible();
-                self.message = format!("match line {}", line.saturating_add(1));
+                // Convert source lines → display after load.
+                self.search_matches = page_hits
+                    .iter()
+                    .map(|&src| self.doc.display_cursor(src))
+                    .collect();
+                self.search_match_idx = start_idx.min(self.search_matches.len().saturating_sub(1));
+                if let Some(&line) = self.search_matches.get(self.search_match_idx) {
+                    self.match_highlight = Some(line);
+                    self.cursor_line = line;
+                    self.scroll = line;
+                    self.ensure_cursor_visible();
+                    self.message = format!(
+                        "{}/{}",
+                        self.search_match_idx.saturating_add(1),
+                        self.search_matches.len()
+                    );
+                }
             }
         }
     }
@@ -403,27 +515,54 @@ impl App {
         self.reload_page_keeping_view(&key, source, source_scroll);
     }
 
-    /// Poll the filesystem watcher and reindex when dirty.
+    /// Poll the filesystem watcher and reindex when dirty (rebuild off UI thread).
     pub(crate) fn poll_watcher(&mut self) {
+        if let Some(rx) = &self.rebuild_rx {
+            match rx.try_recv() {
+                Ok(Ok(index)) => {
+                    self.rebuild_rx = None;
+                    let view = self.view_state();
+                    let effects = self.navigator.reindex(index, view);
+                    self.apply_effects(effects);
+                }
+                Ok(Err(err)) => {
+                    self.rebuild_rx = None;
+                    self.message = format!("reindex failed: {err}");
+                }
+                Err(TryRecvError::Empty) => {}
+                Err(TryRecvError::Disconnected) => {
+                    self.rebuild_rx = None;
+                }
+            }
+        }
+
         let Some(watcher) = self.watcher.as_ref() else {
             return;
         };
-        if !watcher.poll_dirty() {
+        let poll = watcher.poll_dirty();
+        if poll.errors > 0 {
+            self.message = format!("live reload: {} watch error(s)", poll.errors);
+        }
+        if !poll.dirty || self.rebuild_rx.is_some() {
             return;
         }
-        let Ok(index) = Index::build(&self.provider) else {
-            return;
-        };
-        let view = self.view_state();
-        let effects = self.navigator.reindex(index, view);
-        self.apply_effects(effects);
+        let provider = self.provider.clone();
+        let (tx, rx) = mpsc::channel();
+        self.rebuild_rx = Some(rx);
+        std::thread::spawn(move || {
+            let result = Index::build(&provider).map_err(|e| e.to_string());
+            let _ = tx.send(result);
+        });
     }
 
     pub(crate) fn apply_effects(&mut self, effects: Vec<Effect>) {
         let page_changed = effects.iter().any(|e| matches!(e, Effect::LoadPage(_)));
         for effect in effects {
             match effect {
-                Effect::LoadPage(key) => self.load_page(&key),
+                Effect::LoadPage(key) => {
+                    self.page_missing = false;
+                    self.load_page(&key);
+                }
                 Effect::RevealInTree(page) => {
                     self.reveal_page_in_nav(&page);
                 }
@@ -445,6 +584,17 @@ impl App {
                     self.pending_external = Some(url.clone());
                     self.input_mode = InputMode::Confirm;
                     self.message = format!("open {url}? [y/N]");
+                }
+                Effect::PageRemoved => {
+                    self.page_missing = true;
+                    self.message = "page removed".into();
+                    self.doc = PageDoc::Raw(RawDoc::from_source(
+                        "# page removed\n\nThis page no longer exists on disk.\nPress Back to leave.\n",
+                        None,
+                    ));
+                    self.cursor_line = 0;
+                    self.scroll = 0;
+                    self.focused_item = None;
                 }
             }
         }

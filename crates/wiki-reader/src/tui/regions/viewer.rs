@@ -23,6 +23,7 @@ pub fn draw(
     show_gutter: bool,
     scroll: u32,
     cursor_line: u32,
+    match_highlight: Option<u32>,
     focused: bool,
     focused_item: Option<&FocusItem>,
     theme: &Theme,
@@ -49,6 +50,7 @@ pub fn draw(
     let focus_style = Style::default().bg(theme.focus_item).fg(theme.text);
     let focused_link = focused_item.and_then(|it| it.link_id);
     let gutter_style = theme.muted();
+    let match_style = Style::default().bg(theme.focus_item).fg(theme.text);
 
     for row in 0..visible_h {
         let src_idx = scroll + row;
@@ -57,7 +59,9 @@ pub fn draw(
             .y
             .saturating_add(u16::try_from(row).unwrap_or(u16::MAX));
 
-        let base = if line_no == cursor_line {
+        let base = if match_highlight == Some(line_no) {
+            match_style
+        } else if line_no == cursor_line {
             theme.text().bg(theme.cursor_line)
         } else {
             theme.text()

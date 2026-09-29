@@ -798,3 +798,146 @@ fn external_confirm_opens_with_recording_opener() {
         &["https://example.com/wiki".to_owned()]
     );
 }
+
+#[test]
+fn page_removed_placeholder_survives_keypress() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.apply_effects(vec![wiki_reader_core::nav::Effect::PageRemoved]);
+    assert!(app.page_missing);
+    assert_eq!(app.message, "page removed");
+    let body = app.doc.lines().join("\n");
+    assert!(body.to_lowercase().contains("page removed"), "{body}");
+    app.update(Action::ViewerDown);
+    assert!(
+        app.page_missing,
+        "page_missing must stick across cursor moves"
+    );
+    assert_eq!(app.message, "page removed");
+    assert!(
+        app.doc
+            .lines()
+            .join("\n")
+            .to_lowercase()
+            .contains("page removed")
+    );
+}
+
+#[test]
+fn reindex_anchored_keeps_cursor_via_scroll_none() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("README.md"),
+    }));
+    let max = u32::try_from(app.doc.lines().len().saturating_sub(1)).unwrap_or(0);
+    app.cursor_line = app.cursor_line.saturating_add(5).min(max);
+    let view = app.view_state();
+    let saved_source = view.cursor_line;
+    let index = app.navigator.index().clone();
+    let effects = app.navigator.reindex(index, view);
+    assert!(
+        effects
+            .iter()
+            .any(|e| matches!(e, wiki_reader_core::nav::Effect::ScrollTo(None))),
+        "{effects:?}"
+    );
+    assert!(
+        !effects
+            .iter()
+            .any(|e| matches!(e, wiki_reader_core::nav::Effect::ScrollTo(Some(_))))
+    );
+    app.apply_effects(effects);
+    assert_eq!(
+        app.navigator.tab().current().cursor_line,
+        saved_source,
+        "location keeps saved source cursor"
+    );
+    assert_eq!(
+        app.cursor_line,
+        app.doc.display_cursor(saved_source),
+        "viewer restores from saved source cursor"
+    );
+}
+
+#[test]
+fn search_n_n_wrap_and_highlight() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::OpenSearch);
+    app.update(Action::SearchToggleMode); // Text
+    for c in "token".chars() {
+        app.update(Action::SearchChar(c));
+    }
+    assert!(
+        app.search.as_ref().is_some_and(|s| !s.text_hits.is_empty()),
+        "expected text hits"
+    );
+    app.update(Action::SearchActivate);
+    assert!(!app.search_matches.is_empty());
+    assert!(app.match_highlight.is_some());
+    let n = app.search_matches.len();
+    assert!(app.message.contains(&format!("1/{n}")) || app.message.contains(&format!("/{n}")));
+    // Wrap around with n/N
+    for _ in 0..n {
+        app.update(Action::SearchNextMatch);
+    }
+    assert_eq!(app.search_match_idx, 0);
+    app.update(Action::SearchPrevMatch);
+    assert_eq!(app.search_match_idx, n.saturating_sub(1));
+    // Cursor move clears highlight
+    app.update(Action::ViewerDown);
+    assert!(app.match_highlight.is_none());
+    assert!(app.search_matches.is_empty());
+}
+
+#[test]
+fn search_click_result_and_outside() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let prev_cursor = app.cursor_line;
+    app.update(Action::OpenSearch);
+    for c in "token".chars() {
+        app.update(Action::SearchChar(c));
+    }
+    let backend = TestBackend::new(100, 30);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|f| draw(f, &mut app)).unwrap();
+    let result_hit = app
+        .hit_map
+        .entries()
+        .iter()
+        .find(|(_, h)| matches!(h, Hit::SearchResult(0)));
+    assert!(result_hit.is_some(), "expected SearchResult hit");
+    // Click outside closes and restores cursor.
+    app.update(Action::CloseSearch);
+    assert!(app.search.is_none());
+    assert_eq!(app.cursor_line, prev_cursor);
+}
+
+#[test]
+fn search_pages_projection_token_opens_tokens() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::OpenSearch);
+    for c in "projection token".chars() {
+        app.update(Action::SearchChar(c));
+    }
+    let hits = app.search.as_ref().map(|s| s.page_hits.clone()).unwrap();
+    assert!(
+        hits.iter()
+            .any(|h| h.page.relative_path.to_string_lossy().contains("tokens")),
+        "{hits:?}"
+    );
+    app.update(Action::SearchActivate);
+    assert!(
+        app.navigator
+            .tab()
+            .current()
+            .page
+            .relative_path
+            .to_string_lossy()
+            .contains("tokens")
+    );
+}

@@ -66,6 +66,31 @@ pub fn search_pages(query: &str, index: &Index) -> Vec<PageHit> {
 }
 
 fn page_score(q: &str, title: &str, path: &str) -> Option<(u32, u32)> {
+    let words: Vec<&str> = q.split_whitespace().filter(|w| !w.is_empty()).collect();
+    if words.is_empty() {
+        return None;
+    }
+    // Single token: existing subsequence fuzzy (tkn → token).
+    if words.len() == 1 {
+        return page_score_one(words[0], title, path);
+    }
+    // Multi-word any order: each word must be a subsequence of title or path.
+    let mut score = 0u32;
+    for w in &words {
+        let mut best: Option<u32> = None;
+        if let Some(s) = fuzzy_score(w, title) {
+            best = Some(s);
+        }
+        if let Some(s) = fuzzy_score(w, path) {
+            let s = s.saturating_add(10);
+            best = Some(best.map_or(s, |b| b.min(s)));
+        }
+        score = score.saturating_add(best?);
+    }
+    Some((score, u32::try_from(words.len()).unwrap_or(1)))
+}
+
+fn page_score_one(q: &str, title: &str, path: &str) -> Option<(u32, u32)> {
     let mut score = u32::MAX;
     let mut count = 0u32;
     if let Some(s) = fuzzy_score(q, title) {
@@ -195,6 +220,17 @@ mod tests {
             hits.iter()
                 .any(|h| h.page.relative_path.to_string_lossy().contains("token")),
             "hits={hits:?}"
+        );
+    }
+
+    #[test]
+    fn multi_word_any_order_finds_token_projection() {
+        let index = worked();
+        let hits = search_pages("projection token", &index);
+        assert!(
+            hits.iter()
+                .any(|h| { h.page.relative_path.to_string_lossy().contains("tokens.md") }),
+            "expected Token Projection page, hits={hits:?}"
         );
     }
 

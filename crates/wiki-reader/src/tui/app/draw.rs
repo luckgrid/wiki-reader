@@ -43,6 +43,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         gutter,
         app.scroll,
         app.cursor_line,
+        app.match_highlight,
         app.focus == FocusPane::Viewer,
         focus_item.as_ref(),
         &theme,
@@ -112,7 +113,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     );
 
     if let Some(overlay) = &app.search {
-        draw_search_overlay(frame, area, overlay, &theme);
+        draw_search_overlay(frame, area, overlay, &theme, &mut app.hit_map);
     }
 }
 
@@ -121,10 +122,15 @@ fn draw_search_overlay(
     area: ratatui::layout::Rect,
     overlay: &crate::tui::search_ui::SearchOverlay,
     theme: &crate::tui::theme::Theme,
+    hits: &mut crate::tui::hit::HitMap,
 ) {
+    use crate::tui::hit::Hit;
     use crate::tui::search_ui::SearchMode;
     use ratatui::text::{Line, Span};
     use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph};
+
+    // Full-frame dismiss hit under the panel.
+    hits.push(area, Hit::SearchDismiss);
 
     let width = area.width.clamp(20, 60);
     let height = area.height.clamp(8, 16);
@@ -149,6 +155,8 @@ fn draw_search_overlay(
         .title(format!(" Search [{mode}] (Tab) "));
     let inner = block.inner(rect);
     frame.render_widget(block, rect);
+    // Panel itself absorbs clicks (no dismiss).
+    hits.push(rect, Hit::FocusViewer);
     let query_line = Paragraph::new(Line::from(vec![
         Span::raw("> "),
         Span::styled(overlay.query.clone(), theme.text()),
@@ -193,6 +201,16 @@ fn draw_search_overlay(
             })
             .collect(),
     };
+    let visible = usize::from(list_rect.height);
+    for i in 0..items.len().min(visible) {
+        let row = ratatui::layout::Rect {
+            x: list_rect.x,
+            y: list_rect.y.saturating_add(u16::try_from(i).unwrap_or(0)),
+            width: list_rect.width,
+            height: 1,
+        };
+        hits.push(row, Hit::SearchResult(i));
+    }
     frame.render_widget(List::new(items), list_rect);
 }
 

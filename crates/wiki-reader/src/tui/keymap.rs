@@ -92,6 +92,8 @@ pub fn map_global(key: KeyEvent) -> Option<Action> {
         KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             Some(Action::OpenSearch)
         }
+        KeyCode::Char('n') => Some(Action::SearchNextMatch),
+        KeyCode::Char('N') => Some(Action::SearchPrevMatch),
         KeyCode::Char('[') => Some(Action::PrevPage),
         KeyCode::Char(']') => Some(Action::NextPage),
         KeyCode::Backspace => Some(Action::Back),

@@ -36,6 +36,12 @@ pub enum Action {
     SearchToggleMode,
     /// Activate the selected search result.
     SearchActivate,
+    /// Activate search result by index (mouse).
+    SearchActivateIndex(usize),
+    /// Cycle to next in-page search match (`n`).
+    SearchNextMatch,
+    /// Cycle to previous in-page search match (`N`).
+    SearchPrevMatch,
     /// Focus the side nav pane.
     FocusNav,
     /// Focus the viewer pane.
