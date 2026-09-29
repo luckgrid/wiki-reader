@@ -37,8 +37,8 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 | P1-R4 | Navigator hardening | F4,F10,N1–N4 | done | 66866be |
 | P1-R5 | Docs, spikes, housekeeping | | done | 20bdf18 |
 | P1-07 | Layout regions + hit map | | todo | parent of 07a–07c |
-| P1-07a | Core support APIs (breadcrumb, blocks, nav focus) | | doing | |
-| P1-07b | TUI skeleton: regions, hit map, static content | | todo | |
+| P1-07a | Core support APIs (breadcrumb, blocks, nav focus) | | done | (pending merge) |
+| P1-07b | TUI skeleton: regions, hit map, static content | | doing | |
 | P1-07c | Side nav (tui-tree-widget) | T1,N4 | todo | ADR-0009 |
 | P1-G | Live herdr key-log gate | | todo | Entry criterion for P1-08a; [P1-S1](spikes/p1-s1-herdr-input.md) |
 | P1-08 | Focus/cursor | K1–K4 | todo | parent of 08a–08c; entry: P1-G |
