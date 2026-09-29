@@ -16,5 +16,8 @@ ratatui = { workspace = true }
 wiki-reader-core = { workspace = true }
 wiki-reader-render = { workspace = true }
 
+[dev-dependencies]
+insta = { workspace = true }
+
 [lints]
 workspace = true
