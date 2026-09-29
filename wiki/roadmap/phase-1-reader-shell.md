@@ -25,7 +25,7 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 | ID | Task | Reqs | Status | Notes |
 |----|------|------|--------|-------|
 | P1-00 | Scaffold | | done | 2b9fdb6 |
-| P1-01 | FsProvider + discovery | | todo | |
+| P1-01 | FsProvider + discovery | | done | c67c19f |
 | P1-02 | Frontmatter + parse | | todo | |
 | P1-03 | Index | | todo | |
 | P1-04 | Link resolution | L2 | todo | |
