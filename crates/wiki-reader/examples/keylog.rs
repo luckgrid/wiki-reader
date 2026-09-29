@@ -12,19 +12,16 @@ use std::io::{Write, stdout};
 use ratatui::crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind,
 };
+use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use ratatui::crossterm::execute;
 
 fn main() -> std::io::Result<()> {
     enable_raw_mode()?;
     let mut out = stdout();
     execute!(out, EnterAlternateScreen, EnableMouseCapture)?;
-    writeln!(
-        out,
-        "keylog: press keys/click/wheel (q or Esc to quit)\r"
-    )?;
+    writeln!(out, "keylog: press keys/click/wheel (q or Esc to quit)\r")?;
     out.flush()?;
 
     let result = (|| -> std::io::Result<()> {
