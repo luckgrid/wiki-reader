@@ -111,8 +111,14 @@ pub fn path_is_relevant(root: &Path, path: &Path) -> bool {
     if is_markdown(path) {
         return true;
     }
-    // Directory rename/delete: still on disk as a dir, or a path with no extension
-    // (notify often reports the directory path without a trailing slash).
+    // Directory rename/delete under the collection (not the root itself — FSEvents
+    // often reports the parent dir when a non-md file changes).
+    let Ok(rel) = path.strip_prefix(root) else {
+        return false;
+    };
+    if rel.as_os_str().is_empty() {
+        return false;
+    }
     path.is_dir() || path.extension().is_none()
 }
 
@@ -266,6 +272,8 @@ mod tests {
         assert!(!path_is_relevant(root, Path::new("/wiki/.jj/x.md")));
         // Directory path (no extension): relevant for rename/delete.
         assert!(path_is_relevant(root, Path::new("/wiki/docs")));
+        // Collection root itself must not count (parent-dir noise on file writes).
+        assert!(!path_is_relevant(root, Path::new("/wiki")));
     }
 
     #[test]
