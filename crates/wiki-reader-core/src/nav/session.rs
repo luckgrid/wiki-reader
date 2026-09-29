@@ -78,6 +78,15 @@ impl Tab {
     }
 }
 
+/// Side-nav keyboard cursor stop (search row or a tree node).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NavStop {
+    /// ⌕ Search… row above the tree.
+    Search,
+    /// Page, group, or `OtherPages` node.
+    Node(NodeId),
+}
+
 /// Side-nav UI state derived from the tree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NavState {
@@ -85,8 +94,8 @@ pub struct NavState {
     pub tree: NavTree,
     /// Expanded group ids.
     pub expanded: HashSet<NodeId>,
-    /// Remembered nav cursor; `None` → current page's item.
-    pub cursor: Option<NodeId>,
+    /// Keyboard cursor (search row or tree node).
+    pub cursor: NavStop,
     /// Page current when nav last had focus (stale-cursor rule).
     pub seen_page: Option<PageKey>,
 }
@@ -156,7 +165,7 @@ impl Navigator {
             nav: NavState {
                 tree,
                 expanded,
-                cursor: Some(NodeId::Page(start.clone())),
+                cursor: NavStop::Node(NodeId::Page(start.clone())),
                 seen_page: Some(start),
             },
             notice: None,
@@ -205,9 +214,14 @@ impl Navigator {
         self.tabs.len()
     }
 
-    /// Set the side-nav keyboard cursor.
+    /// Set the side-nav keyboard cursor to a tree node.
     pub fn set_nav_cursor(&mut self, id: NodeId) {
-        self.nav.cursor = Some(id);
+        self.nav.cursor = NavStop::Node(id);
+    }
+
+    /// Set the side-nav keyboard cursor (search or node).
+    pub fn set_nav_stop(&mut self, stop: NavStop) {
+        self.nav.cursor = stop;
     }
 
     /// Expand or collapse a group in the side nav.
@@ -228,21 +242,19 @@ impl Navigator {
     ///
     /// If the current page changed while the nav was unfocused, the cursor jumps
     /// to the current page item. Otherwise the remembered cursor is kept
-    /// (defaulting to the current page when none was remembered).
-    pub fn nav_focus_gained(&mut self) -> NodeId {
+    /// (including [`NavStop::Search`]; defaulting to the current page when the
+    /// remembered stop was somehow empty — not applicable with [`NavStop`]).
+    pub fn nav_focus_gained(&mut self) -> NavStop {
         let current = self.tab().current().page.clone();
         let stale = self.nav.seen_page.as_ref() != Some(&current);
-        let id = if stale {
-            NodeId::Page(current.clone())
+        let stop = if stale {
+            NavStop::Node(NodeId::Page(current.clone()))
         } else {
-            self.nav
-                .cursor
-                .clone()
-                .unwrap_or_else(|| NodeId::Page(current.clone()))
+            self.nav.cursor.clone()
         };
-        self.nav.cursor = Some(id.clone());
+        self.nav.cursor = stop.clone();
         self.nav.seen_page = Some(current);
-        id
+        stop
     }
 
     /// Navigate to a resolved or unresolved [`Target`].
@@ -478,15 +490,16 @@ mod tests {
     /// N1: every entry point yields the same history + tree reveal for the same page.
     fn assert_same_arrival(nav: &Navigator, expected: &PageKey) {
         assert_eq!(&nav.tab().current().page, expected);
-        assert!(
-            nav.nav()
-                .expanded
-                .iter()
-                .any(|id| matches!(id, NodeId::Group(_)))
-                || expected.relative_path.components().count() <= 1,
-            "nested page should expand ancestors; expanded={:?}",
-            nav.nav().expanded
-        );
+        let mut ancestors = HashSet::new();
+        expand_ancestors(&nav.nav().tree, expected, &mut ancestors);
+        for id in &ancestors {
+            assert!(
+                nav.nav().expanded.contains(id),
+                "expected ancestor {id:?} expanded for {}; expanded={:?}",
+                expected.relative_path.display(),
+                nav.nav().expanded
+            );
+        }
     }
 
     /// N4: ancestors expanded; current page marked ● in `render_text`.
@@ -791,7 +804,7 @@ mod tests {
         let tokens = key("architecture/design-system/tokens.md");
 
         // Default: remembered cursor is the start page.
-        assert_eq!(nav.nav().cursor, Some(NodeId::Page(root.clone())));
+        assert_eq!(nav.nav().cursor, NavStop::Node(NodeId::Page(root.clone())));
         assert_eq!(nav.nav().seen_page.as_ref(), Some(&root));
 
         // Remember a different cursor, leave nav, navigate elsewhere, refocus → jump.
@@ -802,24 +815,29 @@ mod tests {
         // Cursor not clobbered by navigate.
         assert_eq!(
             nav.nav().cursor,
-            Some(NodeId::Page(key("decisions/0001-stack.md")))
+            NavStop::Node(NodeId::Page(key("decisions/0001-stack.md")))
         );
         let gained = nav.nav_focus_gained();
-        assert_eq!(gained, NodeId::Page(tokens.clone()));
-        assert_eq!(nav.nav().cursor, Some(NodeId::Page(tokens.clone())));
+        assert_eq!(gained, NavStop::Node(NodeId::Page(tokens.clone())));
+        assert_eq!(
+            nav.nav().cursor,
+            NavStop::Node(NodeId::Page(tokens.clone()))
+        );
         assert_eq!(nav.nav().seen_page.as_ref(), Some(&tokens));
 
         // Round-trip through viewer without navigate keeps remembered cursor.
         nav.set_nav_cursor(NodeId::Page(key("architecture/README.md")));
         nav.nav_focus_lost();
         let kept = nav.nav_focus_gained();
-        assert_eq!(kept, NodeId::Page(key("architecture/README.md")));
+        assert_eq!(
+            kept,
+            NavStop::Node(NodeId::Page(key("architecture/README.md")))
+        );
 
-        // No remembered cursor → current page item.
-        nav.nav.cursor = None;
+        // Search stop kept when not stale.
+        nav.set_nav_stop(NavStop::Search);
         nav.nav_focus_lost();
-        let def = nav.nav_focus_gained();
-        assert_eq!(def, NodeId::Page(tokens));
+        assert_eq!(nav.nav_focus_gained(), NavStop::Search);
     }
 
     #[test]

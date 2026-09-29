@@ -10,11 +10,18 @@ rust-version.workspace = true
 name = "wiki-reader"
 path = "src/main.rs"
 
+[[example]]
+name = "keylog"
+path = "examples/keylog.rs"
+
 [dependencies]
 clap = { workspace = true }
 ratatui = { workspace = true }
 wiki-reader-core = { workspace = true }
 wiki-reader-render = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
 
 [lints]
 workspace = true

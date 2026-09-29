@@ -41,6 +41,13 @@ cargo run -p wiki-reader -- fixtures/worked-example
 # q or Esc to quit
 ```
 
+Herdr keymap check (P1-G entry criterion for P1-08):
+
+```bash
+cargo run -p wiki-reader --example keylog
+# Run under herdr; tick wiki/roadmap/spikes/p1-s1-herdr-input.md
+```
+
 ## Crate boundaries
 
 | Crate | Responsibility |

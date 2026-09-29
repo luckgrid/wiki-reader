@@ -16,6 +16,8 @@ Browse a real collection end-to-end with correct navigation. Time box: ≈ 1–2
 
 Open `~/Workspaces/uwiki`, follow ten links in a row, go back ten times, never see a tab.
 
+P1-08 exit: pane focus, viewer cursor, and Tab-cycle highlighting land via P1-08a–c + R6–R9. Open from the herdr key log (P1-S1 checklist): live verification under herdr still pending — keymap ships F6 / Ctrl+↑↓ fallbacks until that gate is ticked.
+
 ## Escape hatch
 
 If porting the renderer takes more than ~3 days, temporarily depend on a simpler renderer (plain pulldown-cmark → styled lines) and port features incrementally. Navigation matters more than table polish.
@@ -36,22 +38,27 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 | P1-R3 | NavTree correctness | F1,F5,F6,T1 | done | e85c57b |
 | P1-R4 | Navigator hardening | F4,F10,N1–N4 | done | 66866be |
 | P1-R5 | Docs, spikes, housekeeping | | done | 20bdf18 |
+| P1-R6 | Geometry: header hits + nav visibility | T1,T2 | done | tip remediation |
+| P1-R7 | Viewport + scroll follow | T3,T4 | done | tip remediation |
+| P1-R8 | Focus + nav state model | T6–T9 | done | tip remediation |
+| P1-R9 | K3 visuals, keymap, terminal safety | T5,T12,T13 | done | tip remediation |
+| P1-R10 | Docs, process, test hygiene | T10–T11,T14,T16–T18 | done | tip remediation |
 | P1-07 | Layout regions + hit map | | todo | parent of 07a–07c |
-| P1-07a | Core support APIs (breadcrumb, blocks, nav focus) | | doing | |
-| P1-07b | TUI skeleton: regions, hit map, static content | | todo | |
-| P1-07c | Side nav (tui-tree-widget) | T1,N4 | todo | ADR-0009 |
-| P1-G | Live herdr key-log gate | | todo | Entry criterion for P1-08a; [P1-S1](spikes/p1-s1-herdr-input.md) |
-| P1-08 | Focus/cursor | K1–K4 | todo | parent of 08a–08c; entry: P1-G |
-| P1-08a | Pane focus (K1) + side-nav keys (K4) | K1,K4 | todo | |
-| P1-08b | Viewer cursor (K2) + interim ViewerDoc | K2 | todo | |
-| P1-08c | Viewer Tab cycle (K3), logic only | K3 | todo | Enter activation → P1-09 |
-| P1-09 | Links, Tab/Enter/click | L1–L3 | todo | non-md / `?query` targets documented in content-model |
+| P1-07a | Core support APIs (breadcrumb, blocks, nav focus) | | done | (pending merge) |
+| P1-07b | TUI skeleton: regions, hit map, static content | | done | (pending merge) |
+| P1-07c | Side nav (`HitMap` flat rows; ADR-0010) | T1,N4 | done | (pending merge); supersedes ADR-0009 A |
+| P1-G | Live herdr key-log gate | | done | example done; live herdr check pending (gate still open) | [P1-S1](spikes/p1-s1-herdr-input.md) |
+| P1-08 | Focus/cursor | K1–K4 | todo | parent of 08a–08c; entry: P1-G (08a shipped ahead of gate with keymap fallbacks) |
+| P1-08a | Pane focus (K1) + side-nav keys (K4) | K1,K4 | done | (pending merge); ahead of live P1-G |
+| P1-08b | Viewer cursor (K2) + interim ViewerDoc | K2 | done | (pending merge) |
+| P1-08c | Viewer Tab cycle (K3) | K3 | done | (pending merge); Enter activation → P1-09 |
+| P1-09 | Links, Tab/Enter/click | L1–L3 | todo | blocked on R6–R9; non-md / `?query` in content-model |
 | P1-10 | Search overlay | S1 | todo | |
 | P1-11 | Raw toggle | V2 | todo | |
 | P1-12 | Live reload | V3 | todo | |
-| P1-13 | Renderer port | V1 | todo | needs P1-R1 `github_slug` |
+| P1-13 | Renderer port | V1 | todo | needs P1-R1 `github_slug`; parallel OK |
 | P1-S1 | Spike, herdr input | | done | [spike note](spikes/p1-s1-herdr-input.md); doc-only; live herdr key log pending |
-| P1-S2 | Spike, tree widget decision | | done | ADR-0009 |
+| P1-S2 | Spike, tree widget decision | | done | ADR-0009 → superseded by ADR-0010 |
 
 ## Related
 

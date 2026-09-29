@@ -1,0 +1,14 @@
+---
+source: crates/wiki-reader/src/tui/regions/side_nav.rs
+expression: "open.iter().map(|r| &r.label).collect::<Vec<_>>()"
+---
+[
+    "Worked Example Wiki",
+    "▾ Architecture Overview",
+    "  Architecture Overview",
+    "  ▾ Design System",
+    "    Design System",
+    "    Token Projection",
+    "  Workflow OS",
+    "▸ Decisions",
+]

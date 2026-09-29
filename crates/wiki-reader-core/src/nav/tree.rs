@@ -132,6 +132,15 @@ impl NavTree {
         trail
     }
 
+    /// Nearest existing side-nav group that contains `id`, if any.
+    ///
+    /// Used by ← on a page. Folded README-only folders are leaves (no group), so
+    /// the parent may be further up — or `None` for a top-level page.
+    #[must_use]
+    pub fn parent_group(&self, id: &NodeId) -> Option<NodeId> {
+        find_parent_group(&self.items, id, None)
+    }
+
     /// Render a text snapshot (content-model style markers).
     ///
     /// `expanded` controls which groups show children. `current` marks `●` vs plain label.
@@ -141,6 +150,31 @@ impl NavTree {
         render_items(&self.items, 0, expanded, current, &mut lines);
         lines.join("\n")
     }
+}
+
+fn find_parent_group(
+    items: &[NavItem],
+    target: &NodeId,
+    parent: Option<&NodeId>,
+) -> Option<NodeId> {
+    for item in items {
+        match item {
+            NavItem::Page { key, .. } => {
+                if matches!(target, NodeId::Page(p) if p == key) {
+                    return parent.cloned();
+                }
+            }
+            NavItem::Group { id, children, .. } => {
+                if target == id {
+                    return parent.cloned();
+                }
+                if let Some(found) = find_parent_group(children, target, Some(id)) {
+                    return Some(found);
+                }
+            }
+        }
+    }
+    None
 }
 
 fn root_crumb(items: &[NavItem]) -> Option<Crumb> {
