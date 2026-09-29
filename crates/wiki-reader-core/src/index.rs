@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::Error;
+use crate::nav::{self, Target};
 use crate::parse::{self, Diagnostic, Heading, MdLinkKind, ParsedPage};
 use crate::provider::{CollectionProvider, PageKey};
 
@@ -61,9 +62,11 @@ pub struct Page {
 /// Collection index: pages, edges, and lookups.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Index {
+    /// Collection id (directory name by default).
+    pub collection_id: String,
     /// All pages keyed by [`PageKey`].
     pub pages: HashMap<PageKey, Page>,
-    /// Flat edge list.
+    /// Flat edge list (deterministic order).
     pub edges: Vec<Edge>,
     /// Edge indices by source page.
     pub by_from: HashMap<PageKey, Vec<usize>>,
@@ -73,27 +76,61 @@ pub struct Index {
     pub by_id: HashMap<String, PageKey>,
     /// Relative path string → page key (for quick path existence checks).
     pub by_path: HashMap<PathBuf, PageKey>,
+    /// Build-time diagnostics (skipped pages, duplicate ids, ambiguous related).
+    pub diagnostics: Vec<Diagnostic>,
 }
 
 impl Index {
     /// Build an index by listing and reading every page through `provider`.
     ///
+    /// Unreadable or non-UTF-8 pages are skipped with a diagnostic. Only
+    /// [`CollectionProvider::list_pages`] failure is fatal.
+    ///
     /// # Errors
     ///
-    /// Returns when listing or reading pages fails.
+    /// Returns when listing pages fails.
     pub fn build(provider: &impl CollectionProvider) -> Result<Self, Error> {
         let metas = provider.list_pages()?;
-        let mut pages = HashMap::with_capacity(metas.len());
-        let mut by_id = HashMap::new();
-        let mut by_path = HashMap::with_capacity(metas.len());
+        let collection_id = metas.first().map_or_else(
+            || {
+                provider
+                    .root()
+                    .file_name()
+                    .map_or_else(|| "collection".into(), |n| n.to_string_lossy().into_owned())
+            },
+            |m| m.key.collection_id.clone(),
+        );
+
+        let mut pages: HashMap<PageKey, Page> = HashMap::with_capacity(metas.len());
+        let mut by_id: HashMap<String, PageKey> = HashMap::new();
+        let mut by_path: HashMap<PathBuf, PageKey> = HashMap::with_capacity(metas.len());
+        let mut diagnostics = Vec::new();
 
         for meta in metas {
-            let source = provider.read(&meta.key)?;
+            let source = match provider.read(&meta.key) {
+                Ok(s) => s,
+                Err(err) => {
+                    diagnostics.push(Diagnostic {
+                        message: format!("skipping {}: {err}", meta.key.relative_path.display()),
+                    });
+                    continue;
+                }
+            };
             let parsed = parse::parse(&source);
             let title = title_for(&parsed, &meta.key.relative_path);
             let id = parsed.frontmatter.id.clone();
             if let Some(ref id) = id {
-                by_id.insert(id.clone(), meta.key.clone());
+                if let Some(existing) = by_id.get(id) {
+                    diagnostics.push(Diagnostic {
+                        message: format!(
+                            "duplicate id `{id}`: keeping {}, ignoring {}",
+                            existing.relative_path.display(),
+                            meta.key.relative_path.display()
+                        ),
+                    });
+                } else {
+                    by_id.insert(id.clone(), meta.key.clone());
+                }
             }
             by_path.insert(meta.key.relative_path.clone(), meta.key.clone());
             pages.insert(
@@ -109,39 +146,27 @@ impl Index {
             );
         }
 
-        let mut edges = Vec::new();
-        for page in pages.values() {
-            push_link_edges(&mut edges, page, &by_path);
-            push_related_edges(&mut edges, page, &by_id, &by_path);
-            push_parent_edge(&mut edges, page, &by_path);
-        }
-
         let mut index = Self {
+            collection_id,
             pages,
-            edges,
+            edges: Vec::new(),
             by_from: HashMap::new(),
             by_to: HashMap::new(),
             by_id,
             by_path,
+            diagnostics,
         };
-        // Refine Link.to with full L2 resolve now that pages exist.
-        let updates: Vec<(usize, Option<PageKey>)> = index
-            .edges
-            .iter()
-            .enumerate()
-            .filter(|(_, e)| e.kind == EdgeKind::Link)
-            .map(|(i, e)| {
-                let to = match crate::nav::resolve(&e.raw_target, &e.from, &index).target {
-                    crate::nav::Target::Page(key, _) => Some(key),
-                    crate::nav::Target::Anchor(_) => Some(e.from.clone()),
-                    _ => None,
-                };
-                (i, to)
-            })
-            .collect();
-        for (i, to) in updates {
-            index.edges[i].to = to;
+
+        let mut keys: Vec<PageKey> = index.pages.keys().cloned().collect();
+        keys.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+
+        let mut edges = Vec::new();
+        for key in &keys {
+            push_link_edges(&mut edges, key, &index);
+            push_related_edges(&mut edges, key, &mut index);
+            push_parent_edge(&mut edges, key, &index);
         }
+        index.edges = edges;
 
         let (by_from, by_to) = build_edge_maps(&index.edges);
         index.by_from = by_from;
@@ -175,19 +200,25 @@ fn title_for(parsed: &ParsedPage, relative_path: &Path) -> String {
     )
 }
 
-fn push_link_edges(edges: &mut Vec<Edge>, page: &Page, index_paths: &HashMap<PathBuf, PageKey>) {
-    // Build a temporary path-only view for resolve during edge construction.
-    // Full Index isn't available yet; use rough lookup then refined in a second pass.
+fn push_link_edges(edges: &mut Vec<Edge>, key: &PageKey, index: &Index) {
+    let Some(page) = index.pages.get(key) else {
+        return;
+    };
     for link in &page.parsed.links {
         let kind = match link.kind {
             MdLinkKind::Link => EdgeKind::Link,
             MdLinkKind::External => EdgeKind::External,
         };
-        let to = (kind == EdgeKind::Link)
-            .then(|| resolve_path_rough(&page.key, &link.target, index_paths))
-            .flatten();
+        let to = if kind == EdgeKind::Link {
+            match nav::resolve(&link.target, key, index).target {
+                Target::Page(dest, _) => Some(dest),
+                Target::Anchor(_) | Target::External(_) | Target::Unresolved(_) => None,
+            }
+        } else {
+            None
+        };
         edges.push(Edge {
-            from: page.key.clone(),
+            from: key.clone(),
             to,
             raw_target: link.target.clone(),
             kind,
@@ -196,111 +227,112 @@ fn push_link_edges(edges: &mut Vec<Edge>, page: &Page, index_paths: &HashMap<Pat
     }
 }
 
-fn push_related_edges(
-    edges: &mut Vec<Edge>,
-    page: &Page,
-    by_id: &HashMap<String, PageKey>,
-    by_path: &HashMap<PathBuf, PageKey>,
-) {
-    for related in &page.parsed.frontmatter.related {
-        let to = by_id
-            .get(related)
-            .cloned()
-            .or_else(|| by_path.get(Path::new(related)).cloned())
-            .or_else(|| {
-                by_path
-                    .get(&PathBuf::from(format!("{related}.md")))
-                    .cloned()
-            });
+fn push_related_edges(edges: &mut Vec<Edge>, key: &PageKey, index: &mut Index) {
+    let relateds = index
+        .pages
+        .get(key)
+        .map(|p| p.parsed.frontmatter.related.clone())
+        .unwrap_or_default();
+    for related in relateds {
+        let to = resolve_related(&related, key, index);
         edges.push(Edge {
-            from: page.key.clone(),
+            from: key.clone(),
             to,
-            raw_target: related.clone(),
+            raw_target: related,
             kind: EdgeKind::FrontmatterRelated,
             source_line: 0,
         });
     }
 }
 
-/// Rough relative path lookup (subset of L2); P1-04 owns the full ordered rules.
-fn resolve_path_rough(
-    from: &PageKey,
-    target: &str,
-    by_path: &HashMap<PathBuf, PageKey>,
-) -> Option<PageKey> {
-    let path_part = target.split_once('#').map_or(target, |(p, _)| p);
-    if path_part.is_empty() {
-        return Some(from.clone());
+/// ID → `nav::resolve` → unique stem match.
+fn resolve_related(related: &str, from: &PageKey, index: &mut Index) -> Option<PageKey> {
+    if let Some(key) = index.by_id.get(related) {
+        return Some(key.clone());
     }
-    let base = from.relative_path.parent().unwrap_or_else(|| Path::new(""));
-    let joined = if path_part.starts_with('/') {
-        PathBuf::from(path_part.trim_start_matches('/'))
-    } else {
-        base.join(path_part)
+    if let Target::Page(key, _) = nav::resolve(related, from, index).target {
+        return Some(key);
+    }
+    let matches: Vec<PageKey> = index
+        .pages
+        .keys()
+        .filter(|k| k.relative_path.file_stem().and_then(|s| s.to_str()) == Some(related))
+        .cloned()
+        .collect();
+    match matches.as_slice() {
+        [one] => Some(one.clone()),
+        [] => None,
+        many => {
+            let paths: Vec<_> = many
+                .iter()
+                .map(|k| k.relative_path.display().to_string())
+                .collect();
+            index.diagnostics.push(Diagnostic {
+                message: format!(
+                    "ambiguous related `{related}` matches {}; left unresolved",
+                    paths.join(", ")
+                ),
+            });
+            None
+        }
+    }
+}
+
+fn is_landing_name(path: &Path) -> bool {
+    matches!(
+        path.file_name().and_then(|n| n.to_str()),
+        Some("README.md" | "README.markdown" | "index.md" | "index.markdown")
+    )
+}
+
+fn push_parent_edge(edges: &mut Vec<Edge>, key: &PageKey, index: &Index) {
+    let rel = &key.relative_path;
+    let Some(dir) = rel.parent() else {
+        return;
     };
-    let joined = normalize_dots(&joined)?;
-    lookup_path_variants(&joined, by_path)
-}
+    // Landing pages link to the parent folder's landing; others to nearest ancestor landing.
+    let mut search = if is_landing_name(rel) {
+        dir.parent()
+    } else {
+        Some(dir)
+    };
 
-fn lookup_path_variants(path: &Path, by_path: &HashMap<PathBuf, PageKey>) -> Option<PageKey> {
-    if let Some(k) = by_path.get(path) {
-        return Some(k.clone());
-    }
-    let with_md = PathBuf::from(format!("{}.md", path.display()));
-    if let Some(k) = by_path.get(&with_md) {
-        return Some(k.clone());
-    }
-    let readme = path.join("README.md");
-    if let Some(k) = by_path.get(&readme) {
-        return Some(k.clone());
-    }
-    let index = path.join("index.md");
-    by_path.get(&index).cloned()
-}
-
-fn normalize_dots(path: &Path) -> Option<PathBuf> {
-    let mut out = PathBuf::new();
-    for c in path.components() {
-        match c {
-            std::path::Component::CurDir
-            | std::path::Component::RootDir
-            | std::path::Component::Prefix(_) => {}
-            std::path::Component::ParentDir => {
-                if !out.pop() {
-                    return None;
+    while let Some(folder) = search {
+        let names = ["README.md", "README.markdown", "index.md", "index.markdown"];
+        if folder.as_os_str().is_empty() {
+            for name in names {
+                if let Some(parent_key) = index.by_path.get(Path::new(name))
+                    && parent_key != key
+                {
+                    edges.push(Edge {
+                        from: parent_key.clone(),
+                        to: Some(key.clone()),
+                        raw_target: key.relative_path.display().to_string(),
+                        kind: EdgeKind::Parent,
+                        source_line: 0,
+                    });
+                    return;
                 }
             }
-            std::path::Component::Normal(s) => out.push(s),
-        }
-    }
-    Some(out)
-}
-
-fn push_parent_edge(edges: &mut Vec<Edge>, page: &Page, by_path: &HashMap<PathBuf, PageKey>) {
-    let Some(parent_dir) = page.key.relative_path.parent() else {
-        return;
-    };
-    if parent_dir.as_os_str().is_empty() {
-        // Page is at collection root — parent is the collection itself, no page edge.
-        return;
-    }
-    // Parent folder landing page, if present.
-    for name in ["README.md", "index.md"] {
-        let candidate = parent_dir.join(name);
-        if let Some(parent_key) = by_path.get(&candidate) {
-            // Skip self (page is the landing page).
-            if parent_key == &page.key {
-                return;
-            }
-            edges.push(Edge {
-                from: parent_key.clone(),
-                to: Some(page.key.clone()),
-                raw_target: page.key.relative_path.display().to_string(),
-                kind: EdgeKind::Parent,
-                source_line: 0,
-            });
             return;
         }
+
+        for name in names {
+            let candidate = folder.join(name);
+            if let Some(parent_key) = index.by_path.get(&candidate)
+                && parent_key != key
+            {
+                edges.push(Edge {
+                    from: parent_key.clone(),
+                    to: Some(key.clone()),
+                    raw_target: key.relative_path.display().to_string(),
+                    kind: EdgeKind::Parent,
+                    source_line: 0,
+                });
+                return;
+            }
+        }
+        search = folder.parent();
     }
 }
 
@@ -323,6 +355,8 @@ fn build_edge_maps(edges: &[Edge]) -> (HashMap<PageKey, Vec<usize>>, HashMap<Pag
 mod tests {
     use super::*;
     use crate::provider::FsProvider;
+    use std::fs;
+    use std::io::Write;
 
     fn worked_example() -> FsProvider {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/worked-example");
@@ -333,6 +367,7 @@ mod tests {
     fn builds_worked_example_pages_and_titles() {
         let index = Index::build(&worked_example()).expect("index");
         assert_eq!(index.pages.len(), 7);
+        assert_eq!(index.collection_id, "worked-example");
 
         let root_key = PageKey {
             collection_id: "worked-example".into(),
@@ -378,6 +413,27 @@ mod tests {
     }
 
     #[test]
+    fn nested_landing_gets_ancestor_parent_edge() {
+        let index = Index::build(&worked_example()).expect("index");
+        let arch = PageKey {
+            collection_id: "worked-example".into(),
+            relative_path: PathBuf::from("architecture/README.md"),
+        };
+        let ds = PageKey {
+            collection_id: "worked-example".into(),
+            relative_path: PathBuf::from("architecture/design-system/README.md"),
+        };
+        let found = index
+            .edges
+            .iter()
+            .any(|e| e.kind == EdgeKind::Parent && e.from == arch && e.to.as_ref() == Some(&ds));
+        assert!(
+            found,
+            "design-system README should parent-link to architecture README"
+        );
+    }
+
+    #[test]
     fn backlink_from_tokens_to_design_system() {
         let index = Index::build(&worked_example()).expect("index");
         let tokens = PageKey {
@@ -393,5 +449,103 @@ mod tests {
             e.from == tokens && e.kind == EdgeKind::Link
         });
         assert!(found, "tokens.md should backlink to design-system README");
+    }
+
+    #[test]
+    fn skips_non_utf8_page_with_diagnostic() {
+        let dir = tempfile::tempdir().expect("temp");
+        fs::write(dir.path().join("README.md"), "# Ok\n").expect("readme");
+        let mut bad = fs::File::create(dir.path().join("bad.md")).expect("create");
+        bad.write_all(&[0xff, 0xfe, b'#', b' ', b'X', b'\n'])
+            .expect("write");
+        drop(bad);
+
+        let provider = FsProvider::open(dir.path()).expect("open");
+        let index = Index::build(&provider).expect("build");
+        assert_eq!(index.pages.len(), 1);
+        assert!(
+            index
+                .diagnostics
+                .iter()
+                .any(|d| d.message.contains("bad.md")),
+            "expected skip diagnostic, got {:?}",
+            index.diagnostics
+        );
+    }
+
+    #[test]
+    fn build_is_deterministic() {
+        let a = Index::build(&worked_example()).expect("a");
+        let b = Index::build(&worked_example()).expect("b");
+        assert_eq!(a.edges, b.edges);
+        assert_eq!(a.by_from, b.by_from);
+        assert_eq!(a.by_to, b.by_to);
+    }
+
+    #[test]
+    fn related_stem_resolves() {
+        let dir = tempfile::tempdir().expect("temp");
+        fs::create_dir(dir.path().join("product")).expect("dir");
+        fs::write(
+            dir.path().join("README.md"),
+            "---\nrelated: [spec]\n---\n\n# Root\n",
+        )
+        .expect("readme");
+        fs::write(dir.path().join("product/spec.md"), "# Spec\n").expect("spec");
+
+        let provider = FsProvider::open(dir.path()).expect("open");
+        let index = Index::build(&provider).expect("build");
+        let root = PageKey {
+            collection_id: index.collection_id.clone(),
+            relative_path: PathBuf::from("README.md"),
+        };
+        let spec = PageKey {
+            collection_id: index.collection_id.clone(),
+            relative_path: PathBuf::from("product/spec.md"),
+        };
+        let found = index.edges.iter().any(|e| {
+            e.kind == EdgeKind::FrontmatterRelated && e.from == root && e.to.as_ref() == Some(&spec)
+        });
+        assert!(found, "related: [spec] should resolve to product/spec.md");
+    }
+
+    #[test]
+    fn anchor_only_link_is_not_self_edge() {
+        let dir = tempfile::tempdir().expect("temp");
+        fs::write(dir.path().join("README.md"), "# Hi\n\n[jump](#hi)\n").expect("readme");
+        let provider = FsProvider::open(dir.path()).expect("open");
+        let index = Index::build(&provider).expect("build");
+        let self_edges: Vec<_> = index
+            .edges
+            .iter()
+            .filter(|e| e.kind == EdgeKind::Link && e.to.as_ref() == Some(&e.from))
+            .collect();
+        assert!(
+            self_edges.is_empty(),
+            "unexpected self-edges: {self_edges:?}"
+        );
+        assert!(
+            index
+                .edges
+                .iter()
+                .any(|e| e.kind == EdgeKind::Link && e.raw_target == "#hi" && e.to.is_none())
+        );
+    }
+
+    #[test]
+    fn dogfood_wiki_builds_without_unresolved_related() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../wiki");
+        let provider = FsProvider::open(root).expect("wiki");
+        let index = Index::build(&provider).expect("build");
+        let unresolved: Vec<_> = index
+            .edges
+            .iter()
+            .filter(|e| e.kind == EdgeKind::FrontmatterRelated && e.to.is_none())
+            .map(|e| format!("{} → {}", e.from.relative_path.display(), e.raw_target))
+            .collect();
+        assert!(
+            unresolved.is_empty(),
+            "unresolved related edges: {unresolved:?}"
+        );
     }
 }
