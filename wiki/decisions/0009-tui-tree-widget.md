@@ -31,3 +31,7 @@ P1-07/08 need a collapsible side-nav with mouse hit-testing. The prior-art note 
 - ➕ Mouse clicks work through `click_at` / `rendered_at`.
 - ➖ Hit regions are whole rows in the widget area, not arbitrary sub-rects (acceptable for v1 nav).
 - ➖ Dependency pinned when P1-07 adds it to `wiki-reader` (not to core).
+
+## Follow-up (P1-R5 compile gate)
+
+Verified 2026-09-29 in a throwaway crate (`tui-tree-widget` 0.24.1 + `ratatui` 0.30.2, `TestBackend`): `TreeState::rendered_at(Position)` and `TreeState::click_at(Position)` compile and return hits after a stateful render. Claim stands; no superseding ADR needed. Gate crate was not kept in-tree.

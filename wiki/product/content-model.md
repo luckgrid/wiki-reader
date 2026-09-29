@@ -69,12 +69,14 @@ In order, for a link target `t` written in page `p`:
 
 1. `#anchor` → same page, anchor by GitHub-style slug.
 2. Scheme present (`http:`, `https:`, `mailto:`) → external.
-3. Relative to `p`'s directory; then (if it starts with `/`) relative to the collection root.
+3. If `t` starts with `/`, resolve relative to the collection root; otherwise relative to `p`'s directory.
 4. Try as written, then with `.md`, then `t/README.md`, then `t/index.md`.
 5. URL-decode (`%20`) and retry once.
 6. Otherwise → `Unresolved(t)`: styled as broken, and explained in the footer when followed.
 
 Anchors that don't exist resolve to the page with a footer notice. The link isn't treated as broken.
+
+Links to existing non-markdown files, and `?query` suffixes on otherwise-valid targets, currently resolve as `Unresolved` (shown as broken). UX for those cases is deferred to P1-09.
 
 ## Side nav tree construction
 

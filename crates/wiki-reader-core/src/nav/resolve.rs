@@ -142,34 +142,20 @@ fn url_decode_once(s: &str) -> Option<String> {
     Some(decoded.into_owned())
 }
 
-/// Rules 3–4: relative (and root-relative when `t` starts with `/`), then path variants.
+/// Rules 3–4: relative to page dir, or root-relative when `t` starts with `/`; then path variants.
 fn resolve_path(path_part: &str, from: &PageKey, index: &Index) -> Option<PageKey> {
     if path_part.is_empty() {
         return Some(from.clone());
     }
 
-    let page_dir = from.relative_path.parent().unwrap_or_else(|| Path::new(""));
-
-    let mut bases = vec![page_dir.to_path_buf()];
-    if path_part.starts_with('/') {
-        bases.push(PathBuf::new()); // collection root
-    }
-
-    let trimmed = path_part.trim_start_matches('/');
-    for base in bases {
-        let joined = if path_part.starts_with('/') {
-            PathBuf::from(trimmed)
-        } else {
-            base.join(path_part)
-        };
-        let Some(norm) = normalize_dots(&joined) else {
-            continue;
-        };
-        if let Some(key) = lookup_variants(&norm, index) {
-            return Some(key);
-        }
-    }
-    None
+    let joined = if path_part.starts_with('/') {
+        PathBuf::from(path_part.trim_start_matches('/'))
+    } else {
+        let page_dir = from.relative_path.parent().unwrap_or_else(|| Path::new(""));
+        page_dir.join(path_part)
+    };
+    let norm = normalize_dots(&joined)?;
+    lookup_variants(&norm, index)
 }
 
 fn lookup_variants(path: &Path, index: &Index) -> Option<PageKey> {

@@ -43,4 +43,14 @@ Old outer terminals can emit press+release as duplicate bytes under kitty keyboa
 
 ## Verification still needed in a live herdr pane
 
-Interactive confirm (½ day leftover): run wiki-reader under herdr, enable mouse, and log crossterm `KeyEvent` / `MouseEvent` for the chords above on the developer's outer terminal (Ghostty / kitty / iTerm). Update this note with per-terminal checkmarks when done; remaps above cover the failure modes already documented by herdr.
+**Entry criterion for P1-08.** Interactive confirm (½ day): run wiki-reader under herdr, enable mouse, and log crossterm `KeyEvent` / `MouseEvent` for the chords above on the developer's outer terminal (Ghostty / kitty / iTerm). Checklist:
+
+- [ ] Plain arrows
+- [ ] `Shift+↑/↓` (or fallback)
+- [ ] `Shift+←/→` (or `F6` fallback)
+- [ ] `Backspace` (back)
+- [ ] `Alt+←/→` when Option=Alt (or document absence)
+- [ ] Click / wheel with mouse reporting on
+- [ ] Confirm `Ctrl+Enter` is unreliable (do not bind)
+
+Update this note with per-terminal checkmarks when done; remaps above cover the failure modes already documented by herdr. Roadmap P1-S1 remains doc-only until this checklist is executed.
