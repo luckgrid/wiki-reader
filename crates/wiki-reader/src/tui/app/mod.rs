@@ -87,6 +87,10 @@ pub struct App {
     rebuild_rx: Option<Receiver<Result<Index, String>>>,
     /// Dirty arrived while a rebuild was in flight — start another when done.
     rebuild_pending: bool,
+    /// In-flight raw-view highlight job (`token` must match [`Self::highlight_token`]).
+    highlight_rx: Option<(u64, Receiver<Vec<Vec<crate::tui::highlight::HlSpan>>>)>,
+    /// Bumped on each Raw load / leave-Raw so stale highlight results are dropped.
+    highlight_token: u64,
     /// Sticky "page removed" until the user navigates elsewhere.
     pub(crate) page_missing: bool,
     /// In-page search match **source** lines (after opening a text hit).
@@ -143,6 +147,8 @@ impl App {
             watcher,
             rebuild_rx: None,
             rebuild_pending: false,
+            highlight_rx: None,
+            highlight_token: 0,
             page_missing: false,
             search_matches: Vec::new(),
             search_match_page: None,
@@ -554,6 +560,7 @@ impl App {
 
     /// Poll the filesystem watcher and reindex when dirty (rebuild off UI thread).
     pub(crate) fn poll_watcher(&mut self) {
+        self.poll_highlight_rx();
         let finished = self.poll_rebuild_rx();
         if let Some(watcher) = self.watcher.as_ref() {
             let poll = watcher.poll_dirty();
@@ -566,6 +573,43 @@ impl App {
             self.rebuild_pending = false;
             self.spawn_rebuild();
         }
+    }
+
+    fn poll_highlight_rx(&mut self) {
+        let Some((token, rx)) = &self.highlight_rx else {
+            return;
+        };
+        let token = *token;
+        match rx.try_recv() {
+            Ok(hl) => {
+                self.highlight_rx = None;
+                if token == self.highlight_token
+                    && let PageDoc::Raw(doc) = &mut self.doc
+                {
+                    doc.set_highlights(hl);
+                }
+            }
+            Err(TryRecvError::Empty) => {}
+            Err(TryRecvError::Disconnected) => {
+                self.highlight_rx = None;
+            }
+        }
+    }
+
+    fn cancel_highlight(&mut self) {
+        self.highlight_token = self.highlight_token.wrapping_add(1);
+        self.highlight_rx = None;
+    }
+
+    fn spawn_highlight(&mut self, source: String) {
+        self.highlight_token = self.highlight_token.wrapping_add(1);
+        let token = self.highlight_token;
+        let (tx, rx) = mpsc::channel();
+        self.highlight_rx = Some((token, rx));
+        std::thread::spawn(move || {
+            let hl = crate::tui::highlight::highlight_markdown(&source);
+            let _ = tx.send(hl);
+        });
     }
 
     /// Apply a completed rebuild if ready. Returns true when a rebuild just finished.
@@ -655,6 +699,7 @@ impl App {
                 Effect::PageRemoved => {
                     self.page_missing = true;
                     self.message = "page removed".into();
+                    self.cancel_highlight();
                     self.doc = PageDoc::Raw(RawDoc::from_source(
                         "# page removed\n\nThis page no longer exists on disk.\nPress Back to leave.\n",
                         None,
@@ -701,6 +746,11 @@ impl App {
                 self.cursor_line = 0;
                 self.scroll = 0;
                 self.focused_item = None;
+                if matches!(mode, ViewMode::Raw) {
+                    self.spawn_highlight(src);
+                } else {
+                    self.cancel_highlight();
+                }
             }
             Err(err) => {
                 self.message = format!("read failed: {err}");
@@ -749,6 +799,11 @@ impl App {
                 self.scroll = self.scroll.min(max);
                 self.remap_search_matches();
                 self.ensure_cursor_visible();
+                if matches!(mode, ViewMode::Raw) {
+                    self.spawn_highlight(src);
+                } else {
+                    self.cancel_highlight();
+                }
             }
             Err(err) => {
                 self.message = format!("read failed: {err}");

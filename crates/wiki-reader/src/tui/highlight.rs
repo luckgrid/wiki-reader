@@ -1,12 +1,30 @@
 //! Syntect markdown highlighting for raw view (line gutter applied at draw).
 
 use std::sync::OnceLock;
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use ratatui::style::{Color, Modifier, Style};
 use syntect::easy::HighlightLines;
 use syntect::highlighting::{FontStyle, Theme, ThemeSet};
 use syntect::parsing::{SyntaxReference, SyntaxSet};
 use syntect::util::LinesWithEndings;
+
+#[cfg(test)]
+static HIGHLIGHT_CALLS: AtomicUsize = AtomicUsize::new(0);
+
+/// Test hook: how many times [`highlight_markdown`] has been called.
+#[cfg(test)]
+#[must_use]
+pub fn highlight_call_count() -> usize {
+    HIGHLIGHT_CALLS.load(Ordering::Relaxed)
+}
+
+/// Test hook: reset the call counter.
+#[cfg(test)]
+pub fn reset_highlight_call_count() {
+    HIGHLIGHT_CALLS.store(0, Ordering::Relaxed);
+}
 
 /// Highlighted span for one run of text.
 #[derive(Debug, Clone)]
@@ -39,8 +57,12 @@ fn pick_theme(ts: &ThemeSet) -> Option<&Theme> {
 }
 
 /// Highlight `source` as markdown. Falls back to plain lines on error.
+///
+/// Call off the UI thread — full-page syntect is tens–hundreds of ms for large pages.
 #[must_use]
 pub fn highlight_markdown(source: &str) -> Vec<Vec<HlSpan>> {
+    #[cfg(test)]
+    HIGHLIGHT_CALLS.fetch_add(1, Ordering::Relaxed);
     let ps = syntax_set();
     let ts = theme_set();
     let Some(syntax) = markdown_syntax(ps) else {
@@ -146,22 +168,39 @@ mod tests {
         );
     }
 
-    /// Manual / release budget: `cargo test -p wiki-reader --release -- highlight_budget --ignored`
+    /// UI path: `RawDoc` for ~50 KB stays well under syntect cost (no sync highlight).
+    /// `cargo test -p wiki-reader --release -- raw_load_budget --ignored`
     #[test]
     #[ignore = "release budget; run with --ignored --release"]
-    fn highlight_budget_50kb_under_20ms() {
+    fn raw_load_budget_50kb_under_50ms() {
+        use crate::tui::viewer_doc::{RawDoc, ViewerDoc};
         let chunk =
             "# Heading\n\nParagraph with `code` and **bold**.\n\n```rust\nfn main() {}\n```\n\n";
         let source = chunk.repeat(700);
         assert!(source.len() >= 40_000);
-        let _ = highlight_markdown("warm");
+        // Warm parse / allocator; highlight must stay unused on this path.
+        let _ = RawDoc::from_source(chunk, None);
+        reset_highlight_call_count();
         let start = Instant::now();
-        let lines = highlight_markdown(&source);
+        let doc = RawDoc::from_source(&source, None);
         let elapsed = start.elapsed();
-        assert!(!lines.is_empty());
+        assert!(!doc.lines().is_empty());
+        assert!(doc.highlights.is_empty(), "UI path must not sync-highlight");
+        assert_eq!(highlight_call_count(), 0);
+        // ponytail: ~25 ms is sync markdown parse for 50 KB; syntect was ~367 ms.
+        // Raise only if parse itself becomes the freeze; upgrade = parse off UI thread.
         assert!(
-            elapsed.as_millis() < 20,
-            "highlight took {elapsed:?}, expected < 20ms (release)"
+            elapsed.as_millis() < 50,
+            "raw load took {elapsed:?}, expected < 50ms (release)"
         );
+    }
+
+    #[test]
+    fn raw_doc_does_not_highlight_on_construct() {
+        use crate::tui::viewer_doc::RawDoc;
+        reset_highlight_call_count();
+        let doc = RawDoc::from_source("# Hi\n\npara\n", None);
+        assert!(doc.highlights.is_empty());
+        assert_eq!(highlight_call_count(), 0);
     }
 }
