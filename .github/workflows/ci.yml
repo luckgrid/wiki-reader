@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --locked
+
+      - name: ADR-0006 core has no terminal deps
+        run: |
+          tree=$(cargo tree -p wiki-reader-core -e normal)
+          echo "$tree"
+          if echo "$tree" | grep -E '(^| )(ratatui|crossterm)( |$)'; then
+            echo "wiki-reader-core must not depend on ratatui or crossterm (ADR-0006)" >&2
+            exit 1
+          fi

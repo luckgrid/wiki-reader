@@ -1,0 +1,12 @@
+[package]
+name = "wiki-reader-render"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Markdown to RenderedDoc for wiki-reader"
+rust-version.workspace = true
+
+[dependencies]
+
+[lib]
+path = "src/lib.rs"

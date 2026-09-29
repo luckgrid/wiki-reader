@@ -1,0 +1,18 @@
+[package]
+name = "wiki-reader"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Terminal wiki reader for markdown collections"
+rust-version.workspace = true
+
+[[bin]]
+name = "wiki-reader"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true }
+crossterm = { workspace = true }
+ratatui = { workspace = true }
+wiki-reader-core = { workspace = true }
+wiki-reader-render = { workspace = true }

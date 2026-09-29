@@ -1,0 +1,13 @@
+[package]
+name = "wiki-reader-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Terminal-free index, nav, and content core for wiki-reader"
+rust-version.workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+
+[lib]
+path = "src/lib.rs"
