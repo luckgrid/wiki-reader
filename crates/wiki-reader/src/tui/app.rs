@@ -21,6 +21,7 @@ use super::layout;
 use super::regions::status::{FocusPane, StatusModel};
 use super::regions::{footer, header, side_nav, status, viewer};
 use super::theme::Theme;
+use super::viewer_doc::{FocusItem, RawDoc, ViewerDoc, cycle, format_target};
 
 /// Owned application state.
 pub struct App {
@@ -36,16 +37,14 @@ pub struct App {
     pub nav_scroll: u16,
     /// When true, the ⌕ Search… row is the nav cursor (not a `NodeId`).
     pub nav_on_search: bool,
-    /// Raw page lines currently shown.
-    pub lines: Vec<String>,
+    /// Current viewer document.
+    pub doc: RawDoc,
     /// Viewer cursor (0-based source line index).
     pub cursor_line: u32,
     /// Viewer scroll offset (lines from top).
     pub scroll: u32,
-    /// Word count of current page.
-    pub word_count: u32,
-    /// Updated frontmatter string.
-    pub updated: String,
+    /// Tab-cycle focused item index into `focus_list`.
+    pub focused_item: Option<usize>,
     /// Status / notice message.
     pub message: String,
     /// Last frame hit map.
@@ -74,11 +73,10 @@ impl App {
             nav_open: true,
             nav_scroll: 0,
             nav_on_search: false,
-            lines: Vec::new(),
+            doc: RawDoc::from_source("", None),
             cursor_line: 0,
             scroll: 0,
-            word_count: 0,
-            updated: "—".into(),
+            focused_item: None,
             message: String::new(),
             hit_map: HitMap::default(),
             theme: Theme::default(),
@@ -155,8 +153,10 @@ impl App {
                 }
             }
             Action::SetCursorLine(line) => {
-                let max = u32::try_from(self.lines.len().saturating_sub(1)).unwrap_or(u32::MAX);
+                let max =
+                    u32::try_from(self.doc.lines().len().saturating_sub(1)).unwrap_or(u32::MAX);
                 self.cursor_line = line.min(max);
+                self.focused_item = None;
                 self.focus = FocusPane::Viewer;
             }
             Action::NavStepUp => self.nav_step(-1),
@@ -166,18 +166,26 @@ impl App {
             Action::NavExpand => self.nav_expand(),
             Action::NavCollapse => self.nav_collapse(),
             Action::NavActivate => self.nav_activate(),
-            // Viewer keys handled in P1-08b/c (wired in keymap already).
-            Action::ViewerUp
-            | Action::ViewerDown
-            | Action::ViewerBlockUp
-            | Action::ViewerBlockDown
-            | Action::ViewerPageUp
-            | Action::ViewerPageDown
-            | Action::ViewerHome
-            | Action::ViewerEnd
-            | Action::ViewerTab
-            | Action::ViewerBackTab
-            | Action::None => {}
+            Action::ViewerUp => self.viewer_move_line(-1),
+            Action::ViewerDown => self.viewer_move_line(1),
+            Action::ViewerBlockUp => self.viewer_block(-1),
+            Action::ViewerBlockDown => self.viewer_block(1),
+            Action::ViewerPageUp => self.viewer_move_line(-20),
+            Action::ViewerPageDown => self.viewer_move_line(20),
+            Action::ViewerHome => {
+                self.focused_item = None;
+                self.cursor_line = 0;
+                self.ensure_cursor_visible(20);
+            }
+            Action::ViewerEnd => {
+                self.focused_item = None;
+                let max = u32::try_from(self.doc.lines().len().saturating_sub(1)).unwrap_or(0);
+                self.cursor_line = max;
+                self.ensure_cursor_visible(20);
+            }
+            Action::ViewerTab => self.viewer_tab(false),
+            Action::ViewerBackTab => self.viewer_tab(true),
+            Action::None => {}
         }
     }
 
@@ -276,7 +284,11 @@ impl App {
                 self.navigator.set_group_expanded(id, false);
             }
             NodeId::Page(key) => {
-                if let Some(parent) = key.relative_path.parent().filter(|p| !p.as_os_str().is_empty()) {
+                if let Some(parent) = key
+                    .relative_path
+                    .parent()
+                    .filter(|p| !p.as_os_str().is_empty())
+                {
                     self.navigator
                         .set_nav_cursor(NodeId::Group(parent.to_path_buf()));
                 }
@@ -337,21 +349,11 @@ impl App {
     fn load_page(&mut self, key: &PageKey) {
         match self.provider.read(key) {
             Ok(src) => {
-                self.lines = src.lines().map(str::to_owned).collect();
-                if let Some(page) = self.navigator.index().pages.get(key) {
-                    self.word_count = page.parsed.word_count;
-                    self.updated = page
-                        .parsed
-                        .frontmatter
-                        .updated
-                        .clone()
-                        .unwrap_or_else(|| "—".into());
-                } else {
-                    self.word_count = 0;
-                    self.updated = "—".into();
-                }
+                let page = self.navigator.index().pages.get(key);
+                self.doc = RawDoc::from_source(&src, page);
                 self.cursor_line = 0;
                 self.scroll = 0;
+                self.focused_item = None;
             }
             Err(err) => {
                 self.message = format!("read failed: {err}");
@@ -360,13 +362,95 @@ impl App {
     }
 
     fn anchor_line(&self, slug: &str) -> Option<u32> {
-        let key = &self.navigator.tab().current().page;
-        let page = self.navigator.index().pages.get(key)?;
-        page.parsed
-            .headings
-            .iter()
-            .find(|h| h.slug == slug)
-            .map(|h| h.source_line)
+        self.doc.anchor_line(slug)
+    }
+
+    fn viewer_move_line(&mut self, delta: i32) {
+        self.focused_item = None;
+        let max = i64::try_from(self.doc.lines().len().saturating_sub(1)).unwrap_or(0);
+        let cur = i64::from(self.cursor_line);
+        let next = (cur + i64::from(delta)).clamp(0, max);
+        self.cursor_line = u32::try_from(next).unwrap_or(0);
+        self.ensure_cursor_visible(20);
+    }
+
+    fn viewer_block(&mut self, dir: i32) {
+        self.focused_item = None;
+        let blocks = self.doc.block_starts();
+        // blocks are 1-based; cursor is 0-based
+        let cur_src = self.cursor_line.saturating_add(1);
+        if dir < 0 {
+            let prev = blocks.iter().rev().find(|&&b| b < cur_src).copied();
+            if let Some(b) = prev {
+                self.cursor_line = b.saturating_sub(1);
+            } else {
+                self.cursor_line = 0;
+            }
+        } else {
+            let next = blocks.iter().find(|&&b| b > cur_src).copied();
+            if let Some(b) = next {
+                self.cursor_line = b.saturating_sub(1);
+            }
+        }
+        self.ensure_cursor_visible(20);
+    }
+
+    fn ensure_cursor_visible(&mut self, page_h: u32) {
+        if self.cursor_line < self.scroll {
+            self.scroll = self.cursor_line;
+        } else if self.cursor_line >= self.scroll.saturating_add(page_h) {
+            self.scroll = self.cursor_line.saturating_sub(page_h.saturating_sub(1));
+        }
+    }
+
+    fn focus_list(&self) -> Vec<FocusItem> {
+        let mut items = self.doc.focus_items();
+        let current = &self.navigator.tab().current().page;
+        let tree = &self.navigator.nav().tree;
+        if tree.prev(current).is_some() {
+            items.push(FocusItem {
+                line: u32::MAX - 1,
+                cols: (0, 1),
+                kind: super::viewer_doc::FocusKind::FooterPrev,
+                target: String::new(),
+            });
+        }
+        if tree.next(current).is_some() {
+            items.push(FocusItem {
+                line: u32::MAX,
+                cols: (0, 1),
+                kind: super::viewer_doc::FocusKind::FooterNext,
+                target: String::new(),
+            });
+        }
+        items
+    }
+
+    fn viewer_tab(&mut self, backward: bool) {
+        let items = self.focus_list();
+        if self.focused_item.is_none() {
+            self.focused_item = cycle::next_after(&items, self.cursor_line, backward);
+        } else {
+            self.focused_item = cycle::step(&items, self.focused_item, backward);
+        }
+        let Some(i) = self.focused_item else {
+            return;
+        };
+        let Some(it) = items.get(i) else {
+            return;
+        };
+        if it.line < u32::MAX - 1 {
+            self.cursor_line = it.line;
+            self.ensure_cursor_visible(20);
+        }
+        let page = &self.navigator.tab().current().page;
+        self.message = match it.kind {
+            super::viewer_doc::FocusKind::Link => {
+                format_target(&it.target, page, self.navigator.index())
+            }
+            super::viewer_doc::FocusKind::FooterPrev => "‹ prev".into(),
+            super::viewer_doc::FocusKind::FooterNext => "next ›".into(),
+        };
     }
 
     fn close_overlay_after_nav(&mut self, term_width: u16) {
@@ -521,7 +605,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     viewer::draw(
         frame,
         regions.viewer,
-        &app.lines,
+        app.doc.lines(),
         app.scroll,
         app.cursor_line,
         app.focus == FocusPane::Viewer,
@@ -561,7 +645,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         );
     }
 
-    let total = u32::try_from(app.lines.len().max(1)).unwrap_or(1);
+    let total = u32::try_from(app.doc.lines().len().max(1)).unwrap_or(1);
     let pct = ((app.scroll.saturating_add(1)) * 100) / total;
     let path = page.relative_path.display().to_string();
     status::draw(
@@ -572,9 +656,9 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
             path: &path,
             line: app.cursor_line.saturating_add(1),
             pct,
-            words: app.word_count,
-            minutes: status::reading_minutes(app.word_count),
-            updated: &app.updated,
+            words: app.doc.word_count(),
+            minutes: status::reading_minutes(app.doc.word_count()),
+            updated: app.doc.updated(),
             message: &app.message,
         },
         &theme,
@@ -830,5 +914,37 @@ mod tests {
         assert!(app.navigator.nav().expanded.contains(&id));
         app.update(Action::NavActivate);
         assert!(!app.navigator.nav().expanded.contains(&id));
+    }
+
+    #[test]
+    fn viewer_cursor_scroll_and_back_restore() {
+        let root = fixture();
+        let mut app = App::new(&root).unwrap();
+        app.update(Action::FocusViewer);
+        app.update(Action::ViewerDown);
+        app.update(Action::ViewerDown);
+        assert_eq!(app.cursor_line, 2);
+        let scroll_before = app.scroll;
+        app.update(Action::GoToPage(PageKey {
+            collection_id: "worked-example".into(),
+            relative_path: PathBuf::from("architecture/README.md"),
+        }));
+        // Leave with view state saved on navigate from README... we navigated from root
+        // with cursor 2; go back.
+        app.update(Action::Back);
+        assert_eq!(app.cursor_line, 2);
+        assert_eq!(app.scroll, scroll_before);
+    }
+
+    #[test]
+    fn viewer_tab_clears_on_arrow() {
+        let root = fixture();
+        let mut app = App::new(&root).unwrap();
+        app.update(Action::FocusViewer);
+        app.update(Action::ViewerTab);
+        // May or may not find items; either way arrow clears.
+        app.focused_item = Some(0);
+        app.update(Action::ViewerDown);
+        assert_eq!(app.focused_item, None);
     }
 }

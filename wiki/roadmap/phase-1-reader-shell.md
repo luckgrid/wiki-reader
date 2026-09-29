@@ -40,11 +40,11 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 | P1-07a | Core support APIs (breadcrumb, blocks, nav focus) | | done | (pending merge) |
 | P1-07b | TUI skeleton: regions, hit map, static content | | done | (pending merge) |
 | P1-07c | Side nav (`HitMap` flat rows; ADR-0009 B) | T1,N4 | done | (pending merge) |
-| P1-G | Live herdr key-log gate | | doing | [P1-S1](spikes/p1-s1-herdr-input.md) |
+| P1-G | Live herdr key-log gate | | done | (pending merge) | [P1-S1](spikes/p1-s1-herdr-input.md) |
 | P1-08 | Focus/cursor | K1–K4 | todo | parent of 08a–08c; entry: P1-G |
-| P1-08a | Pane focus (K1) + side-nav keys (K4) | K1,K4 | todo | |
-| P1-08b | Viewer cursor (K2) + interim ViewerDoc | K2 | todo | |
-| P1-08c | Viewer Tab cycle (K3), logic only | K3 | todo | Enter activation → P1-09 |
+| P1-08a | Pane focus (K1) + side-nav keys (K4) | K1,K4 | done | (pending merge) |
+| P1-08b | Viewer cursor (K2) + interim ViewerDoc | K2 | doing | |
+| P1-08c | Viewer Tab cycle (K3), logic only | K3 | doing | Enter activation → P1-09 |
 | P1-09 | Links, Tab/Enter/click | L1–L3 | todo | non-md / `?query` targets documented in content-model |
 | P1-10 | Search overlay | S1 | todo | |
 | P1-11 | Raw toggle | V2 | todo | |

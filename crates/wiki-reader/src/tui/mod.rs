@@ -9,3 +9,4 @@ pub mod keymap;
 pub mod layout;
 pub mod regions;
 pub mod theme;
+pub mod viewer_doc;
