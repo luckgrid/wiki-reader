@@ -1,7 +1,6 @@
-//! Link resolution, `NavTree` build (titles, folding, order), prev/next.
+//! Link resolution (L2).
 //!
-//! See [content model](../../../wiki/product/content-model.md) and
-//! [ADR-0008](../../../wiki/decisions/0008-side-nav-as-site-nav.md).
+//! See [content model](../../../../../wiki/product/content-model.md).
 
 use std::path::{Path, PathBuf};
 

@@ -28,8 +28,8 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 | P1-01 | FsProvider + discovery | | done | 7bc90c9 |
 | P1-02 | Frontmatter + parse | | done | a907712 |
 | P1-03 | Index | | done | f2752c2 |
-| P1-04 | Link resolution | L2 | doing | |
-| P1-05 | NavTree + fixture snapshots | T1 | todo | |
+| P1-04 | Link resolution | L2 | done | 216be37 |
+| P1-05 | NavTree + fixture snapshots | T1 | doing | |
 | P1-06 | navigate() + history + invariant tests | N1–N4 | todo | |
 | P1-07 | Layout regions + hit map | | todo | placeholder regions done |
 | P1-08 | Focus/cursor | K1–K4 | todo | |
@@ -39,7 +39,7 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 | P1-12 | Live reload | V3 | todo | |
 | P1-13 | Renderer port | V1 | todo | |
 | P1-S1 | Spike, herdr input | | todo | |
-| P1-S2 | Spike, tree widget decision | | todo | |
+| P1-S2 | Spike, tree widget decision | | done | ADR-0009 |
 
 ## Related
 
