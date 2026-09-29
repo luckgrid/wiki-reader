@@ -45,6 +45,15 @@ pub enum NavItem {
     },
 }
 
+/// One breadcrumb segment (root title, group, or current page).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Crumb {
+    /// Display label.
+    pub label: String,
+    /// Landing page to open when clicked; `None` = non-clickable (README-less group).
+    pub target: Option<PageKey>,
+}
+
 /// Site-style navigation tree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NavTree {
@@ -88,6 +97,41 @@ impl NavTree {
         order.get(i + 1).cloned()
     }
 
+    /// Breadcrumb trail for `page`: root title, ancestor groups, then the page.
+    ///
+    /// Segments follow the side-nav hierarchy (not raw directories). Middle
+    /// truncation is width-dependent and lives in the TUI.
+    #[must_use]
+    pub fn breadcrumb(&self, page: &PageKey) -> Vec<Crumb> {
+        let mut trail: Vec<Crumb> = Vec::new();
+        if !find_crumb_path(&self.items, page, &mut trail) {
+            // Page not in tree: still show root + a non-clickable label if possible.
+            if let Some(root) = root_crumb(&self.items) {
+                return vec![
+                    root,
+                    Crumb {
+                        label: humanize_filename(&page.relative_path),
+                        target: Some(page.clone()),
+                    },
+                ];
+            }
+            return vec![Crumb {
+                label: humanize_filename(&page.relative_path),
+                target: Some(page.clone()),
+            }];
+        }
+        // Prepend root title when the path didn't start with it (nested page).
+        if let Some(root) = root_crumb(&self.items) {
+            let starts_with_root = trail
+                .first()
+                .is_some_and(|c| c.target.as_ref() == root.target.as_ref());
+            if !starts_with_root {
+                trail.insert(0, root);
+            }
+        }
+        trail
+    }
+
     /// Render a text snapshot (content-model style markers).
     ///
     /// `expanded` controls which groups show children. `current` marks `●` vs plain label.
@@ -97,6 +141,52 @@ impl NavTree {
         render_items(&self.items, 0, expanded, current, &mut lines);
         lines.join("\n")
     }
+}
+
+fn root_crumb(items: &[NavItem]) -> Option<Crumb> {
+    match items.first() {
+        Some(NavItem::Page { key, label, .. }) => Some(Crumb {
+            label: label.clone(),
+            target: Some(key.clone()),
+        }),
+        _ => None,
+    }
+}
+
+fn group_landing(children: &[NavItem]) -> Option<PageKey> {
+    children.iter().find_map(|c| match c {
+        NavItem::Page { key, .. } if is_landing(&key.relative_path) => Some(key.clone()),
+        _ => None,
+    })
+}
+
+/// DFS: push crumbs for the path to `page`. Returns true if found.
+fn find_crumb_path(items: &[NavItem], page: &PageKey, trail: &mut Vec<Crumb>) -> bool {
+    for item in items {
+        match item {
+            NavItem::Page { key, label, .. } if key == page => {
+                trail.push(Crumb {
+                    label: label.clone(),
+                    target: Some(key.clone()),
+                });
+                return true;
+            }
+            NavItem::Page { .. } => {}
+            NavItem::Group {
+                label, children, ..
+            } => {
+                trail.push(Crumb {
+                    label: label.clone(),
+                    target: group_landing(children),
+                });
+                if find_crumb_path(children, page, trail) {
+                    return true;
+                }
+                trail.pop();
+            }
+        }
+    }
+    false
 }
 
 fn collect_pages(items: &[NavItem], out: &mut Vec<PageKey>) {
@@ -921,5 +1011,67 @@ mod tests {
         };
         assert_eq!(key.relative_path, PathBuf::from("README.md"));
         assert_eq!(label, "From Readme");
+    }
+
+    #[test]
+    fn worked_example_breadcrumb() {
+        let index = index_at("../../fixtures/worked-example");
+        let tree = NavTree::build(&index);
+        let tokens = PageKey {
+            collection_id: "worked-example".into(),
+            relative_path: PathBuf::from("architecture/design-system/tokens.md"),
+        };
+        let crumbs = tree.breadcrumb(&tokens);
+        let labels: Vec<_> = crumbs.iter().map(|c| c.label.as_str()).collect();
+        assert_eq!(
+            labels,
+            vec![
+                "Worked Example Wiki",
+                "Architecture Overview",
+                "Design System",
+                "Token Projection"
+            ]
+        );
+        assert_eq!(
+            crumbs[0].target.as_ref().map(|k| k.relative_path.as_path()),
+            Some(Path::new("README.md"))
+        );
+        assert_eq!(
+            crumbs[1].target.as_ref().map(|k| k.relative_path.as_path()),
+            Some(Path::new("architecture/README.md"))
+        );
+        assert_eq!(
+            crumbs
+                .last()
+                .unwrap()
+                .target
+                .as_ref()
+                .unwrap()
+                .relative_path,
+            PathBuf::from("architecture/design-system/tokens.md")
+        );
+    }
+
+    #[test]
+    fn deep_tree_breadcrumb() {
+        let index = index_at("../../fixtures/deep-tree");
+        let tree = NavTree::build(&index);
+        let leaf = PageKey {
+            collection_id: index.collection_id.clone(),
+            relative_path: PathBuf::from("l1/l2/l3/leaf.md"),
+        };
+        let crumbs = tree.breadcrumb(&leaf);
+        let labels: Vec<_> = crumbs.iter().map(|c| c.label.as_str()).collect();
+        assert!(labels.len() >= 3, "labels={labels:?}");
+        assert_eq!(
+            labels[0],
+            tree.breadcrumb(&PageKey {
+                collection_id: index.collection_id.clone(),
+                relative_path: PathBuf::from("README.md"),
+            })[0]
+                .label
+        );
+        assert_eq!(labels.last().copied(), Some("Deep Leaf"));
+        assert!(crumbs.iter().any(|c| c.target.is_some()));
     }
 }

@@ -35,9 +35,16 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 | P1-R2 | Index robustness + determinism | F3,F5,F8,F9 | done | 4ee9957 |
 | P1-R3 | NavTree correctness | F1,F5,F6,T1 | done | e85c57b |
 | P1-R4 | Navigator hardening | F4,F10,N1–N4 | done | 66866be |
-| P1-R5 | Docs, spikes, housekeeping | | done | |
-| P1-07 | Layout regions + hit map | | todo | placeholder regions done; gate: ADR-0009 follow-up |
-| P1-08 | Focus/cursor | K1–K4 | todo | Entry: live herdr keylog checklist (see P1-S1) |
+| P1-R5 | Docs, spikes, housekeeping | | done | 20bdf18 |
+| P1-07 | Layout regions + hit map | | todo | parent of 07a–07c |
+| P1-07a | Core support APIs (breadcrumb, blocks, nav focus) | | doing | |
+| P1-07b | TUI skeleton: regions, hit map, static content | | todo | |
+| P1-07c | Side nav (tui-tree-widget) | T1,N4 | todo | ADR-0009 |
+| P1-G | Live herdr key-log gate | | todo | Entry criterion for P1-08a; [P1-S1](spikes/p1-s1-herdr-input.md) |
+| P1-08 | Focus/cursor | K1–K4 | todo | parent of 08a–08c; entry: P1-G |
+| P1-08a | Pane focus (K1) + side-nav keys (K4) | K1,K4 | todo | |
+| P1-08b | Viewer cursor (K2) + interim ViewerDoc | K2 | todo | |
+| P1-08c | Viewer Tab cycle (K3), logic only | K3 | todo | Enter activation → P1-09 |
 | P1-09 | Links, Tab/Enter/click | L1–L3 | todo | non-md / `?query` targets documented in content-model |
 | P1-10 | Search overlay | S1 | todo | |
 | P1-11 | Raw toggle | V2 | todo | |

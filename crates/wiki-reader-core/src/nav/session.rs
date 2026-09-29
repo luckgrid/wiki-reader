@@ -205,6 +205,46 @@ impl Navigator {
         self.tabs.len()
     }
 
+    /// Set the side-nav keyboard cursor.
+    pub fn set_nav_cursor(&mut self, id: NodeId) {
+        self.nav.cursor = Some(id);
+    }
+
+    /// Expand or collapse a group in the side nav.
+    pub fn set_group_expanded(&mut self, id: NodeId, expanded: bool) {
+        if expanded {
+            self.nav.expanded.insert(id);
+        } else {
+            self.nav.expanded.remove(&id);
+        }
+    }
+
+    /// Record the current page as `seen_page` when the nav loses focus.
+    pub fn nav_focus_lost(&mut self) {
+        self.nav.seen_page = Some(self.tab().current().page.clone());
+    }
+
+    /// Apply the stale-cursor rule when the nav gains focus; returns the cursor.
+    ///
+    /// If the current page changed while the nav was unfocused, the cursor jumps
+    /// to the current page item. Otherwise the remembered cursor is kept
+    /// (defaulting to the current page when none was remembered).
+    pub fn nav_focus_gained(&mut self) -> NodeId {
+        let current = self.tab().current().page.clone();
+        let stale = self.nav.seen_page.as_ref() != Some(&current);
+        let id = if stale {
+            NodeId::Page(current.clone())
+        } else {
+            self.nav
+                .cursor
+                .clone()
+                .unwrap_or_else(|| NodeId::Page(current.clone()))
+        };
+        self.nav.cursor = Some(id.clone());
+        self.nav.seen_page = Some(current);
+        id
+    }
+
     /// Navigate to a resolved or unresolved [`Target`].
     pub fn navigate(&mut self, target: Target, how: Disposition, view: ViewState) -> Vec<Effect> {
         match target {
@@ -365,9 +405,9 @@ impl Navigator {
     fn effects_for_current(&mut self) -> Vec<Effect> {
         let page = self.tab().current().page.clone();
         let anchor = self.tab().current().anchor.clone();
+        // Expand ancestors for ● / N4. Do not clobber nav cursor or seen_page —
+        // those are owned by focus (nav_focus_lost / nav_focus_gained).
         expand_ancestors(&self.nav.tree, &page, &mut self.nav.expanded);
-        self.nav.cursor = Some(NodeId::Page(page.clone()));
-        self.nav.seen_page = Some(page.clone());
         vec![
             Effect::LoadPage(page.clone()),
             Effect::RevealInTree(page),
@@ -435,11 +475,18 @@ mod tests {
             .collect()
     }
 
-    /// N1: every entry point yields the same history + tree selection for the same page.
+    /// N1: every entry point yields the same history + tree reveal for the same page.
     fn assert_same_arrival(nav: &Navigator, expected: &PageKey) {
         assert_eq!(&nav.tab().current().page, expected);
-        assert_eq!(nav.nav().cursor, Some(NodeId::Page(expected.clone())));
-        assert_eq!(nav.nav().seen_page.as_ref(), Some(expected));
+        assert!(
+            nav.nav()
+                .expanded
+                .iter()
+                .any(|id| matches!(id, NodeId::Group(_)))
+                || expected.relative_path.components().count() <= 1,
+            "nested page should expand ancestors; expanded={:?}",
+            nav.nav().expanded
+        );
     }
 
     /// N4: ancestors expanded; current page marked ● in `render_text`.
@@ -735,5 +782,54 @@ mod tests {
             assert_eq!(nav.tab().current().page.relative_path, PathBuf::from(p));
         }
         assert_eq!(nav.tab_count(), 1);
+    }
+
+    #[test]
+    fn nav_focus_stale_cursor_and_defaults() {
+        let mut nav = worked();
+        let root = key("README.md");
+        let tokens = key("architecture/design-system/tokens.md");
+
+        // Default: remembered cursor is the start page.
+        assert_eq!(nav.nav().cursor, Some(NodeId::Page(root.clone())));
+        assert_eq!(nav.nav().seen_page.as_ref(), Some(&root));
+
+        // Remember a different cursor, leave nav, navigate elsewhere, refocus → jump.
+        nav.set_nav_cursor(NodeId::Page(key("decisions/0001-stack.md")));
+        nav.nav_focus_lost();
+        assert_eq!(nav.nav().seen_page.as_ref(), Some(&root));
+        nav.go_to_page(tokens.clone(), ViewState::default());
+        // Cursor not clobbered by navigate.
+        assert_eq!(
+            nav.nav().cursor,
+            Some(NodeId::Page(key("decisions/0001-stack.md")))
+        );
+        let gained = nav.nav_focus_gained();
+        assert_eq!(gained, NodeId::Page(tokens.clone()));
+        assert_eq!(nav.nav().cursor, Some(NodeId::Page(tokens.clone())));
+        assert_eq!(nav.nav().seen_page.as_ref(), Some(&tokens));
+
+        // Round-trip through viewer without navigate keeps remembered cursor.
+        nav.set_nav_cursor(NodeId::Page(key("architecture/README.md")));
+        nav.nav_focus_lost();
+        let kept = nav.nav_focus_gained();
+        assert_eq!(kept, NodeId::Page(key("architecture/README.md")));
+
+        // No remembered cursor → current page item.
+        nav.nav.cursor = None;
+        nav.nav_focus_lost();
+        let def = nav.nav_focus_gained();
+        assert_eq!(def, NodeId::Page(tokens));
+    }
+
+    #[test]
+    fn set_group_expanded_toggles() {
+        let mut nav = worked();
+        let id = NodeId::Group(PathBuf::from("decisions"));
+        assert!(!nav.nav().expanded.contains(&id));
+        nav.set_group_expanded(id.clone(), true);
+        assert!(nav.nav().expanded.contains(&id));
+        nav.set_group_expanded(id.clone(), false);
+        assert!(!nav.nav().expanded.contains(&id));
     }
 }

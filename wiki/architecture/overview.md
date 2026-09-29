@@ -57,7 +57,8 @@ enum Disposition { Replace, NewTab, BackgroundTab }
 
 struct Location { page: PageKey, anchor: Option<Anchor>, cursor_line: u32, scroll: u32, mode: ViewMode }
 struct Tab { history: Vec<Location>, cursor: usize }       // browser-style stack
-struct App { tabs: Vec<Tab>, active: usize, nav: NavState, focus: Focus, overlay: Option<Overlay>, .. }
+struct App { /* TUI-owned: focus, hit_map, overlay, …; history via Navigator */ }
+// History mutator is Navigator (core); TUI applies Effect::{LoadPage, RevealInTree, ScrollTo}.
 
 enum Focus { Nav, Viewer }
 struct NavState {
