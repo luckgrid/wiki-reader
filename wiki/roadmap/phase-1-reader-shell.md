@@ -57,11 +57,14 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 | P1-R22 | Watcher correctness | V3 | done | 1414d39 |
 | P1-R23 | Search match remap | S1 | done | 1414d39 |
 | P1-R24 | Roadmap honesty + test time | | done | 1414d39 |
+| P1-R25 | Source-map precision + table padding | V1,S1 | doing | PR #27 |
+| P1-R26 | Watcher FS heuristics | V3 | doing | PR #28 |
+| P1-R27 | Roadmap honesty + exit checklist | | doing | this PR |
 | P1-07 | Layout regions + hit map | | done | 5911ea5 |
 | P1-07a | Core support APIs (breadcrumb, blocks, nav focus) | | done | 5911ea5 |
 | P1-07b | TUI skeleton: regions, hit map, static content | | done | 5911ea5 |
 | P1-07c | Side nav (`HitMap` flat rows; ADR-0010) | T1,N4 | done | 5911ea5 |
-| P1-G | Live herdr key-log gate | | done | example done; **live herdr check still open** | [P1-S1](spikes/p1-s1-herdr-input.md) |
+| P1-G | Live herdr key-log gate | | doing | example done; live herdr check open — [P1-S1](spikes/p1-s1-herdr-input.md) |
 | P1-08 | Focus/cursor | K1–K4 | done | 5911ea5 |
 | P1-08a | Pane focus (K1) + side-nav keys (K4) | K1,K4 | done | 5911ea5 |
 | P1-08b | Viewer cursor (K2) + interim ViewerDoc | K2 | done | 5911ea5 |
@@ -71,14 +74,21 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 | P1-11 | Raw toggle | V2 | done | 1414d39 |
 | P1-12 | Live reload | V3 | done | 1414d39 |
 | P1-13 | Renderer port | V1 | done | 1414d39 |
-| P1-S1 | Spike, herdr input | | done | [spike note](spikes/p1-s1-herdr-input.md); doc-only; live herdr key log pending |
+| P1-S1 | Spike, herdr input | | doing | [spike note](spikes/p1-s1-herdr-input.md); example done; live herdr key log open |
 | P1-S2 | Spike, tree widget decision | | done | ADR-0009 → superseded by ADR-0010 |
 
-## Remaining before phase exit
+## Phase 1 exit checklist
 
-- **P1-G:** run the live herdr key-log checklist (still operator-owned).
-- **Exit criterion:** open a real collection (e.g. `~/Workspaces/uwiki` when present), follow ten links incl. anchors, back ten times, one tab cycle + restored cursor; edit/delete/rename while open; resize; search open/close; `q`/Ctrl+C restore terminal.
-- **Manual perf:** `cargo test -p wiki-reader-render --release -- --ignored` (and highlight) for <20 ms / 50 KB; CI runs a doubling scaling check (<3×).
+Phase status stays `active` until every item below is ticked (operator-owned where noted).
+
+1. [ ] `cargo run -p wiki-reader --example keylog` in a herdr pane; tick the [P1-S1](spikes/p1-s1-herdr-input.md) spike note (P1-G).
+2. [ ] On a real collection (e.g. `~/Workspaces/uwiki` when present): follow ten links incl. anchors, go back ten times, confirm one tab and a restored cursor.
+3. [ ] Edit, rename, and delete a page from another terminal while it is open; confirm live reload / page-removed.
+4. [ ] Resize below and above 80 columns; nav overlay / layout stays usable.
+5. [ ] Open/close search; Esc restores the prior cursor.
+6. [ ] Ctrl+C and `q` restore the terminal in herdr and in a plain terminal.
+
+Also: `cargo test -p wiki-reader-render --release -- --ignored` (and highlight) for <20 ms / 50 KB; CI already runs the doubling scaling check (<3×).
 
 ## Related
 
