@@ -387,27 +387,25 @@ mod tests {
 
     #[test]
     fn render_scaling_not_quadratic() {
-        use std::time::Instant;
+        use std::time::{Duration, Instant};
         let chunk = "# H\n\nPara with [link](https://ex.com) and a list:\n\n- a\n- b\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\n```\ncode\n```\n\n";
         let small = chunk.repeat(200); // ≈ 25 KB
         let large = chunk.repeat(400); // ≈ 50 KB
         assert!(small.len() * 2 <= large.len() + chunk.len());
 
-        // Warm caches / allocator.
+        // Warm caches / allocator on the real sizes (CI macOS is noisy).
         let _ = render_src(chunk, 80);
+        let _ = render_src(&small, 80);
 
-        let t_small = {
+        let timed = |src: &str| -> Duration {
             let start = Instant::now();
-            let doc = render_src(&small, 80);
+            let doc = render_src(src, 80);
             assert!(!doc.lines.is_empty());
             start.elapsed()
         };
-        let t_large = {
-            let start = Instant::now();
-            let doc = render_src(&large, 80);
-            assert!(!doc.lines.is_empty());
-            start.elapsed()
-        };
+        // Best of three: one contested core must not fail the doubling check.
+        let t_small = (0..3).map(|_| timed(&small)).min().unwrap();
+        let t_large = (0..3).map(|_| timed(&large)).min().unwrap();
         let ratio = t_large.as_secs_f64() / t_small.as_secs_f64().max(1e-9);
         // Quadratic was ~4× per doubling; allow headroom for debug allocator noise.
         assert!(
