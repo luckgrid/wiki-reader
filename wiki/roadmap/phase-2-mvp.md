@@ -21,7 +21,7 @@ All P0/P1 acceptance criteria in [product spec](../product/spec.md) pass; two we
 | ID | Task | Reqs | Status | Notes |
 |----|------|------|--------|-------|
 | P2-01 | Custom nav order via `SUMMARY.md` / `nav_order` | P1 | done | shipped in P1-R3 |
-| P2-02 | "Linked from" backlinks | B1 | todo | `Index::by_to` ready; end-of-article list |
+| P2-02 | "Linked from" backlinks | B1 | doing | this PR |
 | P2-03 | Block actions in the Tab cycle | BA | todo | extend `FocusTarget` |
 | P2-04 | Heading jump | J1 | todo | `RenderedDoc.headings`; primary `Alt+Shift+↑/↓` (herdr key log 2026-09-29) |
 | P2-05 | Tabs as secondary | TB | todo | core `Disposition` ready; TUI bar + keys |

@@ -862,6 +862,64 @@ fn click_link_glyph_follows_page() {
     );
 }
 
+#[test]
+fn linked_from_backlink_in_tab_cycle_and_activate() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/design-system/README.md"),
+    }));
+    let _ = draw_app(&mut app, 120, 24);
+    assert!(
+        app.doc.lines().iter().any(|l| l.contains("Linked from")),
+        "rendered design-system should list Linked from"
+    );
+    let bl = app
+        .doc
+        .link_spans()
+        .iter()
+        .find(|s| s.raw_target.ends_with("tokens.md") && s.raw_target.starts_with('/'))
+        .expect("root-relative tokens backlink")
+        .clone();
+    // Backlink sits after body links in the Tab cycle (before footer).
+    let items = app.focus_list();
+    let bl_idx = items
+        .iter()
+        .position(|it| it.link_id == Some(bl.id))
+        .expect("backlink in focus list");
+    let footer_idx = items
+        .iter()
+        .position(|it| matches!(it.kind, FocusTarget::FooterPrev | FocusTarget::FooterNext))
+        .expect("footer");
+    assert!(bl_idx < footer_idx, "backlink before footer in Tab cycle");
+    // Enter on the backlink matches tree-select history shape (replace, one tab).
+    app.update(Action::FocusViewer);
+    app.focused_item = Some(bl_idx);
+    app.update(Action::ViewerActivate);
+    assert_eq!(
+        app.navigator.tab().current().page.relative_path,
+        PathBuf::from("architecture/design-system/tokens.md")
+    );
+    assert_eq!(app.navigator.tab_count(), 1);
+}
+
+#[test]
+fn linked_from_absent_in_raw_mode() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/design-system/README.md"),
+    }));
+    app.update(Action::ToggleViewMode);
+    assert!(matches!(app.doc, crate::tui::page_doc::PageDoc::Raw(_)));
+    assert!(
+        !app.doc.lines().iter().any(|l| l.contains("Linked from")),
+        "raw mode is source-only"
+    );
+}
+
 #[derive(Default)]
 struct LogOpener(std::sync::Arc<std::sync::Mutex<Vec<String>>>);
 
