@@ -228,6 +228,72 @@ mod tests {
                     "w={width}: border columns misaligned data={data:?} sep={sep:?}"
                 );
             }
+            for line in table_lines
+                .iter()
+                .filter(|l| l.contains('│') && !l.contains('┼') && !l.contains('├'))
+            {
+                assert!(
+                    cells_padded_both_sides(line),
+                    "w={width}: cell missing side pad: {line}"
+                );
+            }
+        }
+    }
+
+    /// Each cell between `│` has a leading and trailing space.
+    fn cells_padded_both_sides(line: &str) -> bool {
+        let mut parts = line.split('│').filter(|p| !p.is_empty());
+        parts.all(|cell| cell.starts_with(' ') && cell.ends_with(' '))
+    }
+
+    #[test]
+    fn table_rows_map_to_own_source_lines() {
+        let src = "| a | b |\n| --- | --- |\n| 1 | 2 |\n| NEEDLE | x |\n";
+        let doc = render_src(src, 40);
+        let mapped: Vec<(String, u32)> = doc
+            .lines
+            .iter()
+            .zip(doc.source_map.iter())
+            .filter(|(l, _)| l.contains('│') || l.contains('├'))
+            .map(|(l, &s)| (l.clone(), s))
+            .collect();
+        assert_eq!(
+            mapped.iter().map(|(_, s)| *s).collect::<Vec<_>>(),
+            vec![1, 2, 3, 4],
+            "table rows should map to distinct source lines: {mapped:?}"
+        );
+        let needle = mapped
+            .iter()
+            .find(|(l, _)| l.contains("NEEDLE"))
+            .expect("NEEDLE row");
+        assert_eq!(needle.1, 4);
+    }
+
+    #[test]
+    fn source_map_monotonic_mixed_with_table() {
+        let src = "# H\n\nPara.\n\n| a |\n| --- |\n| 1 |\n\nTail.\n";
+        let doc = render_src(src, 40);
+        assert!(
+            doc.source_map.windows(2).all(|w| w[1] >= w[0]),
+            "source_map not monotonic: {:?}",
+            doc.source_map
+        );
+    }
+
+    #[test]
+    fn table_full_width_cells_keep_trailing_space() {
+        // Wide content + narrow width → clipped cells must still pad both sides.
+        let src = "| abcdefghijklmnopqrstuvwxyz |\n| --- |\n| abcdefghijklmnopqrstuvwxyz |\n";
+        let doc = render_src(src, 20);
+        for line in doc
+            .lines
+            .iter()
+            .filter(|l| l.contains('│') && !l.contains('┼') && !l.contains('├'))
+        {
+            assert!(
+                cells_padded_both_sides(line),
+                "full-width cell missing pad: {line}"
+            );
         }
     }
 
