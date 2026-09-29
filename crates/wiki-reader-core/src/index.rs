@@ -116,16 +116,37 @@ impl Index {
             push_parent_edge(&mut edges, page, &by_path);
         }
 
-        let (by_from, by_to) = build_edge_maps(&edges);
-
-        Ok(Self {
+        let mut index = Self {
             pages,
             edges,
-            by_from,
-            by_to,
+            by_from: HashMap::new(),
+            by_to: HashMap::new(),
             by_id,
             by_path,
-        })
+        };
+        // Refine Link.to with full L2 resolve now that pages exist.
+        let updates: Vec<(usize, Option<PageKey>)> = index
+            .edges
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| e.kind == EdgeKind::Link)
+            .map(|(i, e)| {
+                let to = match crate::nav::resolve(&e.raw_target, &e.from, &index).target {
+                    crate::nav::Target::Page(key, _) => Some(key),
+                    crate::nav::Target::Anchor(_) => Some(e.from.clone()),
+                    _ => None,
+                };
+                (i, to)
+            })
+            .collect();
+        for (i, to) in updates {
+            index.edges[i].to = to;
+        }
+
+        let (by_from, by_to) = build_edge_maps(&index.edges);
+        index.by_from = by_from;
+        index.by_to = by_to;
+        Ok(index)
     }
 
     /// Backlink edge indices for `key` (excludes [`EdgeKind::Parent`]).
@@ -154,15 +175,16 @@ fn title_for(parsed: &ParsedPage, relative_path: &Path) -> String {
     )
 }
 
-fn push_link_edges(edges: &mut Vec<Edge>, page: &Page, by_path: &HashMap<PathBuf, PageKey>) {
+fn push_link_edges(edges: &mut Vec<Edge>, page: &Page, index_paths: &HashMap<PathBuf, PageKey>) {
+    // Build a temporary path-only view for resolve during edge construction.
+    // Full Index isn't available yet; use rough lookup then refined in a second pass.
     for link in &page.parsed.links {
         let kind = match link.kind {
             MdLinkKind::Link => EdgeKind::Link,
             MdLinkKind::External => EdgeKind::External,
         };
-        // ponytail: coarse path hit for backlinks; full L2 rules land in P1-04 resolve().
         let to = (kind == EdgeKind::Link)
-            .then(|| resolve_path_rough(&page.key, &link.target, by_path))
+            .then(|| resolve_path_rough(&page.key, &link.target, index_paths))
             .flatten();
         edges.push(Edge {
             from: page.key.clone(),

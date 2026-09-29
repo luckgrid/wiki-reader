@@ -27,8 +27,8 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 | P1-00 | Scaffold | | done | 2b9fdb6 |
 | P1-01 | FsProvider + discovery | | done | 7bc90c9 |
 | P1-02 | Frontmatter + parse | | done | a907712 |
-| P1-03 | Index | | doing | |
-| P1-04 | Link resolution | L2 | todo | |
+| P1-03 | Index | | done | f2752c2 |
+| P1-04 | Link resolution | L2 | doing | |
 | P1-05 | NavTree + fixture snapshots | T1 | todo | |
 | P1-06 | navigate() + history + invariant tests | N1–N4 | todo | |
 | P1-07 | Layout regions + hit map | | todo | placeholder regions done |
