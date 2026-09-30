@@ -40,8 +40,14 @@ jobs:
       - name: Link check
         run: cargo run --locked --quiet -p wiki-reader-tools --bin link-check
 
+      # Repo root comes from the crate manifest, not cwd (was: ok: 0 files from elsewhere).
+      - name: Link check from outside checkout
+        run: |
+          cd "$RUNNER_TEMP" && cargo run --locked --quiet --manifest-path "$GITHUB_WORKSPACE/Cargo.toml" -p wiki-reader-tools --bin link-check
+
       - name: Install rumdl
-        uses: rvben/rumdl@v0
+        # rvben/rumdl@v0
+        uses: rvben/rumdl@9c4cc2a2ebe176de68e1788106e25af8a9bd3899
         with:
           install-only: true
           version: "0.2.78"
