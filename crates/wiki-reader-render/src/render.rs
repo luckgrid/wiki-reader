@@ -519,7 +519,8 @@ impl<'a> LayoutState<'a> {
                         self.diagram_mode,
                         &crate::diagrams::DiagramEnv::default(),
                     );
-                    let (lines, _reason) = crate::diagrams::diagram_lines(&body, tier);
+                    let (lines, _reason) =
+                        crate::diagrams::diagram_lines(&body, tier, u16::try_from(self.width).unwrap_or(80));
                     let start_line = u32::try_from(self.styled.len()).unwrap_or(0);
                     for (i, line) in lines.iter().enumerate() {
                         let src_line = close_src.saturating_add(u32::try_from(i).unwrap_or(0));
@@ -638,6 +639,13 @@ impl<'a> LayoutState<'a> {
                 self.code_body.push('\n');
             }
             self.code_body.push_str(body);
+            // Mermaid: accumulate only; TagEnd paints diagram_lines once.
+            if crate::diagrams::is_mermaid_lang(&self.code_fence_lang) {
+                self.code_line_src = self
+                    .code_line_src
+                    .saturating_add(u32::try_from(body.split('\n').count()).unwrap_or(1));
+                return;
+            }
             for line in body.split('\n') {
                 let line_src = self.code_line_src;
                 self.push_span("│ ".into(), StyleKind::CodeBlock, line_src);

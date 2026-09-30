@@ -293,12 +293,9 @@ pub fn page_label_with(index: &Index, key: &PageKey, mode: crate::config::LabelM
         .or_else(|| page.parsed.h1.clone());
     match mode {
         crate::config::LabelMode::Filename => file,
-        crate::config::LabelMode::Title => title.unwrap_or(file),
-        crate::config::LabelMode::TitleFilename => match title {
-            Some(t) if t != file => format!("{t} ({file})"),
-            Some(t) => t,
-            None => file,
-        },
+        crate::config::LabelMode::Title | crate::config::LabelMode::TitleFilename => {
+            title.unwrap_or(file)
+        }
     }
 }
 
@@ -1081,7 +1078,11 @@ mod tests {
         let file = page_label_with(&index, &key, crate::config::LabelMode::Filename);
         assert!(!file.is_empty());
         let both = page_label_with(&index, &key, crate::config::LabelMode::TitleFilename);
-        assert!(both.contains('('), "{both}");
+        assert_eq!(
+            both,
+            page_label_with(&index, &key, crate::config::LabelMode::Title)
+        );
+        assert!(!both.contains('('), "{both}");
     }
 
     #[test]

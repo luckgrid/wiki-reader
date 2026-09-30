@@ -18,7 +18,7 @@ pub enum LabelMode {
     Title,
     /// Always the humanized filename / stem.
     Filename,
-    /// Title with dim filename — for now: `"Title (filename)"`.
+    /// Title with dim filename suffix at draw time (label itself is title-only).
     #[serde(rename = "title+filename")]
     TitleFilename,
 }
@@ -90,6 +90,7 @@ impl Config {
         cfg
     }
 
+    #[allow(clippy::too_many_lines)] // one merge path per config key
     fn merge_file(&mut self, path: &Path, trusted: bool) {
         let Ok(text) = fs::read_to_string(path) else {
             self.diagnostics
@@ -164,7 +165,18 @@ impl Config {
         }
         if let Some(v) = table.get("theme") {
             match expect_string(v, "theme") {
-                Ok(s) => self.theme = Some(s),
+                Ok(s) => {
+                    self.theme = Some(s);
+                    if !self
+                        .diagnostics
+                        .iter()
+                        .any(|d| d.starts_with("theme stored"))
+                    {
+                        self.diagnostics.push(
+                            "theme stored but inert until themes land (P3-07)".into(),
+                        );
+                    }
+                }
                 Err(msg) => self.diagnostics.push(msg),
             }
         }
@@ -330,6 +342,22 @@ editor = 42
             cfg.diagnostics
         );
         assert!(cfg.editor.is_none());
+    }
+
+    #[test]
+    fn theme_key_records_inert_diagnostic() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("user.toml");
+        fs::write(&path, r#"theme = "dark""#).unwrap();
+        let cfg = Config::load_with_xdg(tmp.path(), None, Some(&path));
+        assert_eq!(cfg.theme.as_deref(), Some("dark"));
+        assert!(
+            cfg.diagnostics
+                .iter()
+                .any(|d| d.contains("theme stored but inert")),
+            "diags={:?}",
+            cfg.diagnostics
+        );
     }
 
     #[test]

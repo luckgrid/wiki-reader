@@ -106,6 +106,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
             &nav.cursor,
             app.nav_scroll,
             app.focus == FocusPane::Nav,
+            app.navigator.label_mode(),
             &theme,
             &mut app.hit_map,
         );

@@ -1,5 +1,9 @@
 //! Mermaid diagram tiers (ADR-0004). Text tier via `mermaid-text`; image deferred.
 
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::sync::{LazyLock, Mutex};
+
 use wiki_reader_core::config::DiagramMode;
 
 /// Environment hints for tier selection (no terminal probes here).
@@ -74,10 +78,43 @@ pub fn render_text_tier(src: &str) -> Result<String, String> {
     mermaid_text::render(src).map_err(|e| e.to_string())
 }
 
+fn content_hash(src: &str) -> u64 {
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    src.hash(&mut h);
+    h.finish()
+}
+
+// ponytail: process-local sync cache; off-thread/shared cache when image tier lands
+#[allow(clippy::type_complexity)]
+type DiagramCacheKey = (u64, u16, u8);
+type DiagramCache = HashMap<DiagramCacheKey, Vec<String>>;
+static DIAGRAM_CACHE: LazyLock<Mutex<DiagramCache>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+#[cfg(test)]
+static CACHE_HITS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 /// Lines to paint for a mermaid fence under `tier` (never image yet).
+///
+/// `width` is part of the cache key so a later width-aware text renderer can
+/// land without callers changing.
 #[must_use]
-pub fn diagram_lines(src: &str, tier: DiagramTier) -> (Vec<String>, Option<String>) {
-    match tier {
+pub fn diagram_lines(src: &str, tier: DiagramTier, width: u16) -> (Vec<String>, Option<String>) {
+    let tier_key = match tier {
+        DiagramTier::Image => 0u8,
+        DiagramTier::Text => 1,
+        DiagramTier::Source => 2,
+    };
+    let key = (content_hash(src), width, tier_key);
+    if let Ok(cache) = DIAGRAM_CACHE.lock()
+        && let Some(hit) = cache.get(&key)
+    {
+        #[cfg(test)]
+        CACHE_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        return (hit.clone(), None);
+    }
+
+    let (lines, reason) = match tier {
         DiagramTier::Image => (
             vec!["│ diagram: image tier not wired (falling back to text)".into()],
             Some("image tier unavailable".into()),
@@ -95,7 +132,12 @@ pub fn diagram_lines(src: &str, tier: DiagramTier) -> (Vec<String>, Option<Strin
             lines.extend(src.lines().map(str::to_owned));
             (lines, Some("source tier".into()))
         }
+    };
+
+    if let Ok(mut cache) = DIAGRAM_CACHE.lock() {
+        cache.insert(key, lines.clone());
     }
+    (lines, reason)
 }
 
 #[cfg(test)]
@@ -121,21 +163,46 @@ mod tests {
 
     #[test]
     fn tier_table_matches_adr() {
-        let env = DiagramEnv {
-            tmux: true,
-            herdr: false,
-            kitty_graphics: true,
-        };
+        let env = DiagramEnv::default();
         assert_eq!(select_tier(DiagramMode::Auto, &env), DiagramTier::Text);
         let herdr = DiagramEnv {
-            tmux: false,
             herdr: true,
-            kitty_graphics: false,
+            ..DiagramEnv::default()
         };
         assert_eq!(select_tier(DiagramMode::Auto, &herdr), DiagramTier::Text);
         assert_eq!(
             select_tier(DiagramMode::Source, &DiagramEnv::default()),
             DiagramTier::Source
         );
+    }
+
+    #[test]
+    fn fallback_emits_source_once() {
+        let bad = "not a real diagram {{{";
+        let (lines, reason) = diagram_lines(bad, DiagramTier::Text, 80);
+        assert!(reason.is_some());
+        let header = lines
+            .iter()
+            .filter(|l| l.starts_with("│ diagram (source"))
+            .count();
+        assert_eq!(header, 1, "{lines:?}");
+        let body_lines = bad.lines().count();
+        let repeats = lines.iter().filter(|l| l.as_str() == bad.lines().next().unwrap_or("")).count();
+        // Source body appears once after the header, not doubled.
+        assert_eq!(lines.len(), 1 + body_lines, "{lines:?}");
+        assert_eq!(repeats, 1, "{lines:?}");
+    }
+
+    #[test]
+    fn cache_hit_on_second_call() {
+        let src = "graph LR; CacheA --> CacheB";
+        CACHE_HITS.store(0, std::sync::atomic::Ordering::Relaxed);
+        let (a, _) = diagram_lines(src, DiagramTier::Text, 72);
+        let hits_before = CACHE_HITS.load(std::sync::atomic::Ordering::Relaxed);
+        let (b, _) = diagram_lines(src, DiagramTier::Text, 72);
+        let hits_after = CACHE_HITS.load(std::sync::atomic::Ordering::Relaxed);
+        assert_eq!(a, b);
+        assert_eq!(hits_before, 0);
+        assert_eq!(hits_after, 1);
     }
 }
