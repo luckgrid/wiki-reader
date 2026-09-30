@@ -93,4 +93,4 @@ Tried as-is inside herdr. **Kept:** it's markdown-only, reads far better than su
 
 ## Licensing
 
-Choose MIT or Apache-2.0 (dual is common in Rust). That keeps you compatible with porting MIT code from markdown-reader. When porting, keep its copyright notice in the ported files and list it in `THIRD_PARTY.md`.
+Choose MIT or Apache-2.0 (dual is common in Rust). That keeps you compatible with porting MIT code from markdown-reader. No source has been ported. If code is ever ported, keep its copyright notice in the ported files and add a `THIRD_PARTY.md` in the same change.

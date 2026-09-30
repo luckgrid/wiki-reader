@@ -3,7 +3,7 @@ id: WR-GUIDE-DEV
 title: Development
 summary: Toolchain, checks, crate boundaries, dependency policy, docs conventions, and task workflow.
 status: draft
-updated: 2026-09-28
+updated: 2026-09-29
 related: []
 ---
 
@@ -74,7 +74,7 @@ See [architecture overview](../architecture/overview.md) and [ADR-0006](../decis
 - Review `cargo tree` before adding a dep.
 - Prefer stdlib / already-chosen crates from [prior art & libraries](../architecture/prior-art-and-libs.md).
 - Markdown is checked and formatted with [rumdl](https://github.com/rvben/rumdl); run `rumdl fmt .` when making documentation changes (`rumdl fmt --check .` only reports).
-- When porting code, keep copyright notices in the ported files and list them in [`THIRD_PARTY.md`](../../THIRD_PARTY.md).
+- No third-party source is vendored or ported. If that changes, keep copyright notices in the ported files and add a `THIRD_PARTY.md` in the same change.
 
 ## Docs and ADRs
 
