@@ -191,21 +191,7 @@ pub(crate) fn apply_mouse(
         }
         MouseEventKind::Down(MouseButton::Middle) => {
             let hit = app.hit_map.hit_at(mouse.column, mouse.row)?.clone();
-            if let Hit::Link(id) = hit {
-                app.update(Action::FocusViewer);
-                let raw = app
-                    .doc
-                    .link_target(wiki_reader_render::LinkId(id))
-                    .map(str::to_owned)?;
-                let from = app.navigator.tab().current().page.clone();
-                let outcome = wiki_reader_core::nav::resolve(&raw, &from, app.navigator.index());
-                let effects = app.navigator.navigate(
-                    outcome.target,
-                    wiki_reader_core::nav::Disposition::NewTab,
-                    app.view_state(),
-                );
-                app.apply_effects(effects);
-            }
+            app.middle_click_hit(hit);
             None
         }
         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {

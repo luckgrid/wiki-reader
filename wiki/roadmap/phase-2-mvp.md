@@ -33,6 +33,8 @@ All P0/P1 acceptance criteria in [product spec](../product/spec.md) pass; two we
 | P2-R31 | Config trust merge (exclude union, keys merge) | C1 | done | 81ea91f |
 | P2-R32 | Session autosave + test isolation | M1 | done | 81ea91f |
 | P2-R33 | Block/copy polish | BA | done | 81ea91f |
+| P2-R34 | `t` / middle-click open the right target | TB | done | focused link / nav row; all navigable hits |
+| P2-R35 | Theme warn, dim labels, Mermaid cache, highlight flake | C1 / D1 | todo | N2–N4 cleanups |
 
 ## Proposed order (after Phase 1 exit)
 

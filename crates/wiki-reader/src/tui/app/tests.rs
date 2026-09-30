@@ -1609,3 +1609,206 @@ fn middle_click_link_opens_new_tab() {
     assert_eq!(action, None);
     assert_eq!(app.navigator.tab_count(), before + 1);
 }
+
+fn middle_at(app: &mut App, x: u16, y: u16) {
+    let _ = apply_mouse(
+        app,
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Middle),
+            column: x,
+            row: y,
+            modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+        },
+    );
+}
+
+#[test]
+fn t_on_focused_link_opens_target_tab() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/design-system/README.md"),
+    }));
+    let _ = draw_app(&mut app, 120, 24);
+    let items = app.focus_list();
+    let link_idx = items
+        .iter()
+        .position(|it| it.kind == FocusTarget::Link)
+        .expect("body link");
+    let target_raw = items[link_idx].target.clone();
+    app.update(Action::FocusViewer);
+    app.focused_item = Some(link_idx);
+    let from = app.navigator.tab().current().page.clone();
+    let expected = wiki_reader_core::nav::resolve(&target_raw, &from, app.navigator.index());
+    let wiki_reader_core::nav::Target::Page(expected_key, _) = expected.target else {
+        panic!("expected page target for {target_raw}");
+    };
+    app.update(Action::NewTab);
+    assert_eq!(app.navigator.tab_count(), 2);
+    assert_eq!(app.navigator.tab().current().page, expected_key);
+    assert_eq!(app.navigator.tab().history.len(), 1);
+}
+
+#[test]
+fn t_on_nav_row_opens_that_page_tab() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let target = PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/design-system/tokens.md"),
+    };
+    app.update(Action::FocusNav);
+    app.navigator.set_nav_cursor(NodeId::Page(target.clone()));
+    app.update(Action::NewTab);
+    assert_eq!(app.navigator.tab_count(), 2);
+    assert_eq!(app.navigator.tab().current().page, target);
+}
+
+#[test]
+fn t_without_focus_duplicates_current_page() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::FocusViewer);
+    app.focused_item = None;
+    let cur = app.navigator.tab().current().page.clone();
+    app.update(Action::NewTab);
+    assert_eq!(app.navigator.tab_count(), 2);
+    assert_eq!(app.navigator.tab().current().page, cur);
+}
+
+#[test]
+fn ordinary_navigation_does_not_create_tabs() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/README.md"),
+    }));
+    assert_eq!(app.navigator.tab_count(), 1);
+    app.update(Action::NextPage);
+    assert_eq!(app.navigator.tab_count(), 1);
+    app.update(Action::Back);
+    assert_eq!(app.navigator.tab_count(), 1);
+}
+
+#[test]
+fn middle_click_nav_breadcrumb_prev_next_search_open_new_tab() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/design-system/tokens.md"),
+    }));
+    let _ = draw_app(&mut app, 120, 24);
+
+    // Nav page row
+    let target = PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/README.md"),
+    };
+    let (nx, ny) = app
+        .hit_map
+        .entries()
+        .iter()
+        .find(|(_, h)| matches!(h, Hit::NavItem(NodeId::Page(k)) if k == &target))
+        .map(|(r, _)| (r.x, r.y))
+        .expect("nav page hit");
+    let before = app.navigator.tab_count();
+    middle_at(&mut app, nx, ny);
+    assert_eq!(app.navigator.tab_count(), before + 1);
+    assert_eq!(app.navigator.tab().current().page, target);
+
+    // Breadcrumb
+    let (cx, cy, crumb_key) = app
+        .hit_map
+        .entries()
+        .iter()
+        .find_map(|(r, h)| match h {
+            Hit::Breadcrumb(k) => Some((r.x, r.y, k.clone())),
+            _ => None,
+        })
+        .expect("breadcrumb");
+    let before = app.navigator.tab_count();
+    middle_at(&mut app, cx, cy);
+    assert_eq!(app.navigator.tab_count(), before + 1);
+    assert_eq!(app.navigator.tab().current().page, crumb_key);
+
+    // Prev / Next footer
+    let _ = draw_app(&mut app, 120, 24);
+    if let Some((x, y)) = app
+        .hit_map
+        .entries()
+        .iter()
+        .find(|(_, h)| matches!(h, Hit::Next))
+        .map(|(r, _)| (r.x, r.y))
+    {
+        let before = app.navigator.tab_count();
+        let cur = app.navigator.tab().current().page.clone();
+        let expected = app.navigator.nav().tree.next(&cur);
+        middle_at(&mut app, x, y);
+        if let Some(expected) = expected {
+            assert_eq!(app.navigator.tab_count(), before + 1);
+            assert_eq!(app.navigator.tab().current().page, expected);
+        }
+    }
+    let _ = draw_app(&mut app, 120, 24);
+    if let Some((x, y)) = app
+        .hit_map
+        .entries()
+        .iter()
+        .find(|(_, h)| matches!(h, Hit::Prev))
+        .map(|(r, _)| (r.x, r.y))
+    {
+        let before = app.navigator.tab_count();
+        let cur = app.navigator.tab().current().page.clone();
+        let expected = app.navigator.nav().tree.prev(&cur);
+        middle_at(&mut app, x, y);
+        if let Some(expected) = expected {
+            assert_eq!(app.navigator.tab_count(), before + 1);
+            assert_eq!(app.navigator.tab().current().page, expected);
+        }
+    }
+
+    // Search result
+    app.update(Action::OpenSearch);
+    for c in "token".chars() {
+        app.update(Action::SearchChar(c));
+    }
+    let _ = draw_app(&mut app, 120, 24);
+    let (sx, sy) = app
+        .hit_map
+        .entries()
+        .iter()
+        .find(|(_, h)| matches!(h, Hit::SearchResult(0)))
+        .map(|(r, _)| (r.x, r.y))
+        .expect("search result hit");
+    let expected_page = app
+        .search
+        .as_ref()
+        .and_then(|s| s.page_hits.first())
+        .map(|h| h.page.clone())
+        .expect("page hit");
+    let before = app.navigator.tab_count();
+    middle_at(&mut app, sx, sy);
+    assert_eq!(app.navigator.tab_count(), before + 1);
+    assert_eq!(app.navigator.tab().current().page, expected_page);
+}
+
+#[test]
+fn new_tab_current_matches_replace_for_same_target() {
+    let root = fixture();
+    let target = PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/design-system/tokens.md"),
+    };
+    let mut via_tab = App::new(&root).unwrap();
+    via_tab.open_page_new_tab(target.clone());
+    let mut via_replace = App::new(&root).unwrap();
+    via_replace.update(Action::GoToPage(target.clone()));
+    assert_eq!(
+        via_tab.navigator.tab().current().page,
+        via_replace.navigator.tab().current().page
+    );
+    assert_eq!(via_tab.navigator.tab().current().page, target);
+}
