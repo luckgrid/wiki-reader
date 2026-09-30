@@ -78,7 +78,7 @@ fn viewer_text_width_matches_painted_content() {
         width: 80,
         height: 24,
     };
-    let regions = layout::split(area, true);
+    let regions = layout::split(area, true, None);
     let want = layout::viewer_text_width(regions.viewer);
     let inner_w = regions.viewer.width.saturating_sub(2);
     let painted = inner_w.saturating_sub(VIEWER_LEFT_PAD).min(100);
@@ -135,6 +135,7 @@ fn cursor_row_background_fills_full_viewer_width() {
                 height: 24,
             },
             true,
+            None,
         );
         regions.viewer.x + 1 // after left border
     };
@@ -295,6 +296,107 @@ fn footer_prev_next_clicks_change_page() {
         app.update(a);
     }
     assert_eq!(app.navigator.tab().current().page, before);
+}
+
+#[test]
+fn nav_divider_drag_changes_width_and_clamps() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.nav_visible = true;
+    let _ = draw_app(&mut app, 120, 24);
+    let (dx, dy) = app
+        .hit_map
+        .entries()
+        .iter()
+        .rev()
+        .find(|(_, h)| matches!(h, Hit::NavDivider))
+        .map(|(r, _)| (r.x, r.y))
+        .expect("NavDivider");
+    let down = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: dx,
+        row: dy,
+        modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+    };
+    assert!(apply_mouse(&mut app, down).is_none());
+    assert!(app.nav_dragging);
+
+    let drag = MouseEvent {
+        kind: MouseEventKind::Drag(MouseButton::Left),
+        column: 39, // → width 40
+        row: dy,
+        modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+    };
+    let _ = apply_mouse(&mut app, drag);
+    assert_eq!(app.nav_width, Some(40));
+    let _ = draw_app(&mut app, 120, 24);
+    assert_eq!(
+        crate::tui::layout::split(
+            ratatui::layout::Rect {
+                x: 0,
+                y: 0,
+                width: 120,
+                height: 24
+            },
+            true,
+            app.nav_width
+        )
+        .side_nav
+        .width,
+        40
+    );
+
+    // Clamp high
+    let drag_hi = MouseEvent {
+        kind: MouseEventKind::Drag(MouseButton::Left),
+        column: 200,
+        row: dy,
+        modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+    };
+    let _ = apply_mouse(&mut app, drag_hi);
+    assert_eq!(app.nav_width, Some(crate::tui::layout::NAV_WIDTH_MAX));
+
+    // Clamp low
+    let drag_lo = MouseEvent {
+        kind: MouseEventKind::Drag(MouseButton::Left),
+        column: 0,
+        row: dy,
+        modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+    };
+    let _ = apply_mouse(&mut app, drag_lo);
+    assert_eq!(app.nav_width, Some(crate::tui::layout::NAV_WIDTH_MIN));
+
+    let up = MouseEvent {
+        kind: MouseEventKind::Up(MouseButton::Left),
+        column: 0,
+        row: dy,
+        modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+    };
+    let _ = apply_mouse(&mut app, up);
+    assert!(!app.nav_dragging);
+}
+
+#[test]
+fn narrow_terminal_ignores_stored_nav_width() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.nav_width = Some(40);
+    app.nav_visible = true;
+    let _ = draw_app(&mut app, 60, 24);
+    let regions = crate::tui::layout::split(
+        ratatui::layout::Rect {
+            x: 0,
+            y: 0,
+            width: 60,
+            height: 24,
+        },
+        true,
+        app.nav_width,
+    );
+    // Overlay uses clamp(16,30), not the stored 40.
+    assert!(regions.nav_overlay);
+    assert!(regions.side_nav.width <= 30);
+    assert_ne!(regions.side_nav.width, 40);
 }
 
 #[test]

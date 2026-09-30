@@ -16,7 +16,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     app.hit_map.clear();
     let area = frame.area();
     app.sync_nav_for_width(area.width);
-    let regions = layout::split(area, app.nav_visible);
+    let regions = layout::split(area, app.nav_visible, app.nav_width);
     let text_width = layout::viewer_text_width(regions.viewer);
     app.ensure_layout_width(text_width);
     app.nav_viewport = regions

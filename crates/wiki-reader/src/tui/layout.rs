@@ -50,26 +50,37 @@ pub fn viewer_text_width(viewer: Rect) -> u16 {
         .min(100)
 }
 
+/// Minimum / maximum docked nav column width (P2-14).
+pub const NAV_WIDTH_MIN: u16 = 16;
+pub const NAV_WIDTH_MAX: u16 = 50;
+
 /// Side-nav column width for a given terminal width.
+///
+/// `preferred` is the user-dragged width (session); ignored when the terminal is
+/// narrow (&lt;80) so responsive collapse / overlay sizing stays intact.
 #[must_use]
-pub fn nav_width(term_width: u16, nav_forced: bool) -> Option<u16> {
-    if term_width >= 120 {
-        Some(30)
-    } else if term_width >= 80 {
-        Some(26)
+pub fn nav_width(term_width: u16, nav_forced: bool, preferred: Option<u16>) -> Option<u16> {
+    if term_width >= 80 {
+        let default = if term_width >= 120 { 30 } else { 26 };
+        let cap = NAV_WIDTH_MAX.min(term_width.saturating_sub(20));
+        Some(
+            preferred
+                .unwrap_or(default)
+                .clamp(NAV_WIDTH_MIN, cap.max(NAV_WIDTH_MIN)),
+        )
     } else if nav_forced {
-        // Overlay: use ~half, capped.
+        // Overlay: ignore preferred; use ~half, capped.
         Some(term_width.saturating_sub(2).clamp(16, 30))
     } else {
         None
     }
 }
 
-/// Split `area` into the five regions.
+/// Split `area` into the regions.
 ///
 /// `nav_visible` is honored at every width: docked when ≥80, overlay when &lt;80.
 #[must_use]
-pub fn split(area: Rect, nav_visible: bool) -> Regions {
+pub fn split(area: Rect, nav_visible: bool, preferred_nav: Option<u16>) -> Regions {
     let gap = vertical_gap(area.height);
     // gap + content + gap (or just content when gap == 0).
     let band = 1 + gap.saturating_mul(2);
@@ -98,11 +109,11 @@ pub fn split(area: Rect, nav_visible: bool) -> Regions {
     };
 
     let narrow = area.width < 80;
-    let show_nav = nav_visible && nav_width(area.width, nav_visible).is_some();
+    let show_nav = nav_visible && nav_width(area.width, nav_visible, preferred_nav).is_some();
     let nav_overlay = narrow && show_nav;
 
     let (side_nav, viewer_col) = if show_nav {
-        let w = nav_width(area.width, nav_visible).unwrap_or(26);
+        let w = nav_width(area.width, nav_visible, preferred_nav).unwrap_or(26);
         if nav_overlay {
             // Overlay sits on the left; viewer still gets full mid underneath.
             let nav = Rect {
@@ -148,10 +159,15 @@ mod tests {
 
     #[test]
     fn responsive_nav_widths() {
-        assert_eq!(nav_width(120, false), Some(30));
-        assert_eq!(nav_width(100, false), Some(26));
-        assert_eq!(nav_width(60, false), None);
-        assert!(nav_width(60, true).is_some());
+        assert_eq!(nav_width(120, false, None), Some(30));
+        assert_eq!(nav_width(100, false, None), Some(26));
+        assert_eq!(nav_width(60, false, None), None);
+        assert!(nav_width(60, true, None).is_some());
+        assert_eq!(nav_width(120, false, Some(40)), Some(40));
+        assert_eq!(nav_width(120, false, Some(10)), Some(NAV_WIDTH_MIN));
+        assert_eq!(nav_width(120, false, Some(99)), Some(NAV_WIDTH_MAX));
+        // Narrow ignores preferred.
+        assert_eq!(nav_width(60, true, Some(40)), Some(30));
     }
 
     #[test]
@@ -203,9 +219,9 @@ mod tests {
             width: 120,
             height: 24,
         };
-        assert_eq!(split(wide, false).side_nav.width, 0);
-        assert!(split(wide, true).side_nav.width > 0);
-        assert!(!split(wide, true).nav_overlay);
+        assert_eq!(split(wide, false, None).side_nav.width, 0);
+        assert!(split(wide, true, None).side_nav.width > 0);
+        assert!(!split(wide, true, None).nav_overlay);
 
         let narrow = Rect {
             x: 0,
@@ -213,9 +229,9 @@ mod tests {
             width: 60,
             height: 24,
         };
-        assert_eq!(split(narrow, false).side_nav.width, 0);
-        assert!(split(narrow, true).side_nav.width > 0);
-        assert!(split(narrow, true).nav_overlay);
+        assert_eq!(split(narrow, false, None).side_nav.width, 0);
+        assert!(split(narrow, true, None).side_nav.width > 0);
+        assert!(split(narrow, true, None).nav_overlay);
     }
 
     #[test]
@@ -226,7 +242,7 @@ mod tests {
             width: 80,
             height: 24,
         };
-        assert_eq!(split(short, true).header.y, 0);
+        assert_eq!(split(short, true, None).header.y, 0);
 
         let tall = Rect {
             x: 0,
@@ -234,8 +250,20 @@ mod tests {
             width: 80,
             height: 40,
         };
-        let r = split(tall, true);
+        let r = split(tall, true, None);
         assert_eq!(r.header.y, 1);
         assert_eq!(r.status.y, 38); // band at bottom: y 37 gap, 38 status, 39 gap
+    }
+
+    #[test]
+    fn split_honors_preferred_nav_width() {
+        let area = Rect {
+            x: 0,
+            y: 0,
+            width: 120,
+            height: 24,
+        };
+        assert_eq!(split(area, true, Some(40)).side_nav.width, 40);
+        assert_eq!(split(area, true, Some(8)).side_nav.width, NAV_WIDTH_MIN);
     }
 }

@@ -980,10 +980,7 @@ mod tests {
             .map(|k| page_label(&index, k))
             .collect();
         // Root README first, then SUMMARY: Two (group) → One nested, Three, then orphan.
-        assert_eq!(
-            labels,
-            vec!["Readme", "Two", "One", "Three", "Orphan"]
-        );
+        assert_eq!(labels, vec!["Readme", "Two", "One", "Three", "Orphan"]);
         // Nested list produced a Group for Two.
         let has_two_group = tree.items.iter().any(|i| matches!(
             i,
@@ -1113,10 +1110,7 @@ mod tests {
         };
         let crumbs = tree.breadcrumb(&tokens);
         let labels: Vec<_> = crumbs.iter().map(|c| c.label.as_str()).collect();
-        assert_eq!(
-            labels,
-            vec!["Readme", "Readme", "Readme", "Tokens"]
-        );
+        assert_eq!(labels, vec!["Readme", "Readme", "Readme", "Tokens"]);
         assert_eq!(
             crumbs[0].target.as_ref().map(|k| k.relative_path.as_path()),
             Some(Path::new("README.md"))

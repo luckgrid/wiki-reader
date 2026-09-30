@@ -54,6 +54,18 @@ pub fn draw(
     }
 
     hits.push(area, Hit::FocusNav);
+    // Divider: 1 col on the right border for drag-resize (P2-14).
+    if area.width > 0 {
+        hits.push(
+            Rect {
+                x: area.x.saturating_add(area.width.saturating_sub(1)),
+                y: area.y,
+                width: 1,
+                height: area.height,
+            },
+            Hit::NavDivider,
+        );
+    }
 
     let block = Block::default()
         .borders(Borders::ALL)

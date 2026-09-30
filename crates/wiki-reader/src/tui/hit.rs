@@ -41,6 +41,8 @@ pub enum Hit {
     Tab(usize),
     /// Tab bar close glyph for tab index.
     TabClose(usize),
+    /// 1-col drag target on the nav's right border (P2-14).
+    NavDivider,
 }
 
 /// Rect → hit entries; searched in reverse so topmost wins.
@@ -99,6 +101,7 @@ impl HitMap {
             Hit::FocusViewer => Action::FocusViewer,
             Hit::Tab(i) => Action::SwitchTab(*i),
             Hit::TabClose(_) => Action::CloseTab, // index applied in apply_mouse
+            Hit::NavDivider => Action::FocusNav,  // drag handled in apply_mouse
         }
     }
 

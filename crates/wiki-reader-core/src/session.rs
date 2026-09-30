@@ -21,6 +21,9 @@ pub struct SessionState {
     pub nav_cursor: NavStopState,
     pub focus: FocusPaneState,
     pub nav_visible: Option<bool>,
+    /// User-resized nav column width (P2-14); absent in older session files.
+    #[serde(default)]
+    pub nav_width: Option<u16>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -144,6 +147,7 @@ pub fn load_from_path(path: &Path) -> Option<LoadedSession> {
                 nav_cursor: NavStopState::Search,
                 focus: FocusPaneState::Viewer,
                 nav_visible: None,
+                nav_width: None,
             },
             notice: Some("session restore failed; starting clean".into()),
         }),
@@ -189,6 +193,7 @@ impl SessionState {
         nav: &Navigator,
         focus: FocusPaneState,
         nav_visible: Option<bool>,
+        nav_width: Option<u16>,
     ) -> Self {
         let tabs = nav
             .tabs()
@@ -230,6 +235,7 @@ impl SessionState {
             nav_cursor,
             focus,
             nav_visible,
+            nav_width,
         }
     }
 
@@ -337,10 +343,11 @@ mod tests {
 
         let state_root = tempdir().unwrap();
         let path = state_root.path().join("sess.toml");
-        let snap = SessionState::from_navigator(&nav, FocusPaneState::Viewer, Some(true));
+        let snap = SessionState::from_navigator(&nav, FocusPaneState::Viewer, Some(true), Some(42));
         save_to_path(&path, &snap).unwrap();
         let loaded = load_from_path(&path).unwrap();
         assert!(loaded.notice.is_none());
+        assert_eq!(loaded.state.nav_width, Some(42));
         assert_eq!(loaded.state.tabs.len(), 1);
         assert!(
             loaded.state.tabs[0]
@@ -359,7 +366,7 @@ mod tests {
         let index = Index::build(&provider).unwrap();
         let nav = Navigator::new(index, None).unwrap();
 
-        let mut snap = SessionState::from_navigator(&nav, FocusPaneState::Nav, None);
+        let mut snap = SessionState::from_navigator(&nav, FocusPaneState::Nav, None, None);
         snap.tabs[0].history.push(LocationState {
             relative_path: PathBuf::from("gone.md"),
             anchor: None,
