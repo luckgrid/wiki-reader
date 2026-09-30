@@ -1070,6 +1070,58 @@ fn open_in_editor_records_command_and_keeps_source_line() {
     assert_eq!(app.doc.source_cursor(app.cursor_line), source);
 }
 
+#[test]
+fn open_in_editor_splits_args_and_reloads_on_mtime_even_if_nonzero() {
+    use crate::tui::editor::{EditorCmd, EditorExit, EditorLauncher};
+    use std::sync::{Arc, Mutex};
+
+    struct SaveThenFail {
+        path: PathBuf,
+        launched: Arc<Mutex<Vec<EditorCmd>>>,
+    }
+    impl EditorLauncher for SaveThenFail {
+        fn launch(&self, cmd: &EditorCmd) -> std::io::Result<EditorExit> {
+            self.launched.lock().expect("lock").push(cmd.clone());
+            let mut body = std::fs::read_to_string(&self.path).unwrap();
+            body.push_str("\n\nedited-marker\n");
+            std::fs::write(&self.path, &body).unwrap();
+            Ok(EditorExit { success: false })
+        }
+    }
+
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    std::fs::write(root.join("README.md"), "# Hi\n\nbody\n").unwrap();
+    let mut app = App::new(root).unwrap();
+    let path = crate::tui::editor::page_abs_path(app.provider.root(), Path::new("README.md"));
+    let log = Arc::new(Mutex::new(Vec::new()));
+    app.editor = Box::new(SaveThenFail {
+        path: path.clone(),
+        launched: log.clone(),
+    });
+    app.open_in_editor_with(Some("code --wait".into()));
+    let cmds = log.lock().unwrap();
+    assert_eq!(cmds[0].program, "code");
+    assert_eq!(cmds[0].args[0], "--wait");
+    assert_eq!(cmds[0].args[1], "-g");
+    assert!(
+        cmds[0].args[2].ends_with("README.md:1"),
+        "path:line = {}",
+        cmds[0].args[2]
+    );
+    drop(cmds);
+    let after = app.doc.lines().join("\n");
+    assert!(
+        after.contains("edited-marker"),
+        "page should reload saved content, got {after:?}"
+    );
+    assert!(
+        app.message.contains("non-zero"),
+        "expected non-zero message, got {:?}",
+        app.message
+    );
+}
+
 #[derive(Default)]
 struct LogOpener(std::sync::Arc<std::sync::Mutex<Vec<String>>>);
 
