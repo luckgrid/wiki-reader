@@ -2,6 +2,7 @@
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use wiki_reader_core::nav::Tab;
@@ -15,6 +16,10 @@ fn stem(tab: &Tab) -> String {
         .relative_path
         .file_stem()
         .map_or_else(|| "?".into(), |s| s.to_string_lossy().into_owned())
+}
+
+fn col_width(s: &str) -> u16 {
+    u16::try_from(Span::raw(s).width()).unwrap_or(u16::MAX)
 }
 
 /// Draw one-row tab bar; register [`Hit::Tab`] / [`Hit::TabClose`].
@@ -38,35 +43,46 @@ pub fn draw(
             x = x.saturating_add(1);
         }
         let label = stem(tab);
-        let style = if i == active {
-            theme.accent().add_modifier(ratatui::style::Modifier::BOLD)
+        let lw = col_width(&label).max(1);
+        let bg = if i == active {
+            theme.tab_active
+        } else {
+            theme.tab_inactive
+        };
+        let fg_style = if i == active {
+            theme.accent().add_modifier(Modifier::BOLD)
         } else {
             theme.muted()
         };
-        let w = u16::try_from(label.chars().count()).unwrap_or(1).max(1);
+        let chip = Style {
+            bg: Some(bg),
+            ..fg_style
+        };
+        // 1-col pad each side of the label; Tab hit covers the padded label.
+        let tab_w = lw.saturating_add(2);
         hits.push(
             Rect {
                 x,
                 y: area.y,
-                width: w,
+                width: tab_w,
                 height: 1,
             },
             Hit::Tab(i),
         );
-        spans.push(Span::styled(label, style));
-        x = x.saturating_add(w);
-        // Close glyph
-        let cx = x;
+        spans.push(Span::styled(" ", Style::default().bg(bg)));
+        spans.push(Span::styled(label, chip));
+        spans.push(Span::styled(" ", Style::default().bg(bg)));
+        x = x.saturating_add(tab_w);
         hits.push(
             Rect {
-                x: cx,
+                x,
                 y: area.y,
                 width: 1,
                 height: 1,
             },
             Hit::TabClose(i),
         );
-        spans.push(Span::styled("×", theme.muted()));
+        spans.push(Span::styled("×", theme.muted().bg(bg)));
         x = x.saturating_add(1);
         if x >= area.x.saturating_add(area.width) {
             break;

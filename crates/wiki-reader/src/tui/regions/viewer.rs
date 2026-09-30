@@ -58,7 +58,7 @@ pub fn draw(
     let inner_area = block.inner(area);
     frame.render_widget(block, area);
 
-    // Left pad reserves a column for the P2-19 cursor marker.
+    // Left pad column holds the ▌ cursor marker (P2-19); text starts one col in.
     let content = Rect {
         x: inner_area.x.saturating_add(VIEWER_LEFT_PAD),
         y: inner_area.y,
@@ -75,6 +75,7 @@ pub fn draw(
     let focused_link = focused_item.and_then(|it| it.link_id);
     let gutter_style = theme.muted();
     let match_style = Style::default().bg(theme.focus_item).fg(theme.text);
+    let cursor_bg = Style::default().bg(theme.cursor_line).fg(theme.text);
 
     for row in 0..visible_h {
         let src_idx = scroll + row;
@@ -83,10 +84,12 @@ pub fn draw(
             .y
             .saturating_add(u16::try_from(row).unwrap_or(u16::MAX));
 
-        let base = if match_highlight == Some(line_no) {
+        let on_cursor = line_no == cursor_line;
+        let on_match = match_highlight == Some(line_no);
+        let base = if on_match {
             match_style
-        } else if line_no == cursor_line {
-            theme.text().bg(theme.cursor_line)
+        } else if on_cursor {
+            cursor_bg
         } else {
             theme.text()
         };
@@ -130,7 +133,16 @@ pub fn draw(
             }
         });
 
+        // Marker column: ▌ on cursor (not on match-only highlight).
         let mut spans: Vec<Span<'static>> = Vec::new();
+        if on_cursor && !on_match {
+            spans.push(Span::styled("▌", cursor_bg));
+        } else if on_match {
+            spans.push(Span::styled(" ", match_style));
+        } else {
+            spans.push(Span::raw(" "));
+        }
+
         if show_gutter {
             let n = src_idx.saturating_add(1);
             spans.push(Span::styled(format!("{n:4}│ "), gutter_style));
@@ -150,13 +162,15 @@ pub fn draw(
                     continue;
                 }
                 let mut st = run.style;
-                if line_no == cursor_line {
+                if on_cursor && !on_match {
                     st = st.bg(theme.cursor_line);
+                } else if on_match {
+                    st = st.bg(theme.focus_item);
                 }
                 col += clipped.chars().count();
                 spans.push(Span::styled(clipped, st));
             }
-            if spans.len() == usize::from(show_gutter) {
+            if spans.len() == 1 + usize::from(show_gutter) {
                 spans.push(Span::styled(String::new(), base));
             }
         } else if let Some(styled_lines) = styled
@@ -172,7 +186,7 @@ pub fn draw(
                 base,
                 focus_style,
                 theme,
-                line_no == cursor_line,
+                on_cursor && !on_match,
             ));
         } else {
             let raw = lines.get(src_idx).map_or("", String::as_str);
@@ -188,21 +202,27 @@ pub fn draw(
                 theme,
             ));
         }
-        if line_no == cursor_line {
-            // Paragraph only styles the glyphs; pad so the highlight spans the row.
-            let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
-            let pad = usize::from(content.width).saturating_sub(used);
+        if on_cursor || on_match {
+            // Pad highlight across the full inner width (marker + content).
+            let used: usize = spans
+                .iter()
+                .map(|s| Span::raw(s.content.as_ref()).width())
+                .sum();
+            let pad = usize::from(inner_area.width).saturating_sub(used);
             if pad > 0 {
-                spans.push(Span::styled(
-                    " ".repeat(pad),
-                    Style::default().bg(theme.cursor_line),
-                ));
+                let pad_style = if on_match {
+                    match_style
+                } else {
+                    Style::default().bg(theme.cursor_line)
+                };
+                spans.push(Span::styled(" ".repeat(pad), pad_style));
             }
         }
         out_lines.push(Line::from(spans));
     }
 
-    frame.render_widget(Paragraph::new(out_lines), content);
+    // Paint into full inner (marker column + content).
+    frame.render_widget(Paragraph::new(out_lines), inner_area);
 }
 
 #[allow(clippy::too_many_arguments)]

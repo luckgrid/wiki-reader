@@ -124,6 +124,26 @@ fn cursor_row_background_fills_full_viewer_width() {
         .filter(|&y| buf[(x, y)].bg == want)
         .collect();
     assert_eq!(rows.len(), 1, "exactly one cursor row, got {rows:?}");
+    // ▌ marker in the left pad column of that row.
+    let marker_x = {
+        // Viewer starts after nav (26 at width 100).
+        let regions = crate::tui::layout::split(
+            ratatui::layout::Rect {
+                x: 0,
+                y: 0,
+                width: 100,
+                height: 24,
+            },
+            true,
+        );
+        regions.viewer.x + 1 // after left border
+    };
+    let y = rows[0];
+    assert!(
+        buf[(marker_x, y)].symbol().contains('▌'),
+        "cursor marker at ({marker_x},{y}), got {:?}",
+        buf[(marker_x, y)].symbol()
+    );
 }
 
 #[test]
@@ -1721,7 +1741,15 @@ fn tab_bar_hit_by_coordinate() {
     let Some((rect, _)) = tab_hit else {
         panic!("expected Hit::Tab(0) after NewTab");
     };
+    // Padded label: 1 + stem + 1.
+    assert!(rect.width >= 3, "padded tab hit width, got {}", rect.width);
     assert_eq!(app.hit_map.hit_at(rect.x, rect.y), Some(&Hit::Tab(0)));
+    assert_eq!(
+        app.hit_map.hit_at(rect.x + rect.width - 1, rect.y),
+        Some(&Hit::Tab(0))
+    );
+    let close_x = rect.x + rect.width;
+    assert_eq!(app.hit_map.hit_at(close_x, rect.y), Some(&Hit::TabClose(0)));
     app.update(Action::SwitchTab(0));
     assert_eq!(app.navigator.active(), 0);
 }
