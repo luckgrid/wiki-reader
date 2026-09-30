@@ -5,9 +5,12 @@ expression: out
 Worked Example Wiki                                      ◫ ✕
 ┌Viewer────────────────────────────────────────────────────┐
 │── frontmatter ▶ ──                                       │
+│                                                          │
 │# Worked Example Wiki                                     │
+│                                                          │
 │A tiny markdown collection used as the default smoke-test │
 │root.                                                     │
+│                                                          │
 │Start at Architecture Overview, follow Token Projection,  │
 │then return via back when history exists.                 │
 │                                                          │
@@ -20,9 +23,6 @@ Worked Example Wiki                                      ◫ ✕
 │                                                          │
 │                                                          │
 │                                                          │
-│                                                          │
-│                                                          │
-│                                                          │
 └──────────────────────────────────────────────────────────┘
 ‹ —                                  Architecture Overview ›
-VIEWER · README.md · L1 16% · 29w · 1m · 2026-09-28
+VIEWER · README.md · L1 11% · 29w · 1m · 2026-09-28

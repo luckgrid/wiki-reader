@@ -809,7 +809,14 @@ fn link_chain_root() -> PathBuf {
 fn link_chain_ten_links_ten_backs_one_tab() {
     let root = link_chain_root();
     let mut app = App::new(&root).unwrap();
-    app.cursor_line = 1;
+    // Land on the intro paragraph (display index shifts with block gaps).
+    app.cursor_line = app
+        .doc
+        .lines()
+        .iter()
+        .position(|l| l.contains("Multi-link"))
+        .map_or(1, |i| u32::try_from(i).unwrap_or(0));
+    let saved_source = app.doc.source_cursor(app.cursor_line);
     app.scroll = 0;
     for i in 1..=10 {
         app.follow_link_target(&format!("{i:02}.md"));
@@ -827,7 +834,7 @@ fn link_chain_ten_links_ten_backs_one_tab() {
         app.navigator.tab().current().page.relative_path,
         PathBuf::from("README.md")
     );
-    assert_eq!(app.cursor_line, 1);
+    assert_eq!(app.doc.source_cursor(app.cursor_line), saved_source);
     assert_eq!(app.scroll, 0);
 }
 
@@ -1584,18 +1591,40 @@ fn switch_tab_restores_cursors() {
     let mut app = App::new(&root).unwrap();
     app.cursor_line = 7;
     app.scroll = 3;
+    let saved = app.view_state();
     app.update(Action::NewTab);
     assert_eq!(app.navigator.tab_count(), 2);
-    // Move around on the new tab.
-    app.cursor_line = 1;
+    assert_eq!(
+        app.navigator.tabs()[0].current().cursor_line,
+        saved.cursor_line,
+        "outgoing tab must keep source cursor"
+    );
+    // Move around on the new tab (pick a real content line, not a block gap).
+    let tab1_line = app
+        .doc
+        .lines()
+        .iter()
+        .position(|l| !l.trim().is_empty())
+        .map_or(0, |i| u32::try_from(i).unwrap_or(0));
+    app.cursor_line = tab1_line;
     app.scroll = 0;
+    let tab1 = app.view_state();
     app.update(Action::SwitchTab(0));
     assert_eq!(app.navigator.active(), 0);
-    assert_eq!(app.cursor_line, 7);
-    assert_eq!(app.scroll, 3);
+    assert_eq!(app.navigator.tab().current().cursor_line, saved.cursor_line);
+    assert_eq!(
+        app.cursor_line,
+        app.doc.display_cursor(saved.cursor_line),
+        "display remap for cursor"
+    );
+    assert_eq!(
+        app.scroll,
+        app.doc.display_cursor(saved.scroll),
+        "display remap for scroll"
+    );
     app.update(Action::SwitchTab(1));
     assert_eq!(app.navigator.active(), 1);
-    assert_eq!(app.cursor_line, 1);
+    assert_eq!(app.cursor_line, app.doc.display_cursor(tab1.cursor_line));
 }
 
 #[test]

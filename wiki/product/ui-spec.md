@@ -70,10 +70,10 @@ Rendered by default; `r` toggles raw. Both views share the **cursor line** (see 
 **Focusable items ("actions")** are what `Tab` cycles through, in document order:
 
 1. Links (internal, anchor, external, broken)
-2. Block actions: expand a truncated table, show collapsed frontmatter, copy a code block (OSC 52)
+2. Block actions: show collapsed frontmatter, copy a code block (OSC 52)
 3. The viewer footer's ‹ Prev / Next › buttons (last in the cycle)
 
-After the last item, `Tab` wraps to the first. The focused item renders inverted, and the status bar shows its target or action (`→ decisions/0003.md#context`, `↗ https://…`, `? not found: foo.md`, `expand table`).
+After the last item, `Tab` wraps to the first. The focused item renders inverted, and the status bar shows its target or action (`→ decisions/0003.md#context`, `↗ https://…`, `? not found: foo.md`, `copy code`).
 
 **Links:** underlined; broken links in the error color with `?`; external links with `↗`. `Enter` or left-click follows. Middle-click or `t` opens in a new tab. External links ask `open https://… ? [y/N]` in the status bar, then use the system opener. Hovering (if the terminal reports motion) highlights the link and shows its target in the status bar.
 

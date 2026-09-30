@@ -70,7 +70,7 @@ Priority. The dogfood review showed the viewer is hard to read even as a markdow
 - **Headings:** distinct H1–H6 styling, like markdown-reader's coloured heading bars.
 - **Frontmatter:** a YAML properties block (keys and values aligned, lists rendered as lists), collapsible. This is P2-15.
 - **Code blocks:** bordered or shaded block with a language label, syntect highlighting, wrap or horizontal scroll without breaking the frame, and a copy action.
-- **Tables:** column widths fitted to the pane, cells wrapped instead of truncated with `…`, header row styled, rows separated. Fall back to horizontal scroll when too wide. The screenshots show cut-off cells and an "expand table" stub.
+- **Tables:** column widths fitted to the pane, cells wrapped instead of truncated with `…`, header row styled, rows separated. Fall back to an unwrapped dump with a note when minimum column widths do not fit. The screenshots showed cut-off cells and an "expand table" stub.
 - **Lists and task lists:** bullets, numbering and nesting indent, checkboxes.
 - **Links:** distinct link style, visible focus and hover state, broken-link marking, footnote references.
 - **Blockquotes and alerts:** a left bar and tint for quotes; typed styling for note, warning and so on.

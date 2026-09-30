@@ -597,6 +597,17 @@ mod tests {
     }
 
     #[test]
+    fn block_gap_between_top_level_not_list_items() {
+        let src = "# H\n\npara\n\n- a\n- b\n\n## Next\n";
+        let doc = render_src(src, 40);
+        let text = doc.lines.join("\n");
+        assert!(
+            text.contains("# H\n\npara\n\n• a\n• b\n\n## Next"),
+            "expected blank gaps between blocks and tight list: {text:?}"
+        );
+    }
+
+    #[test]
     fn elements_fixture_snapshots() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/elements");
         let provider = FsProvider::open(&root).unwrap();

@@ -346,7 +346,7 @@ impl<'a> LayoutState<'a> {
                 self.commit_line(src);
             }
             Event::Rule => {
-                self.finish_block();
+                self.ensure_block_gap(src);
                 self.mark_block(src);
                 self.cur_src = src;
                 self.push_span("─".repeat(self.width.min(40)), StyleKind::Rule, src);
@@ -372,7 +372,12 @@ impl<'a> LayoutState<'a> {
     fn start_tag(&mut self, tag: Tag<'_>, src: u32) {
         match tag {
             Tag::Paragraph => {
-                self.finish_block();
+                // List items keep tight packing; top-level blocks get a blank gap.
+                if self.list_stack.is_empty() {
+                    self.ensure_block_gap(src);
+                } else {
+                    self.finish_block();
+                }
                 self.mark_block(src);
                 self.cur_src = src;
                 if self.in_quote {
@@ -381,7 +386,7 @@ impl<'a> LayoutState<'a> {
                 self.ensure_list_marker(src);
             }
             Tag::Heading { level, .. } => {
-                self.finish_block();
+                self.ensure_block_gap(src);
                 self.mark_block(src);
                 self.cur_src = src;
                 let lv = heading_u8(level);
@@ -392,7 +397,7 @@ impl<'a> LayoutState<'a> {
                 self.push_span(format!("{hashes} "), StyleKind::Heading(lv), src);
             }
             Tag::BlockQuote(kind) => {
-                self.finish_block();
+                self.ensure_block_gap(src);
                 self.mark_block(src);
                 self.in_quote = true;
                 self.alert_label = kind.map(|k| match k {
@@ -409,7 +414,7 @@ impl<'a> LayoutState<'a> {
                 }
             }
             Tag::CodeBlock(kind) => {
-                self.finish_block();
+                self.ensure_block_gap(src);
                 self.mark_block(src);
                 self.in_code_block = true;
                 self.code_body.clear();
@@ -443,7 +448,12 @@ impl<'a> LayoutState<'a> {
                 self.commit_line(src);
             }
             Tag::List(start) => {
-                self.finish_block();
+                // Gap once for the whole list; items stay tight.
+                if self.list_stack.is_empty() {
+                    self.ensure_block_gap(src);
+                } else {
+                    self.finish_block();
+                }
                 self.list_stack.push(ListCtx {
                     ordered: start.is_some(),
                     next_num: start.unwrap_or(1),
@@ -481,7 +491,7 @@ impl<'a> LayoutState<'a> {
                 self.push_span(alt, StyleKind::Link, src);
             }
             Tag::Table(_) => {
-                self.finish_block();
+                self.ensure_block_gap(src);
                 self.mark_block(src);
                 self.in_table = true;
                 self.table_rows.clear();
@@ -918,6 +928,28 @@ impl<'a> LayoutState<'a> {
         if !self.cur.is_empty() {
             self.commit_line(self.cur_src);
         }
+    }
+
+    fn last_line_blank(&self) -> bool {
+        self.styled
+            .last()
+            .is_none_or(|l| l.spans.is_empty() || l.spans.iter().all(|s| s.text.trim().is_empty()))
+    }
+
+    /// Blank line before a top-level block when the previous line has content.
+    ///
+    /// The gap inherits the previous line's source so it does not join the
+    /// following block's source run (cursor restore uses run starts).
+    fn ensure_block_gap(&mut self, src: u32) {
+        self.finish_block();
+        if self.styled.is_empty() || self.last_line_blank() {
+            return;
+        }
+        let gap_src = self.styled.last().map_or(src, |l| l.source_line);
+        self.styled.push(StyledLine {
+            spans: Vec::new(),
+            source_line: gap_src,
+        });
     }
 
     /// Append a "Linked from" section (B1). One entry per source page, sorted by
