@@ -37,6 +37,10 @@ pub enum Hit {
     FocusNav,
     /// Click focuses the viewer pane.
     FocusViewer,
+    /// Tab bar label (index into `Navigator::tabs`).
+    Tab(usize),
+    /// Tab bar close glyph for tab index.
+    TabClose(usize),
 }
 
 /// Rect → hit entries; searched in reverse so topmost wins.
@@ -93,6 +97,8 @@ impl HitMap {
             Hit::SearchDismiss => Action::CloseSearch,
             Hit::FocusNav => Action::FocusNav,
             Hit::FocusViewer => Action::FocusViewer,
+            Hit::Tab(i) => Action::SwitchTab(*i),
+            Hit::TabClose(_) => Action::CloseTab, // index applied in apply_mouse
         }
     }
 

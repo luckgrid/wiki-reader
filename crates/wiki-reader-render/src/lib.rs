@@ -1,8 +1,10 @@
 //! Markdown → `RenderedDoc` (styled lines, link spans, source map).
 
+mod diagrams;
 mod link_span;
 mod render;
 
+pub use diagrams::{DiagramEnv, DiagramTier, diagram_lines, is_mermaid_lang, select_tier};
 pub use link_span::{LinkClass, LinkId, LinkSpan};
 pub use render::{
     BlockAction, BlockActionKind, RenderOpts, RenderedDoc, StyleKind, StyledLine, StyledSpan,
@@ -546,7 +548,10 @@ mod tests {
             &empty_key(),
             &index,
             40,
-            &RenderOpts { expanded },
+            &RenderOpts {
+                expanded,
+                ..RenderOpts::default()
+            },
         );
         assert!(
             open.lines.iter().any(|l| l.contains("title: Hello")),
@@ -595,7 +600,10 @@ mod tests {
             &empty_key(),
             &index,
             40,
-            &RenderOpts { expanded },
+            &RenderOpts {
+                expanded,
+                ..RenderOpts::default()
+            },
         );
         assert!(
             !open.lines.iter().any(|l| l.contains("expand table")),

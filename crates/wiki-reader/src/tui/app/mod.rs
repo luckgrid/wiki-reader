@@ -3,9 +3,10 @@
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::time::Instant;
 
 use wiki_reader_core::Index;
-use wiki_reader_core::nav::{Effect, NavStop, Navigator, NodeId, ViewState};
+use wiki_reader_core::nav::{Disposition, Effect, NavStop, Navigator, NodeId, Target, ViewState};
 use wiki_reader_core::provider::{CollectionProvider, FsProvider, PageKey};
 use wiki_reader_render::RenderOpts;
 
@@ -113,8 +114,18 @@ pub struct App {
     pub(crate) match_highlight: Option<u32>,
     /// Expanded block-action ids for the current page (frontmatter / tables).
     pub(crate) expanded_blocks: HashSet<u32>,
+    /// Page that `expanded_blocks` belongs to (clear only on page change).
+    expanded_for_page: Option<PageKey>,
     /// Clipboard writer (OSC 52; swappable in tests).
     pub(crate) clipboard: Box<dyn ClipboardWriter>,
+    /// Diagram tier preference from config.
+    diagram_mode: wiki_reader_core::config::DiagramMode,
+    /// When false, skip session load/save (tests).
+    persist_session: bool,
+    /// Last successful session save (debounce).
+    session_saved_at: Option<Instant>,
+    /// Session dirty since last save.
+    session_dirty: bool,
 }
 
 impl App {
@@ -126,7 +137,13 @@ impl App {
     /// process exit in [`run`].
     #[cfg(test)]
     pub fn new(root: &Path) -> Result<Self, wiki_reader_core::Error> {
-        Self::new_with_config(root, None)
+        Self::for_tests(root)
+    }
+
+    /// Test constructor: no real XDG config/session.
+    #[cfg(test)]
+    pub fn for_tests(root: &Path) -> Result<Self, wiki_reader_core::Error> {
+        Self::build(root, None, false, true)
     }
 
     /// Build app from a collection root with an optional `--config` path.
@@ -138,7 +155,21 @@ impl App {
         root: &Path,
         config_path: Option<&Path>,
     ) -> Result<Self, wiki_reader_core::Error> {
-        let mut config = wiki_reader_core::config::Config::load(root, config_path);
+        Self::build(root, config_path, true, false)
+    }
+
+    #[allow(clippy::too_many_lines)] // config + session bootstrap
+    fn build(
+        root: &Path,
+        config_path: Option<&Path>,
+        persist_session: bool,
+        skip_xdg: bool,
+    ) -> Result<Self, wiki_reader_core::Error> {
+        let mut config = if skip_xdg {
+            wiki_reader_core::config::Config::load_with_xdg(root, config_path, None)
+        } else {
+            wiki_reader_core::config::Config::load(root, config_path)
+        };
         let (exclude_set, exclude_diags) =
             wiki_reader_core::config::build_exclude_set(&config.exclude);
         config.diagnostics.extend(exclude_diags);
@@ -202,9 +233,16 @@ impl App {
             search_match_idx: 0,
             match_highlight: None,
             expanded_blocks: HashSet::new(),
+            expanded_for_page: None,
             clipboard: Box::new(Osc52Clipboard),
+            diagram_mode: config.diagrams,
+            persist_session,
+            session_saved_at: None,
+            session_dirty: false,
         };
-        if let Some(loaded) = wiki_reader_core::session::load(app.provider.root()) {
+        if persist_session
+            && let Some(loaded) = wiki_reader_core::session::load(app.provider.root())
+        {
             if let Some(n) = loaded.notice {
                 if app.message.is_empty() {
                     app.message = n;
@@ -237,7 +275,10 @@ impl App {
     }
 
     /// Persist session for the next launch.
-    pub(crate) fn save_session(&self) {
+    pub(crate) fn save_session(&mut self) {
+        if !self.persist_session {
+            return;
+        }
         let focus = match self.focus {
             FocusPane::Nav => wiki_reader_core::session::FocusPaneState::Nav,
             FocusPane::Viewer => wiki_reader_core::session::FocusPaneState::Viewer,
@@ -247,12 +288,79 @@ impl App {
             focus,
             Some(self.nav_visible),
         );
-        let _ = wiki_reader_core::session::save(self.provider.root(), &state);
+        if wiki_reader_core::session::save(self.provider.root(), &state).is_ok() {
+            self.session_saved_at = Some(Instant::now());
+            self.session_dirty = false;
+        }
+    }
+
+    /// Mark session dirty; save at most every ~2s.
+    pub(crate) fn note_session_change(&mut self) {
+        if !self.persist_session {
+            return;
+        }
+        self.session_dirty = true;
+        let due = self
+            .session_saved_at
+            .is_none_or(|t| t.elapsed() >= std::time::Duration::from_secs(2));
+        if due {
+            self.save_session();
+        }
+    }
+
+    /// Flush a pending save (`force` ignores the 2s debounce).
+    pub(crate) fn flush_session(&mut self, force: bool) {
+        if !self.session_dirty {
+            return;
+        }
+        let due = force
+            || self
+                .session_saved_at
+                .is_none_or(|t| t.elapsed() >= std::time::Duration::from_secs(2));
+        if due {
+            self.save_session();
+        }
+    }
+
+    fn copy_page_path(&mut self) {
+        let path = self
+            .navigator
+            .tab()
+            .current()
+            .page
+            .relative_path
+            .to_string_lossy()
+            .into_owned();
+        match self.clipboard.copy(&path) {
+            Ok(()) => self.message = "sent to clipboard (OSC 52)".into(),
+            Err(err) => self.message = format!("copy failed: {err}"),
+        }
+    }
+
+    fn copy_link_target(&mut self) {
+        let items = self.focus_list();
+        let Some(i) = self.focused_item else {
+            self.message = "no focused link".into();
+            return;
+        };
+        let Some(item) = items.get(i) else {
+            self.message = "no focused link".into();
+            return;
+        };
+        if item.kind != crate::tui::viewer_doc::FocusTarget::Link {
+            self.message = "no focused link".into();
+            return;
+        }
+        match self.clipboard.copy(&item.target) {
+            Ok(()) => self.message = "sent to clipboard (OSC 52)".into(),
+            Err(err) => self.message = format!("copy failed: {err}"),
+        }
     }
 
     fn render_opts(&self) -> RenderOpts {
         RenderOpts {
             expanded: self.expanded_blocks.clone(),
+            diagram_mode: self.diagram_mode,
         }
     }
 
@@ -264,7 +372,7 @@ impl App {
     }
 
     /// Pure state update (unit-testable without a terminal).
-    #[allow(clippy::too_many_lines)] // split in P1-R10
+    #[allow(clippy::too_many_lines)] // action match grows with tabs/copy
     pub fn update(&mut self, action: Action) {
         // Transient notices clear on the next key/action (Tab keeps focus target).
         // Sticky "page removed" survives until real navigation.
@@ -430,8 +538,73 @@ impl App {
             }
             Action::ToggleViewMode => self.toggle_view_mode(),
             Action::OpenInEditor => self.open_in_editor(),
+            Action::CopyPagePath => self.copy_page_path(),
+            Action::CopyLinkTarget => self.copy_link_target(),
+            Action::NewTab => self.open_new_tab(),
+            Action::NextTab => self.cycle_tab(1),
+            Action::PrevTab => self.cycle_tab(-1),
+            Action::CloseTab => self.close_active_tab(),
+            Action::SwitchTab(i) => self.switch_to_tab(i),
             Action::None => {}
         }
+    }
+
+    fn open_new_tab(&mut self) {
+        let loc = self.navigator.tab().current();
+        let page = loc.page.clone();
+        let anchor = loc.anchor.clone();
+        let effects = self.navigator.navigate(
+            Target::Page(page, anchor),
+            Disposition::NewTab,
+            self.view_state(),
+        );
+        self.apply_effects(effects);
+    }
+
+    fn cycle_tab(&mut self, delta: i32) {
+        let n = self.navigator.tab_count();
+        if n < 2 {
+            return;
+        }
+        let cur = i32::try_from(self.navigator.active()).unwrap_or(0);
+        let next = (cur + delta).rem_euclid(i32::try_from(n).unwrap_or(1));
+        let i = usize::try_from(next).unwrap_or(0);
+        self.switch_to_tab(i);
+    }
+
+    fn switch_to_tab(&mut self, i: usize) {
+        if i == self.navigator.active() {
+            return;
+        }
+        self.navigator.save_view(self.view_state());
+        if !self.navigator.switch_tab(i) {
+            return;
+        }
+        let page = self.navigator.tab().current().page.clone();
+        self.apply_effects(vec![
+            Effect::LoadPage(page.clone()),
+            Effect::RevealInTree(page),
+            Effect::ScrollTo(None),
+        ]);
+    }
+
+    pub(crate) fn close_tab_at(&mut self, i: usize) {
+        self.navigator.save_view(self.view_state());
+        if let Err(msg) = self.navigator.close_tab(i) {
+            self.message = msg.into();
+            return;
+        }
+        let page = self.navigator.tab().current().page.clone();
+        self.apply_effects(vec![
+            Effect::LoadPage(page.clone()),
+            Effect::RevealInTree(page),
+            Effect::ScrollTo(None),
+        ]);
+    }
+
+    fn close_active_tab(&mut self) {
+        let i = self.navigator.active();
+        self.close_tab_at(i);
     }
 
     fn open_search(&mut self) {
@@ -821,7 +994,10 @@ impl App {
                         self.clear_search_matches();
                     }
                     self.page_missing = false;
-                    self.expanded_blocks.clear();
+                    if self.expanded_for_page.as_ref() != Some(&key) {
+                        self.expanded_blocks.clear();
+                        self.expanded_for_page = Some(key.clone());
+                    }
                     self.load_page(&key);
                     if self.search_match_page.as_ref() == Some(&key) {
                         self.remap_search_matches();
@@ -874,6 +1050,9 @@ impl App {
         }
         if page_changed && self.term_width < 80 {
             self.nav_visible = false;
+        }
+        if page_changed {
+            self.note_session_change();
         }
     }
 

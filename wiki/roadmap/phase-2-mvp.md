@@ -3,7 +3,7 @@ id: WR-ROADMAP-P2
 title: Phase 2 — Wiki navigation MVP
 summary: Custom nav order, backlinks, tabs, diagrams, config, and session restore.
 status: active
-updated: 2026-09-29
+updated: 2026-09-30
 related: [phase-1-reader-shell, phase-3-alpha]
 nav_order: 2
 ---
@@ -22,23 +22,25 @@ All P0/P1 acceptance criteria in [product spec](../product/spec.md) pass; two we
 |----|------|------|--------|-------|
 | P2-01 | Custom nav order via `SUMMARY.md` / `nav_order` | P1 | done | shipped in P1-R3 |
 | P2-02 | "Linked from" backlinks | B1 | done | 47185bc |
-| P2-03 | Block actions in the Tab cycle | BA | done | FocusTarget + OSC 52 |
+| P2-03 | Block actions in the Tab cycle | BA | done | d8c63e2 |
 | P2-04 | Heading jump | J1 | done | 19faa9e |
-| P2-05 | Tabs as secondary | TB | todo | core `Disposition` ready; TUI bar + keys |
-| P2-06 | Mermaid tiers | D1 | todo | text tier first; image behind Kitty/herdr |
+| P2-05 | Tabs as secondary | TB | done | core `Disposition` ready; TUI bar + keys |
+| P2-06 | Mermaid tiers | D1 | done | text tier via mermaid-text; image tier deferred |
 | P2-07 | Responsive side nav | R1 | done | shipped in P1-R6 |
 | P2-08 | `$EDITOR` | E1 | done | d130b92 |
-| P2-09 | Config incl. `nav.labels` | C1 | todo | before session restore |
-| P2-10 | Session restore | M1 | todo | `$XDG_STATE_HOME/wiki-reader/*.toml` |
+| P2-09 | Config incl. `nav.labels` | C1 | done | 19db10d |
+| P2-10 | Session restore | M1 | done | 36e00c2 |
+| P2-R31 | Config trust merge (exclude union, keys merge) | C1 | done | exclude union; keys merge; H3 on P2-09 |
+| P2-R32 | Session autosave + test isolation | M1 | done | debounce, signals, stable key, App::for_tests |
+| P2-R33 | Block/copy polish | BA | done | OSC52 messaging/cap, y/Y, stable block ids |
 
 ## Proposed order (after Phase 1 exit)
 
-1. P2-09 Config then P2-10 Session
-2. P2-03 Block actions
-3. P2-05 Tabs
-4. P2-06 Diagrams
+1. P2-R31 → P2-R32 → P2-R33
+2. P2-05 Tabs
+3. P2-06 Diagrams
 
-(Batch 1 done: P2-02, P2-04, P2-08. Batch 2: P2-09/10/03.)
+(Batch 1–2 done: P2-02/04/08/09/10/03.)
 
 ## Related
 

@@ -157,7 +157,7 @@ impl App {
         match action.kind {
             wiki_reader_render::BlockActionKind::CopyCode => {
                 match self.clipboard.copy(&action.payload) {
-                    Ok(()) => self.message = "copied".into(),
+                    Ok(()) => self.message = "sent to clipboard (OSC 52)".into(),
                     Err(err) => self.message = format!("copy failed: {err}"),
                 }
             }

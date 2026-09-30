@@ -116,11 +116,38 @@ pub struct BlockAction {
     pub payload: String,
 }
 
+/// Content-stable block id (kind + text fingerprint). Survives edits above the block.
+fn content_block_id(kind: BlockActionKind, text: &str) -> u32 {
+    let mut h: u32 = 0x811c_9dc5;
+    h ^= match kind {
+        BlockActionKind::ToggleFrontmatter => 1,
+        BlockActionKind::ToggleTable => 2,
+        BlockActionKind::CopyCode => 3,
+    };
+    h = h.wrapping_mul(0x0100_0193);
+    for b in text.as_bytes().iter().take(256) {
+        h ^= u32::from(*b);
+        h = h.wrapping_mul(0x0100_0193);
+    }
+    h
+}
+
 /// Optional expansion state for re-layout.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct RenderOpts {
     /// Expanded block-action ids (frontmatter / tables).
     pub expanded: std::collections::HashSet<u32>,
+    /// Diagram render preference (ADR-0004).
+    pub diagram_mode: wiki_reader_core::config::DiagramMode,
+}
+
+impl Default for RenderOpts {
+    fn default() -> Self {
+        Self {
+            expanded: std::collections::HashSet::new(),
+            diagram_mode: wiki_reader_core::config::DiagramMode::Auto,
+        }
+    }
 }
 
 /// Render `source` at `width` columns.
@@ -160,6 +187,7 @@ pub fn render_with(
     let (body, body_line_offset) = body_and_offset(source);
     let mut state = LayoutState::new(w, body_line_offset, from, index);
     state.expanded.clone_from(&opts.expanded);
+    state.diagram_mode = opts.diagram_mode;
 
     if parsed.frontmatter.title.is_some()
         || parsed.frontmatter.updated.is_some()
@@ -245,8 +273,8 @@ struct LayoutState<'a> {
     heading_text: String,
     used_slugs: HashMap<String, u32>,
     link_id: u32,
-    action_id: u32,
     expanded: std::collections::HashSet<u32>,
+    diagram_mode: wiki_reader_core::config::DiagramMode,
 }
 
 struct LinkBuild {
@@ -295,8 +323,8 @@ impl<'a> LayoutState<'a> {
             heading_text: String::new(),
             used_slugs: HashMap::new(),
             link_id: 0,
-            action_id: 0,
             expanded: std::collections::HashSet::new(),
+            diagram_mode: wiki_reader_core::config::DiagramMode::Auto,
         }
     }
 
@@ -383,6 +411,10 @@ impl<'a> LayoutState<'a> {
                     CodeBlockKind::Indented => String::new(),
                 };
                 self.cur_src = src;
+                if crate::diagrams::is_mermaid_lang(&self.code_fence_lang) {
+                    // Body accumulated; paint on TagEnd via text/source tier.
+                    return;
+                }
                 let label = if self.code_fence_lang.is_empty() {
                     "```".into()
                 } else {
@@ -391,8 +423,8 @@ impl<'a> LayoutState<'a> {
                 let line = u32::try_from(self.styled.len()).unwrap_or(0);
                 self.push_span(label, StyleKind::CodeBlock, src);
                 let end = u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(1);
-                let id = self.action_id;
-                self.action_id = self.action_id.saturating_add(1);
+                // Provisional id from lang; rewritten when body is known.
+                let id = content_block_id(BlockActionKind::CopyCode, &self.code_fence_lang);
                 self.block_actions.push(BlockAction {
                     id,
                     kind: BlockActionKind::CopyCode,
@@ -458,6 +490,7 @@ impl<'a> LayoutState<'a> {
         }
     }
 
+    #[allow(clippy::too_many_lines)] // mermaid branch + existing ends
     fn end_tag(&mut self, end: TagEnd, src: u32, src_end: u32) {
         match end {
             TagEnd::Paragraph => {
@@ -479,8 +512,40 @@ impl<'a> LayoutState<'a> {
             }
             TagEnd::CodeBlock => {
                 self.in_code_block = false;
-                // Closing fence maps to its own source line (range end), not the open.
                 let close_src = src_end.max(src);
+                if crate::diagrams::is_mermaid_lang(&self.code_fence_lang) {
+                    let body = std::mem::take(&mut self.code_body);
+                    let tier = crate::diagrams::select_tier(
+                        self.diagram_mode,
+                        &crate::diagrams::DiagramEnv::default(),
+                    );
+                    let (lines, _reason) = crate::diagrams::diagram_lines(&body, tier);
+                    let start_line = u32::try_from(self.styled.len()).unwrap_or(0);
+                    for (i, line) in lines.iter().enumerate() {
+                        let src_line = close_src.saturating_add(u32::try_from(i).unwrap_or(0));
+                        self.push_span(line.clone(), StyleKind::CodeBlock, src_line);
+                        self.commit_line(src_line);
+                    }
+                    let end = u16::try_from(
+                        lines
+                            .first()
+                            .map_or(8usize, |l| l.chars().count())
+                            .min(usize::from(u16::MAX)),
+                    )
+                    .unwrap_or(8);
+                    let id =
+                        content_block_id(BlockActionKind::CopyCode, &format!("mermaid\n{body}"));
+                    self.block_actions.push(BlockAction {
+                        id,
+                        kind: BlockActionKind::CopyCode,
+                        line: start_line,
+                        cols: (0, end.max(1)),
+                        payload: body,
+                    });
+                    self.code_fence_lang.clear();
+                    return;
+                }
+                // Closing fence maps to its own source line (range end), not the open.
                 self.push_span("```".into(), StyleKind::CodeBlock, close_src);
                 self.commit_line(close_src);
                 if let Some(action) = self
@@ -489,7 +554,10 @@ impl<'a> LayoutState<'a> {
                     .rev()
                     .find(|a| a.kind == BlockActionKind::CopyCode && a.payload.is_empty())
                 {
-                    action.payload = std::mem::take(&mut self.code_body);
+                    let body = std::mem::take(&mut self.code_body);
+                    let fp = format!("{}\n{body}", self.code_fence_lang);
+                    action.id = content_block_id(BlockActionKind::CopyCode, &fp);
+                    action.payload = body;
                 }
             }
             TagEnd::List(_) => {
@@ -628,8 +696,14 @@ impl<'a> LayoutState<'a> {
 
     fn push_frontmatter_box(&mut self, parsed: &parse::ParsedPage) {
         self.mark_block(1);
-        let id = self.action_id;
-        self.action_id = self.action_id.saturating_add(1);
+        let fm_fp = format!(
+            "t={};u={};s={};tags={}",
+            parsed.frontmatter.title.as_deref().unwrap_or(""),
+            parsed.frontmatter.updated.as_deref().unwrap_or(""),
+            parsed.frontmatter.summary.as_deref().unwrap_or(""),
+            parsed.frontmatter.tags.join(",")
+        );
+        let id = content_block_id(BlockActionKind::ToggleFrontmatter, &fm_fp);
         let expanded = self.expanded.contains(&id);
         let line = u32::try_from(self.styled.len()).unwrap_or(0);
         let label = if expanded {
@@ -927,11 +1001,14 @@ impl<'a> LayoutState<'a> {
         if self.table_rows.is_empty() {
             return;
         }
-        let id = self.action_id;
-        self.action_id = self.action_id.saturating_add(1);
-        let expanded = self.expanded.contains(&id);
         let action_line = u32::try_from(self.styled.len()).unwrap_or(0);
         let mut rows = std::mem::take(&mut self.table_rows);
+        let header_fp = rows
+            .first()
+            .map(|(_, cells)| cells.join("|"))
+            .unwrap_or_default();
+        let id = content_block_id(BlockActionKind::ToggleTable, &header_fp);
+        let expanded = self.expanded.contains(&id);
         let was_truncated = !expanded && rows.len() > 4;
         if was_truncated {
             rows.truncate(3);

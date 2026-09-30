@@ -285,6 +285,36 @@ impl Navigator {
         self.tabs.len()
     }
 
+    /// Switch active tab. Returns false if `i` is out of range. Caller saves view first.
+    pub fn switch_tab(&mut self, i: usize) -> bool {
+        if i >= self.tabs.len() {
+            return false;
+        }
+        self.active = i;
+        true
+    }
+
+    /// Close tab `i`. Refuses when only one tab remains.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when there is only one tab or `i` is out of range.
+    pub fn close_tab(&mut self, i: usize) -> Result<(), &'static str> {
+        if self.tabs.len() <= 1 {
+            return Err("can't close the last tab");
+        }
+        if i >= self.tabs.len() {
+            return Err("tab out of range");
+        }
+        self.tabs.remove(i);
+        if self.active > i {
+            self.active -= 1;
+        } else if self.active >= self.tabs.len() {
+            self.active = self.tabs.len() - 1;
+        }
+        Ok(())
+    }
+
     /// Set the side-nav keyboard cursor to a tree node.
     pub fn set_nav_cursor(&mut self, id: NodeId) {
         self.nav.cursor = NavStop::Node(id);
@@ -433,7 +463,8 @@ impl Navigator {
         self.effects_for_current()
     }
 
-    fn save_view(&mut self, view: ViewState) {
+    /// Write live cursor/scroll onto the current history entry.
+    pub fn save_view(&mut self, view: ViewState) {
         let loc = self.tabs[self.active].current_mut();
         loc.cursor_line = view.cursor_line;
         loc.scroll = view.scroll;
@@ -1014,5 +1045,23 @@ mod tests {
         assert!(nav.nav().expanded.contains(&id));
         nav.set_group_expanded(id.clone(), false);
         assert!(!nav.nav().expanded.contains(&id));
+    }
+
+    #[test]
+    fn switch_and_close_tab() {
+        let mut nav = worked();
+        assert_eq!(nav.close_tab(0), Err("can't close the last tab"));
+        nav.navigate(
+            Target::Page(key("architecture/README.md"), None),
+            Disposition::NewTab,
+            ViewState::default(),
+        );
+        assert_eq!(nav.tab_count(), 2);
+        assert!(nav.switch_tab(0));
+        assert_eq!(nav.active(), 0);
+        assert!(!nav.switch_tab(9));
+        nav.close_tab(1).unwrap();
+        assert_eq!(nav.tab_count(), 1);
+        assert_eq!(nav.active(), 0);
     }
 }

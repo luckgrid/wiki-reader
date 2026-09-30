@@ -78,10 +78,22 @@ pub struct LoadedSession {
 /// `$XDG_STATE_HOME/wiki-reader` or `~/.local/state/wiki-reader`.
 #[must_use]
 pub fn state_dir() -> Option<PathBuf> {
-    if let Ok(xdg) = std::env::var("XDG_STATE_HOME") {
-        return Some(PathBuf::from(xdg).join("wiki-reader"));
+    if let Ok(xdg) = std::env::var("XDG_STATE_HOME")
+        && let Some(dir) = absolute_state_home(Some(xdg.as_str()))
+    {
+        return Some(dir);
     }
     std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state/wiki-reader"))
+}
+
+fn absolute_state_home(xdg: Option<&str>) -> Option<PathBuf> {
+    let xdg = xdg?.trim();
+    // XDG Base Directory Spec: empty means unset; relative is ignored.
+    if xdg.is_empty() {
+        return None;
+    }
+    let p = PathBuf::from(xdg);
+    p.is_absolute().then(|| p.join("wiki-reader"))
 }
 
 /// Stable filename for a canonical collection root.
@@ -92,12 +104,18 @@ pub fn state_path_for_root(root: &Path) -> Option<PathBuf> {
     Some(dir.join(format!("{key}.toml")))
 }
 
+/// Stable FNV-1a 64-bit over the display path (not `DefaultHasher`).
 fn root_key(root: &Path) -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    let mut h = DefaultHasher::new();
-    root.to_string_lossy().hash(&mut h);
-    format!("{:016x}", h.finish())
+    fnv1a64(root.to_string_lossy().as_bytes())
+}
+
+fn fnv1a64(bytes: &[u8]) -> String {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in bytes {
+        h ^= u64::from(*b);
+        h = h.wrapping_mul(0x0100_0000_01b3);
+    }
+    format!("{h:016x}")
 }
 
 /// Load session for `root`; missing → `None`. Corrupt → empty state + notice.
@@ -371,5 +389,26 @@ mod tests {
         let loaded = load_from_path(&path).unwrap();
         assert!(loaded.notice.unwrap().contains("clean"));
         assert!(loaded.state.tabs.is_empty());
+    }
+
+    #[test]
+    fn root_key_is_deterministic() {
+        let a = root_key(Path::new("/tmp/wiki-a"));
+        let b = root_key(Path::new("/tmp/wiki-a"));
+        let c = root_key(Path::new("/tmp/wiki-b"));
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+        assert_eq!(a.len(), 16);
+    }
+
+    #[test]
+    fn empty_or_relative_xdg_state_is_rejected_by_helper() {
+        assert!(absolute_state_home(Some("")).is_none());
+        assert!(absolute_state_home(Some("  ")).is_none());
+        assert!(absolute_state_home(Some("relative/path")).is_none());
+        assert_eq!(
+            absolute_state_home(Some("/abs/state")),
+            Some(PathBuf::from("/abs/state/wiki-reader"))
+        );
     }
 }

@@ -1459,6 +1459,23 @@ fn block_action_toggle_frontmatter() {
 }
 
 #[test]
+fn for_tests_starts_on_collection_root_not_saved_session() {
+    let root = fixture();
+    let app = App::for_tests(&root).unwrap();
+    // Worked-example starts at README.md regardless of any real XDG session.
+    assert!(
+        app.navigator
+            .tab()
+            .current()
+            .page
+            .relative_path
+            .ends_with("README.md"),
+        "got {:?}",
+        app.navigator.tab().current().page.relative_path
+    );
+}
+
+#[test]
 fn block_action_copy_code_via_clipboard() {
     use crate::tui::clipboard::RecordingClipboard;
     use std::fs;
@@ -1496,6 +1513,99 @@ fn block_action_copy_code_via_clipboard() {
     app.update(Action::ViewerActivate);
     let copied = log.lock().unwrap().clone();
     assert_eq!(copied, vec!["secret-payload".to_owned()]);
-    assert_eq!(app.message, "copied");
+    assert_eq!(app.message, "sent to clipboard (OSC 52)");
     let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn new_tab_doubles_tabs_close_last_refused() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    assert_eq!(app.navigator.tab_count(), 1);
+    app.update(Action::CloseTab);
+    assert_eq!(app.navigator.tab_count(), 1);
+    assert!(app.message.contains("last tab"));
+
+    app.cursor_line = 5;
+    app.scroll = 2;
+    let saved = app.view_state();
+    app.update(Action::NewTab);
+    assert_eq!(app.navigator.tab_count(), 2);
+    assert_eq!(app.navigator.active(), 1);
+    // New tab starts at top; outgoing tab kept its view in history.
+    assert_eq!(
+        app.navigator.tabs()[0].current().cursor_line,
+        saved.cursor_line
+    );
+    assert_eq!(app.navigator.tabs()[0].current().scroll, saved.scroll);
+}
+
+#[test]
+fn switch_tab_restores_cursors() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.cursor_line = 7;
+    app.scroll = 3;
+    app.update(Action::NewTab);
+    assert_eq!(app.navigator.tab_count(), 2);
+    // Move around on the new tab.
+    app.cursor_line = 1;
+    app.scroll = 0;
+    app.update(Action::SwitchTab(0));
+    assert_eq!(app.navigator.active(), 0);
+    assert_eq!(app.cursor_line, 7);
+    assert_eq!(app.scroll, 3);
+    app.update(Action::SwitchTab(1));
+    assert_eq!(app.navigator.active(), 1);
+    assert_eq!(app.cursor_line, 1);
+}
+
+#[test]
+fn tab_bar_hit_by_coordinate() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::NewTab);
+    assert_eq!(app.navigator.tab_count(), 2);
+    let _ = draw_app(&mut app, 120, 24);
+    let tab_hit = app
+        .hit_map
+        .entries()
+        .iter()
+        .find(|(_, h)| matches!(h, Hit::Tab(0)));
+    let Some((rect, _)) = tab_hit else {
+        panic!("expected Hit::Tab(0) after NewTab");
+    };
+    assert_eq!(app.hit_map.hit_at(rect.x, rect.y), Some(&Hit::Tab(0)));
+    app.update(Action::SwitchTab(0));
+    assert_eq!(app.navigator.active(), 0);
+}
+
+#[test]
+fn middle_click_link_opens_new_tab() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/README.md"),
+    }));
+    let _ = draw_app(&mut app, 120, 24);
+    let link = app
+        .hit_map
+        .entries()
+        .iter()
+        .find(|(_, h)| matches!(h, Hit::Link(_)))
+        .expect("link hit");
+    let (col, row) = (link.0.x, link.0.y);
+    let before = app.navigator.tab_count();
+    let action = apply_mouse(
+        &mut app,
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Middle),
+            column: col,
+            row,
+            modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+        },
+    );
+    assert_eq!(action, None);
+    assert_eq!(app.navigator.tab_count(), before + 1);
 }
