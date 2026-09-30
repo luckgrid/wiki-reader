@@ -43,6 +43,7 @@ pub fn draw(
     cursor: &NavStop,
     scroll: u16,
     focused: bool,
+    labels: wiki_reader_core::config::LabelMode,
     theme: &Theme,
     hits: &mut HitMap,
 ) {
@@ -109,11 +110,38 @@ pub fn draw(
         let on_row = matches!(cursor, NavStop::Node(id) if id == &row.id);
         let cursor_mark = if on_row { "▌" } else { " " };
         let style = if on_row { theme.accent() } else { theme.text() };
-        let text: String = format!("{cursor_mark}{marker}{}", row.label)
-            .chars()
-            .take(usize::from(inner.width))
-            .collect();
-        lines.push(Line::from(Span::styled(text, style)));
+        let mut spans = vec![Span::styled(
+            format!("{cursor_mark}{marker}{}", row.label),
+            style,
+        )];
+        if labels == wiki_reader_core::config::LabelMode::TitleFilename
+            && let NodeId::Page(key) = &row.id
+        {
+            let file = wiki_reader_core::nav::humanize_filename(&key.relative_path);
+            let title = row.label.trim_start();
+            if title != file {
+                spans.push(Span::styled(format!(" ({file})"), theme.muted()));
+            }
+        }
+        let max = usize::from(inner.width);
+        let mut used = 0usize;
+        let mut clipped = Vec::new();
+        for sp in spans {
+            let w = sp.content.chars().count();
+            if used >= max {
+                break;
+            }
+            if used + w <= max {
+                used += w;
+                clipped.push(sp);
+            } else {
+                let take = max.saturating_sub(used);
+                let text: String = sp.content.chars().take(take).collect();
+                clipped.push(Span::styled(text, sp.style));
+                break;
+            }
+        }
+        lines.push(Line::from(clipped));
     }
 
     frame.render_widget(Paragraph::new(lines), inner);

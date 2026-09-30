@@ -629,6 +629,31 @@ mod tests {
         );
     }
 
+    #[test]
+    fn mermaid_fallback_does_not_duplicate_source() {
+        let src = "```mermaid\nnot-a-valid-diagram-xyzzy\n```\n";
+        let doc = render_src(src, 40);
+        let plain = doc.lines.join("\n");
+        let headers = doc
+            .lines
+            .iter()
+            .filter(|l| l.starts_with("│ diagram (source"))
+            .count();
+        assert_eq!(headers, 1, "{plain}");
+        let body_only = doc
+            .lines
+            .iter()
+            .filter(|l| *l == "not-a-valid-diagram-xyzzy")
+            .count();
+        assert_eq!(body_only, 1, "source body once: {plain}");
+        assert!(
+            !doc.lines
+                .iter()
+                .any(|l| l.starts_with("│ not-a-valid") || *l == "│ not-a-valid-diagram-xyzzy"),
+            "must not paint fence body before fallback: {plain}"
+        );
+    }
+
     /// Manual / release budget: `cargo test -p wiki-reader-render --release -- --ignored`
     #[test]
     #[ignore = "release budget; run with --ignored --release"]

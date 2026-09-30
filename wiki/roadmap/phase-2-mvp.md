@@ -16,6 +16,12 @@ Time box: ≈ 2 weeks.
 
 All P0/P1 acceptance criteria in [product spec](../product/spec.md) pass; two weeks without opening a GUI markdown app for these collections.
 
+## Dogfood notes (operator)
+
+Phase 2 stays `active` through two weeks of real use. Record anything that bites here (date + one line); feed that into Phase 3 scoping.
+
+- _empty — start after the [Phase 1 exit checklist](phase-1-reader-shell.md#phase-1-exit-checklist)_
+
 ## Tasks
 
 | ID | Task | Reqs | Status | Notes |
@@ -34,7 +40,7 @@ All P0/P1 acceptance criteria in [product spec](../product/spec.md) pass; two we
 | P2-R32 | Session autosave + test isolation | M1 | done | 81ea91f |
 | P2-R33 | Block/copy polish | BA | done | 81ea91f |
 | P2-R34 | `t` / middle-click open the right target | TB | done | focused link / nav row; all navigable hits |
-| P2-R35 | Theme warn, dim labels, Mermaid cache, highlight flake | C1 / D1 | todo | N2–N4 cleanups |
+| P2-R35 | Theme warn, dim labels, Mermaid cache, highlight flake | C1 / D1 | done | N2–N4 cleanups |
 
 ## Proposed order (after Phase 1 exit)
 

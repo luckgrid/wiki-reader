@@ -239,6 +239,12 @@ impl Navigator {
         &self.tabs
     }
 
+    /// Label mode used when building the tree.
+    #[must_use]
+    pub fn label_mode(&self) -> crate::config::LabelMode {
+        self.label_mode
+    }
+
     /// Active tab index.
     #[must_use]
     pub fn active(&self) -> usize {

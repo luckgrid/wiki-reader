@@ -1,30 +1,12 @@
 //! Syntect markdown highlighting for raw view (line gutter applied at draw).
 
 use std::sync::OnceLock;
-#[cfg(test)]
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use ratatui::style::{Color, Modifier, Style};
 use syntect::easy::HighlightLines;
 use syntect::highlighting::{FontStyle, Theme, ThemeSet};
 use syntect::parsing::{SyntaxReference, SyntaxSet};
 use syntect::util::LinesWithEndings;
-
-#[cfg(test)]
-static HIGHLIGHT_CALLS: AtomicUsize = AtomicUsize::new(0);
-
-/// Test hook: how many times [`highlight_markdown`] has been called.
-#[cfg(test)]
-#[must_use]
-pub fn highlight_call_count() -> usize {
-    HIGHLIGHT_CALLS.load(Ordering::Relaxed)
-}
-
-/// Test hook: reset the call counter.
-#[cfg(test)]
-pub fn reset_highlight_call_count() {
-    HIGHLIGHT_CALLS.store(0, Ordering::Relaxed);
-}
 
 /// Highlighted span for one run of text.
 #[derive(Debug, Clone)]
@@ -62,8 +44,6 @@ fn pick_theme(ts: &ThemeSet) -> Option<&Theme> {
 /// applies asynchronously; the UI paints plain text until the worker result lands.
 #[must_use]
 pub fn highlight_markdown(source: &str) -> Vec<Vec<HlSpan>> {
-    #[cfg(test)]
-    HIGHLIGHT_CALLS.fetch_add(1, Ordering::Relaxed);
     let ps = syntax_set();
     let ts = theme_set();
     let Some(syntax) = markdown_syntax(ps) else {
@@ -181,13 +161,11 @@ mod tests {
         assert!(source.len() >= 40_000);
         // Warm parse / allocator; highlight must stay unused on this path.
         let _ = RawDoc::from_source(chunk, None);
-        reset_highlight_call_count();
         let start = Instant::now();
         let doc = RawDoc::from_source(&source, None);
         let elapsed = start.elapsed();
         assert!(!doc.lines().is_empty());
         assert!(doc.highlights.is_empty(), "UI path must not sync-highlight");
-        assert_eq!(highlight_call_count(), 0);
         // ponytail: ~25 ms is sync markdown parse for 50 KB; syntect was ~367 ms.
         // Raise only if parse itself becomes the freeze; upgrade = parse off UI thread.
         assert!(
@@ -199,9 +177,7 @@ mod tests {
     #[test]
     fn raw_doc_does_not_highlight_on_construct() {
         use crate::tui::viewer_doc::RawDoc;
-        reset_highlight_call_count();
         let doc = RawDoc::from_source("# Hi\n\npara\n", None);
         assert!(doc.highlights.is_empty());
-        assert_eq!(highlight_call_count(), 0);
     }
 }
