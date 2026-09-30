@@ -251,6 +251,22 @@ impl Navigator {
         &self.nav
     }
 
+    /// Mutable side nav state (session restore).
+    pub fn nav_mut(&mut self) -> &mut NavState {
+        &mut self.nav
+    }
+
+    /// Replace tabs after session restore (caller validated non-empty).
+    pub fn replace_tabs(&mut self, tabs: Vec<Tab>, active: usize) {
+        if tabs.is_empty() {
+            return;
+        }
+        self.tabs = tabs;
+        self.active = active.min(self.tabs.len().saturating_sub(1));
+        let page = self.tab().current().page.clone();
+        self.nav.seen_page = Some(page);
+    }
+
     /// Footer notice from the last navigation, if any.
     #[must_use]
     pub fn notice(&self) -> Option<&str> {

@@ -81,6 +81,7 @@ fn run_loop(
     loop {
         terminal.draw(|frame| draw(frame, app))?;
         if app.quit {
+            app.save_session();
             return Ok(());
         }
         app.poll_watcher();

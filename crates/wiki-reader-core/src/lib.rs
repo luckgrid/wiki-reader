@@ -10,6 +10,7 @@ pub mod nav;
 pub mod parse;
 pub mod provider;
 pub mod search;
+pub mod session;
 pub mod watch;
 
 pub use error::Error;
