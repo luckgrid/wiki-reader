@@ -69,7 +69,7 @@ Backlinks are the reverse of every edge except `Parent`. The index keeps a flat 
 In order, for a link target `t` written in page `p`:
 
 1. `#anchor` → same page, anchor by GitHub-style slug.
-2. Scheme present: `http:` / `https:` / `mailto:` → external (confirm before open). Any other URI scheme (`file:`, `javascript:`, custom `…://…`) → unsupported: muted style, status `unsupported link scheme: …`, never passed to the system opener.
+2. Scheme present: `http:` / `https:` / `mailto:` → external (confirm before open). Any other URI scheme (`file:`, `javascript:`, custom `…://…`) → unsupported: muted style, status `unsupported link scheme: …`, never passed to the system opener. Detection is RFC 3986-shaped (leading alpha, then alnum/`+`/`-`/`.` until `:`), so bare forms like `notes:2024.md` or a Windows drive letter (`C:\…`) are unsupported rather than relative file paths.
 3. If `t` starts with `/`, resolve relative to the collection root; otherwise relative to `p`'s directory.
 4. Try as written, then with `.md`, then `t/README.md`, then `t/index.md`.
 5. URL-decode (`%20`) and retry once.

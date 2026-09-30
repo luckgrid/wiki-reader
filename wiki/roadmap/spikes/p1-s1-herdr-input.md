@@ -61,7 +61,7 @@ Ran `cargo run -p wiki-reader --example keylog` and the reader on `~/Workspaces/
 
 Also: `q` and `Ctrl+C` restore the terminal (alt-screen / raw mode) after running wiki-reader under herdr.
 
-**Follow-ups:** P1-R36 (modifier-strict plain keys + Alt+b/Alt+f Back/Forward). Plain-letter bindings currently ignore modifiers (Alt+q quits, Ctrl+b toggles nav) — same ticket.
+**Follow-ups:** P1-R36 done (modifier-strict plain keys + Alt+b/Alt+f Back/Forward). Enter/Tab in panes also require no Ctrl/Alt; Overlay search accepts AltGr / Option non-ASCII.
 
 ## Historical: synthetic herdr verification (2026-09-29)
 

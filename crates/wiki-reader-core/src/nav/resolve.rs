@@ -320,6 +320,9 @@ mod tests {
             "javascript:alert(1)",
             "tel:+15550100",
             "ftp://host/x",
+            r"C:\x",
+            "a:b.md",
+            "notes:2024.md",
         ] {
             let out = resolve(t, &from, &index);
             assert!(
@@ -328,6 +331,39 @@ mod tests {
                 out.target
             );
         }
+    }
+
+    #[test]
+    fn rule2_uri_scheme_edge_cases() {
+        let index = index_at("../../fixtures/broken-links");
+        let from = key("broken-links", "README.md");
+        assert!(matches!(
+            resolve("HTTP://X", &from, &index).target,
+            Target::External(_)
+        ));
+        assert!(matches!(
+            resolve("mailto:a@b.c", &from, &index).target,
+            Target::External(_)
+        ));
+        // Leading `:` / digit — not an RFC scheme; path path, not Unsupported.
+        for t in [":foo", "1abc:x"] {
+            let out = resolve(t, &from, &index);
+            assert!(
+                !matches!(out.target, Target::Unsupported(_)),
+                "{t} → {:?}",
+                out.target
+            );
+            assert!(
+                matches!(out.target, Target::Unresolved(_)),
+                "{t} → {:?}",
+                out.target
+            );
+        }
+        assert_eq!(uri_scheme(r"C:\x"), Some("C"));
+        assert_eq!(uri_scheme("a:b.md"), Some("a"));
+        assert_eq!(uri_scheme(":foo"), None);
+        assert_eq!(uri_scheme("1abc:x"), None);
+        assert_eq!(uri_scheme("HTTP://X"), Some("HTTP"));
     }
 
     #[test]

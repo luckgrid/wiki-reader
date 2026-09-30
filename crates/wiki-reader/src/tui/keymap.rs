@@ -33,6 +33,18 @@ fn no_ctrl_alt(key: KeyEvent) -> bool {
     !key.modifiers.contains(KeyModifiers::CONTROL) && !key.modifiers.contains(KeyModifiers::ALT)
 }
 
+/// Overlay typing: reject pure Ctrl and pure Alt+ASCII; allow `AltGr` (Ctrl+Alt) and Option non-ASCII.
+#[must_use]
+fn overlay_typeable(key: KeyEvent, c: char) -> bool {
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    let alt = key.modifiers.contains(KeyModifiers::ALT);
+    match (ctrl, alt) {
+        (true, false) => false,
+        (false, true) => !c.is_ascii(),
+        (true, true) | (false, false) => true,
+    }
+}
+
 /// Map a key in the given input mode. Returns `(action, next_chord)`.
 #[must_use]
 #[cfg(test)]
@@ -73,7 +85,9 @@ pub fn map_with_overrides(
             KeyCode::Up => (Some(Action::SearchSelectDelta(-1)), Chord::None),
             KeyCode::Down => (Some(Action::SearchSelectDelta(1)), Chord::None),
             KeyCode::Backspace => (Some(Action::SearchBackspace), Chord::None),
-            KeyCode::Char(c) if no_ctrl_alt(key) => (Some(Action::SearchChar(c)), Chord::None),
+            KeyCode::Char(c) if overlay_typeable(key, c) => {
+                (Some(Action::SearchChar(c)), Chord::None)
+            }
             _ => (None, Chord::None),
         };
     }
@@ -199,22 +213,23 @@ pub fn map_global(key: KeyEvent) -> Option<Action> {
 pub fn map_pane(key: KeyEvent, focus: FocusPane) -> Option<Action> {
     let shift = key.modifiers.contains(KeyModifiers::SHIFT);
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    let plain = no_ctrl_alt(key);
 
     match focus {
         FocusPane::Nav => match key.code {
             KeyCode::Up if shift || ctrl => Some(Action::NavJumpUp),
             KeyCode::Down if shift || ctrl => Some(Action::NavJumpDown),
             KeyCode::Up | KeyCode::BackTab => Some(Action::NavStepUp),
-            KeyCode::Tab if shift => Some(Action::NavStepUp),
-            KeyCode::Down | KeyCode::Tab => Some(Action::NavStepDown),
+            KeyCode::Tab if shift && plain => Some(Action::NavStepUp),
+            KeyCode::Down => Some(Action::NavStepDown),
+            KeyCode::Tab if plain => Some(Action::NavStepDown),
             KeyCode::Right => Some(Action::NavExpand),
             KeyCode::Left => Some(Action::NavCollapse),
-            KeyCode::Enter => Some(Action::NavActivate),
+            KeyCode::Enter if plain => Some(Action::NavActivate),
             _ => None,
         },
         FocusPane::Viewer => {
             let alt = key.modifiers.contains(KeyModifiers::ALT);
-            let plain = no_ctrl_alt(key);
             match key.code {
                 // Alt+Shift+↑/↓ (primary); {/} fallback when Alt+Shift is unreliable
                 KeyCode::Up if alt && shift => Some(Action::ViewerHeadingUp),
@@ -235,9 +250,9 @@ pub fn map_pane(key: KeyEvent, focus: FocusPane) -> Option<Action> {
                 KeyCode::End => Some(Action::ViewerEnd),
                 KeyCode::Char('G') if plain => Some(Action::ViewerEnd),
                 KeyCode::BackTab => Some(Action::ViewerBackTab),
-                KeyCode::Tab if shift => Some(Action::ViewerBackTab),
-                KeyCode::Tab => Some(Action::ViewerTab),
-                KeyCode::Enter => Some(Action::ViewerActivate),
+                KeyCode::Tab if shift && plain => Some(Action::ViewerBackTab),
+                KeyCode::Tab if plain => Some(Action::ViewerTab),
+                KeyCode::Enter if plain => Some(Action::ViewerActivate),
                 _ => None,
             }
         }
@@ -511,5 +526,116 @@ mod tests {
             Chord::None,
         );
         assert_eq!(alt_right, Some(Action::Forward));
+    }
+
+    #[test]
+    fn keymap_confirm_rejects_alt_ctrl_y() {
+        for mods in [KeyModifiers::ALT, KeyModifiers::CONTROL] {
+            let (got, _) = map(
+                key_mod(KeyCode::Char('y'), mods),
+                FocusPane::Viewer,
+                InputMode::Confirm,
+                Chord::None,
+            );
+            assert_eq!(got, None, "mods={mods:?}");
+        }
+        let (ok, _) = map(
+            key(KeyCode::Char('y')),
+            FocusPane::Viewer,
+            InputMode::Confirm,
+            Chord::None,
+        );
+        assert_eq!(ok, Some(Action::ConfirmOpen));
+    }
+
+    #[test]
+    fn keymap_overlay_alt_b_neither_types_nor_back() {
+        let (got, _) = map(
+            key_mod(KeyCode::Char('b'), KeyModifiers::ALT),
+            FocusPane::Viewer,
+            InputMode::Overlay,
+            Chord::None,
+        );
+        assert_eq!(got, None);
+    }
+
+    #[test]
+    fn keymap_overlay_altgr_and_option_non_ascii() {
+        let (altgr, _) = map(
+            key_mod(
+                KeyCode::Char('{'),
+                KeyModifiers::CONTROL | KeyModifiers::ALT,
+            ),
+            FocusPane::Viewer,
+            InputMode::Overlay,
+            Chord::None,
+        );
+        assert_eq!(altgr, Some(Action::SearchChar('{')));
+        let (pure_alt_ascii, _) = map(
+            key_mod(KeyCode::Char('a'), KeyModifiers::ALT),
+            FocusPane::Viewer,
+            InputMode::Overlay,
+            Chord::None,
+        );
+        assert_eq!(pure_alt_ascii, None);
+        let (option_non_ascii, _) = map(
+            key_mod(KeyCode::Char('å'), KeyModifiers::ALT),
+            FocusPane::Viewer,
+            InputMode::Overlay,
+            Chord::None,
+        );
+        assert_eq!(option_non_ascii, Some(Action::SearchChar('å')));
+        let (pure_ctrl, _) = map(
+            key_mod(KeyCode::Char('a'), KeyModifiers::CONTROL),
+            FocusPane::Viewer,
+            InputMode::Overlay,
+            Chord::None,
+        );
+        assert_eq!(pure_ctrl, None);
+    }
+
+    #[test]
+    fn keymap_enter_tab_require_no_ctrl_alt() {
+        for focus in [FocusPane::Viewer, FocusPane::Nav] {
+            let (plain_enter, _) = map(key(KeyCode::Enter), focus, InputMode::Normal, Chord::None);
+            assert!(plain_enter.is_some(), "plain Enter focus={focus:?}");
+            for mods in [KeyModifiers::CONTROL, KeyModifiers::ALT] {
+                let (enter, _) = map(
+                    key_mod(KeyCode::Enter, mods),
+                    focus,
+                    InputMode::Normal,
+                    Chord::None,
+                );
+                assert_eq!(enter, None, "Enter mods={mods:?} focus={focus:?}");
+                let (tab, _) = map(
+                    key_mod(KeyCode::Tab, mods),
+                    focus,
+                    InputMode::Normal,
+                    Chord::None,
+                );
+                assert_eq!(tab, None, "Tab mods={mods:?} focus={focus:?}");
+            }
+        }
+        let (viewer_tab, _) = map(
+            key(KeyCode::Tab),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(viewer_tab, Some(Action::ViewerTab));
+        let (shift_tab, _) = map(
+            key_mod(KeyCode::Tab, KeyModifiers::SHIFT),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(shift_tab, Some(Action::ViewerBackTab));
+        let (nav_tab, _) = map(
+            key(KeyCode::Tab),
+            FocusPane::Nav,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(nav_tab, Some(Action::NavStepDown));
     }
 }
