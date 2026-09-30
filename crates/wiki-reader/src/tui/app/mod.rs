@@ -82,6 +82,10 @@ pub struct App {
     pub(crate) opener: Box<dyn Opener>,
     /// `$EDITOR` launcher (swappable in tests).
     pub(crate) editor: Box<dyn EditorLauncher>,
+    /// Configured editor command (overrides env when set).
+    pub(crate) config_editor: Option<String>,
+    /// Key overrides: action name → chord string (e.g. `"quit" = "Q"`).
+    pub(crate) key_overrides: std::collections::BTreeMap<String, String>,
     /// Search overlay (None when closed).
     pub search: Option<SearchOverlay>,
     /// Optional filesystem watcher (live reload).
@@ -113,13 +117,43 @@ impl App {
     ///
     /// Propagates provider/index failures. Empty collection / missing start use
     /// process exit in [`run`].
+    #[cfg(test)]
     pub fn new(root: &Path) -> Result<Self, wiki_reader_core::Error> {
-        let provider = FsProvider::open(root)?;
+        Self::new_with_config(root, None)
+    }
+
+    /// Build app from a collection root with an optional `--config` path.
+    ///
+    /// # Errors
+    ///
+    /// Propagates provider/index failures.
+    pub fn new_with_config(
+        root: &Path,
+        config_path: Option<&Path>,
+    ) -> Result<Self, wiki_reader_core::Error> {
+        let mut config = wiki_reader_core::config::Config::load(root, config_path);
+        let (exclude_set, exclude_diags) =
+            wiki_reader_core::config::build_exclude_set(&config.exclude);
+        config.diagnostics.extend(exclude_diags);
+        let provider = FsProvider::open_with_exclude(root, &config.exclude)?;
         let index = Index::build(&provider)?;
-        let navigator = Navigator::new(index, None)?;
-        let (watcher, watch_msg) = match wiki_reader_core::watch::Watcher::start(root) {
-            Ok(w) => (Some(w), String::new()),
-            Err(err) => (None, format!("live reload off: {err}")),
+        let navigator = Navigator::new_with_labels(index, None, config.nav.labels)?;
+        let (watcher, watch_msg) =
+            match wiki_reader_core::watch::Watcher::start_with_exclude(root, exclude_set) {
+                Ok(w) => (Some(w), String::new()),
+                Err(err) => (None, format!("live reload off: {err}")),
+            };
+        let mut message = watch_msg;
+        if let Some(diag) = config.status_message() {
+            if message.is_empty() {
+                message = diag;
+            } else {
+                message = format!("{message}; {diag}");
+            }
+        }
+        let opener: Box<dyn Opener> = match config.opener.clone() {
+            Some(cmd) => Box::new(crate::tui::opener::CommandOpener { command: cmd }),
+            None => Box::new(SystemOpener),
         };
         let mut app = Self {
             navigator,
@@ -135,7 +169,7 @@ impl App {
             cursor_line: 0,
             scroll: 0,
             focused_item: None,
-            message: watch_msg,
+            message,
             // ponytail: defaults until first draw; layout overwrites each frame
             viewer_rows: 20,
             nav_viewport: 20,
@@ -145,8 +179,10 @@ impl App {
             chord: Chord::None,
             input_mode: InputMode::Normal,
             pending_external: None,
-            opener: Box::new(SystemOpener),
+            opener,
             editor: Box::new(SystemEditor),
+            config_editor: config.editor.clone(),
+            key_overrides: config.keys.clone(),
             search: None,
             watcher,
             rebuild_rx: None,
@@ -573,7 +609,9 @@ impl App {
     /// `events`); tests inject a recording launcher and call
     /// [`Self::open_in_editor_with`].
     pub(crate) fn open_in_editor(&mut self) {
-        self.open_in_editor_with(crate::tui::editor::resolve_editor());
+        self.open_in_editor_with(crate::tui::editor::resolve_editor_with_config(
+            self.config_editor.as_deref(),
+        ));
     }
 
     pub(crate) fn open_in_editor_with(&mut self, editor: Option<String>) {

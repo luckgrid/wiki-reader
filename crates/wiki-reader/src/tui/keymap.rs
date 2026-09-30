@@ -29,15 +29,34 @@ pub enum Chord {
 
 /// Map a key in the given input mode. Returns `(action, next_chord)`.
 #[must_use]
+#[cfg(test)]
 pub fn map(
     key: KeyEvent,
     focus: FocusPane,
     mode: InputMode,
     chord: Chord,
 ) -> (Option<Action>, Chord) {
+    map_with_overrides(key, focus, mode, chord, None)
+}
+
+/// Like [`map`] with optional action-name → chord overrides from config.
+#[must_use]
+pub fn map_with_overrides(
+    key: KeyEvent,
+    focus: FocusPane,
+    mode: InputMode,
+    chord: Chord,
+    overrides: Option<&std::collections::BTreeMap<String, String>>,
+) -> (Option<Action>, Chord) {
     // Ctrl+C always quits (raw mode has no SIGINT).
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
         return (Some(Action::Quit), Chord::None);
+    }
+
+    if let Some(over) = overrides
+        && let Some(action) = override_action(key, over)
+    {
+        return (Some(action), Chord::None);
     }
 
     if mode == InputMode::Overlay {
@@ -76,6 +95,47 @@ pub fn map(
         return (Some(a), chord);
     }
     (map_pane(key, focus), chord)
+}
+
+/// Match a single-character override like `"quit" = "Q"` (plain char, no mods).
+fn override_action(
+    key: KeyEvent,
+    overrides: &std::collections::BTreeMap<String, String>,
+) -> Option<Action> {
+    if !key.modifiers.is_empty()
+        && key.modifiers != KeyModifiers::SHIFT
+        && key.modifiers != KeyModifiers::NONE
+    {
+        // Allow SHIFT for uppercase letters only via Char already uppercased.
+    }
+    let KeyCode::Char(c) = key.code else {
+        return None;
+    };
+    if key.modifiers.contains(KeyModifiers::CONTROL) || key.modifiers.contains(KeyModifiers::ALT) {
+        return None;
+    }
+    for (name, chord) in overrides {
+        let chord = chord.trim();
+        if chord.len() == 1 && chord.starts_with(c) {
+            return action_by_name(name);
+        }
+    }
+    None
+}
+
+fn action_by_name(name: &str) -> Option<Action> {
+    Some(match name {
+        "quit" => Action::Quit,
+        "toggle_nav" | "toggle-nav" => Action::ToggleNav,
+        "open_in_editor" | "open-in-editor" | "editor" => Action::OpenInEditor,
+        "open_search" | "open-search" | "search" => Action::OpenSearch,
+        "prev_page" | "prev-page" => Action::PrevPage,
+        "next_page" | "next-page" => Action::NextPage,
+        "back" => Action::Back,
+        "forward" => Action::Forward,
+        "toggle_view" | "toggle-view" | "raw" => Action::ToggleViewMode,
+        _ => return None,
+    })
 }
 
 /// Global bindings (always, before pane-local). Esc does **not** quit.
@@ -319,5 +379,28 @@ mod tests {
             Chord::None,
         );
         assert_eq!(nav, None);
+    }
+
+    #[test]
+    fn keymap_key_override_changes_quit() {
+        let mut overs = std::collections::BTreeMap::new();
+        overs.insert("quit".into(), "Q".into());
+        let (got, _) = map_with_overrides(
+            key(KeyCode::Char('Q')),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+            Some(&overs),
+        );
+        assert_eq!(got, Some(Action::Quit));
+        // Default lowercase q still works via map_global when not overridden by that char.
+        let (got_q, _) = map_with_overrides(
+            key(KeyCode::Char('q')),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+            Some(&overs),
+        );
+        assert_eq!(got_q, Some(Action::Quit));
     }
 }

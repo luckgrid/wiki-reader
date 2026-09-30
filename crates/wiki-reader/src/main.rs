@@ -18,6 +18,9 @@ struct Args {
     /// Collection root to open (defaults to the current directory).
     #[arg(default_value = ".")]
     root: PathBuf,
+    /// Optional config TOML (overrides XDG and `<root>/.wiki-reader.toml`).
+    #[arg(long = "config", value_name = "PATH")]
+    config: Option<PathBuf>,
 }
 
 fn check_root(root: &Path) -> Result<(), String> {
@@ -33,7 +36,7 @@ fn main() -> ExitCode {
         eprintln!("wiki-reader: {msg}");
         return ExitCode::FAILURE;
     }
-    match tui::app::run(&args.root) {
+    match tui::app::run(&args.root, args.config.as_deref()) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("wiki-reader: {err}");

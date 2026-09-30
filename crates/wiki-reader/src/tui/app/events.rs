@@ -25,9 +25,9 @@ use wiki_reader_core::nav::NavStop;
 /// # Errors
 ///
 /// Returns when terminal init/draw fails or the collection cannot be indexed.
-pub fn run(root: &Path) -> io::Result<()> {
+pub fn run(root: &Path, config: Option<&Path>) -> io::Result<()> {
     // Validate before entering the terminal so empty collections don't leak raw mode.
-    let mut app = App::new(root).map_err(|err| match err {
+    let mut app = App::new_with_config(root, config).map_err(|err| match err {
         wiki_reader_core::Error::EmptyCollection => io::Error::new(
             io::ErrorKind::InvalidInput,
             format!("collection has no markdown pages: {}", root.display()),
@@ -87,8 +87,13 @@ fn run_loop(
         if event::poll(std::time::Duration::from_millis(250))? {
             match event::read()? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => {
-                    let (action, next_chord) =
-                        keymap::map(key, app.focus, app.input_mode, app.chord);
+                    let (action, next_chord) = keymap::map_with_overrides(
+                        key,
+                        app.focus,
+                        app.input_mode,
+                        app.chord,
+                        Some(&app.key_overrides),
+                    );
                     app.chord = next_chord;
                     if let Some(Action::OpenInEditor) = action {
                         suspend_run_editor(terminal, app, guard)?;

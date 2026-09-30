@@ -125,6 +125,7 @@ pub struct Navigator {
     active: usize,
     nav: NavState,
     notice: Option<String>,
+    label_mode: crate::config::LabelMode,
 }
 
 impl Navigator {
@@ -135,10 +136,24 @@ impl Navigator {
     /// Returns [`Error::EmptyCollection`] when the index has no pages, or
     /// [`Error::PageNotFound`] when `start` is not in the index.
     pub fn new(index: Index, start: Option<PageKey>) -> Result<Self, Error> {
+        Self::new_with_labels(index, start, crate::config::LabelMode::Title)
+    }
+
+    /// Like [`new`] with an explicit nav label mode.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::EmptyCollection`] when the index has no pages, or
+    /// [`Error::PageNotFound`] when `start` is not in the index.
+    pub fn new_with_labels(
+        index: Index,
+        start: Option<PageKey>,
+        labels: crate::config::LabelMode,
+    ) -> Result<Self, Error> {
         if index.pages.is_empty() {
             return Err(Error::EmptyCollection);
         }
-        let tree = NavTree::build(&index);
+        let tree = NavTree::build_with(&index, labels);
         let start = match start {
             Some(key) if index.pages.contains_key(&key) => key,
             Some(key) => return Err(Error::PageNotFound(key)),
@@ -171,6 +186,7 @@ impl Navigator {
                 seen_page: Some(start),
             },
             notice: None,
+            label_mode: labels,
         })
     }
 
@@ -191,7 +207,7 @@ impl Navigator {
         self.save_view(view);
         let cur = self.tab().current().page.clone();
         self.index = index;
-        self.nav.tree = NavTree::build(&self.index);
+        self.nav.tree = NavTree::build_with(&self.index, self.label_mode);
 
         let ids = collect_node_ids(&self.nav.tree.items);
         self.nav.expanded.retain(|id| ids.contains(id));

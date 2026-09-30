@@ -31,6 +31,31 @@ impl Opener for SystemOpener {
     }
 }
 
+/// Configurable opener: first word is the program, remaining words are args, then the URL.
+#[derive(Debug, Clone)]
+pub struct CommandOpener {
+    pub command: String,
+}
+
+impl Opener for CommandOpener {
+    fn open(&self, url: &str) -> io::Result<()> {
+        let words = shell_words::split(self.command.trim())
+            .unwrap_or_else(|_| self.command.split_whitespace().map(str::to_owned).collect());
+        let (program, prefix) = match words.split_first() {
+            Some((p, rest)) => (p.clone(), rest.to_vec()),
+            None => (self.command.trim().to_owned(), Vec::new()),
+        };
+        let mut cmd = Command::new(&program);
+        cmd.args(&prefix)
+            .arg(url)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()?;
+        Ok(())
+    }
+}
+
 /// Test double: records opens without spawning.
 #[derive(Debug, Default)]
 #[allow(dead_code)]
