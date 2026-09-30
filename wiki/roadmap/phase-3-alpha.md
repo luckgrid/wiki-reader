@@ -28,7 +28,7 @@ Detail each row into spikes/acceptance only after the Phase 2 dogfood notes in [
 
 | ID | Task | Reqs | Status | Notes |
 |----|------|------|--------|-------|
-| P3-08 | Install via `cargo install` + release binaries | | done | this PR |
+| P3-08 | Install via `cargo install` + release binaries | | done | daf8fc5 |
 | P3-06 | Help overlay with clickable keys | | todo | from keymap table |
 | P3-07 | Themes | | todo | wire stored theme key |
 | P3-01 | Sticky viewer section header | U1 | todo | |
