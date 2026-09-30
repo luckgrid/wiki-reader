@@ -4,7 +4,10 @@ mod link_span;
 mod render;
 
 pub use link_span::{LinkClass, LinkId, LinkSpan};
-pub use render::{RenderedDoc, StyleKind, StyledLine, StyledSpan, render};
+pub use render::{
+    BlockAction, BlockActionKind, RenderOpts, RenderedDoc, StyleKind, StyledLine, StyledSpan,
+    render, render_with,
+};
 
 #[cfg(test)]
 mod tests {
@@ -503,6 +506,119 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn frontmatter_collapsed_by_default_expands_with_opts() {
+        let src = "---\ntitle: Hello\nupdated: 2026-01-01\n---\n\n# Body\n";
+        let doc = render_src(src, 40);
+        assert!(
+            doc.lines.iter().any(|l| l.contains("frontmatter ▶")),
+            "collapsed cue missing: {:?}",
+            doc.lines
+        );
+        assert!(
+            !doc.lines.iter().any(|l| l.contains("title: Hello")),
+            "collapsed must hide fields: {:?}",
+            doc.lines
+        );
+        assert!(
+            doc.block_actions
+                .iter()
+                .any(|a| a.kind == BlockActionKind::ToggleFrontmatter)
+        );
+        let id = doc.block_actions[0].id;
+        let mut expanded = std::collections::HashSet::new();
+        expanded.insert(id);
+        let index = wiki_reader_core::Index {
+            collection_id: "t".into(),
+            pages: HashMap::default(),
+            edges: vec![],
+            by_from: HashMap::default(),
+            by_to: HashMap::default(),
+            by_id: HashMap::default(),
+            by_path: HashMap::default(),
+            diagnostics: vec![],
+        };
+        let open = render_with(
+            src,
+            None,
+            &empty_key(),
+            &index,
+            40,
+            &RenderOpts { expanded },
+        );
+        assert!(
+            open.lines.iter().any(|l| l.contains("title: Hello")),
+            "expanded missing title: {:?}",
+            open.lines
+        );
+    }
+
+    #[test]
+    fn long_table_truncates_until_expanded() {
+        let src = "| h |\n| - |\n| 1 |\n| 2 |\n| 3 |\n| 4 |\n| 5 |\n";
+        let doc = render_src(src, 40);
+        assert!(
+            doc.lines.iter().any(|l| l.contains("expand table")),
+            "truncate cue missing: {:?}",
+            doc.lines
+        );
+        assert!(
+            !doc.lines
+                .iter()
+                .any(|l| l.contains("| 5 |") || l.trim_end().ends_with('5')),
+            "row 5 should be hidden when truncated: {:?}",
+            doc.lines
+        );
+        let id = doc
+            .block_actions
+            .iter()
+            .find(|a| a.kind == BlockActionKind::ToggleTable)
+            .map(|a| a.id)
+            .expect("table action");
+        let mut expanded = std::collections::HashSet::new();
+        expanded.insert(id);
+        let index = wiki_reader_core::Index {
+            collection_id: "t".into(),
+            pages: HashMap::default(),
+            edges: vec![],
+            by_from: HashMap::default(),
+            by_to: HashMap::default(),
+            by_id: HashMap::default(),
+            by_path: HashMap::default(),
+            diagnostics: vec![],
+        };
+        let open = render_with(
+            src,
+            None,
+            &empty_key(),
+            &index,
+            40,
+            &RenderOpts { expanded },
+        );
+        assert!(
+            !open.lines.iter().any(|l| l.contains("expand table")),
+            "expanded still shows cue: {:?}",
+            open.lines
+        );
+        let joined = open.lines.join("\n");
+        assert!(joined.contains('5'), "expanded missing last row: {joined}");
+    }
+
+    #[test]
+    fn code_block_registers_copy_payload() {
+        let doc = render_src("```rust\nfn main() {}\n```\n", 40);
+        let action = doc
+            .block_actions
+            .iter()
+            .find(|a| a.kind == BlockActionKind::CopyCode)
+            .expect("copy action");
+        assert!(
+            action.payload.contains("fn main"),
+            "payload={}",
+            action.payload
+        );
     }
 
     /// Manual / release budget: `cargo test -p wiki-reader-render --release -- --ignored`

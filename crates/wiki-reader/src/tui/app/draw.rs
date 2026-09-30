@@ -5,6 +5,7 @@ use ratatui::Frame;
 use super::App;
 use crate::tui::focus::FocusPane;
 use crate::tui::layout;
+use crate::tui::page_doc::PageDoc;
 use crate::tui::regions::status::StatusModel;
 use crate::tui::regions::{footer, header, side_nav, status, viewer};
 use crate::tui::viewer_doc::{FocusTarget, ViewerDoc, format_target_with_provider};
@@ -60,7 +61,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         .map(|k| wiki_reader_core::nav::page_label(app.navigator.index(), k));
     let footer_focus = focus_item.as_ref().and_then(|it| match it.kind {
         FocusTarget::FooterPrev | FocusTarget::FooterNext => Some(it.kind),
-        FocusTarget::Link => None,
+        FocusTarget::Link | FocusTarget::BlockAction => None,
     });
     footer::draw(
         frame,
@@ -230,7 +231,40 @@ fn focused_status_message(app: &App) -> String {
             app.navigator.index(),
             Some(&app.provider),
         ),
+        FocusTarget::BlockAction => block_action_status(app, &it.target),
         FocusTarget::FooterPrev => "‹ prev".into(),
         FocusTarget::FooterNext => "next ›".into(),
+    }
+}
+
+fn block_action_status(app: &App, target: &str) -> String {
+    let Some(id_str) = target.strip_prefix("block:") else {
+        return String::new();
+    };
+    let Ok(id) = id_str.parse::<u32>() else {
+        return String::new();
+    };
+    let PageDoc::Rendered(doc) = &app.doc else {
+        return String::new();
+    };
+    let Some(action) = doc.block_actions().iter().find(|a| a.id == id) else {
+        return String::new();
+    };
+    match action.kind {
+        wiki_reader_render::BlockActionKind::ToggleFrontmatter => {
+            if app.expanded_blocks.contains(&id) {
+                "collapse frontmatter".into()
+            } else {
+                "expand frontmatter".into()
+            }
+        }
+        wiki_reader_render::BlockActionKind::ToggleTable => {
+            if app.expanded_blocks.contains(&id) {
+                "collapse table".into()
+            } else {
+                "expand table".into()
+            }
+        }
+        wiki_reader_render::BlockActionKind::CopyCode => "copy code".into(),
     }
 }

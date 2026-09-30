@@ -4,15 +4,10 @@ expression: out
 ---
 Worked Example Wiki                                                          ◫ ✕
 ┌Nav─────────────────────┐┌Viewer──────────────────────────────────────────────┐
-│ ⌕ Search…              ││── frontmatter ──                                   │
-│▌● Worked Example Wiki  ││title: Worked Example Wiki                          │
-│ ▸ Architecture Overview││updated: 2026-09-28                                 │
-│ ▸ Decisions            ││summary: Minimal fixture collection for wiki-reader │
-│                        ││smoke tests.                                        │
-│                        ││─────────────────                                   │
-│                        ││# Worked Example Wiki                               │
-│                        ││A tiny markdown collection used as the default      │
-│                        ││smoke-test root.                                    │
+│ ⌕ Search…              ││── frontmatter ▶ ──                                 │
+│▌● Worked Example Wiki  ││# Worked Example Wiki                               │
+│ ▸ Architecture Overview││A tiny markdown collection used as the default      │
+│ ▸ Decisions            ││smoke-test root.                                    │
 │                        ││Start at Architecture Overview, follow Token        │
 │                        ││Projection, then return via back when history       │
 │                        ││exists.                                             │
@@ -23,6 +18,11 @@ Worked Example Wiki                                                          ◫
 │                        ││                                                    │
 │                        ││                                                    │
 │                        ││                                                    │
+│                        ││                                                    │
+│                        ││                                                    │
+│                        ││                                                    │
+│                        ││                                                    │
+│                        ││                                                    │
 │                        │└────────────────────────────────────────────────────┘
 └────────────────────────┘‹ —                            Architecture Overview ›
-VIEWER · README.md · L1 8% · 29w · 1m · 2026-09-28
+VIEWER · README.md · L1 14% · 29w · 1m · 2026-09-28

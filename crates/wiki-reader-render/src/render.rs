@@ -80,6 +80,8 @@ pub struct RenderedDoc {
     /// Styled rows (same length as `lines`).
     pub styled: Vec<StyledLine>,
     pub links: Vec<LinkSpan>,
+    /// Focusable block actions (frontmatter / table / code), document order.
+    pub block_actions: Vec<BlockAction>,
     /// 1-based **rendered** line where each content block starts.
     pub block_starts: Vec<u32>,
     /// Rendered line (0-based) → source line (1-based), monotonic.
@@ -90,6 +92,37 @@ pub struct RenderedDoc {
     pub updated: String,
 }
 
+/// Kind of a Tab-cycle block action (BA / P2-03).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlockActionKind {
+    /// Expand / collapse the frontmatter box.
+    ToggleFrontmatter,
+    /// Expand a truncated table to full width.
+    ToggleTable,
+    /// Copy a fenced code block (OSC 52).
+    CopyCode,
+}
+
+/// One focusable block action in document order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockAction {
+    pub id: u32,
+    pub kind: BlockActionKind,
+    /// 0-based display line.
+    pub line: u32,
+    /// Display columns `[start, end)` on that line.
+    pub cols: (u16, u16),
+    /// For [`BlockActionKind::CopyCode`]: code body. Else empty.
+    pub payload: String,
+}
+
+/// Optional expansion state for re-layout.
+#[derive(Debug, Clone, Default)]
+pub struct RenderOpts {
+    /// Expanded block-action ids (frontmatter / tables).
+    pub expanded: std::collections::HashSet<u32>,
+}
+
 /// Render `source` at `width` columns.
 #[must_use]
 pub fn render(
@@ -98,6 +131,19 @@ pub fn render(
     from: &PageKey,
     index: &Index,
     width: u16,
+) -> RenderedDoc {
+    render_with(source, page, from, index, width, &RenderOpts::default())
+}
+
+/// Render with expansion state for block actions.
+#[must_use]
+pub fn render_with(
+    source: &str,
+    page: Option<&Page>,
+    from: &PageKey,
+    index: &Index,
+    width: u16,
+    opts: &RenderOpts,
 ) -> RenderedDoc {
     let w = usize::from(width.max(20));
     let parsed = match page {
@@ -113,6 +159,7 @@ pub fn render(
 
     let (body, body_line_offset) = body_and_offset(source);
     let mut state = LayoutState::new(w, body_line_offset, from, index);
+    state.expanded.clone_from(&opts.expanded);
 
     if parsed.frontmatter.title.is_some()
         || parsed.frontmatter.updated.is_some()
@@ -130,7 +177,6 @@ pub fn render(
     let line_starts = line_start_offsets(&body);
     for (event, range) in Parser::new_ext(&body, options).into_offset_iter() {
         let src = offset_to_line(&line_starts, body_line_offset, range.start);
-        // Closing tags span the whole construct; prefer end for fence close etc.
         let src_end = offset_to_line(
             &line_starts,
             body_line_offset,
@@ -152,6 +198,7 @@ pub fn render(
         lines,
         styled: state.styled,
         links: state.links,
+        block_actions: state.block_actions,
         block_starts: state.block_starts,
         source_map,
         headings: state.headings,
@@ -167,6 +214,7 @@ struct LayoutState<'a> {
     index: &'a Index,
     styled: Vec<StyledLine>,
     links: Vec<LinkSpan>,
+    block_actions: Vec<BlockAction>,
     block_starts: Vec<u32>,
     headings: Vec<(String, u32)>,
     /// Current open line being built (spans not yet committed).
@@ -178,6 +226,8 @@ struct LayoutState<'a> {
     list_stack: Vec<ListCtx>,
     in_code_block: bool,
     code_fence_lang: String,
+    /// Accumulated code body for `CopyCode` payload.
+    code_body: String,
     /// Next source line for code body rows (advances per content line).
     code_line_src: u32,
     in_quote: bool,
@@ -195,6 +245,8 @@ struct LayoutState<'a> {
     heading_text: String,
     used_slugs: HashMap<String, u32>,
     link_id: u32,
+    action_id: u32,
+    expanded: std::collections::HashSet<u32>,
 }
 
 struct LinkBuild {
@@ -219,6 +271,7 @@ impl<'a> LayoutState<'a> {
             index,
             styled: Vec::new(),
             links: Vec::new(),
+            block_actions: Vec::new(),
             block_starts: Vec::new(),
             headings: Vec::new(),
             cur: Vec::new(),
@@ -228,6 +281,7 @@ impl<'a> LayoutState<'a> {
             list_stack: Vec::new(),
             in_code_block: false,
             code_fence_lang: String::new(),
+            code_body: String::new(),
             code_line_src: 1,
             in_quote: false,
             alert_label: None,
@@ -241,6 +295,8 @@ impl<'a> LayoutState<'a> {
             heading_text: String::new(),
             used_slugs: HashMap::new(),
             link_id: 0,
+            action_id: 0,
+            expanded: std::collections::HashSet::new(),
         }
     }
 
@@ -320,6 +376,7 @@ impl<'a> LayoutState<'a> {
                 self.finish_block();
                 self.mark_block(src);
                 self.in_code_block = true;
+                self.code_body.clear();
                 self.code_line_src = src.saturating_add(1);
                 self.code_fence_lang = match kind {
                     CodeBlockKind::Fenced(lang) => lang.to_string(),
@@ -331,7 +388,18 @@ impl<'a> LayoutState<'a> {
                 } else {
                     format!("```{}", self.code_fence_lang)
                 };
+                let line = u32::try_from(self.styled.len()).unwrap_or(0);
                 self.push_span(label, StyleKind::CodeBlock, src);
+                let end = u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(1);
+                let id = self.action_id;
+                self.action_id = self.action_id.saturating_add(1);
+                self.block_actions.push(BlockAction {
+                    id,
+                    kind: BlockActionKind::CopyCode,
+                    line,
+                    cols: (0, end.max(1)),
+                    payload: String::new(),
+                });
                 self.commit_line(src);
             }
             Tag::List(start) => {
@@ -415,6 +483,14 @@ impl<'a> LayoutState<'a> {
                 let close_src = src_end.max(src);
                 self.push_span("```".into(), StyleKind::CodeBlock, close_src);
                 self.commit_line(close_src);
+                if let Some(action) = self
+                    .block_actions
+                    .iter_mut()
+                    .rev()
+                    .find(|a| a.kind == BlockActionKind::CopyCode && a.payload.is_empty())
+                {
+                    action.payload = std::mem::take(&mut self.code_body);
+                }
             }
             TagEnd::List(_) => {
                 self.list_stack.pop();
@@ -490,6 +566,10 @@ impl<'a> LayoutState<'a> {
             if body.is_empty() && t.ends_with('\n') {
                 return;
             }
+            if !self.code_body.is_empty() {
+                self.code_body.push('\n');
+            }
+            self.code_body.push_str(body);
             for line in body.split('\n') {
                 let line_src = self.code_line_src;
                 self.push_span("│ ".into(), StyleKind::CodeBlock, line_src);
@@ -548,8 +628,28 @@ impl<'a> LayoutState<'a> {
 
     fn push_frontmatter_box(&mut self, parsed: &parse::ParsedPage) {
         self.mark_block(1);
-        self.push_span("── frontmatter ──".into(), StyleKind::Frontmatter, 1);
+        let id = self.action_id;
+        self.action_id = self.action_id.saturating_add(1);
+        let expanded = self.expanded.contains(&id);
+        let line = u32::try_from(self.styled.len()).unwrap_or(0);
+        let label = if expanded {
+            "── frontmatter ──"
+        } else {
+            "── frontmatter ▶ ──"
+        };
+        self.push_span(label.into(), StyleKind::Frontmatter, 1);
+        let end = u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(1);
+        self.block_actions.push(BlockAction {
+            id,
+            kind: BlockActionKind::ToggleFrontmatter,
+            line,
+            cols: (0, end.max(1)),
+            payload: String::new(),
+        });
         self.commit_line(1);
+        if !expanded {
+            return;
+        }
         if let Some(title) = &parsed.frontmatter.title {
             self.push_span(format!("title: {title}"), StyleKind::Frontmatter, 1);
             self.commit_line(1);
@@ -827,7 +927,15 @@ impl<'a> LayoutState<'a> {
         if self.table_rows.is_empty() {
             return;
         }
+        let id = self.action_id;
+        self.action_id = self.action_id.saturating_add(1);
+        let expanded = self.expanded.contains(&id);
+        let action_line = u32::try_from(self.styled.len()).unwrap_or(0);
         let mut rows = std::mem::take(&mut self.table_rows);
+        let was_truncated = !expanded && rows.len() > 4;
+        if was_truncated {
+            rows.truncate(3);
+        }
         let cols = rows
             .iter()
             .map(|(_, cells)| cells.len())
@@ -864,6 +972,31 @@ impl<'a> LayoutState<'a> {
                 });
                 self.commit_line(sep_src);
             }
+        }
+        // Register toggle; only inject an expand cue line when truncated.
+        if was_truncated {
+            let line = u32::try_from(self.styled.len()).unwrap_or(0);
+            let src = rows
+                .last()
+                .map_or(action_line.saturating_add(1), |(s, _)| *s);
+            self.push_span("… expand table".into(), StyleKind::Table, src);
+            let end = u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(1);
+            self.commit_line(src);
+            self.block_actions.push(BlockAction {
+                id,
+                kind: BlockActionKind::ToggleTable,
+                line,
+                cols: (0, end.max(1)),
+                payload: String::new(),
+            });
+        } else {
+            self.block_actions.push(BlockAction {
+                id,
+                kind: BlockActionKind::ToggleTable,
+                line: action_line,
+                cols: (0, 8),
+                payload: String::new(),
+            });
         }
         self.table_header_done = false;
     }

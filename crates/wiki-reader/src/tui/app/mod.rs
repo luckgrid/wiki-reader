@@ -1,13 +1,16 @@
 //! App shell: state, update, render, event loop.
 
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use wiki_reader_core::Index;
 use wiki_reader_core::nav::{Effect, NavStop, Navigator, NodeId, ViewState};
 use wiki_reader_core::provider::{CollectionProvider, FsProvider, PageKey};
+use wiki_reader_render::RenderOpts;
 
 use super::action::Action;
+use super::clipboard::{ClipboardWriter, Osc52Clipboard};
 use super::editor::{EditorLauncher, SystemEditor};
 use super::focus::FocusPane;
 use super::hit::HitMap;
@@ -108,6 +111,10 @@ pub struct App {
     pub(crate) search_match_idx: usize,
     /// Display line highlighted as the current search match.
     pub(crate) match_highlight: Option<u32>,
+    /// Expanded block-action ids for the current page (frontmatter / tables).
+    pub(crate) expanded_blocks: HashSet<u32>,
+    /// Clipboard writer (OSC 52; swappable in tests).
+    pub(crate) clipboard: Box<dyn ClipboardWriter>,
 }
 
 impl App {
@@ -194,6 +201,8 @@ impl App {
             search_match_page: None,
             search_match_idx: 0,
             match_highlight: None,
+            expanded_blocks: HashSet::new(),
+            clipboard: Box::new(Osc52Clipboard),
         };
         if let Some(loaded) = wiki_reader_core::session::load(app.provider.root()) {
             if let Some(n) = loaded.notice {
@@ -239,6 +248,12 @@ impl App {
             Some(self.nav_visible),
         );
         let _ = wiki_reader_core::session::save(self.provider.root(), &state);
+    }
+
+    fn render_opts(&self) -> RenderOpts {
+        RenderOpts {
+            expanded: self.expanded_blocks.clone(),
+        }
     }
 
     pub(crate) fn view_state(&self) -> ViewState {
@@ -806,6 +821,7 @@ impl App {
                         self.clear_search_matches();
                     }
                     self.page_missing = false;
+                    self.expanded_blocks.clear();
                     self.load_page(&key);
                     if self.search_match_page.as_ref() == Some(&key) {
                         self.remap_search_matches();
@@ -877,7 +893,10 @@ impl App {
                         Some(&self.provider),
                     )),
                     ViewMode::Rendered => {
-                        PageDoc::Rendered(RenderedViewerDoc::build(&src, page, key, index, width))
+                        let opts = self.render_opts();
+                        PageDoc::Rendered(RenderedViewerDoc::build_with(
+                            &src, page, key, index, width, &opts,
+                        ))
                     }
                 };
                 self.cursor_line = 0;
@@ -942,7 +961,10 @@ impl App {
                         Some(&self.provider),
                     )),
                     ViewMode::Rendered => {
-                        PageDoc::Rendered(RenderedViewerDoc::build(&src, page, key, index, width))
+                        let opts = self.render_opts();
+                        PageDoc::Rendered(RenderedViewerDoc::build_with(
+                            &src, page, key, index, width, &opts,
+                        ))
                     }
                 };
                 self.cursor_line = self.doc.display_cursor(source_cursor);

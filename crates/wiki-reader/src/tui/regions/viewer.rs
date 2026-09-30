@@ -9,7 +9,7 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use crate::tui::highlight::HlSpan;
 use crate::tui::hit::{Hit, HitMap};
 use crate::tui::theme::Theme;
-use crate::tui::viewer_doc::FocusItem;
+use crate::tui::viewer_doc::{FocusItem, FocusTarget};
 use wiki_reader_render::{LinkClass, LinkId, LinkSpan};
 
 /// Draw lines into the viewer and register link + line hits.
@@ -98,6 +98,14 @@ pub fn draw(
             }
         }
 
+        let focused_block_cols = focused_item.and_then(|it| {
+            if it.kind == FocusTarget::BlockAction && it.line == Some(line_no) {
+                Some(it.cols)
+            } else {
+                None
+            }
+        });
+
         let mut spans: Vec<Span<'static>> = Vec::new();
         if show_gutter {
             let n = src_idx.saturating_add(1);
@@ -135,6 +143,7 @@ pub fn draw(
                 line_no,
                 link_spans,
                 focused_link,
+                focused_block_cols,
                 base,
                 focus_style,
                 theme,
@@ -146,23 +155,30 @@ pub fn draw(
     frame.render_widget(Paragraph::new(out_lines), inner_area);
 }
 
+#[allow(clippy::too_many_arguments)] // link + block focus overlays on one pass
 fn styled_line(
     display: &str,
     line_no: u32,
     link_spans: &[LinkSpan],
     focused_link: Option<LinkId>,
+    focused_block_cols: Option<(u16, u16)>,
     base: Style,
     focus_style: Style,
     theme: &Theme,
 ) -> Vec<Span<'static>> {
-    let mut ranges: Vec<(u16, u16, LinkClass, bool)> = Vec::new();
+    let mut ranges: Vec<(u16, u16, Option<LinkClass>, bool)> = Vec::new();
     for span in link_spans {
         for &(seg_line, cols) in &span.segments {
             if seg_line == line_no && cols.0 < cols.1 {
                 let is_focus = focused_link == Some(span.id);
-                ranges.push((cols.0, cols.1, span.class, is_focus));
+                ranges.push((cols.0, cols.1, Some(span.class), is_focus));
             }
         }
+    }
+    if let Some((c0, c1)) = focused_block_cols
+        && c0 < c1
+    {
+        ranges.push((c0, c1, None, true));
     }
     ranges.sort_by_key(|r| r.0);
 
@@ -190,8 +206,10 @@ fn styled_line(
             if col >= c0 && col < c1 {
                 next_style = if is_focus {
                     focus_style
-                } else {
+                } else if let Some(class) = class {
                     theme.link_class(class)
+                } else {
+                    base
                 };
                 break;
             }
