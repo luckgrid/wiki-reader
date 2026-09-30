@@ -31,3 +31,7 @@ ADR-0009 chose `tui-tree-widget` after a compile-gate spike showed `rendered_at`
 - ➕ Hit regions are exact cells we paint (search row, group toggles, pages).
 - ➖ Own scroll-follow and clamp (done in P1-R7).
 - ➖ Revisit the widget only if we need features that are cheaper as a dependency than as code.
+
+## Landing row label (P2-12)
+
+A folder with a landing page (`README` / `index`) and siblings is a group whose first child is that landing. Removing the child would change `collect_pages` order and breadcrumb targets. Instead the child is labelled **Overview** when it would otherwise repeat the group label.

@@ -1,13 +1,12 @@
 ---
 source: crates/wiki-reader-core/src/nav/tree.rs
-assertion_line: 591
 expression: text
 ---
 ● Worked Example Wiki
 ▾ Architecture Overview
-  Architecture Overview
+  Overview
   ▾ Design System
-    Design System
+    Overview
     Token Projection
   Workflow OS
 ▸ Decisions

@@ -462,12 +462,13 @@ fn fold_dir(
             }]
         }
         (Some(land), true) => {
-            // Group with landing first
+            // Group labelled from the landing; keep the landing row for page order /
+            // breadcrumbs but show "Overview" so the label does not repeat (P2-12).
             let key = page_key(collection_id, land);
             let label = page_label_with(index, &key, labels);
             let mut children = vec![NavItem::Page {
                 id: NodeId::Page(key.clone()),
-                label: label.clone(),
+                label: "Overview".into(),
                 key,
             }];
             children.extend(sorted_siblings(

@@ -4,9 +4,9 @@ expression: "tree.render_text(&expanded, Some(&root))"
 ---
 ● Worked Example Wiki
 ▾ Architecture Overview
-  Architecture Overview
+  Overview
   ▾ Design System
-    Design System
+    Overview
     Token Projection
   Workflow OS
 ▾ Decisions
