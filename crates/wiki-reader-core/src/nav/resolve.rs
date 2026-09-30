@@ -345,7 +345,7 @@ mod tests {
             resolve("mailto:a@b.c", &from, &index).target,
             Target::External(_)
         ));
-        // Leading `:` / digit — not an RFC scheme; path path, not Unsupported.
+        // Leading `:` / digit — not an RFC scheme; a path, not Unsupported.
         for t in [":foo", "1abc:x"] {
             let out = resolve(t, &from, &index);
             assert!(

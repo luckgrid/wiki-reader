@@ -79,25 +79,26 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 | P1-D1 | Docs: Phase 1 status + architecture honesty | | done | this change |
 | P1-R36 | Modifier-strict keys + Alt+b/Alt+f | K1,K2 | done | Ghostty Option encoding |
 | P1-R37 | Unsupported link schemes | L2 | done | muted; never open |
+| P1-R38 | Full-width viewer cursor row | K2 | done | faint row background spans the viewer |
 
 ## Phase 1 exit checklist
 
-Phase status is `active` until every operator item below is ticked. Automated coverage is noted under each item; it does **not** close the item.
+All operator items are ticked (2026-09-29). Phase status stays `active` until the operator closes the phase. Automated coverage is noted under each item; it does **not** close the item.
 
 1. [x] `cargo run -p wiki-reader --example keylog` in a herdr pane on your real keyboard; tick the [P1-S1](spikes/p1-s1-herdr-input.md) spike note (P1-G).
    - Coverage: example exists; real keyboard 2026-09-29 in Ghostty + herdr (see spike for caveats → P1-R36).
-2. [ ] On a real collection (`~/Workspaces/workstation`): follow ten links incl. anchors, go back ten times, confirm one tab and a restored cursor (revisits allowed; deepest page is ≤3 hops from README.md).
-   - Coverage: `link_chain_ten_links_ten_backs_one_tab` on `wiki/`.
-3. [ ] Edit, rename, and delete a page from another terminal while it is open; confirm live reload / page-removed.
-   - Coverage: watcher unit tests (atomic save, rename, delete); herdr smoke open/quit on `wiki/`.
-4. [ ] Resize below and above 80 columns; nav overlay / layout stays usable.
-   - Coverage: snapshot + nav-visibility resize tests; herdr pane resize available.
-5. [ ] Open/close search; Esc restores the prior cursor.
-   - Coverage: overlay unit tests; herdr smoke `/` then Esc.
+2. [x] On a real collection (`~/Workspaces/workstation`): follow ten links incl. anchors, go back ten times, confirm one tab and a restored cursor (revisits allowed; deepest page is ≤3 hops from README.md).
+   - Coverage: `link_chain_ten_links_ten_backs_one_tab` on `wiki/`; operator-confirmed on `~/Workspaces/workstation` 2026-09-29.
+3. [x] Edit, rename, and delete a page from another terminal while it is open; confirm live reload / page-removed.
+   - Coverage: watcher unit tests (atomic save, rename, delete); operator-confirmed 2026-09-29 on a scratch copy of `fixtures/worked-example` (edit, atomic save, rename, delete). Renaming the open page shows the page-removed placeholder; the nav row keeps its title label and now points at the renamed file.
+4. [x] Resize below and above 80 columns; nav overlay / layout stays usable.
+   - Coverage: snapshot + nav-visibility resize tests; operator-confirmed 2026-09-29.
+5. [x] Open/close search; Esc restores the prior cursor.
+   - Coverage: overlay unit tests; operator-confirmed 2026-09-29.
 6. [x] Ctrl+C and `q` restore the terminal in herdr and in a plain terminal.
    - Coverage: confirmed on your machine 2026-09-29.
 
-Also: both ignored release budgets pass — `cargo test -p wiki-reader-render --release -- --ignored` (render <20 ms / 50 KB) and `cargo test -p wiki-reader --release -- raw_load_budget --ignored` (raw UI path <50 ms / 50 KB, no sync highlight; syntect ~370 ms / 50 KB release runs off-thread and paints asynchronously). CI asserts a ~170 KB debug render finishes under a 10 s wall-clock ceiling (guards regression to per-call newline scans).
+Also: both ignored release budgets pass (operator-confirmed 2026-09-29) — `cargo test -p wiki-reader-render --release -- --ignored` (render <20 ms / 50 KB) and `cargo test -p wiki-reader --release -- raw_load_budget --ignored` (raw UI path <50 ms / 50 KB, no sync highlight; syntect ~370 ms / 50 KB release runs off-thread and paints asynchronously). CI asserts a ~170 KB debug render finishes under a 10 s wall-clock ceiling (guards regression to per-call newline scans).
 
 ## Related
 

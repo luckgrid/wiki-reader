@@ -67,6 +67,22 @@ fn snapshots_responsive_widths() {
 }
 
 #[test]
+fn cursor_row_background_fills_full_viewer_width() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let terminal = draw_app(&mut app, 100, 24);
+    let buf = terminal.backend().buffer();
+    let want = crate::tui::theme::Theme::default().cursor_line;
+    // Last inner column of the viewer (right border is at width - 1); short lines
+    // leave this cell empty, so only a row-wide style can colour it.
+    let x = buf.area.width - 2;
+    let rows: Vec<u16> = (0..buf.area.height)
+        .filter(|&y| buf[(x, y)].bg == want)
+        .collect();
+    assert_eq!(rows.len(), 1, "exactly one cursor row, got {rows:?}");
+}
+
+#[test]
 fn hit_map_rebuilds_and_quit_click() {
     let root = fixture();
     let mut app = App::new(&root).unwrap();
