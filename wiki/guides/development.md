@@ -79,7 +79,7 @@ See [architecture overview](../architecture/overview.md) and [ADR-0006](../decis
 ## Docs and ADRs
 
 - Wiki lives under `wiki/` with collection READMEs as indexes. Document standard is in [wiki/README.md](../README.md).
-- ADRs under `wiki/decisions/` are immutable once accepted — supersede, don't edit.
+- ADRs under `wiki/decisions/` are immutable once accepted — supersede, don't edit; mechanical metadata or formatting fixes that don't change decision text are allowed.
 
 ## Task workflow
 
