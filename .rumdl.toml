@@ -1,5 +1,11 @@
 [global]
-# The wiki intentionally uses long prose lines and HTML-like terminal mockups.
-line-length = 120
-disable = ["MD013", "MD033"]
-exclude = ["target", ".git"]
+# The wiki intentionally uses long prose lines, HTML-like terminal mockups (MD033),
+# and bold run-in labels for story groups that are not headings (MD036).
+disable = ["MD013", "MD033", "MD036"]
+# fixtures/ holds deliberately broken and byte-exact inputs for tests and snapshots.
+exclude = ["target", ".git", "fixtures"]
+flavor = "gfm"
+
+# Wiki pages carry the title in frontmatter and repeat it as the single `# H1`.
+[MD025]
+front-matter-title = ""

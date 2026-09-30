@@ -1,6 +1,6 @@
 ---
 id: WR-ADR-0010
-title: ADR-0010: Flat visible rows for side nav (supersedes ADR-0009)
+title: "ADR-0010: Flat visible rows for side nav (supersedes ADR-0009)"
 summary: Ship a custom flat list of visible rows into HitMap instead of tui-tree-widget; TreeState would duplicate NavState.
 status: accepted
 updated: 2026-09-29

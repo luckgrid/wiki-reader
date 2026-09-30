@@ -26,6 +26,7 @@ Terminal markdown tools display files but don't support wiki browsing: links are
 ## User stories
 
 **Browsing**
+
 - As a reader, I want selecting a page in the tree to replace the current page so that browsing feels like a wiki, not an editor.
 - As a reader, I want back/forward (keys and clickable buttons) so that I can retrace my path.
 - As a reader, I want breadcrumbs I can click so that I can jump up to a section.
@@ -35,20 +36,24 @@ Terminal markdown tools display files but don't support wiki browsing: links are
 - As a reader, I want to open a page in a new tab only when I ask for it, as in a browser.
 
 **Links**
+
 - As a reader, I want to click a link in the article to follow it.
 - As a keyboard user, I want Tab / Shift+Tab to move between links and actions (browser-style), arrows to move a cursor line, and Shift+arrows to skip whole blocks.
 - As a reader, I want to see where a link goes (footer) before following it.
 - As a reader, I want broken links to look broken and explain themselves when followed.
 
 **Search**
+
 - As a reader, I want a search overlay I can open from anywhere (hotkey or the ⌕ row at the top of the side nav) so that I can jump to any page, and picking a result opens it in the current view.
 - As a reader, I want closing search to return me to exactly where my cursor was.
 
 **Viewing**
+
 - As a reader, I want to toggle rendered and raw markdown.
 - As a reader, I want diagrams rendered in place.
 
 **Edge cases**
+
 - Empty collection → empty state naming the scanned root.
 - Broken frontmatter → shown raw with a warning, never a crash.
 - Anchor that doesn't exist → navigate to the page top + footer notice.

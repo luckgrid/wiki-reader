@@ -1,6 +1,6 @@
 ---
 id: WR-ADR-0002
-title: ADR-0002: Build on existing pieces, don't fork the app
+title: "ADR-0002: Build on existing pieces, don't fork the app"
 summary: Build a new app shell and core; port rendering from markdown-reader instead of forking the whole app.
 status: accepted
 updated: 2026-09-28
@@ -12,6 +12,7 @@ related: []
 **Status:** Accepted · **Date:** 2026-09-27
 
 ## Context
+
 markdown-reader (MIT, Rust/ratatui) already provides a tree, rendered markdown, Mermaid, tables, and live reload. It covers most of the center pane. wiki-reader's value is the index, the context engine, and a three-column layout, none of which markdown-reader has.
 
 ## Options
@@ -23,9 +24,11 @@ markdown-reader (MIT, Rust/ratatui) already provides a tree, rendered markdown, 
 **C. Wrap it.** Run markdown-reader in a pane and build only the sidebar as a separate process. Great for validation ([roadmap](../roadmap/README.md) phase 0), but two processes can't share selection or navigation.
 
 ## Decision
+
 **C for phase 0, B for the product.** A is kept as an escape hatch if the render port overruns ~3 days (roadmap phase 2).
 
 ## Consequences
+
 - ➕ The architecture fits the actual product (core + CLI + TUI).
 - ➕ We only own rendering code we chose to take.
 - ➖ The port costs a few days up front.

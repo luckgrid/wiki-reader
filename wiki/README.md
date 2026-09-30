@@ -6,7 +6,7 @@ Entrypoint for wiki-reader documentation: product intent, architecture, decision
 
 - [Product](product/README.md) — vision, spec, content model, UI.
 - [Architecture](architecture/README.md) — crates, rendering, prior art, integrations; deferred context engine.
-- [Decisions](decisions/README.md) — ADRs (immutable once accepted; supersede, don't edit).
+- [Decisions](decisions/README.md) — ADRs (immutable once accepted — supersede, don't edit; mechanical metadata or formatting fixes that don't change decision text are allowed).
 - [Roadmap](roadmap/README.md) — phases, exit criteria, and task trackers.
 - [Guides](guides/README.md) — how to develop in this workspace.
 
@@ -54,4 +54,4 @@ nav_order: N   # optional; product and architecture pages use this for reading o
 
 `id` and `summary` are part of the product [content model](product/content-model.md). `title`, `updated`, and `related` follow the workstation wiki convention.
 
-The body starts with `# Title`, a short summary paragraph, then sections. Optional `## Open questions` and `## Related` where they add value. Decisions live under `decisions/` and are immutable once accepted — supersede them; don't edit them.
+The body starts with `# Title`, a short summary paragraph, then sections. Optional `## Open questions` and `## Related` where they add value. Decisions live under `decisions/` and are immutable once accepted — supersede, don't edit; mechanical metadata or formatting fixes that don't change decision text are allowed.

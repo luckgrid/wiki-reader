@@ -4,7 +4,7 @@
 
 A terminal wiki reader for markdown collections. It browses like a documentation site (side nav, breadcrumbs, working links, back/forward, prev/next), sized to live in a herdr pane next to your work.
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ Luckgrid Wiki › Architecture › Design System › Token Projection       ◫   ✕ │
 ├──────────────────────────────┬───────────────────────────────────────────────┤
@@ -28,7 +28,7 @@ Existing terminal markdown tools behave like editors or file browsers: opening a
 
 ## Status
 
-Phase 1 is complete; Phase 2 is active. The reader shell, backlinks, heading jumps, and `$EDITOR` support are shipped. Start at [wiki/README.md](wiki/README.md) and see the [roadmap](wiki/roadmap/README.md) for the next tasks.
+Phase 2 is in progress. Phase 1 is built but not signed off: its exit checklist needs a real-keyboard pass under herdr (see [the Phase 1 roadmap](wiki/roadmap/phase-1-reader-shell.md)). The reader shell, backlinks, heading jumps, and `$EDITOR` support are shipped. Start at [wiki/README.md](wiki/README.md) and see the [roadmap](wiki/roadmap/README.md) for the next tasks.
 
 ## Quickstart
 

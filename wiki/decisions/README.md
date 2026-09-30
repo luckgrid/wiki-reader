@@ -1,6 +1,6 @@
 # Decisions
 
-Architecture decision records. Accepted ADRs are immutable; supersede them instead of editing.
+Architecture decision records. Accepted ADRs are immutable — supersede, don't edit; mechanical metadata or formatting fixes that don't change decision text are allowed.
 
 ## Status
 

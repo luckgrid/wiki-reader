@@ -45,6 +45,7 @@ Tried as-is inside herdr. **Kept:** it's markdown-only, reads far better than su
 ## Libraries
 
 ### Core (`wiki-reader-core`)
+
 | Need | Crate | Notes |
 |------|-------|-------|
 | Markdown parsing | `pulldown-cmark` | Same parser markdown-reader uses, which keeps the render port simple. Enable tables, tasklists, strikethrough, footnotes; check its wikilink option. Alternative: `comrak` (full AST with sourcepos, wikilinks/front-matter extensions) if the event model gets painful. |
@@ -60,6 +61,7 @@ Tried as-is inside herdr. **Kept:** it's markdown-only, reads far better than su
 | Paths | `directories` / `dirs` | XDG config/state/cache |
 
 ### Render (`wiki-reader-render`)
+
 | Need | Crate | Notes |
 |------|-------|-------|
 | Code/raw highlighting | `syntect` (pure-Rust regex backend) | Also highlights raw markdown |
@@ -70,6 +72,7 @@ Tried as-is inside herdr. **Kept:** it's markdown-only, reads far better than su
 | Width | `unicode-width` | CJK/emoji-safe wrapping |
 
 ### App (`wiki-reader`)
+
 | Need | Crate | Notes |
 |------|-------|-------|
 | TUI | `ratatui` 0.30.x + `crossterm` | 0.30 split into `ratatui-core`/`ratatui-widgets`. herdr itself is built on ratatui 0.30 + crossterm 0.29. |
@@ -90,4 +93,4 @@ Tried as-is inside herdr. **Kept:** it's markdown-only, reads far better than su
 
 ## Licensing
 
-Choose MIT or Apache-2.0 (dual is common in Rust). That keeps you compatible with porting MIT code from markdown-reader. When porting, keep its copyright notice in the ported files and list it in `THIRD_PARTY.md`.
+Choose MIT or Apache-2.0 (dual is common in Rust). That keeps you compatible with porting MIT code from markdown-reader. No source has been ported. If code is ever ported, keep its copyright notice in the ported files and add a `THIRD_PARTY.md` in the same change.

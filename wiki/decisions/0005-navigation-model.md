@@ -1,6 +1,6 @@
 ---
 id: WR-ADR-0005
-title: ADR-0005: Wiki navigation model
+title: "ADR-0005: Wiki navigation model"
 summary: Browser/wiki navigation — one navigate() path, replace-by-default with history, tabs opt-in.
 status: accepted
 updated: 2026-09-28
@@ -12,6 +12,7 @@ related: []
 **Status:** Accepted · **Date:** 2026-09-28
 
 ## Context
+
 In Phase 0, markdown-reader showed an IDE-style model: opening files interacts with tabs, search feeds a tab picker, and links can't be followed. Each entry point behaves a bit differently. For a wiki this is the wrong model. Readers expect a site: click to go, back to return, tabs only when asked.
 
 ## Options
@@ -23,6 +24,7 @@ In Phase 0, markdown-reader showed an IDE-style model: opening files interacts w
 **C. Single view, no tabs:** simplest, but loses "keep this open while I look something up."
 
 ## Decision
+
 **B.** Every entry point (tree, search, links, breadcrumbs, prev/next, history, start page) funnels through `App::navigate(target, disposition)`, with `Replace` as the default. The tab bar is hidden until a second tab exists.
 
 ```mermaid
@@ -40,6 +42,7 @@ flowchart LR
 ```
 
 ## Consequences
+
 - ➕ Consistent behavior everywhere; enforced by invariant tests ([architecture](../architecture/overview.md)).
 - ➕ Matches every reader's existing mental model from browsers and doc sites.
 - ➖ Anchor jumps and history need care (scroll restore, forward truncation).
