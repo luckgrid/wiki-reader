@@ -129,9 +129,11 @@ pub fn map_pane(key: KeyEvent, focus: FocusPane) -> Option<Action> {
         FocusPane::Viewer => {
             let alt = key.modifiers.contains(KeyModifiers::ALT);
             match key.code {
-                // herdr key log 2026-09-29: Alt+Shift+↑/↓ arrives; Alt+[/] does not keep ALT
+                // Alt+Shift+↑/↓ (primary); {/} fallback when Alt+Shift is unreliable
                 KeyCode::Up if alt && shift => Some(Action::ViewerHeadingUp),
                 KeyCode::Down if alt && shift => Some(Action::ViewerHeadingDown),
+                KeyCode::Char('{') => Some(Action::ViewerHeadingUp),
+                KeyCode::Char('}') => Some(Action::ViewerHeadingDown),
                 KeyCode::Up if shift || ctrl => Some(Action::ViewerBlockUp),
                 KeyCode::Down if shift || ctrl => Some(Action::ViewerBlockDown),
                 KeyCode::Char('k') | KeyCode::Up => Some(Action::ViewerUp),
@@ -283,5 +285,39 @@ mod tests {
         let block = key_mod(KeyCode::Up, KeyModifiers::SHIFT);
         let (got_block, _) = map(block, FocusPane::Viewer, InputMode::Normal, Chord::None);
         assert_eq!(got_block, Some(Action::ViewerBlockUp));
+    }
+
+    #[test]
+    fn keymap_heading_jump_brace_fallback() {
+        let (got_up, _) = map(
+            key(KeyCode::Char('{')),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+        );
+        let (got_down, _) = map(
+            key(KeyCode::Char('}')),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(got_up, Some(Action::ViewerHeadingUp));
+        assert_eq!(got_down, Some(Action::ViewerHeadingDown));
+        // Shift+[/] still produce {/} on many terminals; modifiers must not steal the binding.
+        let (got_shift, _) = map(
+            key_mod(KeyCode::Char('{'), KeyModifiers::SHIFT),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(got_shift, Some(Action::ViewerHeadingUp));
+        // Nav focus: braces stay unbound (Alt+Shift remains the nav group jump).
+        let (nav, _) = map(
+            key(KeyCode::Char('{')),
+            FocusPane::Nav,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(nav, None);
     }
 }
