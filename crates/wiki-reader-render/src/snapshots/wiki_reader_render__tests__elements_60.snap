@@ -41,14 +41,12 @@ link plus a broken link.
 ## Quote and alert
 
 │ A plain blockquote with enough text that it wraps on a
-narrow pane.
+│ narrow pane.
 
 │ [NOTE]
-
 │ Note alert body.
 
 │ [WARNING]
-
 │ Warning alert body.
 
 ## Code
@@ -66,17 +64,21 @@ narrow pane.
 
 ## Tables
 
+┌───────┬───────────────┬───────────────────────────────┐
 │ Short │ Medium column │ Long cell that needs wrapping │
 ├───────┼───────────────┼───────────────────────────────┤
 │ a     │ b             │ c                             │
 ├───────┼───────────────┼───────────────────────────────┤
 │ one   │ two           │ three four five six seven     │
+└───────┴───────────────┴───────────────────────────────┘
 
+┌─────────┬───────┬─────────┬───────┬────────┐
 │ WideA   │ WideB │ WideC   │ WideD │ WideE  │
 ├─────────┼───────┼─────────┼───────┼────────┤
 │ alpha   │ bravo │ charlie │ delta │ echo   │
 ├─────────┼───────┼─────────┼───────┼────────┤
 │ foxtrot │ golf  │ hotel   │ india │ juliet │
+└─────────┴───────┴─────────┴───────┴────────┘
 
 ## Rule
 
@@ -97,4 +99,7 @@ this is not valid mermaid at all {{{
 
 │ diagram (source; diagram 70 cols > pane 60)
 flowchart LR
-  AAAAAAAAAA[VeryLongNodeLabelAlpha] --> BBBBBBBBBB[VeryLongNodeLabelBravo] --> CCCCCCCCCC[VeryLongNodeLabelCharlie] --> DDDDDDDDDD[VeryLongNodeLabelDelta]
+  AAAAAAAAAA[VeryLongNodeLabelAlpha] -->
+BBBBBBBBBB[VeryLongNodeLabelBravo] -->
+CCCCCCCCCC[VeryLongNodeLabelCharlie] -->
+DDDDDDDDDD[VeryLongNodeLabelDelta]

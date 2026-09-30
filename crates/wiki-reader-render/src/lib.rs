@@ -192,8 +192,22 @@ mod tests {
             let table_lines: Vec<&String> = doc
                 .lines
                 .iter()
-                .filter(|l| l.contains('│') || l.contains('┼') || l.contains('├'))
+                .filter(|l| {
+                    l.contains('│')
+                        || l.contains('┼')
+                        || l.contains('├')
+                        || l.contains('┌')
+                        || l.contains('└')
+                })
                 .collect();
+            assert!(
+                table_lines.iter().any(|l| l.starts_with('┌')),
+                "w={width}: missing top border: {plain}"
+            );
+            assert!(
+                table_lines.iter().any(|l| l.starts_with('└')),
+                "w={width}: missing bottom border: {plain}"
+            );
             assert!(
                 table_lines
                     .iter()
@@ -211,12 +225,15 @@ mod tests {
             );
             // Junction columns: find │ positions on a data row and ┼/┤ on sep.
             if let (Some(data), Some(sep)) = (
+                table_lines.iter().find(|l| {
+                    l.contains('│')
+                        && !l.contains('┼')
+                        && !l.starts_with('┌')
+                        && !l.starts_with('└')
+                }),
                 table_lines
                     .iter()
-                    .find(|l| l.contains('│') && !l.contains('┼')),
-                table_lines
-                    .iter()
-                    .find(|l| l.contains('┼') || l.contains('├')),
+                    .find(|l| l.contains('┼') || (l.contains('├') && !l.starts_with('┌'))),
             ) {
                 let data_borders: Vec<usize> = data
                     .char_indices()
@@ -233,16 +250,46 @@ mod tests {
                     "w={width}: border columns misaligned data={data:?} sep={sep:?}"
                 );
             }
-            for line in table_lines
-                .iter()
-                .filter(|l| l.contains('│') && !l.contains('┼') && !l.contains('├'))
-            {
+            for line in table_lines.iter().filter(|l| {
+                l.contains('│')
+                    && !l.contains('┼')
+                    && !l.contains('├')
+                    && !l.starts_with('┌')
+                    && !l.starts_with('└')
+            }) {
                 assert!(
                     cells_padded_both_sides(line),
                     "w={width}: cell missing side pad: {line}"
                 );
             }
         }
+    }
+
+    #[test]
+    fn table_cells_never_split_words_when_fitted() {
+        let src = "| WideA | WideB | WideC | WideD | WideE |\n| --- | --- | --- | --- | --- |\n| alpha | bravo | charlie | delta | echo |\n| foxrot | golf | hotel | india | juliet |\n";
+        let doc = render_src(src, 80);
+        let plain = doc.lines.join("\n");
+        assert!(
+            !plain.contains("table too wide"),
+            "expected fitted table at 80: {plain}"
+        );
+        for word in [
+            "WideA", "WideB", "WideC", "WideD", "WideE", "alpha", "bravo", "charlie", "delta",
+            "echo", "foxrot", "golf", "hotel", "india", "juliet",
+        ] {
+            assert!(
+                plain.contains(word),
+                "word {word:?} must appear intact: {plain}"
+            );
+        }
+        // Too-narrow pane: dump fallback, still no mid-word cell wrap via fair_share.
+        let narrow = render_src(src, 40);
+        let narrow_plain = narrow.lines.join("\n");
+        assert!(
+            narrow_plain.contains("table too wide for pane"),
+            "expected dump fallback: {narrow_plain}"
+        );
     }
 
     /// Each cell between `│` has a leading and trailing space.
@@ -605,6 +652,127 @@ mod tests {
             text.contains("# H\n\npara\n\n• a\n• b\n\n## Next"),
             "expected blank gaps between blocks and tight list: {text:?}"
         );
+    }
+
+    #[test]
+    fn block_gap_quote_alert_code_table_rule() {
+        let src = concat!(
+            "> quote one\n>\n> quote two\n\n",
+            "> [!NOTE]\n> Note body.\n\n",
+            "```\ncode\n```\n\n",
+            "| a | b |\n| - | - |\n| 1 | 2 |\n\n",
+            "---\n\n",
+            "# After\n"
+        );
+        let doc = render_src(src, 40);
+        let text = doc.lines.join("\n");
+        assert!(
+            text.contains("│ quote one\n│\n│ quote two"),
+            "quote inter-para keeps bar: {text:?}"
+        );
+        assert!(
+            text.contains("│ [NOTE]\n│ Note body."),
+            "alert label tight to body: {text:?}"
+        );
+        assert!(
+            text.contains("```\n│ code\n```"),
+            "code block present: {text:?}"
+        );
+        assert!(
+            text.contains('┌') && text.contains('└'),
+            "table borders: {text:?}"
+        );
+        assert!(
+            text.contains("─\n\n# After") || text.contains("──\n\n# After"),
+            "gap after rule: {text:?}"
+        );
+    }
+
+    #[test]
+    fn quote_wrap_keeps_bar_and_nested_list() {
+        let src = "> A plain blockquote with enough text that it wraps on a narrow pane.\n>\n> - nested\n";
+        let doc = render_src(src, 40);
+        let text = doc.lines.join("\n");
+        let quote_lines: Vec<&str> = text
+            .lines()
+            .filter(|l| l.starts_with('│') || *l == "│")
+            .collect();
+        assert!(
+            quote_lines
+                .iter()
+                .any(|l| l.contains("wraps") || l.contains("narrow")),
+            "expected wrapped quote: {text:?}"
+        );
+        assert!(
+            text.lines()
+                .filter(|l| l.contains("narrow") || l.contains("wraps on"))
+                .all(|l| l.starts_with('│')),
+            "wrap continuation must keep bar: {text:?}"
+        );
+        assert!(
+            text.contains('•') && text.contains("nested"),
+            "nested list in quote: {text:?}"
+        );
+    }
+
+    #[test]
+    fn linked_from_gap_is_single_blank() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/worked-example");
+        let provider = FsProvider::open(&root).unwrap();
+        let index = wiki_reader_core::Index::build(&provider).unwrap();
+        let key = PageKey {
+            collection_id: index.collection_id.clone(),
+            relative_path: std::path::PathBuf::from("architecture/design-system/README.md"),
+        };
+        let src = provider.read(&key).unwrap();
+        let page = index.pages.get(&key);
+        let doc = render(&src, page, &key, &index, 80);
+        let text = doc.lines.join("\n");
+        assert!(
+            !text.contains("\n\n\n## Linked from"),
+            "no double blank before Linked from: {text:?}"
+        );
+        assert!(
+            text.contains("\n\n## Linked from"),
+            "single blank before Linked from: {text:?}"
+        );
+    }
+
+    #[test]
+    fn expanded_frontmatter_snapshot() {
+        let src = "---\ntitle: Hello\ntags:\n  - a\n  - b\nupdated: 2026-01-01\n---\n\n# Body\n";
+        let index = wiki_reader_core::Index {
+            collection_id: "t".into(),
+            pages: HashMap::default(),
+            edges: vec![],
+            by_from: HashMap::default(),
+            by_to: HashMap::default(),
+            by_id: HashMap::default(),
+            by_path: HashMap::default(),
+            diagnostics: vec![],
+        };
+        let collapsed = render_src(src, 40);
+        let id = collapsed
+            .block_actions
+            .iter()
+            .find(|a| a.kind == BlockActionKind::ToggleFrontmatter)
+            .expect("toggle")
+            .id;
+        let mut expanded = std::collections::HashSet::new();
+        expanded.insert(id);
+        let open = render_with(
+            src,
+            None,
+            &empty_key(),
+            &index,
+            40,
+            &RenderOpts {
+                expanded,
+                ..RenderOpts::default()
+            },
+        );
+        let text = open.lines.join("\n");
+        insta::assert_snapshot!("expanded_frontmatter_40", text);
     }
 
     #[test]

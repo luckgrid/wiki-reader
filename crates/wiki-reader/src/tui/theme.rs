@@ -144,7 +144,9 @@ impl Theme {
                 .bg(self.code_bg)
                 .add_modifier(Modifier::BOLD),
             StyleKind::Link => Style::default().fg(self.link),
-            StyleKind::Quote => Style::default().fg(self.text_muted).bg(self.quote_bar),
+            StyleKind::Quote => Style::default()
+                .fg(Color::Rgb(210, 210, 220))
+                .bg(self.quote_bar),
             StyleKind::Alert(id) => {
                 let fg = self.alert[usize::from(id).min(self.alert.len() - 1)];
                 Style::default().fg(fg).add_modifier(Modifier::BOLD)
@@ -165,5 +167,38 @@ impl Theme {
         } else {
             Style::default().fg(self.border)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wiki_reader_render::StyleKind;
+
+    #[test]
+    fn style_kind_heading_ramp_and_alerts() {
+        let t = Theme::default();
+        for level in 1..=6u8 {
+            let st = t.style_kind(StyleKind::Heading(level));
+            let idx = usize::from(level.saturating_sub(1));
+            assert_eq!(st.fg, Some(t.heading[idx]));
+            assert!(st.add_modifier.contains(Modifier::BOLD));
+        }
+        let note = t.style_kind(StyleKind::Alert(1));
+        assert_eq!(note.fg, Some(t.alert[1]));
+        let warn = t.style_kind(StyleKind::Alert(4));
+        assert_eq!(warn.fg, Some(t.alert[4]));
+    }
+
+    #[test]
+    fn style_kind_code_quote_table_header() {
+        let t = Theme::default();
+        let code = t.style_kind(StyleKind::CodeBlock);
+        assert_eq!(code.bg, Some(t.code_bg));
+        let quote = t.style_kind(StyleKind::Quote);
+        assert_eq!(quote.bg, Some(t.quote_bar));
+        let header = t.style_kind(StyleKind::TableHeader);
+        assert_eq!(header.fg, Some(t.accent));
+        assert!(header.add_modifier.contains(Modifier::BOLD));
     }
 }

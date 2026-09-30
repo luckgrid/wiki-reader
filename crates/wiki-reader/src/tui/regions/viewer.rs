@@ -211,8 +211,44 @@ fn paint_styled_line(
     }
     ranges.sort_by_key(|r| r.0);
 
+    let style_at = |col: u16, kind: StyleKind| -> Style {
+        let mut st = theme.style_kind(kind);
+        if on_cursor {
+            st = st.bg(theme.cursor_line);
+        } else if !matches!(
+            kind,
+            StyleKind::CodeBlock | StyleKind::CodeLang | StyleKind::InlineCode | StyleKind::Quote
+        ) {
+            st = st.patch(base);
+        }
+        for &(c0, c1, class, is_focus) in &ranges {
+            if col >= c0 && col < c1 {
+                st = if is_focus {
+                    focus_style
+                } else if let Some(class) = class {
+                    theme.link_class(class)
+                } else {
+                    st
+                };
+                if on_cursor {
+                    st = st.bg(theme.cursor_line);
+                }
+                break;
+            }
+        }
+        st
+    };
+
     let mut spans = Vec::new();
     let mut col = 0u16;
+    let mut buf = String::new();
+    let mut style = base;
+    let flush = |buf: &mut String, style: Style, spans: &mut Vec<Span<'static>>| {
+        if !buf.is_empty() {
+            spans.push(Span::styled(std::mem::take(buf), style));
+        }
+    };
+
     for run in &sl.spans {
         if usize::from(col) >= text_width {
             break;
@@ -224,36 +260,36 @@ fn paint_styled_line(
             let w = u16::try_from(Span::raw(ch.to_string()).width())
                 .unwrap_or(1)
                 .max(1);
-            let mut st = theme.style_kind(run.kind);
-            if on_cursor {
-                st = st.bg(theme.cursor_line);
-            } else if matches!(
-                run.kind,
-                StyleKind::CodeBlock | StyleKind::CodeLang | StyleKind::InlineCode
-            ) {
-                // keep code bg
-            } else {
-                st = st.patch(base);
+            let st = style_at(col, run.kind);
+            if buf.is_empty() {
+                style = st;
+            } else if st != style {
+                flush(&mut buf, style, &mut spans);
+                style = st;
             }
-            for &(c0, c1, class, is_focus) in &ranges {
-                if col >= c0 && col < c1 {
-                    st = if is_focus {
-                        focus_style
-                    } else if let Some(class) = class {
-                        theme.link_class(class)
-                    } else {
-                        st
-                    };
-                    if on_cursor {
-                        st = st.bg(theme.cursor_line);
-                    }
-                    break;
-                }
-            }
-            spans.push(Span::styled(ch.to_string(), st));
+            buf.push(ch);
             col = col.saturating_add(w);
         }
     }
+    flush(&mut buf, style, &mut spans);
+
+    // Full-row code/quote shading (glyphs alone leave a ragged right edge).
+    if !on_cursor {
+        let shade = sl.spans.iter().find_map(|s| match s.kind {
+            StyleKind::CodeBlock | StyleKind::CodeLang | StyleKind::InlineCode => {
+                Some(theme.code_bg)
+            }
+            StyleKind::Quote => Some(theme.quote_bar),
+            _ => None,
+        });
+        if let Some(bg) = shade {
+            let pad = text_width.saturating_sub(usize::from(col));
+            if pad > 0 {
+                spans.push(Span::styled(" ".repeat(pad), Style::default().bg(bg)));
+            }
+        }
+    }
+
     if spans.is_empty() {
         spans.push(Span::styled(String::new(), base));
     }

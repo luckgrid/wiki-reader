@@ -1,0 +1,13 @@
+---
+source: crates/wiki-reader-render/src/lib.rs
+expression: text
+---
+── frontmatter ──
+title:   Hello
+tags:   
+  - a
+  - b
+updated: 2026-01-01
+────────────────────────────────────────
+
+# Body
