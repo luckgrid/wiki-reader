@@ -52,7 +52,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 | P2-14 | Resizable nav pane | R1 | todo | drag the divider with min/max width clamp; persist in session (`SessionState`), not config (P3-11 owns config keys); respect responsive collapse |
 | P2-15 | Frontmatter as YAML props | — | subsumed → P2-23 | properties block in the viewer; stay collapsible (`ToggleFrontmatter`) |
 | P2-16 | Viewer typography and spacing | — | subsumed → P2-23 | spacing between blocks; heading styling; snapshot updates |
-| P2-17 | Chrome spacing | — | todo | topbar gap above/below + left/right padding; status bar same; nav search box gap from pane title and list |
+| P2-17 | Chrome spacing | — | done | 91f7c32 |
 | P2-18 | Viewer footer prev/next | — | todo | ellipsis-truncate each link so long titles can't collide; footer part of the viewer pane border so it reads as chrome |
 | P2-19 | Viewer cursor line and tab visibility | — | todo | stronger selected-line highlight; tabs get background fill and padding |
 | P2-20 | Help overlay (`?`) | — | todo | extract a real binding table from match-based `keymap.rs` first, then generate help from it; clickable keys; pulled forward from P3-06 |
