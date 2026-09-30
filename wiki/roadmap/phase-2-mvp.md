@@ -49,7 +49,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 | P2-11 | Nav selected-row style | U3 | done | 09062f7 |
 | P2-12 | Nav: no duplicate folder/landing row | U3 | done | 12728d1 |
 | P2-13 | Nav labels: default back to filenames | C1 / U3 | done | 2cde12d |
-| P2-14 | Resizable nav pane | R1 | todo | drag the divider with min/max width clamp; persist in session (`SessionState`), not config (P3-11 owns config keys); respect responsive collapse |
+| P2-14 | Resizable nav pane | R1 | done | 587beaa |
 | P2-15 | Frontmatter as YAML props | — | subsumed → P2-23 | properties block in the viewer; stay collapsible (`ToggleFrontmatter`) |
 | P2-16 | Viewer typography and spacing | — | subsumed → P2-23 | spacing between blocks; heading styling; snapshot updates |
 | P2-17 | Chrome spacing | — | done | 91f7c32 |
