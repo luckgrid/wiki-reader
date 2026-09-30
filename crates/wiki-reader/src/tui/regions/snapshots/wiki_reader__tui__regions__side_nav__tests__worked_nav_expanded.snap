@@ -5,9 +5,9 @@ expression: "open.iter().map(|r| &r.label).collect::<Vec<_>>()"
 [
     "Worked Example Wiki",
     "▾ Architecture Overview",
-    "  Architecture Overview",
+    "  Overview",
     "  ▾ Design System",
-    "    Design System",
+    "    Overview",
     "    Token Projection",
     "  Workflow OS",
     "▸ Decisions",
