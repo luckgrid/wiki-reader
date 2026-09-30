@@ -43,6 +43,8 @@ shasum -a 256 -c wiki-reader-vX.Y.Z-<platform>.tar.gz.sha256
 tar xf wiki-reader-vX.Y.Z-<platform>.tar.gz
 ```
 
+Binaries are unsigned and not notarized. Browser downloads on macOS may be quarantined; clear with `xattr -d com.apple.quarantine path/to/wiki-reader` if Gatekeeper blocks them (`curl` downloads usually skip quarantine). The Linux binary is built on `ubuntu-latest` and links that runner's glibc, so older distros may need to build from source or use `cargo install`.
+
 crates.io packaging metadata is prepared (`version` on path deps, repository/readme); the crates are not published yet.
 
 ## Quickstart

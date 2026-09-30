@@ -12,7 +12,8 @@ use clap::Parser;
 #[derive(Debug, Parser)]
 #[command(
     name = "wiki-reader",
-    about = "Terminal wiki reader for markdown collections"
+    about = "Terminal wiki reader for markdown collections",
+    version
 )]
 struct Args {
     /// Collection root to open (defaults to the current directory).
@@ -60,5 +61,15 @@ mod tests {
     fn check_root_rejects_missing_path() {
         let err = check_root(Path::new("/nope-wiki-reader-missing")).unwrap_err();
         assert!(err.contains("not a directory"), "got: {err}");
+    }
+
+    #[test]
+    fn version_flag_reports_pkg_version() {
+        use clap::CommandFactory;
+        let ver = Args::command().render_version();
+        assert!(
+            ver.contains(env!("CARGO_PKG_VERSION")),
+            "version output: {ver}"
+        );
     }
 }

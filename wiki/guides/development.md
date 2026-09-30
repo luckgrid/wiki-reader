@@ -26,12 +26,14 @@ Supported path today — install the binary from git:
 cargo install --locked --git https://github.com/luckgrid/wiki-reader wiki-reader
 ```
 
-Tagged releases attach platform tarballs (macOS arm64 / x86_64, Linux x86_64) plus SHA256 checksums. Verify then unpack:
+Tagged releases attach platform tarballs (macOS arm64 / x86_64, Linux x86_64) plus SHA256 checksums. Cut a tag only on a commit whose CI is already green on `main`; the release workflow builds and smokes `--version` but does not re-run the full test suite. The tag name must be `v` plus the workspace `Cargo.toml` version (e.g. `v0.1.0-alpha.1`). Verify then unpack:
 
 ```bash
 shasum -a 256 -c wiki-reader-vX.Y.Z-<platform>.tar.gz.sha256
 tar xf wiki-reader-vX.Y.Z-<platform>.tar.gz
 ```
+
+Binaries are unsigned and not notarized. Browser downloads on macOS may need `xattr -d com.apple.quarantine path/to/wiki-reader`. The Linux binary links the `ubuntu-latest` runner glibc.
 
 crates.io metadata is prepared on the publishable crates; do not `cargo publish` until that is an intentional follow-up. `wiki-reader-tools` stays `publish = false`.
 

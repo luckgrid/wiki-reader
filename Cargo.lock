@@ -2255,7 +2255,7 @@ dependencies = [
 
 [[package]]
 name = "wiki-reader"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "clap",
  "filetime",
@@ -2271,7 +2271,7 @@ dependencies = [
 
 [[package]]
 name = "wiki-reader-core"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "globset",
  "ignore",
@@ -2289,7 +2289,7 @@ dependencies = [
 
 [[package]]
 name = "wiki-reader-render"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "mermaid-text",
  "pulldown-cmark",
@@ -2300,7 +2300,7 @@ dependencies = [
 
 [[package]]
 name = "wiki-reader-tools"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "pulldown-cmark",
  "tempfile",
