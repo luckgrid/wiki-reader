@@ -1,0 +1,100 @@
+---
+id: elements
+title: Element gallery
+summary: Fixture covering every markdown element for P2-23 snapshots.
+status: active
+updated: 2026-09-30
+tags: [fixture, elements]
+owner: wiki-reader
+related:
+  - architecture/README.md
+nav_order: 1
+---
+
+# Element gallery
+
+A paragraph with a long word like antidisestablishmentarianism and normal wrapping that should break at whitespace instead of mid-word when the pane is narrow.
+
+## Heading two
+
+### Heading three
+
+#### Heading four
+
+##### Heading five
+
+###### Heading six
+
+## Lists
+
+- bullet one
+- bullet two
+  - nested bullet
+1. numbered one
+2. numbered two
+
+- [ ] unchecked task
+- [x] checked task
+
+## Inline
+
+This has **bold**, *italic*, ~~strike~~, `inline code`, and a [working link](architecture/README.md) plus a [broken link](nope.md).
+
+## Quote and alert
+
+> A plain blockquote with enough text that it wraps on a narrow pane.
+
+> [!NOTE]
+> Note alert body.
+
+> [!WARNING]
+> Warning alert body.
+
+## Code
+
+```rust
+fn main() {
+    println!("hello");
+}
+```
+
+```python
+def greet(name):
+    return f"hi {name}"
+```
+
+## Tables
+
+| Short | Medium column | Long cell that needs wrapping |
+|-------|---------------|-------------------------------|
+| a | b | c |
+| one | two | three four five six seven |
+
+| WideA | WideB | WideC | WideD | WideE |
+|-------|-------|-------|-------|-------|
+| alpha | bravo | charlie | delta | echo |
+| foxtrot | golf | hotel | india | juliet |
+
+## Rule
+
+---
+
+## Mermaid good
+
+```mermaid
+flowchart LR
+  A[Start] --> B[End]
+```
+
+## Mermaid bad
+
+```mermaid
+this is not valid mermaid at all {{{
+```
+
+## Mermaid wide
+
+```mermaid
+flowchart LR
+  AAAAAAAAAA[VeryLongNodeLabelAlpha] --> BBBBBBBBBB[VeryLongNodeLabelBravo] --> CCCCCCCCCC[VeryLongNodeLabelCharlie] --> DDDDDDDDDD[VeryLongNodeLabelDelta]
+```

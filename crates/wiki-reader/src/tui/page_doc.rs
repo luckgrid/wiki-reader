@@ -92,6 +92,13 @@ impl ViewerDoc for PageDoc {
         }
     }
 
+    fn styled_lines(&self) -> Option<&[wiki_reader_render::StyledLine]> {
+        match self {
+            Self::Raw(_) => None,
+            Self::Rendered(d) => d.styled_lines(),
+        }
+    }
+
     fn block_focus_items(&self) -> Vec<super::viewer_doc::FocusItem> {
         match self {
             Self::Raw(d) => d.block_focus_items(),

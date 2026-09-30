@@ -192,8 +192,22 @@ mod tests {
             let table_lines: Vec<&String> = doc
                 .lines
                 .iter()
-                .filter(|l| l.contains('│') || l.contains('┼') || l.contains('├'))
+                .filter(|l| {
+                    l.contains('│')
+                        || l.contains('┼')
+                        || l.contains('├')
+                        || l.contains('┌')
+                        || l.contains('└')
+                })
                 .collect();
+            assert!(
+                table_lines.iter().any(|l| l.starts_with('┌')),
+                "w={width}: missing top border: {plain}"
+            );
+            assert!(
+                table_lines.iter().any(|l| l.starts_with('└')),
+                "w={width}: missing bottom border: {plain}"
+            );
             assert!(
                 table_lines
                     .iter()
@@ -211,12 +225,15 @@ mod tests {
             );
             // Junction columns: find │ positions on a data row and ┼/┤ on sep.
             if let (Some(data), Some(sep)) = (
+                table_lines.iter().find(|l| {
+                    l.contains('│')
+                        && !l.contains('┼')
+                        && !l.starts_with('┌')
+                        && !l.starts_with('└')
+                }),
                 table_lines
                     .iter()
-                    .find(|l| l.contains('│') && !l.contains('┼')),
-                table_lines
-                    .iter()
-                    .find(|l| l.contains('┼') || l.contains('├')),
+                    .find(|l| l.contains('┼') || (l.contains('├') && !l.starts_with('┌'))),
             ) {
                 let data_borders: Vec<usize> = data
                     .char_indices()
@@ -233,16 +250,46 @@ mod tests {
                     "w={width}: border columns misaligned data={data:?} sep={sep:?}"
                 );
             }
-            for line in table_lines
-                .iter()
-                .filter(|l| l.contains('│') && !l.contains('┼') && !l.contains('├'))
-            {
+            for line in table_lines.iter().filter(|l| {
+                l.contains('│')
+                    && !l.contains('┼')
+                    && !l.contains('├')
+                    && !l.starts_with('┌')
+                    && !l.starts_with('└')
+            }) {
                 assert!(
                     cells_padded_both_sides(line),
                     "w={width}: cell missing side pad: {line}"
                 );
             }
         }
+    }
+
+    #[test]
+    fn table_cells_never_split_words_when_fitted() {
+        let src = "| WideA | WideB | WideC | WideD | WideE |\n| --- | --- | --- | --- | --- |\n| alpha | bravo | charlie | delta | echo |\n| foxrot | golf | hotel | india | juliet |\n";
+        let doc = render_src(src, 80);
+        let plain = doc.lines.join("\n");
+        assert!(
+            !plain.contains("table too wide"),
+            "expected fitted table at 80: {plain}"
+        );
+        for word in [
+            "WideA", "WideB", "WideC", "WideD", "WideE", "alpha", "bravo", "charlie", "delta",
+            "echo", "foxrot", "golf", "hotel", "india", "juliet",
+        ] {
+            assert!(
+                plain.contains(word),
+                "word {word:?} must appear intact: {plain}"
+            );
+        }
+        // Too-narrow pane: dump fallback, still no mid-word cell wrap via fair_share.
+        let narrow = render_src(src, 40);
+        let narrow_plain = narrow.lines.join("\n");
+        assert!(
+            narrow_plain.contains("table too wide for pane"),
+            "expected dump fallback: {narrow_plain}"
+        );
     }
 
     /// Each cell between `│` has a leading and trailing space.
@@ -259,13 +306,13 @@ mod tests {
             .lines
             .iter()
             .zip(doc.source_map.iter())
-            .filter(|(l, _)| l.contains('│') || l.contains('├'))
+            .filter(|(l, _)| l.contains('│') && !l.contains('├'))
             .map(|(l, &s)| (l.clone(), s))
             .collect();
         assert_eq!(
             mapped.iter().map(|(_, s)| *s).collect::<Vec<_>>(),
-            vec![1, 2, 3, 4],
-            "table rows should map to distinct source lines: {mapped:?}"
+            vec![1, 3, 4],
+            "table data rows should map to distinct source lines: {mapped:?}"
         );
         let needle = mapped
             .iter()
@@ -554,36 +601,146 @@ mod tests {
             },
         );
         assert!(
-            open.lines.iter().any(|l| l.contains("title: Hello")),
+            open.lines
+                .iter()
+                .any(|l| l.contains("title") && l.contains("Hello")),
             "expanded missing title: {:?}",
             open.lines
         );
     }
 
     #[test]
-    fn long_table_truncates_until_expanded() {
+    fn long_table_shows_all_rows_without_expand_stub() {
         let src = "| h |\n| - |\n| 1 |\n| 2 |\n| 3 |\n| 4 |\n| 5 |\n";
         let doc = render_src(src, 40);
         assert!(
-            doc.lines.iter().any(|l| l.contains("expand table")),
-            "truncate cue missing: {:?}",
+            !doc.lines.iter().any(|l| l.contains("expand table")),
+            "expand stub must be gone: {:?}",
             doc.lines
+        );
+        let joined = doc.lines.join("\n");
+        assert!(joined.contains('5'), "all rows visible: {joined}");
+        assert!(
+            doc.block_actions.is_empty(),
+            "tables no longer register block actions: {:?}",
+            doc.block_actions
+        );
+    }
+
+    #[test]
+    fn word_wrap_breaks_at_whitespace() {
+        let src =
+            "never midword break when wrapping turning words across the pane width cleanly.\n";
+        let doc = render_src(src, 20);
+        for line in &doc.lines {
+            assert!(
+                !line.contains("tu rning") && !line.contains("turni ng"),
+                "mid-word wrap: {line:?} in {:?}",
+                doc.lines
+            );
+        }
+        let joined = doc.lines.join(" ");
+        assert!(joined.contains("turning"), "missing word: {joined}");
+    }
+
+    #[test]
+    fn block_gap_between_top_level_not_list_items() {
+        let src = "# H\n\npara\n\n- a\n- b\n\n## Next\n";
+        let doc = render_src(src, 40);
+        let text = doc.lines.join("\n");
+        assert!(
+            text.contains("# H\n\npara\n\n• a\n• b\n\n## Next"),
+            "expected blank gaps between blocks and tight list: {text:?}"
+        );
+    }
+
+    #[test]
+    fn block_gap_quote_alert_code_table_rule() {
+        let src = concat!(
+            "> quote one\n>\n> quote two\n\n",
+            "> [!NOTE]\n> Note body.\n\n",
+            "```\ncode\n```\n\n",
+            "| a | b |\n| - | - |\n| 1 | 2 |\n\n",
+            "---\n\n",
+            "# After\n"
+        );
+        let doc = render_src(src, 40);
+        let text = doc.lines.join("\n");
+        assert!(
+            text.contains("│ quote one\n│\n│ quote two"),
+            "quote inter-para keeps bar: {text:?}"
         );
         assert!(
-            !doc.lines
-                .iter()
-                .any(|l| l.contains("| 5 |") || l.trim_end().ends_with('5')),
-            "row 5 should be hidden when truncated: {:?}",
-            doc.lines
+            text.contains("│ [NOTE]\n│ Note body."),
+            "alert label tight to body: {text:?}"
         );
-        let id = doc
-            .block_actions
-            .iter()
-            .find(|a| a.kind == BlockActionKind::ToggleTable)
-            .map(|a| a.id)
-            .expect("table action");
-        let mut expanded = std::collections::HashSet::new();
-        expanded.insert(id);
+        assert!(
+            text.contains("```\n│ code\n```"),
+            "code block present: {text:?}"
+        );
+        assert!(
+            text.contains('┌') && text.contains('└'),
+            "table borders: {text:?}"
+        );
+        assert!(
+            text.contains("─\n\n# After") || text.contains("──\n\n# After"),
+            "gap after rule: {text:?}"
+        );
+    }
+
+    #[test]
+    fn quote_wrap_keeps_bar_and_nested_list() {
+        let src = "> A plain blockquote with enough text that it wraps on a narrow pane.\n>\n> - nested\n";
+        let doc = render_src(src, 40);
+        let text = doc.lines.join("\n");
+        let quote_lines: Vec<&str> = text
+            .lines()
+            .filter(|l| l.starts_with('│') || *l == "│")
+            .collect();
+        assert!(
+            quote_lines
+                .iter()
+                .any(|l| l.contains("wraps") || l.contains("narrow")),
+            "expected wrapped quote: {text:?}"
+        );
+        assert!(
+            text.lines()
+                .filter(|l| l.contains("narrow") || l.contains("wraps on"))
+                .all(|l| l.starts_with('│')),
+            "wrap continuation must keep bar: {text:?}"
+        );
+        assert!(
+            text.contains('•') && text.contains("nested"),
+            "nested list in quote: {text:?}"
+        );
+    }
+
+    #[test]
+    fn linked_from_gap_is_single_blank() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/worked-example");
+        let provider = FsProvider::open(&root).unwrap();
+        let index = wiki_reader_core::Index::build(&provider).unwrap();
+        let key = PageKey {
+            collection_id: index.collection_id.clone(),
+            relative_path: std::path::PathBuf::from("architecture/design-system/README.md"),
+        };
+        let src = provider.read(&key).unwrap();
+        let page = index.pages.get(&key);
+        let doc = render(&src, page, &key, &index, 80);
+        let text = doc.lines.join("\n");
+        assert!(
+            !text.contains("\n\n\n## Linked from"),
+            "no double blank before Linked from: {text:?}"
+        );
+        assert!(
+            text.contains("\n\n## Linked from"),
+            "single blank before Linked from: {text:?}"
+        );
+    }
+
+    #[test]
+    fn expanded_frontmatter_snapshot() {
+        let src = "---\ntitle: Hello\ntags:\n  - a\n  - b\nupdated: 2026-01-01\n---\n\n# Body\n";
         let index = wiki_reader_core::Index {
             collection_id: "t".into(),
             pages: HashMap::default(),
@@ -594,6 +751,15 @@ mod tests {
             by_path: HashMap::default(),
             diagnostics: vec![],
         };
+        let collapsed = render_src(src, 40);
+        let id = collapsed
+            .block_actions
+            .iter()
+            .find(|a| a.kind == BlockActionKind::ToggleFrontmatter)
+            .expect("toggle")
+            .id;
+        let mut expanded = std::collections::HashSet::new();
+        expanded.insert(id);
         let open = render_with(
             src,
             None,
@@ -605,13 +771,26 @@ mod tests {
                 ..RenderOpts::default()
             },
         );
-        assert!(
-            !open.lines.iter().any(|l| l.contains("expand table")),
-            "expanded still shows cue: {:?}",
-            open.lines
-        );
-        let joined = open.lines.join("\n");
-        assert!(joined.contains('5'), "expanded missing last row: {joined}");
+        let text = open.lines.join("\n");
+        insta::assert_snapshot!("expanded_frontmatter_40", text);
+    }
+
+    #[test]
+    fn elements_fixture_snapshots() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/elements");
+        let provider = FsProvider::open(&root).unwrap();
+        let index = wiki_reader_core::Index::build(&provider).unwrap();
+        let key = PageKey {
+            collection_id: index.collection_id.clone(),
+            relative_path: std::path::PathBuf::from("README.md"),
+        };
+        let src = provider.read(&key).unwrap();
+        let page = index.pages.get(&key);
+        for w in [40u16, 60, 80, 120] {
+            let doc = render(&src, page, &key, &index, w);
+            let text = doc.lines.join("\n");
+            insta::assert_snapshot!(format!("elements_{w}"), text);
+        }
     }
 
     #[test]

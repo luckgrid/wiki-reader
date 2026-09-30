@@ -5,6 +5,7 @@
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use wiki_reader_core::nav::{NavItem, NavStop, NavTree, NodeId};
@@ -33,7 +34,7 @@ pub fn visible_rows(tree: &NavTree, expanded: &std::collections::HashSet<NodeId>
 }
 
 /// Draw search row + flat visible tree rows; register hits.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn draw(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -73,7 +74,7 @@ pub fn draw(
     hits.push(search_rect, Hit::NavSearchRow);
     let on_search = matches!(cursor, NavStop::Search);
     let search_style = if on_search {
-        theme.accent()
+        theme.text().bg(theme.cursor_line)
     } else {
         theme.muted()
     };
@@ -105,11 +106,15 @@ pub fn draw(
         }
         let marker = match &row.id {
             NodeId::Page(k) if k == current => "● ",
-            _ => "",
+            _ => "  ",
         };
         let on_row = matches!(cursor, NavStop::Node(id) if id == &row.id);
         let cursor_mark = if on_row { "▌" } else { " " };
-        let style = if on_row { theme.accent() } else { theme.text() };
+        let style = if on_row {
+            theme.text().bg(theme.cursor_line)
+        } else {
+            theme.text()
+        };
         let mut spans = vec![Span::styled(
             format!("{cursor_mark}{marker}{}", row.label),
             style,
@@ -138,7 +143,17 @@ pub fn draw(
                 let take = max.saturating_sub(used);
                 let text: String = sp.content.chars().take(take).collect();
                 clipped.push(Span::styled(text, sp.style));
+                used = max;
                 break;
+            }
+        }
+        if on_row {
+            let pad = max.saturating_sub(used);
+            if pad > 0 {
+                clipped.push(Span::styled(
+                    " ".repeat(pad),
+                    Style::default().bg(theme.cursor_line),
+                ));
             }
         }
         lines.push(Line::from(clipped));

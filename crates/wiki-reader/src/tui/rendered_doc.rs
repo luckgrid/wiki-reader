@@ -130,6 +130,10 @@ impl ViewerDoc for RenderedViewerDoc {
         &self.inner.links
     }
 
+    fn styled_lines(&self) -> Option<&[wiki_reader_render::StyledLine]> {
+        Some(&self.inner.styled)
+    }
+
     fn block_focus_items(&self) -> Vec<FocusItem> {
         self.inner
             .block_actions

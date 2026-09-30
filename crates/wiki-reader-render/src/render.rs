@@ -30,16 +30,24 @@ pub enum StyleKind {
     Strikethrough,
     /// `inline code`.
     InlineCode,
-    /// Fenced / indented code block.
+    /// Fenced / indented code block body.
     CodeBlock,
+    /// Code fence language label.
+    CodeLang,
     /// Link text (class carried separately on [`LinkSpan`]).
     Link,
-    /// Blockquote / alert body.
+    /// Blockquote body.
     Quote,
+    /// GFM alert (`NOTE`, `WARNING`, …); `kind` is a small tag id.
+    Alert(u8),
     /// Horizontal rule glyph line.
     Rule,
     /// Table cell / border.
     Table,
+    /// Table header row.
+    TableHeader,
+    /// List bullet / number marker.
+    ListMarker,
     /// Task list checkbox marker.
     TaskMarker,
     /// Frontmatter metadata box.
@@ -97,8 +105,6 @@ pub struct RenderedDoc {
 pub enum BlockActionKind {
     /// Expand / collapse the frontmatter box.
     ToggleFrontmatter,
-    /// Expand a truncated table to full width.
-    ToggleTable,
     /// Copy a fenced code block (OSC 52).
     CopyCode,
 }
@@ -121,7 +127,6 @@ fn content_block_id(kind: BlockActionKind, text: &str) -> u32 {
     let mut h: u32 = 0x811c_9dc5;
     h ^= match kind {
         BlockActionKind::ToggleFrontmatter => 1,
-        BlockActionKind::ToggleTable => 2,
         BlockActionKind::CopyCode => 3,
     };
     h = h.wrapping_mul(0x0100_0193);
@@ -189,7 +194,9 @@ pub fn render_with(
     state.expanded.clone_from(&opts.expanded);
     state.diagram_mode = opts.diagram_mode;
 
-    if parsed.frontmatter.title.is_some()
+    if parsed.frontmatter.kind.is_some()
+        || !parsed.frontmatter.props.is_empty()
+        || parsed.frontmatter.title.is_some()
         || parsed.frontmatter.updated.is_some()
         || parsed.frontmatter.summary.is_some()
         || !parsed.frontmatter.tags.is_empty()
@@ -261,6 +268,8 @@ struct LayoutState<'a> {
     in_quote: bool,
     /// Alert label when quote opens with `[!NOTE]` / goal / decision / risk.
     alert_label: Option<String>,
+    /// True after the first body block inside the current quote (gaps keep `│`).
+    quote_body_started: bool,
     list_marker_pending: bool,
     in_table: bool,
     table_row: Vec<String>,
@@ -313,6 +322,7 @@ impl<'a> LayoutState<'a> {
             code_line_src: 1,
             in_quote: false,
             alert_label: None,
+            quote_body_started: false,
             list_marker_pending: false,
             in_table: false,
             table_row: Vec::new(),
@@ -339,7 +349,7 @@ impl<'a> LayoutState<'a> {
                 self.commit_line(src);
             }
             Event::Rule => {
-                self.finish_block();
+                self.ensure_block_gap(src);
                 self.mark_block(src);
                 self.cur_src = src;
                 self.push_span("─".repeat(self.width.min(40)), StyleKind::Rule, src);
@@ -365,7 +375,14 @@ impl<'a> LayoutState<'a> {
     fn start_tag(&mut self, tag: Tag<'_>, src: u32) {
         match tag {
             Tag::Paragraph => {
-                self.finish_block();
+                // List items stay tight; quotes keep the bar on gaps; else blank gap.
+                if !self.list_stack.is_empty() {
+                    self.finish_block();
+                } else if self.in_quote {
+                    self.quote_paragraph_gap(src);
+                } else {
+                    self.ensure_block_gap(src);
+                }
                 self.mark_block(src);
                 self.cur_src = src;
                 if self.in_quote {
@@ -374,7 +391,7 @@ impl<'a> LayoutState<'a> {
                 self.ensure_list_marker(src);
             }
             Tag::Heading { level, .. } => {
-                self.finish_block();
+                self.ensure_block_gap(src);
                 self.mark_block(src);
                 self.cur_src = src;
                 let lv = heading_u8(level);
@@ -385,9 +402,10 @@ impl<'a> LayoutState<'a> {
                 self.push_span(format!("{hashes} "), StyleKind::Heading(lv), src);
             }
             Tag::BlockQuote(kind) => {
-                self.finish_block();
+                self.ensure_block_gap(src);
                 self.mark_block(src);
                 self.in_quote = true;
+                self.quote_body_started = false;
                 self.alert_label = kind.map(|k| match k {
                     BlockQuoteKind::Note => "NOTE".into(),
                     BlockQuoteKind::Tip => "TIP".into(),
@@ -396,12 +414,13 @@ impl<'a> LayoutState<'a> {
                     BlockQuoteKind::Caution => "CAUTION".into(),
                 });
                 if let Some(label) = self.alert_label.clone() {
-                    self.push_span(format!("│ [{label}]"), StyleKind::Quote, src);
+                    let kind = StyleKind::Alert(alert_kind_id(&label));
+                    self.push_span(format!("│ [{label}]"), kind, src);
                     self.commit_line(src);
                 }
             }
             Tag::CodeBlock(kind) => {
-                self.finish_block();
+                self.ensure_block_gap(src);
                 self.mark_block(src);
                 self.in_code_block = true;
                 self.code_body.clear();
@@ -421,7 +440,7 @@ impl<'a> LayoutState<'a> {
                     format!("```{}", self.code_fence_lang)
                 };
                 let line = u32::try_from(self.styled.len()).unwrap_or(0);
-                self.push_span(label, StyleKind::CodeBlock, src);
+                self.push_span(label, StyleKind::CodeLang, src);
                 let end = u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(1);
                 // Provisional id from lang; rewritten when body is known.
                 let id = content_block_id(BlockActionKind::CopyCode, &self.code_fence_lang);
@@ -435,7 +454,16 @@ impl<'a> LayoutState<'a> {
                 self.commit_line(src);
             }
             Tag::List(start) => {
-                self.finish_block();
+                // Gap once for the whole list; items stay tight.
+                if self.list_stack.is_empty() {
+                    if self.in_quote {
+                        self.quote_paragraph_gap(src);
+                    } else {
+                        self.ensure_block_gap(src);
+                    }
+                } else {
+                    self.finish_block();
+                }
                 self.list_stack.push(ListCtx {
                     ordered: start.is_some(),
                     next_num: start.unwrap_or(1),
@@ -473,7 +501,7 @@ impl<'a> LayoutState<'a> {
                 self.push_span(alt, StyleKind::Link, src);
             }
             Tag::Table(_) => {
-                self.finish_block();
+                self.ensure_block_gap(src);
                 self.mark_block(src);
                 self.in_table = true;
                 self.table_rows.clear();
@@ -509,6 +537,7 @@ impl<'a> LayoutState<'a> {
             TagEnd::BlockQuote(_) => {
                 self.in_quote = false;
                 self.alert_label = None;
+                self.quote_body_started = false;
             }
             TagEnd::CodeBlock => {
                 self.in_code_block = false;
@@ -527,8 +556,7 @@ impl<'a> LayoutState<'a> {
                     let start_line = u32::try_from(self.styled.len()).unwrap_or(0);
                     for (i, line) in lines.iter().enumerate() {
                         let src_line = close_src.saturating_add(u32::try_from(i).unwrap_or(0));
-                        self.push_span(line.clone(), StyleKind::CodeBlock, src_line);
-                        self.commit_line(src_line);
+                        self.push_raw_line(line.clone(), StyleKind::CodeBlock, src_line);
                     }
                     let end = u16::try_from(
                         lines
@@ -662,15 +690,16 @@ impl<'a> LayoutState<'a> {
         let text = if self.in_quote && self.alert_label.is_none() {
             if let Some((label, rest)) = parse_alert_prefix(t) {
                 self.alert_label = Some(label.to_owned());
+                let kind = StyleKind::Alert(alert_kind_id(label));
                 // Replace the bare quote gutter with a labelled alert header.
                 if self.cur.len() == 1
                     && self.cur[0].text == "│ "
                     && self.cur[0].kind == StyleKind::Quote
                 {
                     self.cur.clear();
-                    self.push_span(format!("│ [{label}] "), StyleKind::Quote, src);
+                    self.push_span(format!("│ [{label}] "), kind, src);
                 } else {
-                    self.push_span(format!("[{label}] "), StyleKind::Quote, src);
+                    self.push_span(format!("[{label}] "), kind, src);
                 }
                 rest.to_owned()
             } else {
@@ -708,13 +737,16 @@ impl<'a> LayoutState<'a> {
 
     fn push_frontmatter_box(&mut self, parsed: &parse::ParsedPage) {
         self.mark_block(1);
-        let fm_fp = format!(
-            "t={};u={};s={};tags={}",
-            parsed.frontmatter.title.as_deref().unwrap_or(""),
-            parsed.frontmatter.updated.as_deref().unwrap_or(""),
-            parsed.frontmatter.summary.as_deref().unwrap_or(""),
-            parsed.frontmatter.tags.join(",")
-        );
+        let fm_fp = parsed
+            .frontmatter
+            .props
+            .iter()
+            .map(|(k, v)| match v {
+                parse::FmProp::Scalar(s) => format!("{k}={s}"),
+                parse::FmProp::List(xs) => format!("{k}=[{}]", xs.join(",")),
+            })
+            .collect::<Vec<_>>()
+            .join(";");
         let id = content_block_id(BlockActionKind::ToggleFrontmatter, &fm_fp);
         let expanded = self.expanded.contains(&id);
         let line = u32::try_from(self.styled.len()).unwrap_or(0);
@@ -736,27 +768,33 @@ impl<'a> LayoutState<'a> {
         if !expanded {
             return;
         }
-        if let Some(title) = &parsed.frontmatter.title {
-            self.push_span(format!("title: {title}"), StyleKind::Frontmatter, 1);
-            self.commit_line(1);
+        let key_w = parsed
+            .frontmatter
+            .props
+            .iter()
+            .map(|(k, _)| k.width())
+            .max()
+            .unwrap_or(0)
+            .max(1);
+        for (key, val) in &parsed.frontmatter.props {
+            match val {
+                parse::FmProp::Scalar(s) => {
+                    let pad = " ".repeat(key_w.saturating_sub(key.width()));
+                    self.push_span(format!("{key}:{pad} {s}"), StyleKind::Frontmatter, 1);
+                    self.commit_line(1);
+                }
+                parse::FmProp::List(xs) => {
+                    let pad = " ".repeat(key_w.saturating_sub(key.width()));
+                    self.push_span(format!("{key}:{pad}"), StyleKind::Frontmatter, 1);
+                    self.commit_line(1);
+                    for item in xs {
+                        self.push_span(format!("  - {item}"), StyleKind::Frontmatter, 1);
+                        self.commit_line(1);
+                    }
+                }
+            }
         }
-        if let Some(updated) = &parsed.frontmatter.updated {
-            self.push_span(format!("updated: {updated}"), StyleKind::Frontmatter, 1);
-            self.commit_line(1);
-        }
-        if let Some(summary) = &parsed.frontmatter.summary {
-            self.push_span(format!("summary: {summary}"), StyleKind::Frontmatter, 1);
-            self.commit_line(1);
-        }
-        if !parsed.frontmatter.tags.is_empty() {
-            self.push_span(
-                format!("tags: {}", parsed.frontmatter.tags.join(", ")),
-                StyleKind::Frontmatter,
-                1,
-            );
-            self.commit_line(1);
-        }
-        self.push_span("─────────────────".into(), StyleKind::Frontmatter, 1);
+        self.push_span("─".repeat(self.width.min(40)), StyleKind::Frontmatter, 1);
         self.commit_line(1);
     }
 
@@ -790,7 +828,7 @@ impl<'a> LayoutState<'a> {
                 "• ".into()
             }
         };
-        self.push_span(format!("{indent}{marker}"), self.current_kind(), src);
+        self.push_span(format!("{indent}{marker}"), StyleKind::ListMarker, src);
     }
 
     fn current_kind(&self) -> StyleKind {
@@ -810,63 +848,111 @@ impl<'a> LayoutState<'a> {
         self.cur.iter().map(|s| s.text.width()).sum()
     }
 
+    /// Push a full display row without wrapping (diagrams, table rows).
+    fn push_raw_line(&mut self, text: String, kind: StyleKind, src: u32) {
+        self.finish_block();
+        self.cur_src = src;
+        self.cur.push(StyledSpan { text, kind });
+        self.commit_line(src);
+    }
+
     fn push_span(&mut self, text: String, kind: StyleKind, src: u32) {
         if text.is_empty() {
             return;
         }
         self.cur_src = src;
-        // wrap if needed
         let mut rest = text;
         while !rest.is_empty() {
             let avail = self.width.saturating_sub(self.cur_width());
             if avail == 0 {
-                self.commit_line(src);
+                self.commit_quote_wrap(src);
                 continue;
             }
-            let (take, next) = split_at_width(&rest, avail);
+            if rest.width() <= avail {
+                self.push_span_piece(&rest, kind, src);
+                break;
+            }
+            let (take, next) = split_at_word_boundary(&rest, avail);
             if take.is_empty() {
-                // single glyph wider than avail — force commit
-                self.commit_line(src);
-                let (take2, next2) = split_at_width(&rest, self.width.max(1));
-                self.cur.push(StyledSpan { text: take2, kind });
+                // Token does not fit on this line: move to next if we already have content.
+                let only_quote_gutter =
+                    self.in_quote && self.cur.len() == 1 && self.cur[0].text == "│ ";
+                if self.cur_width() > 0 && !only_quote_gutter {
+                    self.commit_quote_wrap(src);
+                    continue;
+                }
+                // Hard-break tokens wider than the remaining pane (after optional gutter).
+                let hard_w = if only_quote_gutter {
+                    avail.max(1)
+                } else {
+                    self.width.max(1)
+                };
+                let (take2, next2) = split_at_width(&rest, hard_w);
+                self.push_span_piece(&take2, kind, src);
                 rest = next2;
+                if !rest.is_empty() {
+                    self.commit_quote_wrap(src);
+                }
                 continue;
             }
-            let is_link = kind == StyleKind::Link && self.in_link.is_some();
-            let start = u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(0);
-            self.cur.push(StyledSpan { text: take, kind });
-            if is_link {
-                let end =
-                    u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(start);
-                let line = u32::try_from(self.styled.len()).unwrap_or(0);
-                if start < end
-                    && let Some(lb) = self.in_link.as_mut()
-                {
-                    coalesce_link_segment(&mut lb.segments, line, start, end);
-                }
-            }
+            self.push_span_piece(&take, kind, src);
             rest = next;
             if !rest.is_empty() {
-                self.commit_line(src);
+                self.commit_quote_wrap(src);
+            }
+        }
+    }
+
+    /// Commit a wrapped line and re-prefix the quote bar on the continuation.
+    fn commit_quote_wrap(&mut self, src: u32) {
+        self.commit_line(src);
+        if self.in_quote {
+            self.cur_src = src;
+            self.cur.push(StyledSpan {
+                text: "│ ".into(),
+                kind: StyleKind::Quote,
+            });
+        }
+    }
+
+    /// Inter-paragraph gap inside a quote keeps `│`; first body block stays tight.
+    fn quote_paragraph_gap(&mut self, src: u32) {
+        self.finish_block();
+        if self.quote_body_started && !self.last_line_blank() {
+            let gap_src = self.styled.last().map_or(src, |l| l.source_line);
+            self.cur_src = gap_src;
+            self.cur.push(StyledSpan {
+                text: "│".into(),
+                kind: StyleKind::Quote,
+            });
+            self.commit_line(gap_src);
+        }
+        self.quote_body_started = true;
+    }
+
+    fn push_span_piece(&mut self, take: &str, kind: StyleKind, _src: u32) {
+        if take.is_empty() {
+            return;
+        }
+        let is_link = kind == StyleKind::Link && self.in_link.is_some();
+        let start = u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(0);
+        self.cur.push(StyledSpan {
+            text: take.to_owned(),
+            kind,
+        });
+        if is_link {
+            let end = u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(start);
+            let line = u32::try_from(self.styled.len()).unwrap_or(0);
+            if start < end
+                && let Some(lb) = self.in_link.as_mut()
+            {
+                coalesce_link_segment(&mut lb.segments, line, start, end);
             }
         }
     }
 
     fn push_wrapping(&mut self, text: &str, src: u32) {
-        let kind = self.current_kind();
-        // Word-wrap on spaces when possible
-        if text.contains(' ') || text.contains('\t') {
-            let mut first = true;
-            for word in text.split_inclusive(|c: char| c.is_whitespace()) {
-                if !first && self.cur_width() > 0 && self.cur_width() + word.width() > self.width {
-                    self.commit_line(src);
-                }
-                first = false;
-                self.push_span(word.to_owned(), kind, src);
-            }
-        } else {
-            self.push_span(text.to_owned(), kind, src);
-        }
+        self.push_span(text.to_owned(), self.current_kind(), src);
     }
 
     fn commit_line(&mut self, src: u32) {
@@ -887,6 +973,28 @@ impl<'a> LayoutState<'a> {
         if !self.cur.is_empty() {
             self.commit_line(self.cur_src);
         }
+    }
+
+    fn last_line_blank(&self) -> bool {
+        self.styled
+            .last()
+            .is_none_or(|l| l.spans.is_empty() || l.spans.iter().all(|s| s.text.trim().is_empty()))
+    }
+
+    /// Blank line before a top-level block when the previous line has content.
+    ///
+    /// The gap inherits the previous line's source so it does not join the
+    /// following block's source run (cursor restore uses run starts).
+    fn ensure_block_gap(&mut self, src: u32) {
+        self.finish_block();
+        if self.styled.is_empty() || self.last_line_blank() {
+            return;
+        }
+        let gap_src = self.styled.last().map_or(src, |l| l.source_line);
+        self.styled.push(StyledLine {
+            spans: Vec::new(),
+            source_line: gap_src,
+        });
     }
 
     /// Append a "Linked from" section (B1). One entry per source page, sorted by
@@ -1013,18 +1121,7 @@ impl<'a> LayoutState<'a> {
         if self.table_rows.is_empty() {
             return;
         }
-        let action_line = u32::try_from(self.styled.len()).unwrap_or(0);
         let mut rows = std::mem::take(&mut self.table_rows);
-        let header_fp = rows
-            .first()
-            .map(|(_, cells)| cells.join("|"))
-            .unwrap_or_default();
-        let id = content_block_id(BlockActionKind::ToggleTable, &header_fp);
-        let expanded = self.expanded.contains(&id);
-        let was_truncated = !expanded && rows.len() > 4;
-        if was_truncated {
-            rows.truncate(3);
-        }
         let cols = rows
             .iter()
             .map(|(_, cells)| cells.len())
@@ -1037,56 +1134,53 @@ impl<'a> LayoutState<'a> {
             }
         }
         let cell_rows: Vec<&[String]> = rows.iter().map(|(_, c)| c.as_slice()).collect();
-        let widths = fair_share_widths(&cell_rows, cols, self.width);
+        let Some(widths) = fair_share_widths(&cell_rows, cols, self.width) else {
+            // Mins do not fit: fall back to a source-like dump with a note.
+            let src = rows.first().map_or(1, |(s, _)| *s);
+            let mut note = format!(
+                "│ table too wide for pane ({} cols); showing cells unwrapped",
+                self.width
+            );
+            while !note.is_empty() {
+                if note.width() <= self.width {
+                    self.push_raw_line(std::mem::take(&mut note), StyleKind::Table, src);
+                    break;
+                }
+                let (take, next) = split_at_width(&note, self.width.max(1));
+                self.push_raw_line(take, StyleKind::Table, src);
+                note = next;
+            }
+            for (row_src, row) in &rows {
+                self.push_raw_line(format!("│ {}", row.join(" | ")), StyleKind::Table, *row_src);
+            }
+            self.table_header_done = false;
+            return;
+        };
         let header_count = usize::from(self.table_header_done);
+        let top_src = rows.first().map_or(1, |(s, _)| *s);
+        self.push_raw_line(format_table_top(&widths), StyleKind::Table, top_src);
         for (i, (row_src, row)) in rows.iter().enumerate() {
-            let line = format_table_row(row, &widths);
-            self.cur_src = *row_src;
-            self.cur.push(StyledSpan {
-                text: line,
-                kind: StyleKind::Table,
-            });
-            self.commit_line(*row_src);
+            let kind = if i < header_count {
+                StyleKind::TableHeader
+            } else {
+                StyleKind::Table
+            };
+            for line in format_table_row_wrapped(row, &widths) {
+                self.push_raw_line(line, kind, *row_src);
+            }
             if i + 1 == header_count {
-                // GFM separator line sits between header and first body row.
                 let mut sep_src = row_src.saturating_add(1);
                 if let Some((next_src, _)) = rows.get(i + 1) {
                     sep_src = sep_src.min(*next_src).max(*row_src);
                 }
-                let sep = format_table_separator(&widths);
-                self.cur_src = sep_src;
-                self.cur.push(StyledSpan {
-                    text: sep,
-                    kind: StyleKind::Table,
-                });
-                self.commit_line(sep_src);
+                self.push_raw_line(format_table_separator(&widths), StyleKind::Table, sep_src);
+            } else if i + 1 < rows.len() && i + 1 != header_count {
+                // Light row separator between body rows.
+                self.push_raw_line(format_table_row_sep(&widths), StyleKind::Table, *row_src);
             }
         }
-        // Register toggle; only inject an expand cue line when truncated.
-        if was_truncated {
-            let line = u32::try_from(self.styled.len()).unwrap_or(0);
-            let src = rows
-                .last()
-                .map_or(action_line.saturating_add(1), |(s, _)| *s);
-            self.push_span("… expand table".into(), StyleKind::Table, src);
-            let end = u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(1);
-            self.commit_line(src);
-            self.block_actions.push(BlockAction {
-                id,
-                kind: BlockActionKind::ToggleTable,
-                line,
-                cols: (0, end.max(1)),
-                payload: String::new(),
-            });
-        } else {
-            self.block_actions.push(BlockAction {
-                id,
-                kind: BlockActionKind::ToggleTable,
-                line: action_line,
-                cols: (0, 8),
-                payload: String::new(),
-            });
-        }
+        let bottom_src = rows.last().map_or(top_src, |(s, _)| *s);
+        self.push_raw_line(format_table_bottom(&widths), StyleKind::Table, bottom_src);
         self.table_header_done = false;
     }
 }
@@ -1188,15 +1282,32 @@ fn split_at_width(s: &str, max: usize) -> (String, String) {
     (s.to_owned(), String::new())
 }
 
-fn truncate_width(s: &str, max: usize) -> String {
+/// Prefer breaking at the last whitespace that fits; empty take means "no break in avail".
+fn split_at_word_boundary(s: &str, max: usize) -> (String, String) {
+    if max == 0 {
+        return (String::new(), s.to_owned());
+    }
     if s.width() <= max {
-        return s.to_owned();
+        return (s.to_owned(), String::new());
     }
-    if max <= 1 {
-        return "…".into();
+    let (hard, _) = split_at_width(s, max);
+    if let Some(pos) = hard.rfind(|c: char| c.is_whitespace()) {
+        let take = hard[..pos].trim_end().to_owned();
+        if !take.is_empty() {
+            let rest = s[pos..].trim_start().to_owned();
+            return (take, rest);
+        }
     }
-    let (head, _) = split_at_width(s, max.saturating_sub(1));
-    format!("{head}…")
+    // No whitespace in the fitting prefix — caller may soft-wrap to next line.
+    (String::new(), s.to_owned())
+}
+
+fn longest_word_width(s: &str) -> usize {
+    s.split_whitespace()
+        .map(UnicodeWidthStr::width)
+        .max()
+        .unwrap_or(0)
+        .max(1)
 }
 
 /// Merge contiguous link glyph runs on the same display line into one rect.
@@ -1238,36 +1349,71 @@ fn parse_alert_prefix(t: &str) -> Option<(&str, &str)> {
     None
 }
 
-fn fair_share_widths(rows: &[&[String]], cols: usize, total_width: usize) -> Vec<usize> {
+fn alert_kind_id(label: &str) -> u8 {
+    match label {
+        "NOTE" => 1,
+        "TIP" => 2,
+        "IMPORTANT" => 3,
+        "WARNING" => 4,
+        "CAUTION" => 5,
+        "GOAL" => 6,
+        "DECISION" => 7,
+        "RISK" => 8,
+        _ => 0,
+    }
+}
+
+/// Returns `None` when minimum (longest-word) widths cannot fit the pane.
+fn fair_share_widths(rows: &[&[String]], cols: usize, total_width: usize) -> Option<Vec<usize>> {
     // │ {cell} │ × cols → borders = cols+1, leading+trailing space per cell (= 2*cols)
     let chrome = cols
         .saturating_add(1)
         .saturating_add(cols.saturating_mul(2));
-    let avail = total_width.saturating_sub(chrome).max(cols);
+    let avail = total_width.saturating_sub(chrome);
+    if avail < cols {
+        return None;
+    }
+    // Uncapped longest-word mins; if they don't fit, caller dumps unwrapped.
+    let mins: Vec<usize> = (0..cols)
+        .map(|c| {
+            rows.iter()
+                .map(|r| r.get(c).map_or(1, |s| longest_word_width(s)))
+                .max()
+                .unwrap_or(1)
+                .max(1)
+        })
+        .collect();
+    let min_sum: usize = mins.iter().sum();
+    if min_sum > avail {
+        return None;
+    }
     let natural: Vec<usize> = (0..cols)
         .map(|c| {
             rows.iter()
                 .map(|r| r.get(c).map_or(0, |s| s.width()))
                 .max()
                 .unwrap_or(1)
-                .max(1)
+                .max(mins[c])
         })
         .collect();
     let sum: usize = natural.iter().sum();
     if sum <= avail {
-        return natural;
+        return Some(natural);
     }
-    // Scale down proportionally, then fix remainder; floor at 1.
     let mut widths: Vec<usize> = natural
         .iter()
-        .map(|&n| ((n * avail) / sum).max(1))
+        .enumerate()
+        .map(|(i, &n)| {
+            let scaled = ((n * avail) / sum).max(1);
+            scaled.max(mins[i])
+        })
         .collect();
     let mut used: usize = widths.iter().sum();
     while used > avail {
         if let Some((i, _)) = widths
             .iter()
             .enumerate()
-            .filter(|(_, w)| **w > 1)
+            .filter(|(i, w)| **w > mins[*i])
             .max_by_key(|(_, w)| **w)
         {
             widths[i] -= 1;
@@ -1288,32 +1434,90 @@ fn fair_share_widths(rows: &[&[String]], cols: usize, total_width: usize) -> Vec
             break;
         }
     }
-    widths
+    Some(widths)
 }
 
-fn format_table_row(row: &[String], widths: &[usize]) -> String {
-    let mut out = String::from("│");
-    for (cell, &w) in row.iter().zip(widths.iter()) {
-        let clipped = truncate_width(cell, w);
-        let pad = w.saturating_sub(clipped.width());
-        // Always one leading and one trailing space inside the cell.
-        let _ = write!(out, " {clipped}{} │", " ".repeat(pad));
+fn wrap_cell(cell: &str, width: usize) -> Vec<String> {
+    if width == 0 {
+        return vec![String::new()];
+    }
+    if cell.is_empty() {
+        return vec![String::new()];
+    }
+    let mut lines = Vec::new();
+    let mut rest = cell.to_owned();
+    while !rest.is_empty() {
+        if rest.width() <= width {
+            lines.push(std::mem::take(&mut rest));
+            break;
+        }
+        let (take, next) = split_at_word_boundary(&rest, width);
+        if take.is_empty() {
+            let (hard, next2) = split_at_width(&rest, width);
+            lines.push(hard);
+            rest = next2;
+        } else {
+            lines.push(take);
+            rest = next;
+        }
+    }
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    lines
+}
+
+fn format_table_row_wrapped(row: &[String], widths: &[usize]) -> Vec<String> {
+    let wrapped: Vec<Vec<String>> = row
+        .iter()
+        .zip(widths.iter())
+        .map(|(cell, &w)| wrap_cell(cell, w))
+        .collect();
+    let height = wrapped.iter().map(Vec::len).max().unwrap_or(1).max(1);
+    let mut out_lines = Vec::with_capacity(height);
+    for r in 0..height {
+        let mut out = String::from("│");
+        for (ci, &w) in widths.iter().enumerate() {
+            let part = wrapped
+                .get(ci)
+                .and_then(|c| c.get(r))
+                .map_or("", String::as_str);
+            let pad = w.saturating_sub(part.width());
+            let _ = write!(out, " {part}{} │", " ".repeat(pad));
+        }
+        out_lines.push(out);
+    }
+    out_lines
+}
+
+fn format_table_border(widths: &[usize], left: char, mid: char, right: char) -> String {
+    let mut out = String::from(left);
+    for (i, &w) in widths.iter().enumerate() {
+        out.push_str(&"─".repeat(w.saturating_add(2)));
+        if i + 1 == widths.len() {
+            out.push(right);
+        } else {
+            out.push(mid);
+        }
     }
     out
+}
+
+fn format_table_top(widths: &[usize]) -> String {
+    format_table_border(widths, '┌', '┬', '┐')
+}
+
+fn format_table_bottom(widths: &[usize]) -> String {
+    format_table_border(widths, '└', '┴', '┘')
 }
 
 fn format_table_separator(widths: &[usize]) -> String {
     // Match data row: leading space + w content + trailing space.
-    let mut out = String::from("├");
-    for (i, &w) in widths.iter().enumerate() {
-        out.push_str(&"─".repeat(w.saturating_add(2)));
-        if i + 1 == widths.len() {
-            out.push('┤');
-        } else {
-            out.push('┼');
-        }
-    }
-    out
+    format_table_border(widths, '├', '┼', '┤')
+}
+
+fn format_table_row_sep(widths: &[usize]) -> String {
+    format_table_border(widths, '├', '┼', '┤')
 }
 
 #[cfg(test)]

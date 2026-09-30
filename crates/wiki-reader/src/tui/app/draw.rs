@@ -62,6 +62,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         frame,
         viewer_area,
         app.doc.lines(),
+        app.doc.styled_lines(),
         app.doc.link_spans(),
         highlights,
         gutter,
@@ -280,13 +281,6 @@ fn block_action_status(app: &App, target: &str) -> String {
                 "collapse frontmatter".into()
             } else {
                 "expand frontmatter".into()
-            }
-        }
-        wiki_reader_render::BlockActionKind::ToggleTable => {
-            if app.expanded_blocks.contains(&id) {
-                "collapse table".into()
-            } else {
-                "expand table".into()
             }
         }
         wiki_reader_render::BlockActionKind::CopyCode => "copy code".into(),

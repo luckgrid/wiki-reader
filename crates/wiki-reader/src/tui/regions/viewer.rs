@@ -10,7 +10,7 @@ use crate::tui::highlight::HlSpan;
 use crate::tui::hit::{Hit, HitMap};
 use crate::tui::theme::Theme;
 use crate::tui::viewer_doc::{FocusItem, FocusTarget};
-use wiki_reader_render::{LinkClass, LinkId, LinkSpan};
+use wiki_reader_render::{LinkClass, LinkId, LinkSpan, StyleKind, StyledLine};
 
 /// Draw lines into the viewer and register link + line hits.
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -18,6 +18,7 @@ pub fn draw(
     frame: &mut Frame<'_>,
     area: Rect,
     lines: &[String],
+    styled: Option<&[StyledLine]>,
     link_spans: &[LinkSpan],
     highlights: Option<&[Vec<HlSpan>]>,
     show_gutter: bool,
@@ -135,6 +136,21 @@ pub fn draw(
             if spans.len() == usize::from(show_gutter) {
                 spans.push(Span::styled(String::new(), base));
             }
+        } else if let Some(styled_lines) = styled
+            && let Some(sl) = styled_lines.get(src_idx)
+        {
+            spans.extend(paint_styled_line(
+                sl,
+                line_no,
+                text_width,
+                link_spans,
+                focused_link,
+                focused_block_cols,
+                base,
+                focus_style,
+                theme,
+                line_no == cursor_line,
+            ));
         } else {
             let raw = lines.get(src_idx).map_or("", String::as_str);
             let display: String = raw.chars().take(text_width).collect();
@@ -164,6 +180,120 @@ pub fn draw(
     }
 
     frame.render_widget(Paragraph::new(out_lines), inner_area);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn paint_styled_line(
+    sl: &StyledLine,
+    line_no: u32,
+    text_width: usize,
+    link_spans: &[LinkSpan],
+    focused_link: Option<LinkId>,
+    focused_block_cols: Option<(u16, u16)>,
+    base: Style,
+    focus_style: Style,
+    theme: &Theme,
+    on_cursor: bool,
+) -> Vec<Span<'static>> {
+    let mut ranges: Vec<(u16, u16, Option<LinkClass>, bool)> = Vec::new();
+    for span in link_spans {
+        for &(seg_line, cols) in &span.segments {
+            if seg_line == line_no && cols.0 < cols.1 {
+                let is_focus = focused_link == Some(span.id);
+                ranges.push((cols.0, cols.1, Some(span.class), is_focus));
+            }
+        }
+    }
+    if let Some((c0, c1)) = focused_block_cols
+        && c0 < c1
+    {
+        ranges.push((c0, c1, None, true));
+    }
+    ranges.sort_by_key(|r| r.0);
+
+    let style_at = |col: u16, kind: StyleKind| -> Style {
+        let mut st = theme.style_kind(kind);
+        if on_cursor {
+            st = st.bg(theme.cursor_line);
+        } else if !matches!(
+            kind,
+            StyleKind::CodeBlock | StyleKind::CodeLang | StyleKind::InlineCode | StyleKind::Quote
+        ) {
+            st = st.patch(base);
+        }
+        for &(c0, c1, class, is_focus) in &ranges {
+            if col >= c0 && col < c1 {
+                st = if is_focus {
+                    focus_style
+                } else if let Some(class) = class {
+                    theme.link_class(class)
+                } else {
+                    st
+                };
+                if on_cursor {
+                    st = st.bg(theme.cursor_line);
+                }
+                break;
+            }
+        }
+        st
+    };
+
+    let mut spans = Vec::new();
+    let mut col = 0u16;
+    let mut buf = String::new();
+    let mut style = base;
+    let flush = |buf: &mut String, style: Style, spans: &mut Vec<Span<'static>>| {
+        if !buf.is_empty() {
+            spans.push(Span::styled(std::mem::take(buf), style));
+        }
+    };
+
+    for run in &sl.spans {
+        if usize::from(col) >= text_width {
+            break;
+        }
+        for ch in run.text.chars() {
+            if usize::from(col) >= text_width {
+                break;
+            }
+            let w = u16::try_from(Span::raw(ch.to_string()).width())
+                .unwrap_or(1)
+                .max(1);
+            let st = style_at(col, run.kind);
+            if buf.is_empty() {
+                style = st;
+            } else if st != style {
+                flush(&mut buf, style, &mut spans);
+                style = st;
+            }
+            buf.push(ch);
+            col = col.saturating_add(w);
+        }
+    }
+    flush(&mut buf, style, &mut spans);
+
+    // Full-row code/quote shading (glyphs alone leave a ragged right edge).
+    if !on_cursor {
+        let shade = sl.spans.iter().find_map(|s| match s.kind {
+            StyleKind::CodeBlock | StyleKind::CodeLang | StyleKind::InlineCode => {
+                Some(theme.code_bg)
+            }
+            StyleKind::Quote => Some(theme.quote_bar),
+            _ => None,
+        });
+        if let Some(bg) = shade {
+            let pad = text_width.saturating_sub(usize::from(col));
+            if pad > 0 {
+                spans.push(Span::styled(" ".repeat(pad), Style::default().bg(bg)));
+            }
+        }
+    }
+
+    if spans.is_empty() {
+        spans.push(Span::styled(String::new(), base));
+    }
+    spans
 }
 
 #[allow(clippy::too_many_arguments)] // link + block focus overlays on one pass
