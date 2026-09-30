@@ -2,13 +2,14 @@
 source: crates/wiki-reader/src/tui/app/tests.rs
 expression: out
 ---
- Readme                                                 ◫ ✕ 
+ Readme                                               ○ ◫ ✕ 
 ┌ Help (? or Esc to close) ────────────────────────────────┐
 │── Global Alt+← / Alt+b  Back                             │
 │Alt+→ / Alt+f  Forward                                    │
 │q              Quit                                       │
 │b              Toggle side nav                            │
 │r              Toggle raw / rendered                      │
+│◈              Toggle syntax / formatted (eye)            │
 │e              Open in editor                             │
 │y              Copy page path                             │
 │Y              Copy focused link target                   │
@@ -23,6 +24,5 @@ expression: out
 │]              Next page                                  │
 │Backspace      Back                                       │
 │Shift+←        Focus side nav                             │
-│Shift+→        Focus viewer                               │
 └──────────────────────────────────────────────────────────┘
  VIEWER · README.md · L1 11% · 29w · 1m · 2026-09-28

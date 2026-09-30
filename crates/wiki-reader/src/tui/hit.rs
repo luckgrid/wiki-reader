@@ -19,6 +19,8 @@ pub enum Hit {
     Breadcrumb(PageKey),
     /// Header ◫.
     NavToggle,
+    /// Header eye (syntax ↔ formatted).
+    ViewToggle,
     /// Header ✕.
     Quit,
     /// Viewer footer prev.
@@ -90,6 +92,7 @@ impl HitMap {
         match hit {
             Hit::Quit => Action::Quit,
             Hit::NavToggle => Action::ToggleNav,
+            Hit::ViewToggle => Action::ToggleFormattedView,
             Hit::Prev => Action::PrevPage,
             Hit::Next => Action::NextPage,
             Hit::Breadcrumb(key) => Action::GoToPage(key.clone()),

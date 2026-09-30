@@ -129,6 +129,8 @@ pub struct App {
     pub(crate) clipboard: Box<dyn ClipboardWriter>,
     /// Diagram tier preference from config.
     diagram_mode: wiki_reader_core::config::DiagramMode,
+    /// Formatted (marker-free) rendered view (ADR-0012).
+    pub formatted_view: bool,
     /// When false, skip session load/save (tests).
     persist_session: bool,
     /// Last successful session save (debounce).
@@ -249,6 +251,7 @@ impl App {
             expanded_for_page: None,
             clipboard: Box::new(Osc52Clipboard),
             diagram_mode: config.diagrams,
+            formatted_view: false,
             persist_session,
             session_saved_at: None,
             session_dirty: false,
@@ -278,6 +281,7 @@ impl App {
                 app.nav_user_override = true;
             }
             app.nav_width = loaded.state.nav_width;
+            app.formatted_view = loaded.state.formatted_view;
         }
         let page = app.navigator.tab().current().page.clone();
         app.apply_effects(vec![
@@ -302,6 +306,7 @@ impl App {
             focus,
             Some(self.nav_visible),
             self.nav_width,
+            self.formatted_view,
         );
         if wiki_reader_core::session::save(self.provider.root(), &state).is_ok() {
             self.session_saved_at = Some(Instant::now());
@@ -376,6 +381,7 @@ impl App {
         RenderOpts {
             expanded: self.expanded_blocks.clone(),
             diagram_mode: self.diagram_mode,
+            formatted: self.formatted_view,
         }
     }
 
@@ -562,6 +568,7 @@ impl App {
                 self.message.clear();
             }
             Action::ToggleViewMode => self.toggle_view_mode(),
+            Action::ToggleFormattedView => self.toggle_formatted_view(),
             Action::OpenInEditor => self.open_in_editor(),
             Action::CopyPagePath => self.copy_page_path(),
             Action::CopyLinkTarget => self.copy_link_target(),
@@ -686,6 +693,7 @@ impl App {
             | Hit::NavGroupToggle(_)
             | Hit::NavSearchRow
             | Hit::NavToggle
+            | Hit::ViewToggle
             | Hit::Quit
             | Hit::ViewerLine(_)
             | Hit::SearchDismiss
@@ -1050,6 +1058,18 @@ impl App {
         };
         self.navigator.set_view_mode(new_mode);
         self.reload_page_keeping_view(&key, source, source_scroll);
+    }
+
+    fn toggle_formatted_view(&mut self) {
+        self.formatted_view = !self.formatted_view;
+        self.note_session_change();
+        // Only re-layout when currently in rendered mode.
+        if matches!(self.navigator.tab().current().mode, ViewMode::Rendered) {
+            let key = self.navigator.tab().current().page.clone();
+            let source = self.doc.source_cursor(self.cursor_line);
+            let source_scroll = self.doc.source_cursor(self.scroll);
+            self.reload_page_keeping_view(&key, source, source_scroll);
+        }
     }
 
     /// Open the current page in `$VISUAL`/`$EDITOR` at the cursor's source line.

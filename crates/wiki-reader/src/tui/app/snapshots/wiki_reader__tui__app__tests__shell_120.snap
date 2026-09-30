@@ -2,7 +2,7 @@
 source: crates/wiki-reader/src/tui/app/tests.rs
 expression: out
 ---
- Readme                                                                                                             ◫ ✕ 
+ Readme                                                                                                           ○ ◫ ✕ 
 ┌Nav─────────────────────────┐┌Viewer──────────────────────────────────────────────────────────────────────────────────┐
 │                            ││▌── frontmatter ▶ ──                                                                    │
 │ ⌕ Search…                  ││                                                                                        │

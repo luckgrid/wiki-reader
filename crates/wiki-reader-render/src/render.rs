@@ -144,6 +144,8 @@ pub struct RenderOpts {
     pub expanded: std::collections::HashSet<u32>,
     /// Diagram render preference (ADR-0004).
     pub diagram_mode: wiki_reader_core::config::DiagramMode,
+    /// Drop markdown markers at push time (ADR-0012 formatted view).
+    pub formatted: bool,
 }
 
 impl Default for RenderOpts {
@@ -151,6 +153,7 @@ impl Default for RenderOpts {
         Self {
             expanded: std::collections::HashSet::new(),
             diagram_mode: wiki_reader_core::config::DiagramMode::Auto,
+            formatted: false,
         }
     }
 }
@@ -193,6 +196,7 @@ pub fn render_with(
     let mut state = LayoutState::new(w, body_line_offset, from, index);
     state.expanded.clone_from(&opts.expanded);
     state.diagram_mode = opts.diagram_mode;
+    state.formatted = opts.formatted;
 
     if parsed.frontmatter.kind.is_some()
         || !parsed.frontmatter.props.is_empty()
@@ -284,6 +288,8 @@ struct LayoutState<'a> {
     link_id: u32,
     expanded: std::collections::HashSet<u32>,
     diagram_mode: wiki_reader_core::config::DiagramMode,
+    /// Hide markdown markers (ADR-0012).
+    formatted: bool,
 }
 
 struct LinkBuild {
@@ -335,6 +341,7 @@ impl<'a> LayoutState<'a> {
             link_id: 0,
             expanded: std::collections::HashSet::new(),
             diagram_mode: wiki_reader_core::config::DiagramMode::Auto,
+            formatted: false,
         }
     }
 
@@ -398,8 +405,15 @@ impl<'a> LayoutState<'a> {
                 self.heading_level = Some(lv);
                 self.heading_text.clear();
                 self.style_stack.push(StyleKind::Heading(lv));
-                let hashes = "#".repeat(usize::from(lv));
-                self.push_span(format!("{hashes} "), StyleKind::Heading(lv), src);
+                if self.formatted {
+                    // Extra top gap for H1/H2 so levels read without hashes.
+                    if lv <= 2 && !self.styled.is_empty() {
+                        self.ensure_block_gap(src);
+                    }
+                } else {
+                    let hashes = "#".repeat(usize::from(lv));
+                    self.push_span(format!("{hashes} "), StyleKind::Heading(lv), src);
+                }
             }
             Tag::BlockQuote(kind) => {
                 self.ensure_block_gap(src);
@@ -434,7 +448,13 @@ impl<'a> LayoutState<'a> {
                     // Body accumulated; paint on TagEnd via text/source tier.
                     return;
                 }
-                let label = if self.code_fence_lang.is_empty() {
+                let label = if self.formatted {
+                    if self.code_fence_lang.is_empty() {
+                        "── code ──".into()
+                    } else {
+                        format!("── {} ──", self.code_fence_lang)
+                    }
+                } else if self.code_fence_lang.is_empty() {
                     "```".into()
                 } else {
                     format!("```{}", self.code_fence_lang)
@@ -530,8 +550,11 @@ impl<'a> LayoutState<'a> {
                 let rendered = u32::try_from(self.styled.len()).unwrap_or(0);
                 let slug = unique_slug(&github_slug(&self.heading_text), &mut self.used_slugs);
                 self.headings.push((slug, rendered.saturating_add(1)));
-                let _ = level;
                 self.commit_line(src);
+                if self.formatted && level == 1 {
+                    self.push_span("─".repeat(self.width.min(40)), StyleKind::Rule, src);
+                    self.commit_line(src);
+                }
                 self.heading_text.clear();
             }
             TagEnd::BlockQuote(_) => {
@@ -578,8 +601,10 @@ impl<'a> LayoutState<'a> {
                     return;
                 }
                 // Closing fence maps to its own source line (range end), not the open.
-                self.push_span("```".into(), StyleKind::CodeBlock, close_src);
-                self.commit_line(close_src);
+                if !self.formatted {
+                    self.push_span("```".into(), StyleKind::CodeBlock, close_src);
+                    self.commit_line(close_src);
+                }
                 if let Some(action) = self
                     .block_actions
                     .iter_mut()
@@ -721,7 +746,11 @@ impl<'a> LayoutState<'a> {
     }
 
     fn inline_code(&mut self, t: &CowStr<'_>, src: u32) {
-        let s = format!("`{t}`");
+        let s = if self.formatted {
+            t.to_string()
+        } else {
+            format!("`{t}`")
+        };
         if let Some(lb) = self.in_link.as_mut() {
             lb.text.push_str(&s);
         }

@@ -59,7 +59,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 | P2-21 | Search overlay layout and scroll | — | done | #72; larger pane, scroll + jumps, Files\|Content rename, styled results |
 | P2-22 | Keyboard flow: nav to viewer to footer | — | done | #70; `→` opens page + focuses viewer; `f` focuses footer; sticky footer focus; ADR-0007 |
 | P2-23 | Markdown syntax view: element styling (priority) | D1 | done | 09062f7 |
-| P2-24a | Formatted-text view and eye toggle | D1 / C1 | todo | after P2-23; see [P2-24a scope](#p2-24a-scope) |
+| P2-24a | Formatted-text view and eye toggle | D1 / C1 | done | ADR-0012; eye toggles syntax↔formatted; `r` stays Raw↔Rendered |
 | P2-24b | Image diagrams and images | D1 | todo | after P2-24a; see [P2-24b scope](#p2-24b-scope). May slip to Phase 3 without blocking exit |
 
 ## P2-23 scope
