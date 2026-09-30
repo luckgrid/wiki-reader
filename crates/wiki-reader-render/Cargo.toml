@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 description = "Markdown to RenderedDoc for wiki-reader"
 rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "../../README.md"
 
 [dependencies]
 mermaid-text = { workspace = true }

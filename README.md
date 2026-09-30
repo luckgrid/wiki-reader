@@ -28,12 +28,36 @@ Existing terminal markdown tools behave like editors or file browsers: opening a
 
 ## Status
 
-Phase 1 is closed. Phase 2 dogfood clock started 2026-09-29 on `~/Workspaces/workstation`. Next Phase 3 work is [P3-08 Install](wiki/roadmap/phase-3-alpha.md). The reader shell, backlinks, heading jumps, and `$EDITOR` support are shipped. Start at [wiki/README.md](wiki/README.md) and see the [roadmap](wiki/roadmap/README.md) for the next tasks.
+Phase 1 is closed. Phase 2 dogfood clock started 2026-09-29 on `~/Workspaces/workstation`. P3-08 install path and release binaries are in this change; later Phase 3 rows wait on dogfood notes. The reader shell, backlinks, heading jumps, and `$EDITOR` support are shipped. Start at [wiki/README.md](wiki/README.md) and see the [roadmap](wiki/roadmap/README.md) for the next tasks.
+
+## Install
+
+From git (supported today):
+
+```bash
+cargo install --locked --git https://github.com/luckgrid/wiki-reader wiki-reader
+```
+
+Release binaries (macOS arm64 / x86_64, Linux x86_64) ship on `v*` tags under [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases). Download the matching `.tar.gz`, verify the checksum, and put `wiki-reader` on your `PATH`:
+
+```bash
+shasum -a 256 -c wiki-reader-vX.Y.Z-<platform>.tar.gz.sha256
+tar xf wiki-reader-vX.Y.Z-<platform>.tar.gz
+```
+
+crates.io packaging metadata is prepared (`version` on path deps, repository/readme); the crates are not published yet.
 
 ## Quickstart
 
 ```bash
 cargo run -p wiki-reader -- fixtures/worked-example
+# q or Esc to quit
+```
+
+Or after install:
+
+```bash
+wiki-reader fixtures/worked-example
 # q or Esc to quit
 ```
 

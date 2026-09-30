@@ -18,6 +18,23 @@ How to pick up work in this repo.
 - Edition 2024; `rustfmt.toml` sets `style_edition = "2024"`.
 - Builds and CI use `--locked` against the committed `Cargo.lock`.
 
+## Install
+
+Supported path today — install the binary from git:
+
+```bash
+cargo install --locked --git https://github.com/luckgrid/wiki-reader wiki-reader
+```
+
+Tagged releases attach platform tarballs (macOS arm64 / x86_64, Linux x86_64) plus SHA256 checksums. Verify then unpack:
+
+```bash
+shasum -a 256 -c wiki-reader-vX.Y.Z-<platform>.tar.gz.sha256
+tar xf wiki-reader-vX.Y.Z-<platform>.tar.gz
+```
+
+crates.io metadata is prepared on the publishable crates; do not `cargo publish` until that is an intentional follow-up. `wiki-reader-tools` stays `publish = false`.
+
 ## Checks
 
 Local mirror of CI (run before every push):
