@@ -15,10 +15,8 @@ pub struct Regions {
     pub header: Rect,
     /// Side nav (zero-sized when hidden).
     pub side_nav: Rect,
-    /// Viewer body (above footer).
+    /// Viewer pane (prev/next live on the bottom border).
     pub viewer: Rect,
-    /// Sticky viewer footer (prev/next).
-    pub footer: Rect,
     /// Status content row (gaps above/below are blank when tall).
     pub status: Rect,
     /// Whether the nav is an overlay (narrow terminal).
@@ -133,16 +131,12 @@ pub fn split(area: Rect, nav_visible: bool) -> Regions {
         )
     };
 
-    let viewer_split = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(1)])
-        .split(viewer_col);
+    let viewer = viewer_col;
 
     Regions {
         header,
         side_nav,
-        viewer: viewer_split[0],
-        footer: viewer_split[1],
+        viewer,
         status,
         nav_overlay,
     }

@@ -28,6 +28,9 @@ pub fn draw(
     match_highlight: Option<u32>,
     focused: bool,
     focused_item: Option<&FocusItem>,
+    prev_label: Option<&str>,
+    next_label: Option<&str>,
+    footer_focus: Option<FocusTarget>,
     theme: &Theme,
     hits: &mut HitMap,
 ) {
@@ -37,12 +40,23 @@ pub fn draw(
 
     hits.push(area, Hit::FocusViewer);
 
-    let inner = Block::default()
+    let footer = crate::tui::regions::footer::titles(
+        area,
+        prev_label,
+        next_label,
+        footer_focus,
+        theme,
+        hits,
+    );
+
+    let block = Block::default()
         .borders(Borders::ALL)
         .border_style(theme.border(focused))
-        .title("Viewer");
-    let inner_area = inner.inner(area);
-    frame.render_widget(inner, area);
+        .title("Viewer")
+        .title_bottom(footer.left)
+        .title_bottom(footer.right);
+    let inner_area = block.inner(area);
+    frame.render_widget(block, area);
 
     // Left pad reserves a column for the P2-19 cursor marker.
     let content = Rect {

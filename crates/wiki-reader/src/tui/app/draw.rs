@@ -7,7 +7,7 @@ use crate::tui::focus::FocusPane;
 use crate::tui::layout;
 use crate::tui::page_doc::PageDoc;
 use crate::tui::regions::status::StatusModel;
-use crate::tui::regions::{footer, header, side_nav, status, tabs, viewer};
+use crate::tui::regions::{header, side_nav, status, tabs, viewer};
 use crate::tui::viewer_doc::{FocusTarget, ViewerDoc, format_target_with_provider};
 
 /// Draw all regions and rebuild the hit map.
@@ -61,6 +61,18 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         crate::tui::page_doc::PageDoc::Raw(d) => (Some(d.highlights.as_slice()), true),
         crate::tui::page_doc::PageDoc::Rendered(_) => (None, false),
     };
+    let prev = nav.tree.prev(&page);
+    let next = nav.tree.next(&page);
+    let prev_label = prev
+        .as_ref()
+        .map(|k| wiki_reader_core::nav::page_label(app.navigator.index(), k));
+    let next_label = next
+        .as_ref()
+        .map(|k| wiki_reader_core::nav::page_label(app.navigator.index(), k));
+    let footer_focus = focus_item.as_ref().and_then(|it| match it.kind {
+        FocusTarget::FooterPrev | FocusTarget::FooterNext => Some(it.kind),
+        FocusTarget::Link | FocusTarget::BlockAction => None,
+    });
     viewer::draw(
         frame,
         viewer_area,
@@ -74,25 +86,6 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         app.match_highlight,
         app.focus == FocusPane::Viewer,
         focus_item.as_ref(),
-        &theme,
-        &mut app.hit_map,
-    );
-
-    let prev = nav.tree.prev(&page);
-    let next = nav.tree.next(&page);
-    let prev_label = prev
-        .as_ref()
-        .map(|k| wiki_reader_core::nav::page_label(app.navigator.index(), k));
-    let next_label = next
-        .as_ref()
-        .map(|k| wiki_reader_core::nav::page_label(app.navigator.index(), k));
-    let footer_focus = focus_item.as_ref().and_then(|it| match it.kind {
-        FocusTarget::FooterPrev | FocusTarget::FooterNext => Some(it.kind),
-        FocusTarget::Link | FocusTarget::BlockAction => None,
-    });
-    footer::draw(
-        frame,
-        regions.footer,
         prev_label.as_deref(),
         next_label.as_deref(),
         footer_focus,

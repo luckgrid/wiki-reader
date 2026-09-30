@@ -239,6 +239,41 @@ fn nav_toggle_hides_at_120_and_fresh_60_has_no_overlay() {
 }
 
 #[test]
+fn footer_prev_next_clicks_change_page() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let _ = draw_app(&mut app, 80, 24);
+    let next = app
+        .hit_map
+        .entries()
+        .iter()
+        .rev()
+        .find(|(_, h)| matches!(h, Hit::Next))
+        .map(|(r, _)| (r.x, r.y))
+        .expect("Next hit");
+    let before = app.navigator.tab().current().page.clone();
+    let expected = app.navigator.nav().tree.next(&before).expect("has next");
+    if let Some(a) = click_at(&mut app, next.0, next.1) {
+        app.update(a);
+    }
+    assert_eq!(app.navigator.tab().current().page, expected);
+
+    let _ = draw_app(&mut app, 80, 24);
+    let prev = app
+        .hit_map
+        .entries()
+        .iter()
+        .rev()
+        .find(|(_, h)| matches!(h, Hit::Prev))
+        .map(|(r, _)| (r.x, r.y))
+        .expect("Prev hit");
+    if let Some(a) = click_at(&mut app, prev.0, prev.1) {
+        app.update(a);
+    }
+    assert_eq!(app.navigator.tab().current().page, before);
+}
+
+#[test]
 fn mouse_and_key_prev_agree_on_history() {
     let root = fixture();
     let mut via_key = App::new(&root).unwrap();
