@@ -21,10 +21,13 @@ jobs:
         include:
           - os: ubuntu-latest
             name: linux-x86_64
+            target: ""
           - os: macos-14
             name: macos-arm64
-          - os: macos-13
+            target: ""
+          - os: macos-14
             name: macos-x86_64
+            target: x86_64-apple-darwin
 
     steps:
       - uses: actions/checkout@v4
@@ -32,12 +35,23 @@ jobs:
       - name: Install toolchain
         run: rustup toolchain install
 
+      - name: Add cross target
+        if: matrix.target != ''
+        run: rustup target add ${{ matrix.target }}
+
       - uses: Swatinem/rust-cache@v2
         with:
           key: release-${{ matrix.name }}
 
       - name: Build
-        run: cargo build --release --locked -p wiki-reader
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          if [[ -n "$TARGET" ]]; then
+            cargo build --release --locked -p wiki-reader --target "$TARGET"
+          else
+            cargo build --release --locked -p wiki-reader
+          fi
 
       - name: Package
         shell: bash
@@ -45,6 +59,7 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
           MATRIX_NAME: ${{ matrix.name }}
+          TARGET: ${{ matrix.target }}
         run: |
           if [[ "$REF_TYPE" == "tag" ]]; then
             ver="$REF_NAME"
@@ -53,7 +68,12 @@ jobs:
           fi
           name="wiki-reader-${ver}-${MATRIX_NAME}"
           mkdir -p "dist/${name}"
-          cp target/release/wiki-reader "dist/${name}/"
+          if [[ -n "$TARGET" ]]; then
+            bin="target/${TARGET}/release/wiki-reader"
+          else
+            bin="target/release/wiki-reader"
+          fi
+          cp "$bin" "dist/${name}/"
           cp LICENSE-MIT LICENSE-APACHE "dist/${name}/"
           tar -C dist -czf "dist/${name}.tar.gz" "${name}"
           (cd dist && shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256")
