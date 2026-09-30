@@ -18,9 +18,9 @@ All P0/P1 acceptance criteria in [product spec](../product/spec.md) pass; two we
 
 ## Dogfood notes (operator)
 
-Phase 2 stays `active` through two weeks of real use on `~/Workspaces/workstation`. The two-week clock starts when you say so. Record anything that bites here (date + one line); feed that into Phase 3 scoping.
+Phase 2 stays `active` through two weeks of real use on a real collection. The two-week clock starts when you say so. Record anything that bites here (date + one line); feed that into Phase 3 scoping.
 
-- 2026-09-29: clock started on ~/Workspaces/workstation
+- 2026-09-29: clock started on a real collection
 
 ## Tasks
 

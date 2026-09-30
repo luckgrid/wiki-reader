@@ -19,7 +19,7 @@ related: []
 
 - v1 ships the reader: tree, reader, header, footer, sidebar search/outline, working links, and history.
 - The context engine and `--json` CLI move to v2, alongside a right-hand widget slot.
-- `wiki-reader-core` **still has no terminal dependencies**. Index, link resolution, nav order, and search live there, so v2 widgets, a CLI, or a uwiki provider can be added without touching the UI.
+- `wiki-reader-core` **still has no terminal dependencies**. Index, link resolution, nav order, and search live there, so v2 widgets, a CLI, or an external index provider can be added without touching the UI.
 
 ## Consequences
 

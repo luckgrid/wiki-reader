@@ -16,10 +16,10 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 
 ```text
 ┌ Header (full width) ─────────────────────────────────────────────────────────┐
-│ Luckgrid Wiki › Architecture › Design System › Token Projection       ◫   ✕ │
+│ Project Wiki › Architecture › Design System › Token Projection       ◫   ✕ │
 ├ Side nav ────────────────────┬ Viewer ───────────────────────────────────────┤
 │ ⌕ Search…               /    │ # Token Projection                            │
-│ ● Luckgrid Wiki              │                                               │
+│ ● Project Wiki               │                                               │
 │ ▾ Architecture               │ The reusable adapter stays semantic-only; see │
 │     Architecture Overview    │ [ADR-0003](../decisions/0003.md) for why.     │
 │   ▾ Design System            │                                               │
@@ -37,7 +37,7 @@ Five regions: **Header**, **Side nav**, **Viewer** (with its own sticky **Viewer
 
 ## Header (full width, 1 row)
 
-- **Left:** the root entry page's title, then the breadcrumb trail through side-nav groups to the current page. Example: `Luckgrid Wiki › Architecture › Design System › Token Projection`. Segments follow the **side nav hierarchy** (groups), not raw directories, so folded folders ([content model](content-model.md)) don't produce extra crumbs. Each segment is clickable and opens that group's landing page. The trail truncates from the middle with `…` when narrow, always keeping the root and current page.
+- **Left:** the root entry page's title, then the breadcrumb trail through side-nav groups to the current page. Example: `Project Wiki › Architecture › Design System › Token Projection`. Segments follow the **side nav hierarchy** (groups), not raw directories, so folded folders ([content model](content-model.md)) don't produce extra crumbs. Each segment is clickable and opens that group's landing page. The trail truncates from the middle with `…` when narrow, always keeping the root and current page.
 - **Right:** icon buttons. `◫` toggles the side nav, `✕` quits (saves session; same as `q`).
 - Future: optional back/forward buttons (`‹ ›`). Back/forward are keyboard-only in v1.
 

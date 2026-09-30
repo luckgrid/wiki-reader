@@ -43,7 +43,7 @@ Old outer terminals can emit press+release as duplicate bytes under kitty keyboa
 
 ## Real keyboard verification (Ghostty + herdr, macOS)
 
-Ran `cargo run -p wiki-reader --example keylog` and the reader on `~/Workspaces/workstation` in a herdr pane. Outer terminal = Ghostty via herdr 0.9.0. **Real keyboard** (not `send-keys`).
+Ran `cargo run -p wiki-reader --example keylog` and the reader on a real collection in a herdr pane. Outer terminal = Ghostty via herdr 0.9.0. **Real keyboard** (not `send-keys`).
 
 | Input | Result |
 |-------|--------|

@@ -1,15 +1,13 @@
 # wiki-reader
 
-> Working name. Rename freely; nothing depends on it yet.
-
 A terminal wiki reader for markdown collections. It browses like a documentation site (side nav, breadcrumbs, working links, back/forward, prev/next), sized to live in a herdr pane next to your work.
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ Luckgrid Wiki › Architecture › Design System › Token Projection       ◫   ✕ │
+│ Project Wiki › Architecture › Design System › Token Projection       ◫   ✕ │
 ├──────────────────────────────┬───────────────────────────────────────────────┤
 │ ⌕ Search…               /    │ # Token Projection                            │
-│ ● Luckgrid Wiki              │                                               │
+│ ● Project Wiki               │                                               │
 │ ▾ Architecture               │ The reusable adapter stays semantic-only; see │
 │     Architecture Overview    │ [ADR-0003](../decisions/0003.md) for why.     │
 │   ▾ Design System            │                                               │
@@ -28,7 +26,7 @@ Existing terminal markdown tools behave like editors or file browsers: opening a
 
 ## Status
 
-Phase 1 is closed. Phase 2 dogfood clock started 2026-09-29 on `~/Workspaces/workstation`. P3-08 install path and release binaries are shipped; later Phase 3 rows wait on dogfood notes. The reader shell, backlinks, heading jumps, and `$EDITOR` support are shipped. Start at [wiki/README.md](wiki/README.md) and see the [roadmap](wiki/roadmap/README.md) for the next tasks.
+Phase 1 is closed. Phase 2 dogfood clock started 2026-09-29 on a real collection. P3-08 install path and release binaries are shipped; later Phase 3 rows wait on dogfood notes. The reader shell, backlinks, heading jumps, and `$EDITOR` support are shipped. Start at [wiki/README.md](wiki/README.md) and see the [roadmap](wiki/roadmap/README.md) for the next tasks.
 
 ## Install
 
@@ -44,6 +42,7 @@ Release binaries (macOS arm64 / x86_64, Linux x86_64) ship on `v*` tags under [G
 shasum -a 256 -c wiki-reader-vX.Y.Z-<platform>.tar.gz.sha256
 tar xf wiki-reader-vX.Y.Z-<platform>.tar.gz
 ```
+
 
 crates.io packaging metadata is prepared (`version` on path deps, repository/readme); the crates are not published yet.
 

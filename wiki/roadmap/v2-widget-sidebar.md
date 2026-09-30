@@ -17,7 +17,7 @@ nav_order: 4
 | V2-01 | Right-hand widget slot with a small widget trait | | todo | read-only page + index; renders into a rect; registers hits |
 | V2-02 | First widgets: context engine, page metadata, backlinks graph summary | | todo | |
 | V2-03 | Agent CLI (`--json`) on the same core | | todo | |
-| V2-04 | Revisit uwiki as a provider and design-system theme mapping | | todo | |
+| V2-04 | Revisit external providers and theme-token mapping | | todo | |
 
 ## Related
 

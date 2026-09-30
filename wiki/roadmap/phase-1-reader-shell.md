@@ -14,7 +14,7 @@ Browse a real collection end-to-end with correct navigation. Time box: ≈ 1–2
 
 ## Exit criteria
 
-Open a real collection (dev machine: `~/Workspaces/workstation`; the uwiki repo doesn't exist yet), follow ten links in a row (revisits allowed), go back ten times, never see a tab.
+Open a real collection (e.g. any docs folder, or `fixtures/worked-example`), follow ten links in a row (revisits allowed), go back ten times, never see a tab.
 
 ## Escape hatch
 
@@ -87,8 +87,8 @@ All operator items are ticked (2026-09-29). Phase status is `done`. Automated co
 
 1. [x] `cargo run -p wiki-reader --example keylog` in a herdr pane on your real keyboard; tick the [P1-S1](spikes/p1-s1-herdr-input.md) spike note (P1-G).
    - Coverage: example exists; real keyboard 2026-09-29 in Ghostty + herdr (see spike for caveats → P1-R36).
-2. [x] On a real collection (`~/Workspaces/workstation`): follow ten links incl. anchors, go back ten times, confirm one tab and a restored cursor (revisits allowed; deepest page is ≤3 hops from README.md).
-   - Coverage: `link_chain_ten_links_ten_backs_one_tab` on `wiki/`; operator-confirmed on `~/Workspaces/workstation` 2026-09-29.
+2. [x] On a real collection (e.g. any docs folder, or `fixtures/worked-example`): follow ten links incl. anchors, go back ten times, confirm one tab and a restored cursor (revisits allowed; deepest page is ≤3 hops from README.md).
+   - Coverage: `link_chain_ten_links_ten_backs_one_tab` on `wiki/`; operator-confirmed on a real collection 2026-09-29.
 3. [x] Edit, rename, and delete a page from another terminal while it is open; confirm live reload / page-removed.
    - Coverage: watcher unit tests (atomic save, rename, delete); operator-confirmed 2026-09-29 on a scratch copy of `fixtures/worked-example` (edit, atomic save, rename, delete). Renaming the open page shows the page-removed placeholder; the nav row keeps its title label and now points at the renamed file.
 4. [x] Resize below and above 80 columns; nav overlay / layout stays usable.

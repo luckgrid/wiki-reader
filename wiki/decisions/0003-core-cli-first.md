@@ -23,5 +23,5 @@ The context engine is the riskiest, least-proven part. It must also serve agents
 
 - ➕ Context quality can be tested with snapshot tests and spot checks before any UI exists.
 - ➕ Agents get the same answers as the human.
-- ➕ A uwiki provider or MCP server can be added without touching the UI.
+- ➕ An external index provider or MCP server can be added without touching the UI.
 - ➖ Slight up-front structure cost for a POC.

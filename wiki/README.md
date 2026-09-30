@@ -20,7 +20,7 @@ Entrypoint for wiki-reader documentation: product intent, architecture, decision
 6. [Rendering](architecture/rendering.md) — markdown and diagrams.
 7. [Prior art & libraries](architecture/prior-art-and-libs.md) — Phase 0 findings and deps.
 8. [Roadmap](roadmap/README.md) — what to build next.
-9. [Integrations](architecture/integrations.md) — uwiki, design-system, herdr (non-blocking).
+9. [Integrations](architecture/integrations.md) — external providers, design tokens, herdr (non-blocking).
 10. [Context engine](architecture/context-engine.md) — deferred v2 draft.
 
 ## Decisions (ADRs)
@@ -52,6 +52,6 @@ nav_order: N   # optional; product and architecture pages use this for reading o
 ---
 ```
 
-`id` and `summary` are part of the product [content model](product/content-model.md). `title`, `updated`, and `related` follow the workstation wiki convention.
+`id` and `summary` are part of the product [content model](product/content-model.md). `title`, `updated`, and `related` follow common wiki frontmatter conventions.
 
 The body starts with `# Title`, a short summary paragraph, then sections. Optional `## Open questions` and `## Related` where they add value. Decisions live under `decisions/` and are immutable once accepted — supersede, don't edit; mechanical metadata or formatting fixes that don't change decision text are allowed.

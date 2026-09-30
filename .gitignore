@@ -5,3 +5,5 @@
 *.swo
 .idea/
 .vscode/
+.kilo/
+.rumdl_cache/
