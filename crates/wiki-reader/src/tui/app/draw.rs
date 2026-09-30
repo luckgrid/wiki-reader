@@ -137,6 +137,9 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     if let Some(overlay) = &app.search {
         draw_search_overlay(frame, area, overlay, &theme, &mut app.hit_map);
     }
+    if let Some(help) = &mut app.help {
+        draw_help_overlay(frame, area, help, &theme, &mut app.hit_map);
+    }
 }
 
 fn draw_search_overlay(
@@ -234,6 +237,79 @@ fn draw_search_overlay(
         hits.push(row, Hit::SearchResult(i));
     }
     frame.render_widget(List::new(items), list_rect);
+}
+
+fn draw_help_overlay(
+    frame: &mut Frame<'_>,
+    area: ratatui::layout::Rect,
+    help: &mut crate::tui::help_ui::HelpOverlay,
+    theme: &crate::tui::theme::Theme,
+    hits: &mut crate::tui::hit::HitMap,
+) {
+    use crate::tui::hit::Hit;
+    use crate::tui::regions::overlay::{centered_panel, clamp_scroll, ensure_visible};
+    use ratatui::style::Modifier;
+    use ratatui::text::{Line, Span};
+    use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+
+    hits.push(area, Hit::HelpDismiss);
+
+    let rect = centered_panel(area, 72, 22, 40, 10);
+    frame.render_widget(Clear, rect);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(theme.border(true))
+        .title(" Help (? or Esc to close) ");
+    let inner = block.inner(rect);
+    frame.render_widget(block, rect);
+    hits.push(rect, Hit::FocusViewer);
+
+    if inner.height == 0 || inner.width == 0 {
+        return;
+    }
+
+    let visible = usize::from(inner.height);
+    help.list_height = visible;
+    help.scroll = ensure_visible(help.selected, help.scroll, visible);
+    help.scroll = clamp_scroll(help.scroll, visible, help.rows.len());
+
+    for row_i in 0..visible {
+        let abs = help.scroll + row_i;
+        let Some(row) = help.rows.get(abs) else {
+            break;
+        };
+        let y = inner.y.saturating_add(u16::try_from(row_i).unwrap_or(0));
+        let row_rect = ratatui::layout::Rect {
+            x: inner.x,
+            y,
+            width: inner.width,
+            height: 1,
+        };
+        let selected = abs == help.selected;
+        let bg = if selected {
+            theme.cursor_line
+        } else {
+            theme.surface
+        };
+        let mut spans = Vec::new();
+        if let Some(sec) = row.section {
+            spans.push(Span::styled(
+                format!("── {sec} "),
+                theme.muted().add_modifier(Modifier::BOLD),
+            ));
+        }
+        let style = if selected {
+            theme.text().bg(bg).add_modifier(Modifier::BOLD)
+        } else {
+            theme.text().bg(bg)
+        };
+        spans.push(Span::styled(format!("{:<14}", row.keys), style));
+        spans.push(Span::styled(format!(" {}", row.help), theme.muted().bg(bg)));
+        frame.render_widget(Paragraph::new(Line::from(spans)), row_rect);
+        if row.action.is_some() {
+            hits.push(row_rect, Hit::HelpRow(abs));
+        }
+    }
 }
 
 fn focused_status_message(app: &App) -> String {

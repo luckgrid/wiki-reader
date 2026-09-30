@@ -55,7 +55,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 | P2-17 | Chrome spacing | — | done | 91f7c32 |
 | P2-18 | Viewer footer prev/next | — | done | cb8dbf3 |
 | P2-19 | Viewer cursor line and tab visibility | — | done | 6d7448d |
-| P2-20 | Help overlay (`?`) | — | todo | extract a real binding table from match-based `keymap.rs` first, then generate help from it; clickable keys; pulled forward from P3-06 |
+| P2-20 | Help overlay (`?`) | — | done | #71; binding table + clickable help; done-via P3-06 |
 | P2-21 | Search overlay layout and scroll | — | todo | larger pane, scrolls the full result list with jump to top/bottom, styled like markdown-reader; rename tabs to Content and Files (`SearchMode::Text` / `Pages`) |
 | P2-22 | Keyboard flow: nav to viewer to footer | — | done | #70; `→` opens page + focuses viewer; `f` focuses footer; sticky footer focus; ADR-0007 |
 | P2-23 | Markdown syntax view: element styling (priority) | D1 | done | 09062f7 |

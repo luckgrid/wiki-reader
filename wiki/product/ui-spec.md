@@ -63,6 +63,13 @@ Future: this search row becomes a proper **side nav header**, and a **side nav f
 - `Esc` or a click outside closes it and restores the previous focus and cursor.
 - The last query and results are kept for the session.
 
+## Help overlay panel
+
+- Opens with `?` from Normal mode. Generated from the binding table in `keymap.rs` (same source as the live map).
+- Sections: Global, Side nav, Viewer, Chords, Search overlay. Key labels show config overrides when set.
+- `↑`/`↓` / `PgUp`/`PgDn` / `g`/`G` scroll; `Enter` or a click on a row closes help and runs that action (display-only rows are not clickable).
+- `Esc` or `?` closes without an action. Click outside dismisses.
+
 ## Viewer (center)
 
 Rendered by default; `r` toggles raw. Both views share the **cursor line** (see Cursor model), so toggling keeps you on the same source line. The text column is capped at ~100 cols; tables and code may use the full width.

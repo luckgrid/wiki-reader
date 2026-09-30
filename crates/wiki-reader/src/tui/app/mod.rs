@@ -14,6 +14,7 @@ use super::action::Action;
 use super::clipboard::{ClipboardWriter, Osc52Clipboard};
 use super::editor::{EditorLauncher, SystemEditor};
 use super::focus::FocusPane;
+use super::help_ui::HelpOverlay;
 use super::hit::HitMap;
 use super::keymap::{Chord, InputMode};
 use super::opener::{Opener, SystemOpener};
@@ -98,6 +99,8 @@ pub struct App {
     pub(crate) key_overrides: std::collections::BTreeMap<String, String>,
     /// Search overlay (None when closed).
     pub search: Option<SearchOverlay>,
+    /// Help overlay (None when closed).
+    pub help: Option<HelpOverlay>,
     /// Optional filesystem watcher (live reload).
     pub(crate) watcher: Option<wiki_reader_core::watch::Watcher>,
     /// In-flight background index rebuild.
@@ -231,6 +234,7 @@ impl App {
             config_editor: config.editor.clone(),
             key_overrides: config.keys.clone(),
             search: None,
+            help: None,
             watcher,
             rebuild_rx: None,
             rebuild_pending: false,
@@ -462,6 +466,13 @@ impl App {
             }
             Action::OpenSearch => self.open_search(),
             Action::CloseSearch => self.close_search(false),
+            Action::OpenHelp => self.open_help(),
+            Action::CloseHelp => self.close_help(),
+            Action::HelpSelectDelta(d) => self.help_select(d),
+            Action::HelpPageDelta(d) => self.help_page(d),
+            Action::HelpHome => self.help_jump(true),
+            Action::HelpEnd => self.help_jump(false),
+            Action::HelpActivate => self.help_activate(None),
             Action::SearchChar(c) => self.search_type(c),
             Action::SearchBackspace => self.search_backspace(),
             Action::SearchSelectDelta(d) => self.search_select(d),
@@ -676,6 +687,8 @@ impl App {
             | Hit::Quit
             | Hit::ViewerLine(_)
             | Hit::SearchDismiss
+            | Hit::HelpDismiss
+            | Hit::HelpRow(_)
             | Hit::FocusNav
             | Hit::FocusViewer
             | Hit::Tab(_)
@@ -731,6 +744,7 @@ impl App {
     }
 
     fn open_search(&mut self) {
+        self.help = None;
         self.navigator.set_nav_stop(NavStop::Search);
         self.search = Some(SearchOverlay {
             query: String::new(),
@@ -763,6 +777,66 @@ impl App {
             self.ensure_cursor_visible();
         }
         self.message.clear();
+    }
+
+    fn open_help(&mut self) {
+        if self.search.is_some() {
+            self.close_search(false);
+        }
+        self.help = Some(HelpOverlay::new(&self.key_overrides));
+        self.input_mode = InputMode::Help;
+        self.message.clear();
+    }
+
+    fn close_help(&mut self) {
+        self.help = None;
+        if self.search.is_none() {
+            self.input_mode = InputMode::Normal;
+        }
+        self.message.clear();
+    }
+
+    fn help_select(&mut self, delta: i32) {
+        let Some(help) = self.help.as_mut() else {
+            return;
+        };
+        help.select_delta(delta);
+    }
+
+    fn help_page(&mut self, dir: i32) {
+        let step =
+            i32::try_from(self.help.as_ref().map_or(10, |h| h.list_height.max(1))).unwrap_or(10);
+        self.help_select(dir * step);
+    }
+
+    fn help_jump(&mut self, home: bool) {
+        let Some(help) = self.help.as_mut() else {
+            return;
+        };
+        help.selected = if home {
+            0
+        } else {
+            help.rows.len().saturating_sub(1)
+        };
+    }
+
+    pub(crate) fn help_activate(&mut self, index: Option<usize>) {
+        let Some(help) = self.help.as_ref() else {
+            return;
+        };
+        let i = index.unwrap_or(help.selected);
+        let Some(row) = help.rows.get(i) else {
+            return;
+        };
+        let Some(action) = row.action.clone() else {
+            return;
+        };
+        // Don't re-open help from a help row.
+        if matches!(action, Action::OpenHelp) {
+            return;
+        }
+        self.close_help();
+        self.update(action);
     }
 
     fn search_refresh(&mut self) {

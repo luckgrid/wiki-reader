@@ -22,10 +22,24 @@ pub enum Action {
     GoToPage(PageKey),
     /// Toggle a nav group.
     ToggleGroup(NodeId),
-    /// Activate the search overlay.
+    /// Activate search overlay.
     OpenSearch,
     /// Close search overlay without navigating.
     CloseSearch,
+    /// Open the help overlay (`?`).
+    OpenHelp,
+    /// Close the help overlay.
+    CloseHelp,
+    /// Move help selection.
+    HelpSelectDelta(i32),
+    /// Page help list (sign = direction).
+    HelpPageDelta(i32),
+    /// Jump help selection to top.
+    HelpHome,
+    /// Jump help selection to bottom.
+    HelpEnd,
+    /// Activate the selected help row (dispatch its action).
+    HelpActivate,
     /// Type a character into the search field.
     SearchChar(char),
     /// Backspace in search field.

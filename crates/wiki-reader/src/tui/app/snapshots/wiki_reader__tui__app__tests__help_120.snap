@@ -1,0 +1,28 @@
+---
+source: crates/wiki-reader/src/tui/app/tests.rs
+expression: out
+---
+ Readme                                                                                                             ◫ ✕ 
+┌Nav────────────────────┌ Help (? or Esc to close) ────────────────────────────────────────────┐───────────────────────┐
+│                       │── Global Alt+← / Alt+b  Back                                         │                       │
+│ ⌕ Search…             │Alt+→ / Alt+f  Forward                                                │                       │
+│                       │q              Quit                                                   │                       │
+│▌● Readme              │b              Toggle side nav                                        │                       │
+│   ▸ Readme            │r              Toggle raw / rendered                                  │                       │
+│   ▸ Decisions         │e              Open in editor                                         │                       │
+│                       │y              Copy page path                                         │turn via back when     │
+│                       │Y              Copy focused link target                               │                       │
+│                       │t              New tab                                                │                       │
+│                       │x              Close tab                                              │                       │
+│                       │/              Search                                                 │                       │
+│                       │Ctrl+k         Search                                                 │                       │
+│                       │?              Help                                                   │                       │
+│                       │n              Next search match                                      │                       │
+│                       │N              Previous search match                                  │                       │
+│                       │[              Previous page                                          │                       │
+│                       │]              Next page                                              │                       │
+│                       │Backspace      Back                                                   │                       │
+│                       │Shift+←        Focus side nav                                         │                       │
+│                       │Shift+→        Focus viewer                                           │                       │
+└───────────────────────└──────────────────────────────────────────────────────────────────────┘───────────────Readme ›┘
+ VIEWER · README.md · L1 12% · 29w · 1m · 2026-09-28
