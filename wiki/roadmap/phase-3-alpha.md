@@ -18,7 +18,7 @@ Start after Phase 1's real-keyboard / real-collection gate and Phase 2 dogfood n
 2. **P3-06 Help overlay (`?`)** — generated from the keymap table so it stays correct; clickable keys.
 3. **P3-07 Themes** — wire the stored `theme` config key to the semantic token table in `theme.rs`; ship dark/light presets. (R35 already warns when the key is set but inert.)
 4. **P3-01 / P3-02 / P3-04** — sticky section header, side nav header/footer regions, optional ‹ › header buttons.
-5. **P3-05 / P3-03** — link hover preview; nav label options (R35 already draws a dim ` (filename)` suffix for `title+filename`; full “alt text below” remains here).
+5. **P3-05 / P3-03** — link hover preview; nav label options (R35 already draws a dim `(filename)` suffix for `title+filename`; full “alt text below” remains here).
 6. **P3-09 / P3-10** — herdr integration (plugin pane; publish current page to herdr sidebar) after the herdr API is confirmed on a real install.
 7. **D1 image tier** (follow-up) — mermaid-rs-renderer → resvg → Kitty once herdr/Kitty detection is confirmed; text tier stays the default.
 
