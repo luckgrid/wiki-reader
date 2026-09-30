@@ -149,6 +149,17 @@ pub fn draw(
                 theme,
             ));
         }
+        if line_no == cursor_line {
+            // Paragraph only styles the glyphs; pad so the highlight spans the row.
+            let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+            let pad = usize::from(inner_area.width).saturating_sub(used);
+            if pad > 0 {
+                spans.push(Span::styled(
+                    " ".repeat(pad),
+                    Style::default().bg(theme.cursor_line),
+                ));
+            }
+        }
         out_lines.push(Line::from(spans));
     }
 

@@ -18,9 +18,9 @@ All P0/P1 acceptance criteria in [product spec](../product/spec.md) pass; two we
 
 ## Dogfood notes (operator)
 
-Phase 2 stays `active` through two weeks of real use. Record anything that bites here (date + one line); feed that into Phase 3 scoping.
+Phase 2 stays `active` through two weeks of real use on `~/Workspaces/workstation`. The two-week clock starts when you say so. Record anything that bites here (date + one line); feed that into Phase 3 scoping.
 
-- _empty — start after the [Phase 1 exit checklist](phase-1-reader-shell.md#phase-1-exit-checklist)_
+- _empty — clock not started_
 
 ## Tasks
 

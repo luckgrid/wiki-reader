@@ -260,6 +260,7 @@ fn link_class(raw: &str, from: &PageKey, index: &Index) -> LinkClass {
     let outcome = resolve(raw, from, index);
     match outcome.target {
         Target::External(_) => LinkClass::External,
+        Target::Unsupported(_) => LinkClass::Unsupported,
         Target::Unresolved(_) => LinkClass::Broken,
         _ => LinkClass::Internal,
     }
@@ -305,6 +306,9 @@ pub fn format_target_with_provider(
         }
         wiki_reader_core::nav::Target::Anchor(a) => format!("→ #{a}"),
         wiki_reader_core::nav::Target::External(url) => format!("↗ {url}"),
+        wiki_reader_core::nav::Target::Unsupported(u) => {
+            format!("unsupported link scheme: {u}")
+        }
         wiki_reader_core::nav::Target::Unresolved(u) => {
             if let (Some(p), Some(rel)) = (provider, unresolved_relative_path(raw, from))
                 && p.non_markdown_file_exists(&rel)
@@ -456,5 +460,23 @@ more words here
             !doc.link_spans().is_empty(),
             "expected link spans on broken-links README"
         );
+    }
+
+    #[test]
+    fn unsupported_scheme_status_and_class() {
+        let root =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/broken-links");
+        let provider = wiki_reader_core::provider::FsProvider::open(&root).unwrap();
+        let index = wiki_reader_core::Index::build(&provider).unwrap();
+        let from = wiki_reader_core::provider::PageKey {
+            collection_id: index.collection_id.clone(),
+            relative_path: PathBuf::from("README.md"),
+        };
+        let raw = "chatgpt-conversation://abc";
+        assert_eq!(
+            format_target_with_provider(raw, &from, &index, Some(&provider)),
+            "unsupported link scheme: chatgpt-conversation://abc"
+        );
+        assert_eq!(link_class(raw, &from, &index), LinkClass::Unsupported);
     }
 }

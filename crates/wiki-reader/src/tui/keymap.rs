@@ -27,6 +27,24 @@ pub enum Chord {
     PendingG,
 }
 
+/// True when CONTROL and ALT are absent (SHIFT alone is fine for capitals).
+#[must_use]
+fn no_ctrl_alt(key: KeyEvent) -> bool {
+    !key.modifiers.contains(KeyModifiers::CONTROL) && !key.modifiers.contains(KeyModifiers::ALT)
+}
+
+/// Overlay typing: reject pure Ctrl and pure Alt+ASCII; allow `AltGr` (Ctrl+Alt) and Option non-ASCII.
+#[must_use]
+fn overlay_typeable(key: KeyEvent, c: char) -> bool {
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    let alt = key.modifiers.contains(KeyModifiers::ALT);
+    match (ctrl, alt) {
+        (true, false) => false,
+        (false, true) => !c.is_ascii(),
+        (true, true) | (false, false) => true,
+    }
+}
+
 /// Map a key in the given input mode. Returns `(action, next_chord)`.
 #[must_use]
 #[cfg(test)]
@@ -67,7 +85,7 @@ pub fn map_with_overrides(
             KeyCode::Up => (Some(Action::SearchSelectDelta(-1)), Chord::None),
             KeyCode::Down => (Some(Action::SearchSelectDelta(1)), Chord::None),
             KeyCode::Backspace => (Some(Action::SearchBackspace), Chord::None),
-            KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Char(c) if overlay_typeable(key, c) => {
                 (Some(Action::SearchChar(c)), Chord::None)
             }
             _ => (None, Chord::None),
@@ -76,8 +94,13 @@ pub fn map_with_overrides(
 
     if mode == InputMode::Confirm {
         return match key.code {
-            KeyCode::Char('y' | 'Y') => (Some(Action::ConfirmOpen), Chord::None),
-            KeyCode::Char('n' | 'N') | KeyCode::Esc => (Some(Action::ConfirmDecline), Chord::None),
+            KeyCode::Char('y' | 'Y') if no_ctrl_alt(key) => {
+                (Some(Action::ConfirmOpen), Chord::None)
+            }
+            KeyCode::Char('n' | 'N') if no_ctrl_alt(key) => {
+                (Some(Action::ConfirmDecline), Chord::None)
+            }
+            KeyCode::Esc => (Some(Action::ConfirmDecline), Chord::None),
             _ => (None, Chord::None),
         };
     }
@@ -85,14 +108,18 @@ pub fn map_with_overrides(
     // `g` chords: `gg` home, `gt` next tab, `gT` prev tab. Lone `g` waits.
     if chord == Chord::PendingG {
         match key.code {
-            KeyCode::Char('g') if !key.modifiers.contains(KeyModifiers::SHIFT) => {
+            KeyCode::Char('g')
+                if no_ctrl_alt(key) && !key.modifiers.contains(KeyModifiers::SHIFT) =>
+            {
                 return (Some(Action::ViewerHome), Chord::None);
             }
-            KeyCode::Char('t') => return (Some(Action::NextTab), Chord::None),
-            KeyCode::Char('T') => return (Some(Action::PrevTab), Chord::None),
+            KeyCode::Char('t') if no_ctrl_alt(key) => return (Some(Action::NextTab), Chord::None),
+            KeyCode::Char('T') if no_ctrl_alt(key) => return (Some(Action::PrevTab), Chord::None),
             _ => {} // cancel pending `g`; map this key normally below
         }
-    } else if matches!(key.code, KeyCode::Char('g')) && !key.modifiers.contains(KeyModifiers::SHIFT)
+    } else if matches!(key.code, KeyCode::Char('g'))
+        && no_ctrl_alt(key)
+        && !key.modifiers.contains(KeyModifiers::SHIFT)
     {
         return (None, Chord::PendingG);
     }
@@ -150,27 +177,29 @@ fn action_by_name(name: &str) -> Option<Action> {
 pub fn map_global(key: KeyEvent) -> Option<Action> {
     let shift = key.modifiers.contains(KeyModifiers::SHIFT);
     let alt = key.modifiers.contains(KeyModifiers::ALT);
+    let plain = no_ctrl_alt(key);
 
     match key.code {
-        KeyCode::Char('q') => Some(Action::Quit),
-        KeyCode::Char('b') => Some(Action::ToggleNav),
-        KeyCode::Char('r') => Some(Action::ToggleViewMode),
-        KeyCode::Char('e') => Some(Action::OpenInEditor),
-        KeyCode::Char('y') => Some(Action::CopyPagePath),
-        KeyCode::Char('Y') => Some(Action::CopyLinkTarget),
-        KeyCode::Char('t') => Some(Action::NewTab),
-        KeyCode::Char('x') => Some(Action::CloseTab),
-        KeyCode::Char('/') => Some(Action::OpenSearch),
+        // Ghostty on macOS sends Option+←/→ as Alt+b / Alt+f (readline), not arrows.
+        KeyCode::Char('b') | KeyCode::Left if alt => Some(Action::Back),
+        KeyCode::Char('f') | KeyCode::Right if alt => Some(Action::Forward),
+        KeyCode::Char('q') if plain => Some(Action::Quit),
+        KeyCode::Char('b') if plain => Some(Action::ToggleNav),
+        KeyCode::Char('r') if plain => Some(Action::ToggleViewMode),
+        KeyCode::Char('e') if plain => Some(Action::OpenInEditor),
+        KeyCode::Char('y') if plain => Some(Action::CopyPagePath),
+        KeyCode::Char('Y') if plain => Some(Action::CopyLinkTarget),
+        KeyCode::Char('t') if plain => Some(Action::NewTab),
+        KeyCode::Char('x') if plain => Some(Action::CloseTab),
+        KeyCode::Char('/') if plain => Some(Action::OpenSearch),
         KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             Some(Action::OpenSearch)
         }
-        KeyCode::Char('n') => Some(Action::SearchNextMatch),
-        KeyCode::Char('N') => Some(Action::SearchPrevMatch),
-        KeyCode::Char('[') => Some(Action::PrevPage),
-        KeyCode::Char(']') => Some(Action::NextPage),
+        KeyCode::Char('n') if plain => Some(Action::SearchNextMatch),
+        KeyCode::Char('N') if plain => Some(Action::SearchPrevMatch),
+        KeyCode::Char('[') if plain => Some(Action::PrevPage),
+        KeyCode::Char(']') if plain => Some(Action::NextPage),
         KeyCode::Backspace => Some(Action::Back),
-        KeyCode::Left if alt => Some(Action::Back),
-        KeyCode::Right if alt => Some(Action::Forward),
         KeyCode::Left if shift => Some(Action::FocusNav),
         KeyCode::Right if shift => Some(Action::FocusViewer),
         KeyCode::F(6) => Some(Action::CycleFocus),
@@ -184,17 +213,19 @@ pub fn map_global(key: KeyEvent) -> Option<Action> {
 pub fn map_pane(key: KeyEvent, focus: FocusPane) -> Option<Action> {
     let shift = key.modifiers.contains(KeyModifiers::SHIFT);
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    let plain = no_ctrl_alt(key);
 
     match focus {
         FocusPane::Nav => match key.code {
             KeyCode::Up if shift || ctrl => Some(Action::NavJumpUp),
             KeyCode::Down if shift || ctrl => Some(Action::NavJumpDown),
             KeyCode::Up | KeyCode::BackTab => Some(Action::NavStepUp),
-            KeyCode::Tab if shift => Some(Action::NavStepUp),
-            KeyCode::Down | KeyCode::Tab => Some(Action::NavStepDown),
+            KeyCode::Tab if shift && plain => Some(Action::NavStepUp),
+            KeyCode::Down => Some(Action::NavStepDown),
+            KeyCode::Tab if plain => Some(Action::NavStepDown),
             KeyCode::Right => Some(Action::NavExpand),
             KeyCode::Left => Some(Action::NavCollapse),
-            KeyCode::Enter => Some(Action::NavActivate),
+            KeyCode::Enter if plain => Some(Action::NavActivate),
             _ => None,
         },
         FocusPane::Viewer => {
@@ -203,21 +234,25 @@ pub fn map_pane(key: KeyEvent, focus: FocusPane) -> Option<Action> {
                 // Alt+Shift+↑/↓ (primary); {/} fallback when Alt+Shift is unreliable
                 KeyCode::Up if alt && shift => Some(Action::ViewerHeadingUp),
                 KeyCode::Down if alt && shift => Some(Action::ViewerHeadingDown),
-                KeyCode::Char('{') => Some(Action::ViewerHeadingUp),
-                KeyCode::Char('}') => Some(Action::ViewerHeadingDown),
+                KeyCode::Char('{') if plain => Some(Action::ViewerHeadingUp),
+                KeyCode::Char('}') if plain => Some(Action::ViewerHeadingDown),
                 KeyCode::Up if shift || ctrl => Some(Action::ViewerBlockUp),
                 KeyCode::Down if shift || ctrl => Some(Action::ViewerBlockDown),
-                KeyCode::Char('k') | KeyCode::Up => Some(Action::ViewerUp),
-                KeyCode::Char('j') | KeyCode::Down => Some(Action::ViewerDown),
+                KeyCode::Char('k') if plain => Some(Action::ViewerUp),
+                KeyCode::Up if plain => Some(Action::ViewerUp),
+                KeyCode::Char('j') if plain => Some(Action::ViewerDown),
+                KeyCode::Down if plain => Some(Action::ViewerDown),
                 KeyCode::PageUp => Some(Action::ViewerPageUp),
                 KeyCode::Char(' ') if shift => Some(Action::ViewerPageUp),
-                KeyCode::PageDown | KeyCode::Char(' ') => Some(Action::ViewerPageDown),
+                KeyCode::Char(' ') if plain => Some(Action::ViewerPageDown),
+                KeyCode::PageDown => Some(Action::ViewerPageDown),
                 KeyCode::Home => Some(Action::ViewerHome),
-                KeyCode::End | KeyCode::Char('G') => Some(Action::ViewerEnd),
+                KeyCode::End => Some(Action::ViewerEnd),
+                KeyCode::Char('G') if plain => Some(Action::ViewerEnd),
                 KeyCode::BackTab => Some(Action::ViewerBackTab),
-                KeyCode::Tab if shift => Some(Action::ViewerBackTab),
-                KeyCode::Tab => Some(Action::ViewerTab),
-                KeyCode::Enter => Some(Action::ViewerActivate),
+                KeyCode::Tab if shift && plain => Some(Action::ViewerBackTab),
+                KeyCode::Tab if plain => Some(Action::ViewerTab),
+                KeyCode::Enter if plain => Some(Action::ViewerActivate),
                 _ => None,
             }
         }
@@ -444,5 +479,163 @@ mod tests {
             Some(&overs),
         );
         assert_eq!(got_q, Some(Action::Quit));
+    }
+
+    #[test]
+    fn keymap_alt_b_f_back_forward_and_plain_keys_ignore_mods() {
+        let (back, _) = map(
+            key_mod(KeyCode::Char('b'), KeyModifiers::ALT),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(back, Some(Action::Back));
+        let (fwd, _) = map(
+            key_mod(KeyCode::Char('f'), KeyModifiers::ALT),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(fwd, Some(Action::Forward));
+        let (alt_q, _) = map(
+            key_mod(KeyCode::Char('q'), KeyModifiers::ALT),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(alt_q, None);
+        let (ctrl_b, _) = map(
+            key_mod(KeyCode::Char('b'), KeyModifiers::CONTROL),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(ctrl_b, None);
+        // Arrow forms still work when the terminal actually sends them.
+        let (alt_left, _) = map(
+            key_mod(KeyCode::Left, KeyModifiers::ALT),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(alt_left, Some(Action::Back));
+        let (alt_right, _) = map(
+            key_mod(KeyCode::Right, KeyModifiers::ALT),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(alt_right, Some(Action::Forward));
+    }
+
+    #[test]
+    fn keymap_confirm_rejects_alt_ctrl_y() {
+        for mods in [KeyModifiers::ALT, KeyModifiers::CONTROL] {
+            let (got, _) = map(
+                key_mod(KeyCode::Char('y'), mods),
+                FocusPane::Viewer,
+                InputMode::Confirm,
+                Chord::None,
+            );
+            assert_eq!(got, None, "mods={mods:?}");
+        }
+        let (ok, _) = map(
+            key(KeyCode::Char('y')),
+            FocusPane::Viewer,
+            InputMode::Confirm,
+            Chord::None,
+        );
+        assert_eq!(ok, Some(Action::ConfirmOpen));
+    }
+
+    #[test]
+    fn keymap_overlay_alt_b_neither_types_nor_back() {
+        let (got, _) = map(
+            key_mod(KeyCode::Char('b'), KeyModifiers::ALT),
+            FocusPane::Viewer,
+            InputMode::Overlay,
+            Chord::None,
+        );
+        assert_eq!(got, None);
+    }
+
+    #[test]
+    fn keymap_overlay_altgr_and_option_non_ascii() {
+        let (altgr, _) = map(
+            key_mod(
+                KeyCode::Char('{'),
+                KeyModifiers::CONTROL | KeyModifiers::ALT,
+            ),
+            FocusPane::Viewer,
+            InputMode::Overlay,
+            Chord::None,
+        );
+        assert_eq!(altgr, Some(Action::SearchChar('{')));
+        let (pure_alt_ascii, _) = map(
+            key_mod(KeyCode::Char('a'), KeyModifiers::ALT),
+            FocusPane::Viewer,
+            InputMode::Overlay,
+            Chord::None,
+        );
+        assert_eq!(pure_alt_ascii, None);
+        let (option_non_ascii, _) = map(
+            key_mod(KeyCode::Char('å'), KeyModifiers::ALT),
+            FocusPane::Viewer,
+            InputMode::Overlay,
+            Chord::None,
+        );
+        assert_eq!(option_non_ascii, Some(Action::SearchChar('å')));
+        let (pure_ctrl, _) = map(
+            key_mod(KeyCode::Char('a'), KeyModifiers::CONTROL),
+            FocusPane::Viewer,
+            InputMode::Overlay,
+            Chord::None,
+        );
+        assert_eq!(pure_ctrl, None);
+    }
+
+    #[test]
+    fn keymap_enter_tab_require_no_ctrl_alt() {
+        for focus in [FocusPane::Viewer, FocusPane::Nav] {
+            let (plain_enter, _) = map(key(KeyCode::Enter), focus, InputMode::Normal, Chord::None);
+            assert!(plain_enter.is_some(), "plain Enter focus={focus:?}");
+            for mods in [KeyModifiers::CONTROL, KeyModifiers::ALT] {
+                let (enter, _) = map(
+                    key_mod(KeyCode::Enter, mods),
+                    focus,
+                    InputMode::Normal,
+                    Chord::None,
+                );
+                assert_eq!(enter, None, "Enter mods={mods:?} focus={focus:?}");
+                let (tab, _) = map(
+                    key_mod(KeyCode::Tab, mods),
+                    focus,
+                    InputMode::Normal,
+                    Chord::None,
+                );
+                assert_eq!(tab, None, "Tab mods={mods:?} focus={focus:?}");
+            }
+        }
+        let (viewer_tab, _) = map(
+            key(KeyCode::Tab),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(viewer_tab, Some(Action::ViewerTab));
+        let (shift_tab, _) = map(
+            key_mod(KeyCode::Tab, KeyModifiers::SHIFT),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(shift_tab, Some(Action::ViewerBackTab));
+        let (nav_tab, _) = map(
+            key(KeyCode::Tab),
+            FocusPane::Nav,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(nav_tab, Some(Action::NavStepDown));
     }
 }
