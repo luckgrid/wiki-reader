@@ -987,6 +987,47 @@ fn heading_jump_works_in_raw_and_after_toggle() {
 }
 
 #[test]
+fn heading_jump_brace_keys_work_in_rendered_and_raw() {
+    use crate::tui::focus::FocusPane;
+    use crate::tui::keymap::{self, Chord, InputMode};
+    use ratatui::crossterm::event::{KeyCode, KeyEvent};
+
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/README.md"),
+    }));
+    let (down, _) = keymap::map(
+        KeyEvent::from(KeyCode::Char('}')),
+        FocusPane::Viewer,
+        InputMode::Normal,
+        Chord::None,
+    );
+    assert_eq!(down, Some(Action::ViewerHeadingDown));
+    app.cursor_line = 0;
+    app.update(down.unwrap());
+    assert_eq!(
+        app.cursor_line,
+        app.doc.heading_lines()[0].saturating_sub(1)
+    );
+
+    app.update(Action::ToggleViewMode);
+    assert!(matches!(app.doc, crate::tui::page_doc::PageDoc::Raw(_)));
+    let (up, _) = keymap::map(
+        KeyEvent::from(KeyCode::Char('{')),
+        FocusPane::Viewer,
+        InputMode::Normal,
+        Chord::None,
+    );
+    assert_eq!(up, Some(Action::ViewerHeadingUp));
+    let raw_headings = app.doc.heading_lines();
+    app.cursor_line = raw_headings.last().copied().unwrap_or(1).saturating_sub(1);
+    app.update(up.unwrap());
+    assert_eq!(app.cursor_line, raw_headings[0].saturating_sub(1));
+}
+
+#[test]
 fn open_in_editor_no_env_sets_message() {
     let root = fixture();
     let mut app = App::new(&root).unwrap();

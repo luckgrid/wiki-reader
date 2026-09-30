@@ -3,7 +3,7 @@ id: WR-UI
 title: UI spec
 summary: Layout, side nav, header/footers, focus and cursor model, keyboard and mouse behavior for the wiki-reader reader.
 status: draft
-updated: 2026-09-28
+updated: 2026-09-29
 related: [spec, content-model]
 nav_order: 4
 ---
@@ -69,7 +69,7 @@ Rendered by default; `r` toggles raw. Both views share the **cursor line** (see 
 
 **Focusable items ("actions")** are what `Tab` cycles through, in document order:
 1. Links (internal, anchor, external, broken)
-2. Block actions: expand a truncated table, show collapsed frontmatter, expand a diagram, copy a code block (P1)
+2. Block actions (planned, P2-03): expand a truncated table, show collapsed frontmatter, expand a diagram, copy a code block
 3. The viewer footer's ‹ Prev / Next › buttons (last in the cycle)
 
 After the last item, `Tab` wraps to the first. The focused item renders inverted, and the status bar shows its target or action (`→ decisions/0003.md#context`, `↗ https://…`, `? not found: foo.md`, `expand table`).
@@ -110,7 +110,7 @@ Two focusable panes: **Side nav** and **Viewer**. The search overlay is modal wh
 |-----|--------|
 | `↑` / `↓` (`k` / `j`) | Move cursor line |
 | `Shift+↑` / `Shift+↓` | Jump to previous / next **content block** (paragraph, list, code, table, quote, diagram). Headings are blocks, so this also lands on section starts. |
-| `Alt+Shift+↑` / `↓` | *(proposed)* Jump to previous / next **heading** (section skip) |
+| `Alt+Shift+↑` / `↓` · `{` / `}` | Jump to previous / next **heading** (section skip). `{`/`}` is the fallback when Alt+Shift does not reach the TUI. |
 | `PgUp` / `PgDn` · `Space` / `Shift+Space` | Page up / down |
 | `Home` / `End` (`gg` / `G`) | Top / bottom |
 | `Tab` / `Shift+Tab` | Next / previous focusable item (links, block actions, footer buttons) |
