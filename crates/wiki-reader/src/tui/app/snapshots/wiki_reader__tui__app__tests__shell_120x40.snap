@@ -3,14 +3,14 @@ source: crates/wiki-reader/src/tui/app/tests.rs
 expression: tall
 ---
                                                                                                                         
- Worked Example Wiki                                                                                                ◫ ✕ 
+ Readme                                                                                                             ◫ ✕ 
                                                                                                                         
 ┌Nav─────────────────────────┐┌Viewer──────────────────────────────────────────────────────────────────────────────────┐
 │                            ││▌── frontmatter ▶ ──                                                                    │
 │ ⌕ Search…                  ││                                                                                        │
 │                            ││ # Worked Example Wiki                                                                  │
-│▌● Worked Example Wiki      ││                                                                                        │
-│   ▸ Architecture Overview  ││ A tiny markdown collection used as the default smoke-test root.                        │
+│▌● Readme                   ││                                                                                        │
+│   ▸ Readme                 ││ A tiny markdown collection used as the default smoke-test root.                        │
 │   ▸ Decisions              ││                                                                                        │
 │                            ││ Start at Architecture Overview, follow Token Projection, then return via back when     │
 │                            ││ history exists.                                                                        │
@@ -38,6 +38,6 @@ expression: tall
 │                            ││                                                                                        │
 │                            ││                                                                                        │
 │                            ││                                                                                        │
-└────────────────────────────┘└‹ —──────────────────────────────────────────────────────────────Architecture Overview ›┘
+└────────────────────────────┘└‹ —─────────────────────────────────────────────────────────────────────────────Readme ›┘
                                                                                                                         
  VIEWER · README.md · L1 12% · 29w · 1m · 2026-09-28

@@ -65,7 +65,7 @@ impl NavTree {
     /// Build the nav tree from an index (title labels).
     #[must_use]
     pub fn build(index: &Index) -> Self {
-        Self::build_with(index, crate::config::LabelMode::Title)
+        Self::build_with(index, crate::config::LabelMode::default())
     }
 
     /// Build the nav tree with an explicit label mode.
@@ -274,7 +274,7 @@ fn render_items(
 /// used for index/search does not block humanization in the tree.
 #[must_use]
 pub fn page_label(index: &Index, key: &PageKey) -> String {
-    page_label_with(index, key, crate::config::LabelMode::Title)
+    page_label_with(index, key, crate::config::LabelMode::default())
 }
 
 /// Label with an explicit [`crate::config::LabelMode`].
@@ -982,7 +982,7 @@ mod tests {
         // Root README first, then SUMMARY: Two (group) → One nested, Three, then orphan.
         assert_eq!(
             labels,
-            vec!["Summary Root", "Two", "One", "Three", "Orphan Page"]
+            vec!["Readme", "Two", "One", "Three", "Orphan"]
         );
         // Nested list produced a Group for Two.
         let has_two_group = tree.items.iter().any(|i| matches!(
@@ -1073,7 +1073,7 @@ mod tests {
             relative_path: PathBuf::from("architecture/design-system/tokens.md"),
         };
         assert_eq!(
-            page_label_with(&index, &key, crate::config::LabelMode::Title),
+            page_label_with(&index, &key, crate::config::LabelMode::Filename),
             page_label(&index, &key)
         );
         let file = page_label_with(&index, &key, crate::config::LabelMode::Filename);
@@ -1100,7 +1100,7 @@ mod tests {
             panic!("expected root page");
         };
         assert_eq!(key.relative_path, PathBuf::from("README.md"));
-        assert_eq!(label, "From Readme");
+        assert_eq!(label, "Readme");
     }
 
     #[test]
@@ -1115,12 +1115,7 @@ mod tests {
         let labels: Vec<_> = crumbs.iter().map(|c| c.label.as_str()).collect();
         assert_eq!(
             labels,
-            vec![
-                "Worked Example Wiki",
-                "Architecture Overview",
-                "Design System",
-                "Token Projection"
-            ]
+            vec!["Readme", "Readme", "Readme", "Tokens"]
         );
         assert_eq!(
             crumbs[0].target.as_ref().map(|k| k.relative_path.as_path()),
@@ -1161,7 +1156,7 @@ mod tests {
             })[0]
                 .label
         );
-        assert_eq!(labels.last().copied(), Some("Deep Leaf"));
+        assert_eq!(labels.last().copied(), Some("Leaf"));
         assert!(crumbs.iter().any(|c| c.target.is_some()));
     }
 }

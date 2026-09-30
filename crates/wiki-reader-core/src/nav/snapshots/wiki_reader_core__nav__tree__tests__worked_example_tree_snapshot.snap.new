@@ -1,6 +1,7 @@
 ---
 source: crates/wiki-reader-core/src/nav/tree.rs
-expression: "tree.render_text(&expanded, Some(&root))"
+assertion_line: 953
+expression: text
 ---
 ● Readme
 ▾ Readme
@@ -9,6 +10,4 @@ expression: "tree.render_text(&expanded, Some(&root))"
     Overview
     Tokens
   Readme
-▾ Decisions
-  Stack
-  Adapters
+▸ Decisions
