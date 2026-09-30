@@ -7,6 +7,7 @@ use ratatui::widgets::Paragraph;
 use wiki_reader_core::nav::Crumb;
 
 use crate::tui::hit::{Hit, HitMap};
+use crate::tui::layout;
 use crate::tui::theme::Theme;
 
 /// Display columns for `s` (CJK/emoji-safe; matches ratatui cell width).
@@ -16,6 +17,7 @@ fn col_width(s: &str) -> u16 {
 
 /// Draw the header and register breadcrumb / icon hits.
 pub fn draw(frame: &mut Frame<'_>, area: Rect, crumbs: &[Crumb], theme: &Theme, hits: &mut HitMap) {
+    let area = layout::chrome_pad(area);
     if area.width == 0 {
         return;
     }
@@ -55,7 +57,7 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, crumbs: &[Crumb], theme: &Theme, 
         x = x.saturating_add(w);
     }
 
-    // Glyph columns: [w-4]=sp [w-3]=◫ [w-2]=sp [w-1]=✕
+    // Glyph columns: [w-4]=sp [w-3]=◫ [w-2]=sp [w-1]=✕ (within padded area).
     let toggle_x = area.x.saturating_add(area.width.saturating_sub(3));
     let quit_x = area.x.saturating_add(area.width.saturating_sub(1));
     hits.push(

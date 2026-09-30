@@ -22,6 +22,8 @@ pub struct Theme {
     pub accent: Color,
     /// Cursor line highlight.
     pub cursor_line: Color,
+    /// Nav search box background.
+    pub search_box: Color,
     /// Focused Tab-cycle item.
     pub focus_item: Color,
     /// Internal link text.
@@ -53,6 +55,8 @@ impl Default for Theme {
             text_muted: Color::DarkGray,
             accent: Color::Cyan,
             cursor_line: Color::Rgb(40, 40, 50),
+            // ponytail: Reset surface means unknown terminal bg; DarkGray reads on both until P3-07.
+            search_box: Color::DarkGray,
             focus_item: Color::Yellow,
             link: Color::Blue,
             link_broken: Color::Red,

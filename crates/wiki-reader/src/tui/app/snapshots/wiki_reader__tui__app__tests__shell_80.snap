@@ -2,18 +2,18 @@
 source: crates/wiki-reader/src/tui/app/tests.rs
 expression: out
 ---
-Worked Example Wiki                                                          ◫ ✕
+ Worked Example Wiki                                                        ◫ ✕ 
 ┌Nav─────────────────────┐┌Viewer──────────────────────────────────────────────┐
-│ ⌕ Search…              ││── frontmatter ▶ ──                                 │
+│                        ││ ── frontmatter ▶ ──                                │
+│ ⌕ Search…              ││                                                    │
+│                        ││ # Worked Example Wiki                              │
 │▌● Worked Example Wiki  ││                                                    │
-│   ▸ Architecture Overvi││# Worked Example Wiki                               │
-│   ▸ Decisions          ││                                                    │
-│                        ││A tiny markdown collection used as the default      │
-│                        ││smoke-test root.                                    │
+│   ▸ Architecture Overvi││ A tiny markdown collection used as the default     │
+│   ▸ Decisions          ││ smoke-test root.                                   │
 │                        ││                                                    │
-│                        ││Start at Architecture Overview, follow Token        │
-│                        ││Projection, then return via back when history       │
-│                        ││exists.                                             │
+│                        ││ Start at Architecture Overview, follow Token       │
+│                        ││ Projection, then return via back when history      │
+│                        ││ exists.                                            │
 │                        ││                                                    │
 │                        ││                                                    │
 │                        ││                                                    │
@@ -25,4 +25,4 @@ Worked Example Wiki                                                          ◫
 │                        ││                                                    │
 │                        │└────────────────────────────────────────────────────┘
 └────────────────────────┘‹ —                            Architecture Overview ›
-VIEWER · README.md · L1 10% · 29w · 1m · 2026-09-28
+ VIEWER · README.md · L1 10% · 29w · 1m · 2026-09-28

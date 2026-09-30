@@ -2,9 +2,11 @@
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 
 use crate::tui::focus::FocusPane;
+use crate::tui::layout;
 use crate::tui::theme::Theme;
 
 /// Status fields drawn into one line.
@@ -27,8 +29,32 @@ pub struct StatusModel<'a> {
     pub message: &'a str,
 }
 
+/// Display columns for `s` (CJK/emoji-safe; matches ratatui cell width).
+fn col_width(s: &str) -> usize {
+    Span::raw(s).width()
+}
+
+/// Truncate `s` to at most `max` display columns.
+fn truncate_cols(s: &str, max: usize) -> String {
+    if col_width(s) <= max {
+        return s.to_owned();
+    }
+    let mut out = String::new();
+    let mut used = 0;
+    for ch in s.chars() {
+        let w = col_width(&ch.to_string());
+        if used + w > max {
+            break;
+        }
+        out.push(ch);
+        used += w;
+    }
+    out
+}
+
 /// Draw the status bar. When narrow, drop lower-priority fields before the message.
 pub fn draw(frame: &mut Frame<'_>, area: Rect, model: &StatusModel<'_>, theme: &Theme) {
+    let area = layout::chrome_pad(area);
     if area.width == 0 {
         return;
     }
@@ -44,7 +70,7 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, model: &StatusModel<'_>, theme: &
     } else {
         format!(" · {msg}")
     };
-    let msg_len = msg_suffix.chars().count();
+    let msg_len = col_width(&msg_suffix);
     let budget = w.saturating_sub(msg_len);
 
     // High → low priority fields (drop from the end when narrowing).
@@ -57,15 +83,15 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, model: &StatusModel<'_>, theme: &
         model.updated.to_owned(),
     ];
     let mut head = join_fields(&fields);
-    while head.chars().count() > budget && fields.len() > 2 {
+    while col_width(&head) > budget && fields.len() > 2 {
         fields.pop();
         head = join_fields(&fields);
     }
-    if head.chars().count() > budget {
-        head = head.chars().take(budget).collect();
+    if col_width(&head) > budget {
+        head = truncate_cols(&head, budget);
     }
     let text = format!("{head}{msg_suffix}");
-    let chars: String = text.chars().take(w).collect();
+    let chars = truncate_cols(&text, w);
     frame.render_widget(Paragraph::new(chars).style(theme.muted()), area);
 }
 

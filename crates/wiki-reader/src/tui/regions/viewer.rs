@@ -8,6 +8,7 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 
 use crate::tui::highlight::HlSpan;
 use crate::tui::hit::{Hit, HitMap};
+use crate::tui::layout::VIEWER_LEFT_PAD;
 use crate::tui::theme::Theme;
 use crate::tui::viewer_doc::{FocusItem, FocusTarget};
 use wiki_reader_render::{LinkClass, LinkId, LinkSpan, StyleKind, StyledLine};
@@ -43,9 +44,17 @@ pub fn draw(
     let inner_area = inner.inner(area);
     frame.render_widget(inner, area);
 
+    // Left pad reserves a column for the P2-19 cursor marker.
+    let content = Rect {
+        x: inner_area.x.saturating_add(VIEWER_LEFT_PAD),
+        y: inner_area.y,
+        width: inner_area.width.saturating_sub(VIEWER_LEFT_PAD),
+        height: inner_area.height,
+    };
+
     let gutter_w: u16 = if show_gutter { 6 } else { 0 };
-    let text_width = usize::from(inner_area.width.saturating_sub(gutter_w)).min(100);
-    let visible_h = usize::from(inner_area.height);
+    let text_width = usize::from(content.width.saturating_sub(gutter_w)).min(100);
+    let visible_h = usize::from(content.height);
     let scroll = usize::try_from(scroll).unwrap_or(0);
     let mut out_lines = Vec::with_capacity(visible_h);
     let focus_style = Style::default().bg(theme.focus_item).fg(theme.text);
@@ -56,7 +65,7 @@ pub fn draw(
     for row in 0..visible_h {
         let src_idx = scroll + row;
         let line_no = u32::try_from(src_idx).unwrap_or(u32::MAX);
-        let y = inner_area
+        let y = content
             .y
             .saturating_add(u16::try_from(row).unwrap_or(u16::MAX));
 
@@ -82,13 +91,13 @@ pub fn draw(
             for &(seg_line, (c0, c1)) in &span.segments {
                 if seg_line == line_no && c0 < c1 {
                     let x0 = gutter_w.saturating_add(c0);
-                    let x1 = gutter_w.saturating_add(c1).min(inner_area.width);
-                    if x0 >= inner_area.width || x1 <= x0 {
+                    let x1 = gutter_w.saturating_add(c1).min(content.width);
+                    if x0 >= content.width || x1 <= x0 {
                         continue;
                     }
                     hits.push(
                         Rect {
-                            x: inner_area.x.saturating_add(x0),
+                            x: content.x.saturating_add(x0),
                             y,
                             width: x1.saturating_sub(x0),
                             height: 1,
@@ -168,7 +177,7 @@ pub fn draw(
         if line_no == cursor_line {
             // Paragraph only styles the glyphs; pad so the highlight spans the row.
             let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
-            let pad = usize::from(inner_area.width).saturating_sub(used);
+            let pad = usize::from(content.width).saturating_sub(used);
             if pad > 0 {
                 spans.push(Span::styled(
                     " ".repeat(pad),
@@ -179,7 +188,7 @@ pub fn draw(
         out_lines.push(Line::from(spans));
     }
 
-    frame.render_widget(Paragraph::new(out_lines), inner_area);
+    frame.render_widget(Paragraph::new(out_lines), content);
 }
 
 #[allow(clippy::too_many_arguments)]
