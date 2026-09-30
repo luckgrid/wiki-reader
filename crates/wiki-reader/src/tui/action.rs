@@ -46,7 +46,11 @@ pub enum Action {
     SearchBackspace,
     /// Move selection in search results.
     SearchSelectDelta(i32),
-    /// Toggle Pages / Text mode.
+    /// Jump to first / last search result.
+    SearchJump(bool),
+    /// Page search results (sign = direction).
+    SearchPageDelta(i32),
+    /// Toggle Files / Content mode.
     SearchToggleMode,
     /// Activate the selected search result.
     SearchActivate,

@@ -571,6 +571,20 @@ pub static BINDINGS: &[Binding] = &[
         help: "Move selection",
         matcher: None,
     },
+    Binding {
+        keys: "Home / End",
+        scope: BindingScope::Overlay,
+        action: None,
+        help: "Jump to first / last result",
+        matcher: None,
+    },
+    Binding {
+        keys: "PgUp / PgDn",
+        scope: BindingScope::Overlay,
+        action: None,
+        help: "Page results",
+        matcher: None,
+    },
 ];
 
 /// True when CONTROL and ALT are absent (SHIFT alone is fine for capitals).
@@ -651,6 +665,10 @@ pub fn map_with_overrides(
             KeyCode::Tab => (Some(Action::SearchToggleMode), Chord::None),
             KeyCode::Up => (Some(Action::SearchSelectDelta(-1)), Chord::None),
             KeyCode::Down => (Some(Action::SearchSelectDelta(1)), Chord::None),
+            KeyCode::Home => (Some(Action::SearchJump(true)), Chord::None),
+            KeyCode::End => (Some(Action::SearchJump(false)), Chord::None),
+            KeyCode::PageUp => (Some(Action::SearchPageDelta(-1)), Chord::None),
+            KeyCode::PageDown => (Some(Action::SearchPageDelta(1)), Chord::None),
             KeyCode::Backspace => (Some(Action::SearchBackspace), Chord::None),
             KeyCode::Char(c) if overlay_typeable(key, c) => {
                 (Some(Action::SearchChar(c)), Chord::None)
