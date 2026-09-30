@@ -744,21 +744,65 @@ impl<'a> LayoutState<'a> {
                 "/{}",
                 from.relative_path.to_string_lossy().replace('\\', "/")
             );
-            self.push_span("• ".into(), StyleKind::Plain, src);
-            let start_col = u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(0);
-            let line = u32::try_from(self.styled.len()).unwrap_or(0);
-            self.push_span(title, StyleKind::Link, src);
-            let end_col =
-                u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(start_col);
-            let mut segments = Vec::new();
-            coalesce_link_segment(&mut segments, line, start_col, end_col);
+            self.push_backlink_entry(&title, &target, src);
+        }
+    }
+
+    /// Bullet + wrapped title with hanging indent; `LinkSpan` segments follow glyphs.
+    fn push_backlink_entry(&mut self, title: &str, target: &str, src: u32) {
+        const MAX_ROWS: usize = 3;
+        const BULLET: &str = "• ";
+        // Hang matches bullet display width ("• " → 2).
+        const HANG: &str = "  ";
+
+        self.push_span(BULLET.into(), StyleKind::Plain, src);
+        let col = u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(0);
+        let line = u32::try_from(self.styled.len()).unwrap_or(0);
+        self.in_link = Some(LinkBuild {
+            raw: target.to_owned(),
+            text: title.to_owned(),
+            start_line: line,
+            start_col: col,
+            segments: Vec::new(),
+        });
+
+        let mut rest = title.to_owned();
+        for row in 0..MAX_ROWS {
+            if rest.is_empty() {
+                break;
+            }
+            if row > 0 {
+                self.push_span(HANG.into(), StyleKind::Plain, src);
+            }
+            let avail = self.width.saturating_sub(self.cur_width()).max(1);
+            let last = row + 1 == MAX_ROWS;
+            if last && rest.width() > avail {
+                let room = avail.saturating_sub(1).max(1);
+                let (take, _) = split_at_width(&rest, room);
+                if !take.is_empty() {
+                    self.push_span(take, StyleKind::Link, src);
+                }
+                self.push_span("…".into(), StyleKind::Link, src);
+                rest.clear();
+            } else {
+                let (take, next) = split_at_width(&rest, avail);
+                self.push_span(take, StyleKind::Link, src);
+                rest = next;
+            }
+            if !rest.is_empty() {
+                self.commit_line(src);
+            }
+        }
+        if let Some(lb) = self.in_link.take() {
             self.links.push(LinkSpan {
                 id: LinkId(self.link_id),
-                raw_target: target,
+                raw_target: lb.raw,
                 class: LinkClass::Internal,
-                segments,
+                segments: lb.segments,
             });
             self.link_id = self.link_id.saturating_add(1);
+        }
+        if !self.cur.is_empty() {
             self.commit_line(src);
         }
     }

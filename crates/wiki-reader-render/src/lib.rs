@@ -439,6 +439,72 @@ mod tests {
         );
     }
 
+    #[test]
+    fn linked_from_wraps_title_segments_at_narrow_widths() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::write(
+            root.join("src0.md"),
+            "---\ntitle: \"A very long page title number 0 that certainly exceeds thirty columns of width\"\n---\n\n# Src\n\nSee [dst](dst.md).\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("dst.md"), "# Dst\n\nBody.\n").unwrap();
+        let provider = FsProvider::open(root).unwrap();
+        let index = wiki_reader_core::Index::build(&provider).unwrap();
+        let key = PageKey {
+            collection_id: index.collection_id.clone(),
+            relative_path: std::path::PathBuf::from("dst.md"),
+        };
+        let src = provider.read(&key).unwrap();
+        let page = index.pages.get(&key);
+        for &width in &[30u16, 40u16, 80u16] {
+            let doc = render(&src, page, &key, &index, width);
+            let bl = doc
+                .links
+                .iter()
+                .find(|s| s.raw_target == "/src0.md")
+                .unwrap_or_else(|| panic!("backlink at width {width}"));
+            assert!(!bl.segments.is_empty(), "width {width}: expected segments");
+            // Every link glyph on those rows must sit inside a segment.
+            for &(line, (start, end)) in &bl.segments {
+                let row = &doc.styled[line as usize];
+                let row_text: String = row.spans.iter().map(|s| s.text.as_str()).collect();
+                let link_text: String = row
+                    .spans
+                    .iter()
+                    .filter(|s| matches!(s.kind, StyleKind::Link))
+                    .map(|s| s.text.as_str())
+                    .collect();
+                assert!(
+                    end > start,
+                    "width {width} line {line}: empty segment in {row_text:?}"
+                );
+                // Segment covers the full link run on that row (hang indent is Plain).
+                let mut col = 0u16;
+                for sp in &row.spans {
+                    let w = u16::try_from(sp.text.width()).unwrap_or(0);
+                    if matches!(sp.kind, StyleKind::Link) {
+                        assert!(
+                            col >= start && col + w <= end,
+                            "width {width} line {line}: link {:?} cols {col}..{} outside segment {start}..{end}; row={row_text:?} link={link_text:?}",
+                            sp.text,
+                            col + w
+                        );
+                    }
+                    col = col.saturating_add(w);
+                }
+            }
+            // Wrapped titles produce multiple segments at width 30.
+            if width == 30 {
+                assert!(
+                    bl.segments.len() >= 2,
+                    "width 30 should wrap long title, segs={:?}",
+                    bl.segments
+                );
+            }
+        }
+    }
+
     /// Manual / release budget: `cargo test -p wiki-reader-render --release -- --ignored`
     #[test]
     #[ignore = "release budget; run with --ignored --release"]

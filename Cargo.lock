@@ -2201,6 +2201,7 @@ name = "wiki-reader-render"
 version = "0.1.0"
 dependencies = [
  "pulldown-cmark",
+ "tempfile",
  "unicode-width",
  "wiki-reader-core",
 ]
