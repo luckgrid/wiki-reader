@@ -46,7 +46,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 | P2-R33 | Block/copy polish | BA | done | 81ea91f |
 | P2-R34 | `t` / middle-click open the right target | TB | done | focused link / nav row; all navigable hits |
 | P2-R35 | Theme warn, dim labels, Mermaid cache, highlight flake | C1 / D1 | done | N2–N4 cleanups |
-| P2-11 | Nav selected-row style | U3 | done | full-row `cursor_line` bg; fixed-width `●` / spacer column |
+| P2-11 | Nav selected-row style | U3 | done | 09062f7 |
 | P2-12 | Nav: no duplicate folder/landing row | U3 | todo | README/SUMMARY landing inside a folder repeats the folder label; folder keeps its name, landing is deduped or labelled distinctly (`is_landing` / `group_landing` in `nav/tree.rs`) |
 | P2-13 | Nav labels: default back to filenames | C1 / U3 | todo | titles truncate badly in the narrow nav; default `filename`; keep `nav.labels` option |
 | P2-14 | Resizable nav pane | R1 | todo | drag the divider with min/max width clamp; persist in session (`SessionState`), not config (P3-11 owns config keys); respect responsive collapse |
