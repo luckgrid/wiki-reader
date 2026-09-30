@@ -43,7 +43,6 @@ shasum -a 256 -c wiki-reader-vX.Y.Z-<platform>.tar.gz.sha256
 tar xf wiki-reader-vX.Y.Z-<platform>.tar.gz
 ```
 
-
 crates.io packaging metadata is prepared (`version` on path deps, repository/readme); the crates are not published yet.
 
 ## Quickstart
