@@ -2,6 +2,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+command -v rumdl >/dev/null || {
+  echo "rumdl not found; install it with: uv tool install rumdl" >&2
+  exit 1
+}
+
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked

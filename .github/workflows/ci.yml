@@ -40,6 +40,18 @@ jobs:
       - name: Link check
         run: cargo run --locked --quiet -p wiki-reader-tools --bin link-check
 
+      - name: Install rumdl
+        uses: rvben/rumdl@v0
+        with:
+          install-only: true
+          version: "0.2.78"
+
+      - name: Markdown format
+        run: rumdl fmt --check .
+
+      - name: Markdown lint
+        run: rumdl check .
+
       - name: ADR-0006 core has no terminal deps
         run: |
           tree=$(cargo tree -p wiki-reader-core -e normal)
