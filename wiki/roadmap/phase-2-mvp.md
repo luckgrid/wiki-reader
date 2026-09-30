@@ -54,7 +54,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 | P2-16 | Viewer typography and spacing | — | subsumed → P2-23 | spacing between blocks; heading styling; snapshot updates |
 | P2-17 | Chrome spacing | — | done | 91f7c32 |
 | P2-18 | Viewer footer prev/next | — | done | cb8dbf3 |
-| P2-19 | Viewer cursor line and tab visibility | — | todo | stronger selected-line highlight; tabs get background fill and padding |
+| P2-19 | Viewer cursor line and tab visibility | — | done | 6d7448d |
 | P2-20 | Help overlay (`?`) | — | todo | extract a real binding table from match-based `keymap.rs` first, then generate help from it; clickable keys; pulled forward from P3-06 |
 | P2-21 | Search overlay layout and scroll | — | todo | larger pane, scrolls the full result list with jump to top/bottom, styled like markdown-reader; rename tabs to Content and Files (`SearchMode::Text` / `Pages`) |
 | P2-22 | Keyboard flow: nav to viewer to footer | — | todo | `→` on a nav item opens it and focuses the viewer; hotkey to focus footer prev/next links; focus stays on the link after the page changes; update [ADR-0007](../decisions/0007-input-focus-model.md) when this lands |
