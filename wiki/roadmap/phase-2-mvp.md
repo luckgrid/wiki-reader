@@ -3,7 +3,7 @@ id: WR-ROADMAP-P2
 title: Phase 2 — Wiki navigation MVP
 summary: Custom nav order, backlinks, tabs, diagrams, config, and session restore.
 status: active
-updated: 2026-09-29
+updated: 2026-09-30
 related: [phase-1-reader-shell, phase-3-alpha]
 nav_order: 2
 ---
@@ -16,12 +16,16 @@ Time box: ≈ 2 weeks.
 
 All P0/P1 acceptance criteria in [product spec](../product/spec.md) pass; two weeks without opening a GUI markdown app for these collections.
 
+The P2-11…P2-24 dogfood polish batch is not gated on the spec P0/P1 criteria, but it should land before the two-week clock is judged.
+
 ## Dogfood notes (operator)
 
 Phase 2 stays `active` through two weeks of real use on a real collection. The two-week clock starts when you say so. Record anything that bites here (date + one line); feed that into Phase 3 scoping.
 
 - 2026-09-29: clock started on a real collection
 - 2026-09-29: v0.1.0-alpha.1 released (macOS arm64/x86_64, Linux x86_64); dogfood from the installed binary
+- 2026-09-30: side-by-side review vs markdown-reader; UI/UX polish batch filed as P2-11…P2-22
+- 2026-09-30: markdown element rendering (Mermaid text tier garbled, truncated tables, mid-word wrapping, raw syntax markers) filed as P2-23; formatted-text view, eye toggle and jcode-style diagrams filed as P2-24, to follow once the syntax view renders neatly
 
 ## Tasks
 
@@ -42,6 +46,53 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 | P2-R33 | Block/copy polish | BA | done | 81ea91f |
 | P2-R34 | `t` / middle-click open the right target | TB | done | focused link / nav row; all navigable hits |
 | P2-R35 | Theme warn, dim labels, Mermaid cache, highlight flake | C1 / D1 | done | N2–N4 cleanups |
+| P2-11 | Nav selected-row style | | todo | background highlight, not indent or text shift; keep `●` only if it doesn't move text |
+| P2-12 | Nav: no duplicate folder/landing row | U3 | todo | README/SUMMARY landing inside a folder repeats the folder label; folder keeps its name, landing is deduped or labelled distinctly (`is_landing` / `group_landing` in `nav/tree.rs`) |
+| P2-13 | Nav labels: default back to filenames | C1 / U3 | todo | titles truncate badly in the narrow nav; decide default (`filename` or `title+filename`); keep `nav.labels` option |
+| P2-14 | Resizable nav pane | R1 | todo | drag the divider with min/max width clamp; persist via config or session; respect responsive collapse |
+| P2-15 | Frontmatter as YAML props | | todo | properties block in the viewer like markdown-reader, replacing the `── frontmatter ▶ ──` stub; stay collapsible (`ToggleFrontmatter` in `render.rs`) |
+| P2-16 | Viewer typography and spacing | | todo | spacing between paragraphs, headings, lists, code, tables, diagrams; heading styling closer to markdown-reader; snapshot updates |
+| P2-17 | Chrome spacing | | todo | topbar gap above/below + left/right padding; status bar same; nav search box gap from pane title and list |
+| P2-18 | Viewer footer prev/next | | todo | ellipsis-truncate each link so long titles can't collide; footer part of the viewer pane border so it reads as chrome |
+| P2-19 | Viewer cursor line and tab visibility | | todo | stronger selected-line highlight; tabs get background fill and padding |
+| P2-20 | Help overlay (`?`) | | todo | keybindings generated from the keymap table, clickable keys; pulled forward from P3-06 |
+| P2-21 | Search overlay layout and scroll | | todo | larger pane, scrolls the full result list with jump to top/bottom, styled like markdown-reader; rename tabs to Content and Files (`SearchMode::Text` / `Pages`) |
+| P2-22 | Keyboard flow: nav to viewer to footer | | todo | `→` on a nav item opens it and focuses the viewer; hotkey to focus footer prev/next links; focus stays on the link after the page changes so pages can be cycled quickly |
+| P2-23 | Markdown syntax view: element styling (priority) | D1 | todo | see [P2-23 scope](#p2-23-scope). Subsumes P2-15 and P2-16; do first |
+| P2-24 | Formatted-text view, eye toggle, image diagrams | D1 / C1 | todo | after P2-23; see [P2-24 scope](#p2-24-scope). Pulls the D1 image tier forward from Phase 3 |
+
+## P2-23 scope
+
+Priority. The dogfood review showed the viewer is hard to read even as a markdown *source* view. This task makes the syntax view (markers stay visible) render every element neatly, using markdown-reader as the reference. The formatted-text view and the fancier diagram work wait for [P2-24](#p2-24-scope).
+
+- **Text flow:** word-wrap at the pane width, never mid-word (the screenshots break words like `tu rning`). Consistent spacing between blocks.
+- **Headings:** distinct H1–H6 styling, like markdown-reader's coloured heading bars.
+- **Frontmatter:** a YAML properties block (keys and values aligned, lists rendered as lists), collapsible. This is P2-15.
+- **Code blocks:** bordered or shaded block with a language label, syntect highlighting, wrap or horizontal scroll without breaking the frame, and a copy action.
+- **Tables:** column widths fitted to the pane, cells wrapped instead of truncated with `…`, header row styled, rows separated. Fall back to horizontal scroll when too wide. The screenshots show cut-off cells and an "expand table" stub.
+- **Lists and task lists:** bullets, numbering and nesting indent, checkboxes.
+- **Links:** distinct link style, visible focus and hover state, broken-link marking, footnote references.
+- **Blockquotes and alerts:** a left bar and tint for quotes; typed styling for note, warning and so on.
+- **Inline:** bold, italic, strikethrough and inline code styled.
+- **Diagrams (text tier):** the current Mermaid text output is garbled beyond a simple flow. The screenshots show overlapping boxes, labels split across lines, and output wider than the pane. Fix the text tier so it never overflows or overlaps. When a diagram can't fit, fall back to the fenced source with the reason shown.
+- **Rules:** a full-width line.
+
+Acceptance:
+
+- Side-by-side with markdown-reader on the design-system collection pages shown in the review: every element above renders at least as readably.
+- The `shell_{60,80,120}` snapshots and per-element snapshots cover each element.
+- No regression in cursor, line selection, link following or block actions.
+
+## P2-24 scope
+
+After P2-23. The goal is a browser-style wiki reader, not another editor-style viewer.
+
+- **Formatted-text view:** render markdown as formatted text, with no visible syntax markers (`#`, `**`, backticks, fence lines, link brackets and URLs). Styling carries the meaning instead. This is feasible in a terminal for everything except font size: headings differ by colour, weight, rules and spacing. The `source_map` must keep the cursor, line selection, link hits and block actions working on the formatted output.
+- **Toggle:** an eye icon at the top right of the topbar switches between the syntax view and the formatted view. The same choice is a config option, set alongside nav placement and theme in P3-11. Decide the default, and record it in an ADR.
+- **Diagrams like jcode:** the D1 image tier, pulled forward from Phase 3: mermaid-rs-renderer → resvg → Kitty, following jcode's pipeline, per [ADR-0004](../decisions/0004-diagram-rendering.md). Include scroll and clear behaviour, herdr/Kitty detection, a cache, and the tier-selection defaults.
+- **Images:** local and remote images through the Kitty protocol, with alt-text fallback.
+
+Acceptance: the eye toggle switches views without losing the cursor position, and diagrams render as images where Kitty graphics is available, otherwise in the text tier.
 
 ## Proposed order (after Phase 1 exit)
 
@@ -50,6 +101,14 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 3. P2-06 Diagrams
 
 (Batch 1–2 done: P2-02/04/08/09/10/03.)
+
+Dogfood polish batch (2026-09-30), in order:
+
+1. Readability: P2-23 (includes P2-15, P2-16) → P2-11 (P2-24 follows P2-23 once the syntax view is fixed; it can move to Phase 3 if Phase 2 runs long)
+2. Chrome: P2-17 → P2-18 → P2-19
+3. Nav: P2-12 → P2-13 → P2-14
+4. Keyboard flow: P2-22
+5. Overlays: P2-20 → P2-21
 
 ## Related
 
