@@ -21,6 +21,7 @@ All P0/P1 acceptance criteria in [product spec](../product/spec.md) pass; two we
 Phase 2 stays `active` through two weeks of real use on a real collection. The two-week clock starts when you say so. Record anything that bites here (date + one line); feed that into Phase 3 scoping.
 
 - 2026-09-29: clock started on a real collection
+- 2026-09-29: v0.1.0-alpha.1 released (macOS arm64/x86_64, Linux x86_64); dogfood from the installed binary
 
 ## Tasks
 
