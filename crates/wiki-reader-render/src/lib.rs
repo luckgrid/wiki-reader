@@ -259,13 +259,13 @@ mod tests {
             .lines
             .iter()
             .zip(doc.source_map.iter())
-            .filter(|(l, _)| l.contains('│') || l.contains('├'))
+            .filter(|(l, _)| l.contains('│') && !l.contains('├'))
             .map(|(l, &s)| (l.clone(), s))
             .collect();
         assert_eq!(
             mapped.iter().map(|(_, s)| *s).collect::<Vec<_>>(),
-            vec![1, 2, 3, 4],
-            "table rows should map to distinct source lines: {mapped:?}"
+            vec![1, 3, 4],
+            "table data rows should map to distinct source lines: {mapped:?}"
         );
         let needle = mapped
             .iter()
@@ -554,64 +554,64 @@ mod tests {
             },
         );
         assert!(
-            open.lines.iter().any(|l| l.contains("title: Hello")),
+            open.lines
+                .iter()
+                .any(|l| l.contains("title") && l.contains("Hello")),
             "expanded missing title: {:?}",
             open.lines
         );
     }
 
     #[test]
-    fn long_table_truncates_until_expanded() {
+    fn long_table_shows_all_rows_without_expand_stub() {
         let src = "| h |\n| - |\n| 1 |\n| 2 |\n| 3 |\n| 4 |\n| 5 |\n";
         let doc = render_src(src, 40);
         assert!(
-            doc.lines.iter().any(|l| l.contains("expand table")),
-            "truncate cue missing: {:?}",
+            !doc.lines.iter().any(|l| l.contains("expand table")),
+            "expand stub must be gone: {:?}",
             doc.lines
         );
+        let joined = doc.lines.join("\n");
+        assert!(joined.contains('5'), "all rows visible: {joined}");
         assert!(
-            !doc.lines
-                .iter()
-                .any(|l| l.contains("| 5 |") || l.trim_end().ends_with('5')),
-            "row 5 should be hidden when truncated: {:?}",
-            doc.lines
+            doc.block_actions.is_empty(),
+            "tables no longer register block actions: {:?}",
+            doc.block_actions
         );
-        let id = doc
-            .block_actions
-            .iter()
-            .find(|a| a.kind == BlockActionKind::ToggleTable)
-            .map(|a| a.id)
-            .expect("table action");
-        let mut expanded = std::collections::HashSet::new();
-        expanded.insert(id);
-        let index = wiki_reader_core::Index {
-            collection_id: "t".into(),
-            pages: HashMap::default(),
-            edges: vec![],
-            by_from: HashMap::default(),
-            by_to: HashMap::default(),
-            by_id: HashMap::default(),
-            by_path: HashMap::default(),
-            diagnostics: vec![],
+    }
+
+    #[test]
+    fn word_wrap_breaks_at_whitespace() {
+        let src =
+            "never midword break when wrapping turning words across the pane width cleanly.\n";
+        let doc = render_src(src, 20);
+        for line in &doc.lines {
+            assert!(
+                !line.contains("tu rning") && !line.contains("turni ng"),
+                "mid-word wrap: {line:?} in {:?}",
+                doc.lines
+            );
+        }
+        let joined = doc.lines.join(" ");
+        assert!(joined.contains("turning"), "missing word: {joined}");
+    }
+
+    #[test]
+    fn elements_fixture_snapshots() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/elements");
+        let provider = FsProvider::open(&root).unwrap();
+        let index = wiki_reader_core::Index::build(&provider).unwrap();
+        let key = PageKey {
+            collection_id: index.collection_id.clone(),
+            relative_path: std::path::PathBuf::from("README.md"),
         };
-        let open = render_with(
-            src,
-            None,
-            &empty_key(),
-            &index,
-            40,
-            &RenderOpts {
-                expanded,
-                ..RenderOpts::default()
-            },
-        );
-        assert!(
-            !open.lines.iter().any(|l| l.contains("expand table")),
-            "expanded still shows cue: {:?}",
-            open.lines
-        );
-        let joined = open.lines.join("\n");
-        assert!(joined.contains('5'), "expanded missing last row: {joined}");
+        let src = provider.read(&key).unwrap();
+        let page = index.pages.get(&key);
+        for w in [40u16, 60, 80, 120] {
+            let doc = render(&src, page, &key, &index, w);
+            let text = doc.lines.join("\n");
+            insta::assert_snapshot!(format!("elements_{w}"), text);
+        }
     }
 
     #[test]

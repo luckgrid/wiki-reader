@@ -6,8 +6,8 @@ Worked Example Wiki                                                          ◫
 ┌Nav─────────────────────┐┌Viewer──────────────────────────────────────────────┐
 │ ⌕ Search…              ││── frontmatter ▶ ──                                 │
 │▌● Worked Example Wiki  ││# Worked Example Wiki                               │
-│ ▸ Architecture Overview││A tiny markdown collection used as the default      │
-│ ▸ Decisions            ││smoke-test root.                                    │
+│   ▸ Architecture Overvi││A tiny markdown collection used as the default      │
+│   ▸ Decisions          ││smoke-test root.                                    │
 │                        ││Start at Architecture Overview, follow Token        │
 │                        ││Projection, then return via back when history       │
 │                        ││exists.                                             │

@@ -46,7 +46,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 | P2-R33 | Block/copy polish | BA | done | 81ea91f |
 | P2-R34 | `t` / middle-click open the right target | TB | done | focused link / nav row; all navigable hits |
 | P2-R35 | Theme warn, dim labels, Mermaid cache, highlight flake | C1 / D1 | done | N2–N4 cleanups |
-| P2-11 | Nav selected-row style | U3 | todo | background highlight, not indent or text shift; keep `●` only if it doesn't move text |
+| P2-11 | Nav selected-row style | U3 | done | full-row `cursor_line` bg; fixed-width `●` / spacer column |
 | P2-12 | Nav: no duplicate folder/landing row | U3 | todo | README/SUMMARY landing inside a folder repeats the folder label; folder keeps its name, landing is deduped or labelled distinctly (`is_landing` / `group_landing` in `nav/tree.rs`) |
 | P2-13 | Nav labels: default back to filenames | C1 / U3 | todo | titles truncate badly in the narrow nav; default `filename`; keep `nav.labels` option |
 | P2-14 | Resizable nav pane | R1 | todo | drag the divider with min/max width clamp; persist in session (`SessionState`), not config (P3-11 owns config keys); respect responsive collapse |
@@ -58,7 +58,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 | P2-20 | Help overlay (`?`) | — | todo | extract a real binding table from match-based `keymap.rs` first, then generate help from it; clickable keys; pulled forward from P3-06 |
 | P2-21 | Search overlay layout and scroll | — | todo | larger pane, scrolls the full result list with jump to top/bottom, styled like markdown-reader; rename tabs to Content and Files (`SearchMode::Text` / `Pages`) |
 | P2-22 | Keyboard flow: nav to viewer to footer | — | todo | `→` on a nav item opens it and focuses the viewer; hotkey to focus footer prev/next links; focus stays on the link after the page changes; update [ADR-0007](../decisions/0007-input-focus-model.md) when this lands |
-| P2-23 | Markdown syntax view: element styling (priority) | D1 | todo | see [P2-23 scope](#p2-23-scope). Subsumes P2-15 and P2-16; do first |
+| P2-23 | Markdown syntax view: element styling (priority) | D1 | done | word wrap, tables, mermaid width, StyleKind paint, frontmatter props; see [P2-23 scope](#p2-23-scope) |
 | P2-24a | Formatted-text view and eye toggle | D1 / C1 | todo | after P2-23; see [P2-24a scope](#p2-24a-scope) |
 | P2-24b | Image diagrams and images | D1 | todo | after P2-24a; see [P2-24b scope](#p2-24b-scope). May slip to Phase 3 without blocking exit |
 

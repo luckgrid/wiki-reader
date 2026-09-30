@@ -161,8 +161,7 @@ impl App {
                     Err(err) => self.message = format!("copy failed: {err}"),
                 }
             }
-            wiki_reader_render::BlockActionKind::ToggleFrontmatter
-            | wiki_reader_render::BlockActionKind::ToggleTable => {
+            wiki_reader_render::BlockActionKind::ToggleFrontmatter => {
                 if !self.expanded_blocks.remove(&id) {
                     self.expanded_blocks.insert(id);
                 }

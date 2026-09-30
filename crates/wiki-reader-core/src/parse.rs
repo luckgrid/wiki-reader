@@ -23,6 +23,15 @@ pub enum FrontmatterKind {
     Toml,
 }
 
+/// One frontmatter value for the properties block (scalar or list).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FmProp {
+    /// Single string value.
+    Scalar(String),
+    /// YAML/TOML list rendered as a list in the viewer.
+    List(Vec<String>),
+}
+
 /// Typed frontmatter keys plus unknowns kept raw for metadata disclosure.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Frontmatter {
@@ -52,6 +61,8 @@ pub struct Frontmatter {
     pub nav_title: Option<String>,
     /// Unknown keys, stringified for raw disclosure (ordered for stable display).
     pub unknown: BTreeMap<String, String>,
+    /// Full key/value map in document order for the properties block (P2-15 / P2-23).
+    pub props: Vec<(String, FmProp)>,
     /// Delimiter kind when a block was present.
     pub kind: Option<FrontmatterKind>,
 }
@@ -448,6 +459,7 @@ fn apply_frontmatter_key(
                     if s.is_empty() {
                         return;
                     }
+                    fm.props.push((name.to_owned(), FmProp::Scalar(s.clone())));
                     match name {
                         "id" => fm.id = Some(s),
                         "title" => fm.title = Some(s),
@@ -465,30 +477,46 @@ fn apply_frontmatter_key(
             }
         }
         "nav_order" => match value.as_f64() {
-            Some(n) => fm.nav_order = Some(n),
+            Some(n) => {
+                fm.nav_order = Some(n);
+                fm.props
+                    .push((name.to_owned(), FmProp::Scalar(n.to_string())));
+            }
             None => diagnostics.push(Diagnostic {
                 message: "frontmatter `nav_order`: expected number; skipped".into(),
             }),
         },
         "tags" | "work_units" | "applies_to" | "related" => match value.as_list_strings() {
-            Some(list) => match name {
-                "tags" => fm.tags = list,
-                "work_units" => fm.work_units = list,
-                "applies_to" => fm.applies_to = list,
-                "related" => fm.related = list,
-                _ => unreachable!(),
-            },
+            Some(list) => {
+                fm.props.push((name.to_owned(), FmProp::List(list.clone())));
+                match name {
+                    "tags" => fm.tags = list,
+                    "work_units" => fm.work_units = list,
+                    "applies_to" => fm.applies_to = list,
+                    "related" => fm.related = list,
+                    _ => unreachable!(),
+                }
+            }
             None => diagnostics.push(Diagnostic {
                 message: format!("frontmatter `{name}`: expected string or list; skipped"),
             }),
         },
         _ => {
+            if let Some(list) = value.as_list_strings() {
+                if !list.is_empty() {
+                    fm.props.push((name.to_owned(), FmProp::List(list.clone())));
+                    fm.unknown.insert(name.to_owned(), list.join(", "));
+                }
+                return;
+            }
             let display = if let Some(s) = value.as_string() {
                 s.trim().to_owned()
             } else {
                 value.to_display()
             };
             if !display.is_empty() {
+                fm.props
+                    .push((name.to_owned(), FmProp::Scalar(display.clone())));
                 fm.unknown.insert(name.to_owned(), display);
             }
         }

@@ -58,6 +58,10 @@ pub trait ViewerDoc {
     fn anchor_line(&self, slug: &str) -> Option<u32>;
     /// Interactive link geometry.
     fn link_spans(&self) -> &[LinkSpan];
+    /// Styled display rows when available (rendered path).
+    fn styled_lines(&self) -> Option<&[wiki_reader_render::StyledLine]> {
+        None
+    }
     /// Tab-cycle items (links + block actions + footer slots filled by the app).
     fn focus_items(&self) -> Vec<FocusItem> {
         let mut items: Vec<FocusItem> = self
