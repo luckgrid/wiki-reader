@@ -1,0 +1,5 @@
+[global]
+# The wiki intentionally uses long prose lines and HTML-like terminal mockups.
+line-length = 120
+disable = ["MD013", "MD033"]
+exclude = ["target", ".git"]
