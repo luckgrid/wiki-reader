@@ -3,7 +3,7 @@ id: WR-ROADMAP-P2
 title: Phase 2 — Wiki navigation MVP
 summary: Custom nav order, backlinks, tabs, diagrams, config, and session restore.
 status: active
-updated: 2026-09-30
+updated: 2026-09-29
 related: [phase-1-reader-shell, phase-3-alpha]
 nav_order: 2
 ---
@@ -20,7 +20,7 @@ All P0/P1 acceptance criteria in [product spec](../product/spec.md) pass; two we
 
 Phase 2 stays `active` through two weeks of real use on `~/Workspaces/workstation`. The two-week clock starts when you say so. Record anything that bites here (date + one line); feed that into Phase 3 scoping.
 
-- _empty — clock not started_
+- 2026-09-29: clock started on ~/Workspaces/workstation
 
 ## Tasks
 

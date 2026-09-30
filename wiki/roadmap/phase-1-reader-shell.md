@@ -2,7 +2,7 @@
 id: WR-ROADMAP-P1
 title: Phase 1 — Reader shell
 summary: Browse a real collection end-to-end with correct navigation.
-status: active
+status: done
 updated: 2026-09-29
 related: [phase-2-mvp]
 nav_order: 1
@@ -76,14 +76,14 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 | P1-13 | Renderer port | V1 | done | 1414d39 |
 | P1-S1 | Spike, herdr input | | done | real keyboard 2026-09-29; Alt+←/→ → Alt+b/f (P1-R36) |
 | P1-S2 | Spike, tree widget decision | | done | ADR-0009 → superseded by ADR-0010 |
-| P1-D1 | Docs: Phase 1 status + architecture honesty | | done | this change |
-| P1-R36 | Modifier-strict keys + Alt+b/Alt+f | K1,K2 | done | Ghostty Option encoding |
-| P1-R37 | Unsupported link schemes | L2 | done | muted; never open |
-| P1-R38 | Full-width viewer cursor row | K2 | done | faint row background spans the viewer |
+| P1-D1 | Docs: Phase 1 status + architecture honesty | | done | 269670b |
+| P1-R36 | Modifier-strict keys + Alt+b/Alt+f | K1,K2 | done | 269670b Ghostty Option encoding |
+| P1-R37 | Unsupported link schemes | L2 | done | 269670b muted; never open |
+| P1-R38 | Full-width viewer cursor row | K2 | done | 269670b faint row background spans the viewer |
 
 ## Phase 1 exit checklist
 
-All operator items are ticked (2026-09-29). Phase status stays `active` until the operator closes the phase. Automated coverage is noted under each item; it does **not** close the item.
+All operator items are ticked (2026-09-29). Phase status is `done`. Automated coverage is noted under each item; it does **not** close the item.
 
 1. [x] `cargo run -p wiki-reader --example keylog` in a herdr pane on your real keyboard; tick the [P1-S1](spikes/p1-s1-herdr-input.md) spike note (P1-G).
    - Coverage: example exists; real keyboard 2026-09-29 in Ghostty + herdr (see spike for caveats → P1-R36).

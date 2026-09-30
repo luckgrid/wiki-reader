@@ -3,14 +3,14 @@ id: WR-ROADMAP-P3
 title: Phase 3 — Alpha polish
 summary: Sticky headers, nav chrome, help, themes, install, and early herdr niceties.
 status: planned
-updated: 2026-09-30
+updated: 2026-09-29
 related: [phase-2-mvp, v2-widget-sidebar]
 nav_order: 3
 ---
 
 # Phase 3 — Alpha polish
 
-Start after Phase 1's real-keyboard / real-collection gate and Phase 2 dogfood notes land. Order is **adoption value first** — install early so real use does not depend on a checkout.
+Phase 1 is closed. Detail later rows into spikes/acceptance only after Phase 2 dogfood notes land. Order is **adoption value first** — install early so real use does not depend on a checkout.
 
 ## Proposed order
 

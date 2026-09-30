@@ -28,7 +28,7 @@ Existing terminal markdown tools behave like editors or file browsers: opening a
 
 ## Status
 
-Phase 2 is in progress. Phase 1 is built but not signed off: real-keyboard pass done; remaining exit checks (items 2–5) are in the [Phase 1 roadmap](wiki/roadmap/phase-1-reader-shell.md). The reader shell, backlinks, heading jumps, and `$EDITOR` support are shipped. Start at [wiki/README.md](wiki/README.md) and see the [roadmap](wiki/roadmap/README.md) for the next tasks.
+Phase 1 is closed. Phase 2 dogfood clock started 2026-09-29 on `~/Workspaces/workstation`. Next Phase 3 work is [P3-08 Install](wiki/roadmap/phase-3-alpha.md). The reader shell, backlinks, heading jumps, and `$EDITOR` support are shipped. Start at [wiki/README.md](wiki/README.md) and see the [roadmap](wiki/roadmap/README.md) for the next tasks.
 
 ## Quickstart
 
