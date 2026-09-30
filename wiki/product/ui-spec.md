@@ -14,7 +14,7 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 
 ## Layout
 
-```
+```text
 ┌ Header (full width) ─────────────────────────────────────────────────────────┐
 │ Luckgrid Wiki › Architecture › Design System › Token Projection       ◫   ✕ │
 ├ Side nav ────────────────────┬ Viewer ───────────────────────────────────────┤
@@ -68,6 +68,7 @@ Future: this search row becomes a proper **side nav header**, and a **side nav f
 Rendered by default; `r` toggles raw. Both views share the **cursor line** (see Cursor model), so toggling keeps you on the same source line. The text column is capped at ~100 cols; tables and code may use the full width.
 
 **Focusable items ("actions")** are what `Tab` cycles through, in document order:
+
 1. Links (internal, anchor, external, broken)
 2. Block actions: expand a truncated table, show collapsed frontmatter, copy a code block (OSC 52)
 3. The viewer footer's ‹ Prev / Next › buttons (last in the cycle)
@@ -146,6 +147,7 @@ Two focusable panes: **Side nav** and **Viewer**. The search overlay is modal wh
 | `q` · click `✕` | Quit (saves session) |
 
 ### Terminal key caveats (verify in the Phase 1 input spike)
+
 - `Shift+Tab` arrives as `BackTab`; fine everywhere.
 - `Shift+arrows` are reported by most modern terminals (crossterm exposes the modifier). Confirm that herdr forwards them to the pane and doesn't bind them itself.
 - `Ctrl+Enter` / `Shift+Enter` can't be told apart from `Enter` without the kitty keyboard protocol. Use `t` and middle-click for new tabs, and treat `Ctrl+Enter` as a bonus when the protocol is available.
@@ -174,4 +176,5 @@ Click to focus a pane; click items, links, breadcrumbs, prev/next, header icons,
 | Header ‹ › buttons | Optional back/forward |
 
 ## Theming
+
 Semantic tokens only: `surface`, `surface.muted`, `border`, `border.focus`, `text`, `text.muted`, `text.alt` (filename alt text), `accent`, `cursor.line`, `focus.item`, `link`, `link.broken`, `link.external`, `heading.1..6`, `code.bg`, `match`, `status.ok/warn/error`.

@@ -27,7 +27,7 @@ flowchart LR
 
 ## Crates
 
-```
+```text
 wiki-reader/
 ├── Cargo.toml                 # workspace
 ├── crates/

@@ -17,6 +17,7 @@ The rule: **nothing here blocks the POC.** Each integration has a seam built in 
 **Seam now:** `CollectionProvider` trait ([architecture](overview.md)). All content access goes through it; the index never touches `std::fs` directly.
 
 **Possible roles for uwiki, cheapest first:**
+
 1. *Content only*: uwiki is just a collection wiki-reader reads. Zero integration work; works in the POC.
 2. *Conventions*: wiki-reader adopts uwiki's frontmatter keys, ID grammar, and link style via config. Config-only.
 3. *Index provider*: if uwiki builds an index (links, IDs, metadata), implement `UwikiProvider` and skip wiki-reader's own parsing for those collections.

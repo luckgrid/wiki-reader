@@ -4,7 +4,7 @@
 
 A terminal wiki reader for markdown collections. It browses like a documentation site (side nav, breadcrumbs, working links, back/forward, prev/next), sized to live in a herdr pane next to your work.
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ Luckgrid Wiki › Architecture › Design System › Token Projection       ◫   ✕ │
 ├──────────────────────────────┬───────────────────────────────────────────────┤

@@ -89,6 +89,7 @@ The side nav is built from the filesystem but **presented as a documentation sit
 Each page's label is the first match of: frontmatter `nav_title` → `title` → first H1 → humanized filename (`02-token-projection.md` → "Token Projection"; numeric prefixes are stripped for display but still used for sorting).
 
 Config (P1/P2):
+
 ```toml
 [nav]
 labels = "title"            # "title" | "filename" | "title+filename" (filename as dim alt text below)
@@ -109,7 +110,7 @@ The root folder is special: the root README is always the **first top-level item
 
 **Worked example**
 
-```
+```text
 wiki/
 ├── README.md                    "Worked Example Wiki"
 ├── architecture/
@@ -126,7 +127,7 @@ wiki/
 
 renders as (annotated; `render_text` omits the ← markers)
 
-```
+```text
 ● Worked Example Wiki          ← landing / root entry
 ▾ Architecture Overview        ← group
   Architecture Overview        ← landing page
@@ -141,6 +142,7 @@ renders as (annotated; `render_text` omits the ← markers)
 > Group headers and their landing pages share a label by default (the MkDocs/Docusaurus convention). If that reads as noise, a later option `nav.landing_label = "Overview"` can relabel landing items.
 
 ### Group header behavior
+
 Clicking or pressing `Enter` on a group header **toggles** it. The landing page is opened by its own item. Groups containing the current page auto-expand after navigation.
 
 ### Ordering (tree and prev/next)
