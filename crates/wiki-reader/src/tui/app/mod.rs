@@ -587,8 +587,31 @@ impl App {
         let source_scroll = self.doc.source_cursor(self.scroll);
         let line_1based = source.saturating_add(1);
         let cmd = crate::tui::editor::build_editor_command(&editor, &path, line_1based);
+        let meta_before = std::fs::metadata(&path).ok();
         match self.editor.launch(&cmd) {
-            Ok(()) => self.reload_page_keeping_view(&key, source, source_scroll),
+            Ok(exit) => {
+                let meta_after = std::fs::metadata(&path).ok();
+                let saved = match (&meta_before, &meta_after) {
+                    (Some(b), Some(a)) => {
+                        let mtime_changed = match (b.modified(), a.modified()) {
+                            (Ok(t0), Ok(t1)) => t0 != t1,
+                            _ => false,
+                        };
+                        mtime_changed || b.len() != a.len()
+                    }
+                    _ => false,
+                };
+                if saved {
+                    self.reload_page_keeping_view(&key, source, source_scroll);
+                }
+                if !exit.success {
+                    self.message = if saved {
+                        "editor exited non-zero (file saved)".into()
+                    } else {
+                        "editor exited non-zero".into()
+                    };
+                }
+            }
             Err(err) => self.message = format!("editor failed: {err}"),
         }
     }

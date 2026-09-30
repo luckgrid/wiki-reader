@@ -7,11 +7,13 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.98.1"
+authors = ["LUCKGRID"]
 
 [workspace.dependencies]
 thiserror = "2.0.21"
 ignore = "0.4.33"
 tempfile = "3.27.0"
+filetime = "0.2.26"
 clap = { version = "4.6.7", features = ["derive"] }
 ratatui = "0.30.2"
 serde = { version = "1.0.228", features = ["derive"] }
@@ -24,6 +26,7 @@ insta = "1.48.0"
 notify-debouncer-mini = "0.7.0"
 syntect = { version = "5.3.0", default-features = false, features = ["default-syntaxes", "default-themes", "regex-fancy"] }
 unicode-width = "0.2.0"
+shell-words = "1.1.1"
 wiki-reader-core = { path = "crates/wiki-reader-core" }
 wiki-reader-render = { path = "crates/wiki-reader-render" }
 

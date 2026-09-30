@@ -17,12 +17,15 @@ path = "examples/keylog.rs"
 [dependencies]
 clap = { workspace = true }
 ratatui = { workspace = true }
+shell-words = { workspace = true }
 syntect = { workspace = true }
 wiki-reader-core = { workspace = true }
 wiki-reader-render = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }
+tempfile = { workspace = true }
+filetime = { workspace = true }
 
 [lints]
 workspace = true

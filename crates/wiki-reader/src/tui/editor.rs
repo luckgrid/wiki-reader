@@ -13,14 +13,21 @@ pub struct EditorCmd {
     pub args: Vec<String>,
 }
 
+/// Outcome of a successful spawn + wait (exit code may be non-zero).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EditorExit {
+    /// Process exited with status 0.
+    pub success: bool,
+}
+
 /// Spawn an editor and wait (injected for tests).
 pub trait EditorLauncher: Send {
     /// Run `cmd` with inherited stdio; return when the editor exits.
     ///
     /// # Errors
     ///
-    /// Propagates spawn / wait failures.
-    fn launch(&self, cmd: &EditorCmd) -> io::Result<()>;
+    /// Propagates spawn / wait failures (not a non-zero exit).
+    fn launch(&self, cmd: &EditorCmd) -> io::Result<EditorExit>;
 }
 
 /// Real editor: inherit stdio and wait.
@@ -28,18 +35,16 @@ pub trait EditorLauncher: Send {
 pub struct SystemEditor;
 
 impl EditorLauncher for SystemEditor {
-    fn launch(&self, cmd: &EditorCmd) -> io::Result<()> {
+    fn launch(&self, cmd: &EditorCmd) -> io::Result<EditorExit> {
         let status = Command::new(&cmd.program)
             .args(&cmd.args)
             .stdin(Stdio::inherit())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .status()?;
-        if status.success() {
-            Ok(())
-        } else {
-            Err(io::Error::other(format!("editor exited with {status}")))
-        }
+        Ok(EditorExit {
+            success: status.success(),
+        })
     }
 }
 
@@ -49,12 +54,16 @@ impl EditorLauncher for SystemEditor {
 pub struct RecordingEditor {
     /// Captured commands (shared so tests can keep a handle after boxing).
     pub launched: std::sync::Arc<std::sync::Mutex<Vec<EditorCmd>>>,
+    /// Exit success flag returned to the caller (default true).
+    pub exit_ok: bool,
 }
 
 impl EditorLauncher for RecordingEditor {
-    fn launch(&self, cmd: &EditorCmd) -> io::Result<()> {
+    fn launch(&self, cmd: &EditorCmd) -> io::Result<EditorExit> {
         self.launched.lock().expect("lock").push(cmd.clone());
-        Ok(())
+        Ok(EditorExit {
+            success: self.exit_ok,
+        })
     }
 }
 
@@ -72,21 +81,48 @@ pub fn resolve_editor() -> Option<String> {
 }
 
 /// Build argv for `editor` opening `path` at 1-based `line`.
+///
+/// `editor` may include arguments (`code --wait`, `nvim -u NONE`); the first
+/// word is the program, its basename picks the line syntax, and remaining
+/// words precede the file/line args.
 #[must_use]
 pub fn build_editor_command(editor: &str, path: &Path, line: u32) -> EditorCmd {
-    let program = editor.trim().to_owned();
+    let words = shell_words::split(editor.trim()).unwrap_or_else(|_| {
+        editor
+            .split_whitespace()
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    });
+    let (program, prefix) = match words.split_first() {
+        Some((prog, rest)) => (prog.clone(), rest.to_vec()),
+        None => (editor.trim().to_owned(), Vec::new()),
+    };
     let base = Path::new(&program)
         .file_name()
         .and_then(|s| s.to_str())
         .unwrap_or(program.as_str());
     let path_s = path.to_string_lossy().into_owned();
     let line = line.max(1);
-    let args = match base {
-        "code" | "code-insiders" => vec!["-g".to_owned(), format!("{path_s}:{line}")],
-        "hx" | "helix" | "zed" | "zeditor" => vec![format!("{path_s}:{line}")],
+    let mut args = prefix;
+    match base {
+        "code" | "code-insiders" => {
+            args.push("-g".to_owned());
+            args.push(format!("{path_s}:{line}"));
+        }
+        "hx" | "helix" | "zed" | "zeditor" => {
+            args.push(format!("{path_s}:{line}"));
+        }
+        "emacsclient" => {
+            // -t is typically in the editor string; still open at line.
+            args.push(format!("+{line}"));
+            args.push(path_s);
+        }
         // vi / vim / nvim / nano / emacs / default
-        _ => vec![format!("+{line}"), path_s],
-    };
+        _ => {
+            args.push(format!("+{line}"));
+            args.push(path_s);
+        }
+    }
     EditorCmd { program, args }
 }
 
@@ -140,6 +176,45 @@ mod tests {
 
         let zed = build_editor_command("zed", &path, 5);
         assert_eq!(zed.args, vec!["/wiki/my page.md:5".to_owned()]);
+    }
+
+    #[test]
+    fn command_builder_splits_editor_args() {
+        let path = PathBuf::from("/wiki/a.md");
+        let code = build_editor_command("code --wait", &path, 10);
+        assert_eq!(code.program, "code");
+        assert_eq!(
+            code.args,
+            vec![
+                "--wait".to_owned(),
+                "-g".to_owned(),
+                "/wiki/a.md:10".to_owned()
+            ]
+        );
+
+        let nvim = build_editor_command("nvim -u NONE", &path, 2);
+        assert_eq!(nvim.program, "nvim");
+        assert_eq!(
+            nvim.args,
+            vec![
+                "-u".to_owned(),
+                "NONE".to_owned(),
+                "+2".to_owned(),
+                "/wiki/a.md".to_owned()
+            ]
+        );
+
+        let emacs = build_editor_command("emacsclient -t", &path, 5);
+        assert_eq!(emacs.program, "emacsclient");
+        assert_eq!(
+            emacs.args,
+            vec!["-t".to_owned(), "+5".to_owned(), "/wiki/a.md".to_owned()]
+        );
+
+        let quoted = build_editor_command(r#""/opt/My Editor/bin/code" --wait"#, &path, 1);
+        assert_eq!(quoted.program, "/opt/My Editor/bin/code");
+        assert_eq!(quoted.args[0], "--wait");
+        assert_eq!(quoted.args[1], "-g");
     }
 
     #[test]
