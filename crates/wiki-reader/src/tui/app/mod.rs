@@ -550,15 +550,125 @@ impl App {
     }
 
     fn open_new_tab(&mut self) {
+        match self.focus {
+            FocusPane::Nav => match self.navigator.nav().cursor.clone() {
+                NavStop::Node(NodeId::Page(key)) => self.open_page_new_tab(key),
+                NavStop::Node(id) => {
+                    let open = !self.navigator.nav().expanded.contains(&id);
+                    self.navigator.set_group_expanded(id, open);
+                    self.clamp_nav_scroll();
+                }
+                NavStop::Search => {}
+            },
+            FocusPane::Viewer => {
+                if let Some(raw) = self.new_tab_link_target() {
+                    self.open_raw_new_tab(&raw);
+                } else {
+                    self.duplicate_current_tab();
+                }
+            }
+        }
+    }
+
+    /// Focused link, or the sole link on the cursor line.
+    fn new_tab_link_target(&self) -> Option<String> {
+        let items = self.focus_list();
+        if let Some(i) = self.focused_item
+            && let Some(it) = items.get(i)
+            && it.kind == crate::tui::viewer_doc::FocusTarget::Link
+        {
+            return Some(it.target.clone());
+        }
+        let line = self.cursor_line;
+        let on_line: Vec<_> = self
+            .doc
+            .link_spans()
+            .iter()
+            .filter(|s| s.segments.iter().any(|(l, _)| *l == line))
+            .collect();
+        (on_line.len() == 1).then(|| on_line[0].raw_target.clone())
+    }
+
+    fn duplicate_current_tab(&mut self) {
         let loc = self.navigator.tab().current();
         let page = loc.page.clone();
         let anchor = loc.anchor.clone();
-        let effects = self.navigator.navigate(
-            Target::Page(page, anchor),
-            Disposition::NewTab,
-            self.view_state(),
-        );
+        self.open_target_new_tab(Target::Page(page, anchor));
+    }
+
+    pub(crate) fn open_page_new_tab(&mut self, key: PageKey) {
+        self.open_target_new_tab(Target::Page(key, None));
+    }
+
+    fn open_raw_new_tab(&mut self, raw: &str) {
+        let from = self.navigator.tab().current().page.clone();
+        let outcome = wiki_reader_core::nav::resolve(raw, &from, self.navigator.index());
+        self.open_target_new_tab(outcome.target);
+    }
+
+    fn open_target_new_tab(&mut self, target: Target) {
+        let effects = self
+            .navigator
+            .navigate(target, Disposition::NewTab, self.view_state());
         self.apply_effects(effects);
+    }
+
+    /// Middle-click: open navigable hits in a new tab (same targets as left-click).
+    pub(crate) fn middle_click_hit(&mut self, hit: crate::tui::hit::Hit) {
+        use crate::tui::hit::Hit;
+        match hit {
+            Hit::Link(id) => {
+                self.update(Action::FocusViewer);
+                if let Some(raw) = self
+                    .doc
+                    .link_target(wiki_reader_render::LinkId(id))
+                    .map(str::to_owned)
+                {
+                    self.open_raw_new_tab(&raw);
+                }
+            }
+            Hit::NavItem(NodeId::Page(key)) => {
+                self.update(Action::FocusNav);
+                self.navigator.set_nav_cursor(NodeId::Page(key.clone()));
+                self.open_page_new_tab(key);
+            }
+            Hit::Breadcrumb(key) => self.open_page_new_tab(key),
+            Hit::Prev => {
+                let cur = self.navigator.tab().current().page.clone();
+                if let Some(key) = self.navigator.nav().tree.prev(&cur) {
+                    self.open_page_new_tab(key);
+                }
+            }
+            Hit::Next => {
+                let cur = self.navigator.tab().current().page.clone();
+                if let Some(key) = self.navigator.nav().tree.next(&cur) {
+                    self.open_page_new_tab(key);
+                }
+            }
+            Hit::SearchResult(i) => {
+                let Some(overlay) = self.search.as_ref() else {
+                    return;
+                };
+                let key = match overlay.mode {
+                    SearchMode::Pages => overlay.page_hits.get(i).map(|h| h.page.clone()),
+                    SearchMode::Text => overlay.text_hits.get(i).map(|h| h.page.clone()),
+                };
+                if let Some(key) = key {
+                    self.open_page_new_tab(key);
+                }
+            }
+            Hit::NavItem(_)
+            | Hit::NavGroupToggle(_)
+            | Hit::NavSearchRow
+            | Hit::NavToggle
+            | Hit::Quit
+            | Hit::ViewerLine(_)
+            | Hit::SearchDismiss
+            | Hit::FocusNav
+            | Hit::FocusViewer
+            | Hit::Tab(_)
+            | Hit::TabClose(_) => {}
+        }
     }
 
     fn cycle_tab(&mut self, delta: i32) {
