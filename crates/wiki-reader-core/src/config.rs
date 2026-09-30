@@ -64,7 +64,8 @@ impl Config {
         Self::load_with_xdg(root, explicit, xdg_config_path().as_deref())
     }
 
-    fn load_with_xdg(root: &Path, explicit: Option<&Path>, xdg: Option<&Path>) -> Self {
+    #[must_use]
+    pub fn load_with_xdg(root: &Path, explicit: Option<&Path>, xdg: Option<&Path>) -> Self {
         let mut cfg = Self::default();
         if let Some(xdg) = xdg
             && xdg.is_file()
@@ -113,7 +114,13 @@ impl Config {
         }
         if let Some(v) = table.get("exclude") {
             match parse_string_list(v) {
-                Ok(list) => self.exclude = list,
+                Ok(list) => {
+                    for pat in list {
+                        if !self.exclude.contains(&pat) {
+                            self.exclude.push(pat);
+                        }
+                    }
+                }
                 Err(msg) => self.diagnostics.push(format!("exclude: {msg}")),
             }
         }
@@ -164,7 +171,11 @@ impl Config {
         if let Some(v) = table.get("keys") {
             if trusted {
                 match parse_string_map(v) {
-                    Ok(map) => self.keys = map,
+                    Ok(map) => {
+                        for (k, val) in map {
+                            self.keys.insert(k, val);
+                        }
+                    }
                     Err(msg) => self.diagnostics.push(format!("keys: {msg}")),
                 }
             } else {
@@ -220,8 +231,14 @@ fn parse_string_map(v: &toml::Value) -> Result<BTreeMap<String, String>, String>
 #[must_use]
 pub fn xdg_config_path() -> Option<PathBuf> {
     if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
-        let p = PathBuf::from(xdg).join("wiki-reader/config.toml");
-        return Some(p);
+        let xdg = xdg.trim();
+        // XDG Base Directory Spec: empty means unset.
+        if !xdg.is_empty() {
+            let p = PathBuf::from(xdg);
+            if p.is_absolute() {
+                return Some(p.join("wiki-reader/config.toml"));
+            }
+        }
     }
     std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config/wiki-reader/config.toml"))
 }
@@ -364,6 +381,50 @@ quit = "X"
             "diags={:?}",
             cfg.diagnostics
         );
+    }
+
+    #[test]
+    fn exclude_unions_across_files() {
+        let tmp = tempdir().unwrap();
+        let xdg = tmp.path().join("xdg.toml");
+        fs::write(&xdg, r#"exclude = ["drafts/**"]"#).unwrap();
+        fs::write(
+            tmp.path().join(".wiki-reader.toml"),
+            r#"exclude = ["secrets/**", "drafts/**"]"#,
+        )
+        .unwrap();
+        let cfg = Config::load_with_xdg(tmp.path(), None, Some(&xdg));
+        assert_eq!(
+            cfg.exclude,
+            vec!["drafts/**".to_owned(), "secrets/**".to_owned()]
+        );
+    }
+
+    #[test]
+    fn keys_merge_later_wins_per_action() {
+        let tmp = tempdir().unwrap();
+        let xdg = tmp.path().join("xdg.toml");
+        fs::write(
+            &xdg,
+            r#"
+[keys]
+quit = "q"
+toggle-nav = "b"
+"#,
+        )
+        .unwrap();
+        let over = tmp.path().join("over.toml");
+        fs::write(
+            &over,
+            r#"
+[keys]
+quit = "Q"
+"#,
+        )
+        .unwrap();
+        let cfg = Config::load_with_xdg(tmp.path(), Some(&over), Some(&xdg));
+        assert_eq!(cfg.keys.get("quit").map(String::as_str), Some("Q"));
+        assert_eq!(cfg.keys.get("toggle-nav").map(String::as_str), Some("b"));
     }
 
     fn load_isolated(root: &Path, explicit: Option<&Path>) -> Config {

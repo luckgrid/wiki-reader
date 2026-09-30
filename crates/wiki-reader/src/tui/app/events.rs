@@ -3,6 +3,8 @@
 use std::io::{self, stdout};
 use std::panic;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use ratatui::DefaultTerminal;
 use ratatui::Terminal;
@@ -78,13 +80,21 @@ fn run_loop(
     app: &mut App,
     guard: &mut TerminalGuard,
 ) -> io::Result<()> {
+    let terminate = Arc::new(AtomicBool::new(false));
+    let _ = signal_hook::flag::register(signal_hook::consts::SIGHUP, Arc::clone(&terminate));
+    let _ = signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&terminate));
     loop {
         terminal.draw(|frame| draw(frame, app))?;
+        if terminate.load(Ordering::Relaxed) {
+            app.flush_session(true);
+            app.quit = true;
+        }
         if app.quit {
-            app.save_session();
+            app.flush_session(true);
             return Ok(());
         }
         app.poll_watcher();
+        app.flush_session(false);
         if event::poll(std::time::Duration::from_millis(250))? {
             match event::read()? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => {
@@ -161,12 +171,42 @@ pub(crate) fn apply_mouse(
                         _ => {}
                     }
                 }
-                Hit::Link(_) | Hit::ViewerLine(_) | Hit::FocusViewer | Hit::Prev | Hit::Next => {
+                Hit::Link(_)
+                | Hit::ViewerLine(_)
+                | Hit::FocusViewer
+                | Hit::Prev
+                | Hit::Next
+                | Hit::Tab(_)
+                | Hit::TabClose(_) => {
                     app.update(Action::FocusViewer);
                 }
                 _ => {}
             }
+            // TabClose carries the index; CloseTab alone would close the active tab.
+            if let Hit::TabClose(i) = hit {
+                app.close_tab_at(i);
+                return None;
+            }
             Some(HitMap::action_for(&hit))
+        }
+        MouseEventKind::Down(MouseButton::Middle) => {
+            let hit = app.hit_map.hit_at(mouse.column, mouse.row)?.clone();
+            if let Hit::Link(id) = hit {
+                app.update(Action::FocusViewer);
+                let raw = app
+                    .doc
+                    .link_target(wiki_reader_render::LinkId(id))
+                    .map(str::to_owned)?;
+                let from = app.navigator.tab().current().page.clone();
+                let outcome = wiki_reader_core::nav::resolve(&raw, &from, app.navigator.index());
+                let effects = app.navigator.navigate(
+                    outcome.target,
+                    wiki_reader_core::nav::Disposition::NewTab,
+                    app.view_state(),
+                );
+                app.apply_effects(effects);
+            }
+            None
         }
         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
             let over_nav = app.hit_map.entries().iter().any(|(r, h)| {

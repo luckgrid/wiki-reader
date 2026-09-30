@@ -17,13 +17,13 @@ pub enum InputMode {
     Confirm,
 }
 
-/// Chord / pending-key state for multi-key sequences (`gg`).
+/// Chord / pending-key state for multi-key sequences (`gg`, `gt`, `gT`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Chord {
     /// No pending key.
     #[default]
     None,
-    /// Saw a lone `g`; next `g` → home.
+    /// Saw a lone `g`; next `g` → home, `t`/`T` → next/prev tab.
     PendingG,
 }
 
@@ -82,12 +82,19 @@ pub fn map_with_overrides(
         };
     }
 
-    // `gg` chord (viewer home). Lone `g` waits; other keys cancel.
-    if matches!(key.code, KeyCode::Char('g')) && !key.modifiers.contains(KeyModifiers::SHIFT) {
-        return match chord {
-            Chord::PendingG => (Some(Action::ViewerHome), Chord::None),
-            Chord::None => (None, Chord::PendingG),
-        };
+    // `g` chords: `gg` home, `gt` next tab, `gT` prev tab. Lone `g` waits.
+    if chord == Chord::PendingG {
+        match key.code {
+            KeyCode::Char('g') if !key.modifiers.contains(KeyModifiers::SHIFT) => {
+                return (Some(Action::ViewerHome), Chord::None);
+            }
+            KeyCode::Char('t') => return (Some(Action::NextTab), Chord::None),
+            KeyCode::Char('T') => return (Some(Action::PrevTab), Chord::None),
+            _ => {} // cancel pending `g`; map this key normally below
+        }
+    } else if matches!(key.code, KeyCode::Char('g')) && !key.modifiers.contains(KeyModifiers::SHIFT)
+    {
+        return (None, Chord::PendingG);
     }
     let chord = Chord::None;
 
@@ -149,6 +156,10 @@ pub fn map_global(key: KeyEvent) -> Option<Action> {
         KeyCode::Char('b') => Some(Action::ToggleNav),
         KeyCode::Char('r') => Some(Action::ToggleViewMode),
         KeyCode::Char('e') => Some(Action::OpenInEditor),
+        KeyCode::Char('y') => Some(Action::CopyPagePath),
+        KeyCode::Char('Y') => Some(Action::CopyLinkTarget),
+        KeyCode::Char('t') => Some(Action::NewTab),
+        KeyCode::Char('x') => Some(Action::CloseTab),
         KeyCode::Char('/') => Some(Action::OpenSearch),
         KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             Some(Action::OpenSearch)
@@ -226,6 +237,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)]
     fn keymap_table_bindings() {
         let cases: &[(KeyEvent, FocusPane, Option<Action>)] = &[
             (
@@ -307,6 +319,36 @@ mod tests {
         );
         assert_eq!(a2, Some(Action::ViewerHome));
         assert_eq!(c2, Chord::None);
+
+        // gt / gT tab chords
+        let (_, c) = map(
+            key(KeyCode::Char('g')),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(c, Chord::PendingG);
+        let (next, _) = map(
+            key(KeyCode::Char('t')),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::PendingG,
+        );
+        assert_eq!(next, Some(Action::NextTab));
+        let (prev, _) = map(
+            key(KeyCode::Char('T')),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::PendingG,
+        );
+        assert_eq!(prev, Some(Action::PrevTab));
+        let (new_tab, _) = map(
+            key(KeyCode::Char('t')),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(new_tab, Some(Action::NewTab));
 
         // Overlay types plain letters into the search field
         let (a, _) = map(

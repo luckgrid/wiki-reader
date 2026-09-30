@@ -7,10 +7,11 @@ use crate::tui::focus::FocusPane;
 use crate::tui::layout;
 use crate::tui::page_doc::PageDoc;
 use crate::tui::regions::status::StatusModel;
-use crate::tui::regions::{footer, header, side_nav, status, viewer};
+use crate::tui::regions::{footer, header, side_nav, status, tabs, viewer};
 use crate::tui::viewer_doc::{FocusTarget, ViewerDoc, format_target_with_provider};
 
 /// Draw all regions and rebuild the hit map.
+#[allow(clippy::too_many_lines)] // layout + tab bar
 pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     app.hit_map.clear();
     let area = frame.area();
@@ -18,7 +19,6 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     let regions = layout::split(area, app.nav_visible);
     let text_width = regions.viewer.width.saturating_sub(2).min(100);
     app.ensure_layout_width(text_width);
-    app.viewer_rows = regions.viewer.height.max(1);
     // Borders (2) + search row (1); remaining rows show the tree.
     app.nav_viewport = regions.side_nav.height.saturating_sub(3).max(1);
     let theme = app.theme;
@@ -27,6 +27,29 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     let nav = app.navigator.nav();
 
     header::draw(frame, regions.header, &crumbs, &theme, &mut app.hit_map);
+
+    // Tab bar sits above the viewer only when ≥2 tabs.
+    let viewer_area = if app.navigator.tab_count() >= 2 {
+        let split = ratatui::layout::Layout::default()
+            .direction(ratatui::layout::Direction::Vertical)
+            .constraints([
+                ratatui::layout::Constraint::Length(1),
+                ratatui::layout::Constraint::Min(1),
+            ])
+            .split(regions.viewer);
+        tabs::draw(
+            frame,
+            split[0],
+            app.navigator.tabs(),
+            app.navigator.active(),
+            &theme,
+            &mut app.hit_map,
+        );
+        split[1]
+    } else {
+        regions.viewer
+    };
+    app.viewer_rows = viewer_area.height.max(1);
 
     let focus_item = app
         .focused_item
@@ -37,7 +60,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     };
     viewer::draw(
         frame,
-        regions.viewer,
+        viewer_area,
         app.doc.lines(),
         app.doc.link_spans(),
         highlights,

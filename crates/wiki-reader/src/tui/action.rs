@@ -100,6 +100,20 @@ pub enum Action {
     ToggleViewMode,
     /// Open current page in `$VISUAL` / `$EDITOR` at the cursor line (`e`).
     OpenInEditor,
+    /// Copy current page relative path (`y`).
+    CopyPagePath,
+    /// Copy focused link target (`Y`).
+    CopyLinkTarget,
+    /// Duplicate current page into a new tab (`t`).
+    NewTab,
+    /// Activate next tab (`gt`).
+    NextTab,
+    /// Activate previous tab (`gT`).
+    PrevTab,
+    /// Close the active tab (`x`); refuses the last tab.
+    CloseTab,
+    /// Activate tab by index (tab bar click).
+    SwitchTab(usize),
     /// No-op / ignored.
     #[allow(dead_code)]
     None,
