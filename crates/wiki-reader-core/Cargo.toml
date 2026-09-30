@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 description = "Terminal-free index, nav, and content core for wiki-reader"
 rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "../../README.md"
 
 [dependencies]
 thiserror = { workspace = true }
