@@ -32,6 +32,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify tag matches crate version
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          ver=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)
+          expected="v${ver}"
+          if [[ "$REF_NAME" != "$expected" ]]; then
+            echo "tag '$REF_NAME' does not match Cargo.toml version '$expected'" >&2
+            exit 1
+          fi
+
       - name: Install toolchain
         run: rustup toolchain install
 
@@ -52,6 +65,21 @@ jobs:
           else
             cargo build --release --locked -p wiki-reader
           fi
+
+      - name: Smoke --version
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          ver=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)
+          if [[ -n "$TARGET" ]]; then
+            bin="target/${TARGET}/release/wiki-reader"
+          else
+            bin="target/release/wiki-reader"
+          fi
+          out=$("$bin" --version)
+          echo "$out"
+          echo "$out" | grep -F "$ver"
 
       - name: Package
         shell: bash
@@ -90,8 +118,10 @@ jobs:
 
       - name: Attach to GitHub Release
         if: github.event_name == 'push'
-        uses: softprops/action-gh-release@v2
+        # softprops/action-gh-release@v2.6.2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
           files: |
             dist/*.tar.gz
             dist/*.tar.gz.sha256
+          prerelease: ${{ contains(github.ref_name, '-') }}
