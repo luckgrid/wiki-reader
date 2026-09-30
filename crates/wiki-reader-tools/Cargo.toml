@@ -4,11 +4,20 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+description = "Repository checks for wiki-reader: relative links, anchors, and frontmatter"
 publish = false
 
 [[bin]]
 name = "link-check"
 path = "src/main.rs"
+
+[dependencies]
+pulldown-cmark = { workspace = true }
+thiserror = { workspace = true }
+wiki-reader-core = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

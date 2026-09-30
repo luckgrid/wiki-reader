@@ -2210,6 +2210,12 @@ dependencies = [
 [[package]]
 name = "wiki-reader-tools"
 version = "0.1.0"
+dependencies = [
+ "pulldown-cmark",
+ "tempfile",
+ "thiserror 2.0.21",
+ "wiki-reader-core",
+]
 
 [[package]]
 name = "winapi"
