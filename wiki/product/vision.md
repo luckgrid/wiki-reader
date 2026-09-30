@@ -29,7 +29,7 @@ A terminal pane that browses a markdown collection the way a good documentation 
 
 ## Who it's for
 
-A developer or architect working in herdr panes, with markdown collections spread across repos under `~/Workspaces/`.
+A developer or architect working in herdr panes, with markdown collections spread across repos.
 
 ## Principles
 
@@ -49,8 +49,8 @@ A developer or architect working in herdr panes, with markdown collections sprea
 | In-app editing | markdown-reader already does this well; we're a reader. |
 | Context/widget right sidebar | The requirements aren't clear yet. Designed as a v2 slot ([context engine](../architecture/context-engine.md), [integrations](../architecture/integrations.md)). |
 | Agent CLI / JSON output | Follows the widget sidebar in v2. The core stays terminal-free so it's easy to add. |
-| Publishing / site export | mdBook, Zola, uwiki own this. |
-| uwiki / design-system dependencies | Seams now, decisions after MVP. |
+| Publishing / site export | mdBook, Zola, and similar tools own this. |
+| External providers / theme tokens | Seams now, decisions after MVP. |
 
 ## What success looks like
 

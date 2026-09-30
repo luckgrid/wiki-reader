@@ -35,7 +35,7 @@ Signals are collected independently. Each is optional, and each records whether 
 
 ### Context repo vs. collection root
 
-The collection you're **reading** and the repo you're **working in** are often different. Examples: reading `~/Workspaces/uwiki/` while agents work in `~/Workspaces/design-system/`. So context signals are gathered from context directories, not the collection root:
+The collection you're **reading** and the repo you're **working in** are often different. Examples: reading `~/src/docs/` while agents work in `~/src/api/`. So context signals are gathered from context directories, not the collection root:
 
 - `--context-dir` flag (repeatable), else
 - herdr sibling pane cwds (deduplicated to git roots), else
@@ -45,32 +45,32 @@ This is the main reason herdr integration matters. It lets the wiki pane know wh
 
 ## 2. Resolution
 
-Signals resolve into **entities**: work units, workspaces, paths, tags.
+Signals resolve into **entities**: work units, workspace roots, paths, tags.
 
 ### Work unit IDs
 
-Configured as named patterns so the grammar isn't hard-coded. Example based on the current Luckgrid convention (branch `ds/e01-s4-t2-utility-variant-extraction` ↔ ID `DS-E01.S4.T2`):
+Configured as named patterns so the grammar isn't hard-coded. Example (branch `feature/auth-refresh` ↔ ID `AUTH-12`):
 
 ```toml
 [[context.work_unit]]
-name = "program-task"
+name = "ticket"
 # ID as it appears in text
-id_pattern = '\b(?P<prog>[A-Z]{2,5})-E(?P<e>\d{2})(?:\.S(?P<s>\d+))?(?:\.T(?P<t>\d+))?\b'
+id_pattern = '\b(?P<proj>[A-Z]{2,5})-(?P<n>\d+)\b'
 # branch → ID
-branch_pattern = '^(?P<prog>[a-z]{2,5})/e(?P<e>\d{2})(?:-s(?P<s>\d+))?(?:-t(?P<t>\d+))?'
-id_template = "{prog|upper}-E{e}{.S{s}}{.T{t}}"
+branch_pattern = '^feature/(?P<proj>[a-z]+)-(?P<n>\d+)'
+id_template = "{proj|upper}-{n}"
 ```
 
-The ID is hierarchical, so resolution also yields ancestors: `DS-E01.S4.T2` → `DS-E01.S4` → `DS-E01`. Ancestor matches rank lower than exact ones.
+The ID can be hierarchical when configured that way; ancestor matches rank lower than exact ones.
 
 ### Path rules
 
 ```toml
 [[context.path_rule]]
-match = "~/Workspaces/design-system/**"
-workspace = "design-system"
-tags = ["design-system", "tokens"]
-pages = ["architecture/design-system/**"]   # globs within the collection
+match = "~/src/api/**"
+workspace = "api"
+tags = ["api", "auth"]
+pages = ["architecture/auth/**"]   # globs within the collection
 ```
 
 ### Page-declared applicability
@@ -79,9 +79,9 @@ Pages can declare what they apply to. This is often the most reliable signal bec
 
 ```yaml
 ---
-applies_to: ["~/Workspaces/design-system/**"]
-work_units: ["DS-E01.S4"]
-tags: [tokens, tailwind]
+applies_to: ["~/src/api/**"]
+work_units: ["AUTH-12"]
+tags: [auth, tokens]
 ---
 ```
 
@@ -121,12 +121,12 @@ Rule: the sidebar never shows more than ~12 lines of highlights. Everything else
 
 ```json
 {
-  "signals": [{"source":"git_branch","value":"ds/e01-s4-t2-utility-variant-extraction","dir":"~/Workspaces/design-system"}],
-  "work_units": ["DS-E01.S4.T2"],
+  "signals": [{"source":"git_branch","value":"feature/auth-refresh","dir":"~/src/api"}],
+  "work_units": ["AUTH-12"],
   "related": [
-    {"page":"design-system/S4-T2.md","score":90,"reasons":["frontmatter id = DS-E01.S4.T2","mentions ×3"]}
+    {"page":"architecture/auth/refresh.md","score":90,"reasons":["frontmatter id = AUTH-12","mentions ×3"]}
   ],
-  "highlights": [{"page":"design-system/S4-T2.md","kind":"status","text":"implemented / review-pending"}],
+  "highlights": [{"page":"architecture/auth/refresh.md","kind":"status","text":"implemented / review-pending"}],
   "unavailable": [{"source":"herdr","reason":"HERDR_ENV not set"}]
 }
 ```

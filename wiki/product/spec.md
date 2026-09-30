@@ -110,8 +110,8 @@ Terminal markdown tools display files but don't support wiki browsing: links are
 | U4 | Header back/forward buttons | Header right/left slots are lists of icon buttons, not hard-coded. |
 | W1 | Widget sidebar incl. context engine ([context engine](../architecture/context-engine.md)) | Optional right slot; widget trait gets read-only page + index. |
 | W2 | Agent CLI (`--json`) | Core stays terminal-free ([ADR-0006](../decisions/0006-reader-first.md)). |
-| W3 | uwiki provider | `CollectionProvider` trait. |
-| W4 | Design-system themes | Semantic theme tokens only. |
+| W3 | External provider | `CollectionProvider` trait. |
+| W4 | Design-system themes / shared design tokens | Semantic theme tokens only. |
 | W5 | herdr integration | "Current page changed" event. |
 | W6 | Link hover preview | Hit map already knows link targets. |
 
