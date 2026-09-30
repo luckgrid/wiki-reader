@@ -4,7 +4,7 @@ A terminal wiki reader for markdown collections. It browses like a documentation
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ Project Wiki › Architecture › Design System › Token Projection       ◫   ✕ │
+│ Project Wiki › Architecture › Design System › Token Projection          ◫  ✕ │
 ├──────────────────────────────┬───────────────────────────────────────────────┤
 │ ⌕ Search…               /    │ # Token Projection                            │
 │ ● Project Wiki               │                                               │
@@ -16,7 +16,7 @@ A terminal wiki reader for markdown collections. It browses like a documentation
 │     Workflow OS              ├───────────────────────────────────────────────┤
 │ ▸ Decisions                  │ ‹ Design System                  Adapters ›   │
 ├──────────────────────────────┴───────────────────────────────────────────────┤
-│ VIEWER · architecture/design-system/tokens.md · L42 38% · 1,284 w · 6 min   │
+│ VIEWER · architecture/design-system/tokens.md · L42 38% · 1,284 w · 6 min    │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
