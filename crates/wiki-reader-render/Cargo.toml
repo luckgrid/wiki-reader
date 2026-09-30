@@ -11,6 +11,9 @@ pulldown-cmark = { workspace = true }
 unicode-width = { workspace = true }
 wiki-reader-core = { workspace = true }
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [lints]
 workspace = true
 
