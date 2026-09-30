@@ -186,6 +186,16 @@ pub(crate) fn apply_mouse(
                 }
                 _ => {}
             }
+            // Footer clicks keep focus on that side after the page loads (P2-22).
+            match &hit {
+                Hit::Prev => {
+                    app.sticky_footer = Some(crate::tui::viewer_doc::FocusTarget::FooterPrev)
+                }
+                Hit::Next => {
+                    app.sticky_footer = Some(crate::tui::viewer_doc::FocusTarget::FooterNext)
+                }
+                _ => {}
+            }
             // TabClose carries the index; CloseTab alone would close the active tab.
             if let Hit::TabClose(i) = hit {
                 app.close_tab_at(i);

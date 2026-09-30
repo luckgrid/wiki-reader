@@ -57,7 +57,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 | P2-19 | Viewer cursor line and tab visibility | — | done | 6d7448d |
 | P2-20 | Help overlay (`?`) | — | todo | extract a real binding table from match-based `keymap.rs` first, then generate help from it; clickable keys; pulled forward from P3-06 |
 | P2-21 | Search overlay layout and scroll | — | todo | larger pane, scrolls the full result list with jump to top/bottom, styled like markdown-reader; rename tabs to Content and Files (`SearchMode::Text` / `Pages`) |
-| P2-22 | Keyboard flow: nav to viewer to footer | — | todo | `→` on a nav item opens it and focuses the viewer; hotkey to focus footer prev/next links; focus stays on the link after the page changes; update [ADR-0007](../decisions/0007-input-focus-model.md) when this lands |
+| P2-22 | Keyboard flow: nav to viewer to footer | — | done | `→` opens page + focuses viewer; `f` focuses footer; sticky footer focus across page change; ADR-0007 |
 | P2-23 | Markdown syntax view: element styling (priority) | D1 | done | 09062f7 |
 | P2-24a | Formatted-text view and eye toggle | D1 / C1 | todo | after P2-23; see [P2-24a scope](#p2-24a-scope) |
 | P2-24b | Image diagrams and images | D1 | todo | after P2-24a; see [P2-24b scope](#p2-24b-scope). May slip to Phase 3 without blocking exit |

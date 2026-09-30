@@ -90,6 +90,8 @@ pub enum Action {
     ViewerBackTab,
     /// Viewer Enter — follow link or footer action.
     ViewerActivate,
+    /// Focus viewer footer prev/next (`f`).
+    FocusFooter,
     /// Follow a link by id (mouse).
     FollowLinkId(u32),
     /// Confirm opening a pending external URL.

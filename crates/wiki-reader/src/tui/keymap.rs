@@ -253,6 +253,7 @@ pub fn map_pane(key: KeyEvent, focus: FocusPane) -> Option<Action> {
                 KeyCode::Tab if shift && plain => Some(Action::ViewerBackTab),
                 KeyCode::Tab if plain => Some(Action::ViewerTab),
                 KeyCode::Enter if plain => Some(Action::ViewerActivate),
+                KeyCode::Char('f') if plain => Some(Action::FocusFooter),
                 _ => None,
             }
         }
@@ -592,6 +593,33 @@ mod tests {
             Chord::None,
         );
         assert_eq!(pure_ctrl, None);
+    }
+
+    #[test]
+    fn keymap_focus_footer_on_f() {
+        let (got, _) = map(
+            key(KeyCode::Char('f')),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(got, Some(Action::FocusFooter));
+        // Alt+f remains Forward (Ghostty Option+→).
+        let (alt_f, _) = map(
+            key_mod(KeyCode::Char('f'), KeyModifiers::ALT),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(alt_f, Some(Action::Forward));
+        // Nav pane: plain f is unbound (global map does not steal it).
+        let (nav_f, _) = map(
+            key(KeyCode::Char('f')),
+            FocusPane::Nav,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(nav_f, None);
     }
 
     #[test]

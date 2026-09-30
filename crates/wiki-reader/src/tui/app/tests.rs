@@ -2092,3 +2092,112 @@ fn new_tab_current_matches_replace_for_same_target() {
     );
     assert_eq!(via_tab.navigator.tab().current().page, target);
 }
+
+#[test]
+fn nav_right_on_page_opens_and_focuses_viewer() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.navigator
+        .set_group_expanded(NodeId::Group(PathBuf::from("decisions")), true);
+    let target = PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("decisions/0001-stack.md"),
+    };
+    app.update(Action::FocusNav);
+    app.navigator.set_nav_cursor(NodeId::Page(target.clone()));
+    assert_eq!(app.focus, FocusPane::Nav);
+    app.update(Action::NavExpand);
+    assert_eq!(app.focus, FocusPane::Viewer);
+    assert_eq!(app.navigator.tab().current().page, target);
+}
+
+#[test]
+fn nav_right_on_expanded_group_steps_to_first_child() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let group = NodeId::Group(PathBuf::from("decisions"));
+    app.navigator.set_group_expanded(group.clone(), true);
+    app.update(Action::FocusNav);
+    app.navigator.set_nav_cursor(group);
+    app.update(Action::NavExpand);
+    let rows = app.nav_rows();
+    let idx = app.nav_cursor_index(&rows).expect("cursor");
+    assert!(
+        !rows[idx].is_group,
+        "should land on first child, got {:?}",
+        rows[idx].id
+    );
+}
+
+#[test]
+fn focus_footer_then_enter_keeps_focus_across_pages() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::FocusViewer);
+    app.update(Action::FocusFooter);
+    let items = app.focus_list();
+    let i = app.focused_item.expect("footer focused");
+    assert_eq!(items[i].kind, FocusTarget::FooterNext);
+    let start = app.navigator.tab().current().page.clone();
+    for _ in 0..3 {
+        app.update(Action::ViewerActivate);
+        let items = app.focus_list();
+        let i = app.focused_item.expect("sticky footer");
+        assert_eq!(items[i].kind, FocusTarget::FooterNext);
+    }
+    assert_ne!(app.navigator.tab().current().page, start);
+    // Arrow clears sticky.
+    app.update(Action::ViewerDown);
+    assert_eq!(app.focused_item, None);
+    assert_eq!(app.sticky_footer, None);
+}
+
+#[test]
+fn sticky_footer_falls_back_at_end_of_tree() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    // Walk to the last page via next.
+    app.update(Action::FocusViewer);
+    app.update(Action::FocusFooter);
+    for _ in 0..64 {
+        let items = app.focus_list();
+        let Some(i) = app.focused_item else { break };
+        if items[i].kind != FocusTarget::FooterNext {
+            break;
+        }
+        app.update(Action::ViewerActivate);
+    }
+    let items = app.focus_list();
+    let i = app.focused_item.expect("fallback");
+    assert_eq!(
+        items[i].kind,
+        FocusTarget::FooterPrev,
+        "last page should fall back to prev"
+    );
+}
+
+#[test]
+fn mouse_footer_next_keeps_sticky_focus() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let _ = draw_app(&mut app, 100, 24);
+    let (x, y) = app
+        .hit_map
+        .entries()
+        .iter()
+        .find(|(_, h)| matches!(h, Hit::Next))
+        .map(|(r, _)| (r.x, r.y))
+        .expect("next hit");
+    let mouse = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: x,
+        row: y,
+        modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+    };
+    if let Some(a) = apply_mouse(&mut app, mouse) {
+        app.update(a);
+    }
+    let items = app.focus_list();
+    let i = app.focused_item.expect("sticky after click");
+    assert_eq!(items[i].kind, FocusTarget::FooterNext);
+}
