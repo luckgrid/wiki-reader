@@ -195,6 +195,29 @@ impl App {
             search_match_idx: 0,
             match_highlight: None,
         };
+        if let Some(loaded) = wiki_reader_core::session::load(app.provider.root()) {
+            if let Some(n) = loaded.notice {
+                if app.message.is_empty() {
+                    app.message = n;
+                } else {
+                    app.message = format!("{}; {n}", app.message);
+                }
+            }
+            let cid = app.navigator.index().collection_id.clone();
+            if let Some(n) = loaded.state.apply_to(&mut app.navigator, &cid)
+                && app.message.is_empty()
+            {
+                app.message = n;
+            }
+            app.focus = match loaded.state.focus {
+                wiki_reader_core::session::FocusPaneState::Nav => FocusPane::Nav,
+                wiki_reader_core::session::FocusPaneState::Viewer => FocusPane::Viewer,
+            };
+            if let Some(v) = loaded.state.nav_visible {
+                app.nav_visible = v;
+                app.nav_user_override = true;
+            }
+        }
         let page = app.navigator.tab().current().page.clone();
         app.apply_effects(vec![
             Effect::LoadPage(page.clone()),
@@ -202,6 +225,20 @@ impl App {
             Effect::ScrollTo(None),
         ]);
         Ok(app)
+    }
+
+    /// Persist session for the next launch.
+    pub(crate) fn save_session(&self) {
+        let focus = match self.focus {
+            FocusPane::Nav => wiki_reader_core::session::FocusPaneState::Nav,
+            FocusPane::Viewer => wiki_reader_core::session::FocusPaneState::Viewer,
+        };
+        let state = wiki_reader_core::session::SessionState::from_navigator(
+            &self.navigator,
+            focus,
+            Some(self.nav_visible),
+        );
+        let _ = wiki_reader_core::session::save(self.provider.root(), &state);
     }
 
     pub(crate) fn view_state(&self) -> ViewState {
