@@ -5,10 +5,13 @@ use std::panic;
 use std::path::Path;
 
 use ratatui::DefaultTerminal;
+use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
 use ratatui::crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event, KeyEventKind, MouseButton, MouseEventKind,
 };
 use ratatui::crossterm::execute;
+use ratatui::crossterm::terminal::{EnterAlternateScreen, enable_raw_mode};
 
 use super::App;
 use super::draw::draw;
@@ -104,7 +107,8 @@ fn run_loop(
     }
 }
 
-/// Leave alt-screen/raw/mouse, run `$EDITOR`, then re-enter (`TerminalGuard` semantics).
+/// Leave alt-screen/raw/mouse, run `$EDITOR`, then re-enter without stacking
+/// another `try_init` panic hook (`TerminalGuard` semantics).
 fn suspend_run_editor(
     terminal: &mut DefaultTerminal,
     app: &mut App,
@@ -116,9 +120,18 @@ fn suspend_run_editor(
     }
     ratatui::restore();
     app.open_in_editor();
-    *terminal = ratatui::try_init()?;
+    reenter_terminal(terminal)?;
     execute!(stdout(), EnableMouseCapture)?;
     guard.mouse = true;
+    Ok(())
+}
+
+/// Re-enter raw mode + alt screen without calling `ratatui::try_init` (which
+/// would install another panic hook on every editor round-trip).
+fn reenter_terminal(terminal: &mut DefaultTerminal) -> io::Result<()> {
+    enable_raw_mode()?;
+    execute!(stdout(), EnterAlternateScreen)?;
+    *terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
     Ok(())
 }
 

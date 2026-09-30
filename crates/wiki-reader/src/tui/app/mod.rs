@@ -602,7 +602,10 @@ impl App {
                     _ => false,
                 };
                 if saved {
-                    self.reload_page_keeping_view(&key, source, source_scroll);
+                    // Index may lag the watcher; force a fresh parse for this paint and
+                    // kick a rebuild so backlinks/nav catch up.
+                    self.note_watcher_dirty(true);
+                    self.reload_page_keeping_view_ex(&key, source, source_scroll, true);
                 }
                 if !exit.success {
                     self.message = if saved {
@@ -833,10 +836,26 @@ impl App {
     }
 
     fn reload_page_keeping_view(&mut self, key: &PageKey, source_cursor: u32, source_scroll: u32) {
+        self.reload_page_keeping_view_ex(key, source_cursor, source_scroll, false);
+    }
+
+    /// Reload the current page, optionally ignoring the indexed `Page` so parse
+    /// data matches the fresh file (post-editor) before async reindex finishes.
+    fn reload_page_keeping_view_ex(
+        &mut self,
+        key: &PageKey,
+        source_cursor: u32,
+        source_scroll: u32,
+        fresh_parse: bool,
+    ) {
         match self.provider.read(key) {
             Ok(src) => {
                 let index = self.navigator.index();
-                let page = index.pages.get(key);
+                let page = if fresh_parse {
+                    None
+                } else {
+                    index.pages.get(key)
+                };
                 let mode = self.navigator.tab().current().mode;
                 let width = self.layout_width.max(20);
                 self.doc = match mode {
