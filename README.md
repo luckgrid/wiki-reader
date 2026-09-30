@@ -28,7 +28,7 @@ Existing terminal markdown tools behave like editors or file browsers: opening a
 
 ## Status
 
-Phase 1 is closed. Phase 2 dogfood clock started 2026-09-29 on `~/Workspaces/workstation`. P3-08 install path and release binaries are in this change; later Phase 3 rows wait on dogfood notes. The reader shell, backlinks, heading jumps, and `$EDITOR` support are shipped. Start at [wiki/README.md](wiki/README.md) and see the [roadmap](wiki/roadmap/README.md) for the next tasks.
+Phase 1 is closed. Phase 2 dogfood clock started 2026-09-29 on `~/Workspaces/workstation`. P3-08 install path and release binaries are shipped; later Phase 3 rows wait on dogfood notes. The reader shell, backlinks, heading jumps, and `$EDITOR` support are shipped. Start at [wiki/README.md](wiki/README.md) and see the [roadmap](wiki/roadmap/README.md) for the next tasks.
 
 ## Install
 
