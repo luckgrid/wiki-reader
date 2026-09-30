@@ -88,8 +88,7 @@ fn content_hash(src: &str) -> u64 {
 #[allow(clippy::type_complexity)]
 type DiagramCacheKey = (u64, u16, u8);
 type DiagramCache = HashMap<DiagramCacheKey, Vec<String>>;
-static DIAGRAM_CACHE: LazyLock<Mutex<DiagramCache>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+static DIAGRAM_CACHE: LazyLock<Mutex<DiagramCache>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 #[cfg(test)]
 static CACHE_HITS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
@@ -187,7 +186,10 @@ mod tests {
             .count();
         assert_eq!(header, 1, "{lines:?}");
         let body_lines = bad.lines().count();
-        let repeats = lines.iter().filter(|l| l.as_str() == bad.lines().next().unwrap_or("")).count();
+        let repeats = lines
+            .iter()
+            .filter(|l| l.as_str() == bad.lines().next().unwrap_or(""))
+            .count();
         // Source body appears once after the header, not doubled.
         assert_eq!(lines.len(), 1 + body_lines, "{lines:?}");
         assert_eq!(repeats, 1, "{lines:?}");

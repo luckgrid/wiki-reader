@@ -172,9 +172,8 @@ impl Config {
                         .iter()
                         .any(|d| d.starts_with("theme stored"))
                     {
-                        self.diagnostics.push(
-                            "theme stored but inert until themes land (P3-07)".into(),
-                        );
+                        self.diagnostics
+                            .push("theme stored but inert until themes land (P3-07)".into());
                     }
                 }
                 Err(msg) => self.diagnostics.push(msg),

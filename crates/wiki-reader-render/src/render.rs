@@ -519,8 +519,11 @@ impl<'a> LayoutState<'a> {
                         self.diagram_mode,
                         &crate::diagrams::DiagramEnv::default(),
                     );
-                    let (lines, _reason) =
-                        crate::diagrams::diagram_lines(&body, tier, u16::try_from(self.width).unwrap_or(80));
+                    let (lines, _reason) = crate::diagrams::diagram_lines(
+                        &body,
+                        tier,
+                        u16::try_from(self.width).unwrap_or(80),
+                    );
                     let start_line = u32::try_from(self.styled.len()).unwrap_or(0);
                     for (i, line) in lines.iter().enumerate() {
                         let src_line = close_src.saturating_add(u32::try_from(i).unwrap_or(0));
