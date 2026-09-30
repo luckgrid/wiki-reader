@@ -83,6 +83,15 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 
 Phase status is `active` until every operator item below is ticked. Automated coverage is noted under each item; it does **not** close the item.
 
+**Your next pass (blocks Phase 1 close):**
+
+```bash
+cargo run -p wiki-reader --example keylog   # real Ghostty + herdr pane
+cargo run -p wiki-reader -- ~/Workspaces/uwiki   # or another real collection
+```
+
+Then tick items 1–6 below and the [P1-S1](spikes/p1-s1-herdr-input.md) real-keyboard cells.
+
 1. [ ] `cargo run -p wiki-reader --example keylog` in a herdr pane on your real keyboard; tick the [P1-S1](spikes/p1-s1-herdr-input.md) spike note (P1-G).
    - Coverage: example exists; 2026-09-29 pass used `herdr pane send-keys` only (synthetic).
 2. [ ] On a real collection (e.g. `~/Workspaces/uwiki` when present): follow ten links incl. anchors, go back ten times, confirm one tab and a restored cursor.
