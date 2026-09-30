@@ -91,4 +91,11 @@ impl ViewerDoc for PageDoc {
             Self::Rendered(d) => d.link_spans(),
         }
     }
+
+    fn block_focus_items(&self) -> Vec<super::viewer_doc::FocusItem> {
+        match self {
+            Self::Raw(d) => d.block_focus_items(),
+            Self::Rendered(d) => d.block_focus_items(),
+        }
+    }
 }

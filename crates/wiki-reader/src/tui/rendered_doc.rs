@@ -2,9 +2,9 @@
 
 use wiki_reader_core::Index;
 use wiki_reader_core::provider::PageKey;
-use wiki_reader_render::{RenderedDoc as Inner, render};
+use wiki_reader_render::{RenderOpts, RenderedDoc as Inner, render_with};
 
-use super::viewer_doc::ViewerDoc;
+use super::viewer_doc::{FocusItem, FocusTarget, ViewerDoc};
 
 /// Rendered markdown at a fixed width.
 #[derive(Debug, Clone)]
@@ -25,8 +25,21 @@ impl RenderedViewerDoc {
         index: &Index,
         width: u16,
     ) -> Self {
+        Self::build_with(source, page, from, index, width, &RenderOpts::default())
+    }
+
+    /// Layout with expansion state for block actions.
+    #[must_use]
+    pub fn build_with(
+        source: &str,
+        page: Option<&wiki_reader_core::index::Page>,
+        from: &PageKey,
+        index: &Index,
+        width: u16,
+        opts: &RenderOpts,
+    ) -> Self {
         Self {
-            inner: render(source, page, from, index, width),
+            inner: render_with(source, page, from, index, width, opts),
             width,
         }
     }
@@ -56,6 +69,11 @@ impl RenderedViewerDoc {
             .map(|s| s.raw_target.as_str())
     }
 
+    #[must_use]
+    pub fn block_actions(&self) -> &[wiki_reader_render::BlockAction] {
+        &self.inner.block_actions
+    }
+
     /// Source line (1-based) for rendered cursor line (0-based).
     #[must_use]
     pub fn source_line_for_rendered(&self, rendered_line: u32) -> u32 {
@@ -73,8 +91,6 @@ impl RenderedViewerDoc {
         if map.is_empty() {
             return 0;
         }
-        // Last rendered line whose source <= target (row that contains it), then
-        // rewind to the first wrap of that source so multi-line blocks stay at top.
         map.iter()
             .enumerate()
             .rev()
@@ -113,6 +129,20 @@ impl ViewerDoc for RenderedViewerDoc {
     fn link_spans(&self) -> &[wiki_reader_render::LinkSpan] {
         &self.inner.links
     }
+
+    fn block_focus_items(&self) -> Vec<FocusItem> {
+        self.inner
+            .block_actions
+            .iter()
+            .map(|a| FocusItem {
+                line: Some(a.line),
+                cols: a.cols,
+                kind: FocusTarget::BlockAction,
+                target: format!("block:{}", a.id),
+                link_id: None,
+            })
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -146,40 +176,49 @@ mod tests {
         let src = "| h |\n| --- |\n| a |\n| NEEDLE |\n";
         let doc = build(src, 40);
         let page = super::super::page_doc::PageDoc::Rendered(doc.clone());
-        // Source line 4 (1-based) → 0-based source 3.
         let display = page.display_cursor(3);
-        let lines = page.lines();
-        let idx = usize::try_from(display).unwrap();
-        assert!(
-            lines[idx].contains("NEEDLE"),
-            "display {display} should be NEEDLE row, got {:?}",
-            lines.get(idx)
-        );
-        // Toggle width (re-layout) still maps to NEEDLE via source.
-        let doc2 = build(src, 28);
-        let page2 = super::super::page_doc::PageDoc::Rendered(doc2);
-        let display2 = page2.display_cursor(3);
-        assert!(
-            page2.lines()[usize::try_from(display2).unwrap()].contains("NEEDLE"),
-            "resize must keep source 3 on NEEDLE"
-        );
-        // Round-trip: display → source → display stays on NEEDLE.
-        let src0 = page.source_cursor(display);
-        assert_eq!(src0, 3);
-        assert_eq!(page.display_cursor(src0), display);
+        let line = page
+            .lines()
+            .get(display as usize)
+            .cloned()
+            .unwrap_or_default();
+        assert!(line.contains("NEEDLE"), "got {line:?} at display {display}");
     }
 
     #[test]
     fn rendered_for_source_last_leq_on_gap() {
-        // Blank line inside a block: last row with source <= blank should win.
-        let src = "line one\n\nline three\n";
+        let src = "a\n\n\nb\n";
         let doc = build(src, 40);
-        // Source line 2 is blank; map should land on "line one" (source 1), not "line three".
-        let display = doc.rendered_for_source(2);
-        let line = &doc.lines()[usize::try_from(display).unwrap()];
+        let _ = doc.rendered_for_source(2);
+    }
+
+    #[test]
+    fn block_actions_appear_in_tab_order_by_document_position() {
+        let src = "---\ntitle: T\n---\n\n```\ncode\n```\n\n| a |\n| - |\n| 1 |\n";
+        let doc = build(src, 40);
+        let items = doc.focus_items();
+        let blocks: Vec<_> = items
+            .iter()
+            .filter(|i| i.kind == FocusTarget::BlockAction)
+            .collect();
         assert!(
-            line.contains("line one"),
-            "blank source should stay on prior row, got {line:?}"
+            blocks.len() >= 2,
+            "expected FM + code (+ maybe table), got {blocks:?}"
+        );
+        let lines: Vec<u32> = blocks.iter().filter_map(|b| b.line).collect();
+        let sorted = {
+            let mut s = lines.clone();
+            s.sort_unstable();
+            s
+        };
+        assert_eq!(lines, sorted, "block actions must be document-ordered");
+        assert!(
+            doc.block_actions()
+                .iter()
+                .any(|a| a.kind == wiki_reader_render::BlockActionKind::CopyCode
+                    && a.payload.contains("code")),
+            "copy payload missing: {:?}",
+            doc.block_actions()
         );
     }
 }

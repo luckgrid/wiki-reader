@@ -9,6 +9,7 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use wiki_reader_core::nav::{NavStop, NodeId};
 use wiki_reader_core::provider::PageKey;
 
@@ -1428,4 +1429,73 @@ fn search_pages_projection_token_opens_tokens() {
             .to_string_lossy()
             .contains("tokens")
     );
+}
+
+#[test]
+fn block_action_toggle_frontmatter() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let items = app.focus_list();
+    let fm = items
+        .iter()
+        .position(|it| it.kind == FocusTarget::BlockAction)
+        .expect("frontmatter block action");
+    let joined = app.doc.lines().join("\n");
+    assert!(
+        joined.contains("frontmatter ▶"),
+        "expected collapsed cue: {joined}"
+    );
+    app.focused_item = Some(fm);
+    app.update(Action::ViewerActivate);
+    assert!(
+        !app.expanded_blocks.is_empty(),
+        "toggle should expand a block"
+    );
+    let joined = app.doc.lines().join("\n");
+    assert!(
+        joined.contains("title:"),
+        "expanded frontmatter should show fields: {joined}"
+    );
+}
+
+#[test]
+fn block_action_copy_code_via_clipboard() {
+    use crate::tui::clipboard::RecordingClipboard;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!("wiki-reader-ba-{stamp}"));
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(
+        dir.join("README.md"),
+        "---\ntitle: Copy\n---\n\n```\nsecret-payload\n```\n",
+    )
+    .unwrap();
+    let mut app = App::new(&dir).unwrap();
+    let rec = RecordingClipboard::default();
+    let log = Arc::clone(&rec.copied);
+    app.clipboard = Box::new(rec);
+
+    let items = app.focus_list();
+    let copy = items
+        .iter()
+        .position(|it| {
+            it.kind == FocusTarget::BlockAction
+                && app
+                    .doc
+                    .lines()
+                    .get(it.line.unwrap_or(0) as usize)
+                    .is_some_and(|l| l.contains("```"))
+        })
+        .expect("copy code action");
+    app.focused_item = Some(copy);
+    app.update(Action::ViewerActivate);
+    let copied = log.lock().unwrap().clone();
+    assert_eq!(copied, vec!["secret-payload".to_owned()]);
+    assert_eq!(app.message, "copied");
+    let _ = fs::remove_dir_all(&dir);
 }

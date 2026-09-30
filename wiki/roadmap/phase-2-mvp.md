@@ -22,7 +22,7 @@ All P0/P1 acceptance criteria in [product spec](../product/spec.md) pass; two we
 |----|------|------|--------|-------|
 | P2-01 | Custom nav order via `SUMMARY.md` / `nav_order` | P1 | done | shipped in P1-R3 |
 | P2-02 | "Linked from" backlinks | B1 | done | 47185bc |
-| P2-03 | Block actions in the Tab cycle | BA | todo | extend `FocusTarget` |
+| P2-03 | Block actions in the Tab cycle | BA | done | FocusTarget + OSC 52 |
 | P2-04 | Heading jump | J1 | done | 19faa9e |
 | P2-05 | Tabs as secondary | TB | todo | core `Disposition` ready; TUI bar + keys |
 | P2-06 | Mermaid tiers | D1 | todo | text tier first; image behind Kitty/herdr |
@@ -38,7 +38,7 @@ All P0/P1 acceptance criteria in [product spec](../product/spec.md) pass; two we
 3. P2-05 Tabs
 4. P2-06 Diagrams
 
-(Batch 1 done: P2-02, P2-04, P2-08.)
+(Batch 1 done: P2-02, P2-04, P2-08. Batch 2: P2-09/10/03.)
 
 ## Related
 

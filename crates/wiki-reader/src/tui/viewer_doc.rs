@@ -12,6 +12,8 @@ use wiki_reader_render::{LinkClass, LinkId, LinkSpan};
 pub enum FocusTarget {
     /// Inline markdown link.
     Link,
+    /// Block action (frontmatter / table / code).
+    BlockAction,
     /// Viewer footer prev.
     FooterPrev,
     /// Viewer footer next.
@@ -38,7 +40,7 @@ impl FocusItem {
     #[must_use]
     pub fn doc_line(&self) -> Option<u32> {
         match self.kind {
-            FocusTarget::Link => self.line,
+            FocusTarget::Link | FocusTarget::BlockAction => self.line,
             FocusTarget::FooterPrev | FocusTarget::FooterNext => None,
         }
     }
@@ -56,9 +58,10 @@ pub trait ViewerDoc {
     fn anchor_line(&self, slug: &str) -> Option<u32>;
     /// Interactive link geometry.
     fn link_spans(&self) -> &[LinkSpan];
-    /// Tab-cycle items (links + footer slots filled by the app).
+    /// Tab-cycle items (links + block actions + footer slots filled by the app).
     fn focus_items(&self) -> Vec<FocusItem> {
-        self.link_spans()
+        let mut items: Vec<FocusItem> = self
+            .link_spans()
             .iter()
             .map(|s| {
                 let (line, cols) = s.segments.first().copied().unwrap_or((0, (0, 0)));
@@ -70,7 +73,15 @@ pub trait ViewerDoc {
                     link_id: Some(s.id),
                 }
             })
-            .collect()
+            .collect();
+        items.extend(self.block_focus_items());
+        items.sort_by_key(|it| (it.line.unwrap_or(u32::MAX), it.cols.0));
+        items
+    }
+
+    /// Block actions (rendered mode); empty for raw.
+    fn block_focus_items(&self) -> Vec<FocusItem> {
+        Vec::new()
     }
 }
 

@@ -2,6 +2,7 @@
 
 use super::App;
 use crate::tui::action::Action;
+use crate::tui::page_doc::PageDoc;
 use crate::tui::viewer_doc::{FocusItem, FocusTarget, ViewerDoc, cycle};
 
 impl App {
@@ -116,13 +117,14 @@ impl App {
     pub(crate) fn viewer_activate(&mut self) {
         let items = self.focus_list();
         if let Some(i) = self.focused_item {
-            let Some(it) = items.get(i) else {
+            let Some(it) = items.get(i).cloned() else {
                 return;
             };
             match it.kind {
                 FocusTarget::FooterPrev => self.update(Action::PrevPage),
                 FocusTarget::FooterNext => self.update(Action::NextPage),
                 FocusTarget::Link => self.follow_link_target(&it.target),
+                FocusTarget::BlockAction => self.activate_block(&it.target),
             }
             return;
         }
@@ -136,6 +138,50 @@ impl App {
         if on_line.len() == 1 {
             let raw = on_line[0].raw_target.clone();
             self.follow_link_target(&raw);
+        }
+    }
+
+    fn activate_block(&mut self, target: &str) {
+        let Some(id_str) = target.strip_prefix("block:") else {
+            return;
+        };
+        let Ok(id) = id_str.parse::<u32>() else {
+            return;
+        };
+        let PageDoc::Rendered(doc) = &self.doc else {
+            return;
+        };
+        let Some(action) = doc.block_actions().iter().find(|a| a.id == id).cloned() else {
+            return;
+        };
+        match action.kind {
+            wiki_reader_render::BlockActionKind::CopyCode => {
+                match self.clipboard.copy(&action.payload) {
+                    Ok(()) => self.message = "copied".into(),
+                    Err(err) => self.message = format!("copy failed: {err}"),
+                }
+            }
+            wiki_reader_render::BlockActionKind::ToggleFrontmatter
+            | wiki_reader_render::BlockActionKind::ToggleTable => {
+                if !self.expanded_blocks.remove(&id) {
+                    self.expanded_blocks.insert(id);
+                }
+                let key = self.navigator.tab().current().page.clone();
+                let source = self.doc.source_cursor(self.cursor_line);
+                let source_scroll = self.doc.source_cursor(self.scroll);
+                self.reload_page_keeping_view(&key, source, source_scroll);
+                // Keep focus on the same block id after re-layout.
+                let items = self.focus_list();
+                self.focused_item = items.iter().position(|it| {
+                    it.kind == FocusTarget::BlockAction && it.target == format!("block:{id}")
+                });
+                if let Some(i) = self.focused_item
+                    && let Some(line) = items[i].doc_line()
+                {
+                    self.cursor_line = line;
+                    self.ensure_cursor_visible();
+                }
+            }
         }
     }
 

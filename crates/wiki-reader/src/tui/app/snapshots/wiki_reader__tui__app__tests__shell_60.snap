@@ -4,12 +4,7 @@ expression: out
 ---
 Worked Example Wiki                                      ◫ ✕
 ┌Viewer────────────────────────────────────────────────────┐
-│── frontmatter ──                                         │
-│title: Worked Example Wiki                                │
-│updated: 2026-09-28                                       │
-│summary: Minimal fixture collection for wiki-reader smoke │
-│tests.                                                    │
-│─────────────────                                         │
+│── frontmatter ▶ ──                                       │
 │# Worked Example Wiki                                     │
 │A tiny markdown collection used as the default smoke-test │
 │root.                                                     │
@@ -23,6 +18,11 @@ Worked Example Wiki                                      ◫ ✕
 │                                                          │
 │                                                          │
 │                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
 └──────────────────────────────────────────────────────────┘
 ‹ —                                  Architecture Overview ›
-VIEWER · README.md · L1 9% · 29w · 1m · 2026-09-28
+VIEWER · README.md · L1 16% · 29w · 1m · 2026-09-28

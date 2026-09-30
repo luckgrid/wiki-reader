@@ -69,7 +69,7 @@ Rendered by default; `r` toggles raw. Both views share the **cursor line** (see 
 
 **Focusable items ("actions")** are what `Tab` cycles through, in document order:
 1. Links (internal, anchor, external, broken)
-2. Block actions (planned, P2-03): expand a truncated table, show collapsed frontmatter, expand a diagram, copy a code block
+2. Block actions: expand a truncated table, show collapsed frontmatter, copy a code block (OSC 52)
 3. The viewer footer's ‹ Prev / Next › buttons (last in the cycle)
 
 After the last item, `Tab` wraps to the first. The focused item renders inverted, and the status bar shows its target or action (`→ decisions/0003.md#context`, `↗ https://…`, `? not found: foo.md`, `expand table`).
