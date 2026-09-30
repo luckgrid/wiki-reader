@@ -1,0 +1,109 @@
+---
+source: crates/wiki-reader-render/src/lib.rs
+expression: "formatted.lines.join(\"\\n\")"
+---
+── frontmatter ▶ ──
+
+Element gallery
+────────────────────────────────────────
+
+A paragraph with a long word like
+antidisestablishmentarianism and normal
+wrapping that should break at
+whitespace instead of mid-word when the
+pane is narrow.
+
+Heading two
+
+Heading three
+
+Heading four
+
+Heading five
+
+Heading six
+
+Lists
+
+• bullet one
+• bullet two
+  • nested bullet
+
+1. numbered one
+2. numbered two
+
+• [ ] unchecked task
+• [x] checked task
+
+Inline
+
+This has bold, italic, strike, inline
+code, and a working link plus a broken
+link.
+
+Quote and alert
+
+│ A plain blockquote with enough text
+│ that it wraps on a narrow pane.
+
+│ [NOTE]
+│ Note alert body.
+
+│ [WARNING]
+│ Warning alert body.
+
+Code
+
+── rust ──
+│ fn main() {
+│     println!("hello");
+│ }
+
+── python ──
+│ def greet(name):
+│     return f"hi {name}"
+
+Tables
+
+┌───────┬──────────┬───────────────────┐
+│ Short │ Medium   │ Long cell that    │
+│       │ column   │ needs wrapping    │
+├───────┼──────────┼───────────────────┤
+│ a     │ b        │ c                 │
+├───────┼──────────┼───────────────────┤
+│ one   │ two      │ three four five   │
+│       │          │ six seven         │
+└───────┴──────────┴───────────────────┘
+
+│ table too wide for pane (40 cols); sho
+wing cells unwrapped
+│ WideA | WideB | WideC | WideD | WideE
+│ alpha | bravo | charlie | delta | echo
+│ foxtrot | golf | hotel | india | juliet
+
+Rule
+
+────────────────────────────────────────
+
+Mermaid good
+
+┌───────┐     ┌─────┐
+│ Start │────▸│ End │
+└───────┘     └─────┘
+
+Mermaid bad
+
+│ diagram (source; unsupported diagram
+type: 'this')
+this is not valid mermaid at all {{{
+
+Mermaid wide
+
+│ diagram (source; diagram 54 cols >
+pane 40)
+flowchart LR
+  AAAAAAAAAA[VeryLongNodeLabelAlpha]
+--> BBBBBBBBBB[VeryLongNodeLabelBravo]
+-->
+CCCCCCCCCC[VeryLongNodeLabelCharlie]
+--> DDDDDDDDDD[VeryLongNodeLabelDelta]

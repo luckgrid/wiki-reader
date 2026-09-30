@@ -29,7 +29,14 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     let crumbs = app.navigator.nav().tree.breadcrumb(&page);
     let nav = app.navigator.nav();
 
-    header::draw(frame, regions.header, &crumbs, &theme, &mut app.hit_map);
+    header::draw(
+        frame,
+        regions.header,
+        &crumbs,
+        app.formatted_view,
+        &theme,
+        &mut app.hit_map,
+    );
 
     // Tab bar sits above the viewer only when ≥2 tabs.
     let viewer_area = if app.navigator.tab_count() >= 2 {
@@ -300,19 +307,13 @@ fn draw_search_overlay(
         let line = match overlay.mode {
             SearchMode::Files => {
                 let hit = &overlay.page_hits[abs];
-                let title = index
-                    .pages
-                    .get(&hit.page)
-                    .map_or("", |p| p.title.as_str());
+                let title = index.pages.get(&hit.page).map_or("", |p| p.title.as_str());
                 let path = hit.page.relative_path.display().to_string();
                 search_result_line(title, &path, None, &q, selected, bg, theme)
             }
             SearchMode::Content => {
                 let hit = &overlay.text_hits[abs];
-                let title = index
-                    .pages
-                    .get(&hit.page)
-                    .map_or("", |p| p.title.as_str());
+                let title = index.pages.get(&hit.page).map_or("", |p| p.title.as_str());
                 let path = hit.page.relative_path.display().to_string();
                 let snip = format!("{}:{}", hit.line, hit.snippet);
                 search_result_line(title, &path, Some(&snip), &q, selected, bg, theme)

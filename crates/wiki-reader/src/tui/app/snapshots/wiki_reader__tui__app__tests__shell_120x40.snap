@@ -3,7 +3,7 @@ source: crates/wiki-reader/src/tui/app/tests.rs
 expression: tall
 ---
                                                                                                                         
- Readme                                                                                                             ◫ ✕ 
+ Readme                                                                                                           ○ ◫ ✕ 
                                                                                                                         
 ┌Nav─────────────────────────┐┌Viewer──────────────────────────────────────────────────────────────────────────────────┐
 │                            ││▌── frontmatter ▶ ──                                                                    │

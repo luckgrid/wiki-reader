@@ -91,13 +91,16 @@ fn chrome_pad_hits_header_icons_and_nav_search() {
     let mut app = App::new(&root).unwrap();
     let terminal = draw_app(&mut app, 120, 24);
     let buf = terminal.backend().buffer();
+    let (ex, ey) = find_glyph(buf, "○").expect("○ eye");
     let (tx, ty) = find_glyph(buf, "◫").expect("◫");
     let (qx, qy) = find_glyph(buf, "✕").expect("✕");
+    assert_eq!(app.hit_map.hit_at(ex, ey), Some(&Hit::ViewToggle));
     assert_eq!(app.hit_map.hit_at(tx, ty), Some(&Hit::NavToggle));
     assert_eq!(app.hit_map.hit_at(qx, qy), Some(&Hit::Quit));
     // Padded: icons sit one col inset from the raw edge.
     assert_eq!(qx, 120 - 2, "✕ at chrome_pad right edge");
     assert_eq!(tx, 120 - 4, "◫ two cols left of ✕");
+    assert_eq!(ex, 120 - 6, "○ two cols left of ◫");
 
     // Nav search row is below the blank gap under the title (inner.y + 1).
     let search = (0..buf.area.width)
@@ -108,6 +111,30 @@ fn chrome_pad_hits_header_icons_and_nav_search() {
         Some(&Hit::NavSearchRow),
         "search hit on padded chrome row"
     );
+}
+
+#[test]
+fn formatted_view_preserves_cursor_source_and_links() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    // Skip frontmatter so we land on body with links.
+    for _ in 0..12 {
+        app.update(Action::ViewerDown);
+    }
+    let source = app.doc.source_cursor(app.cursor_line);
+    assert!(source > 0);
+    let links_before = app.doc.link_spans().len();
+    assert!(links_before > 0, "fixture page should have links");
+    app.update(Action::ToggleFormattedView);
+    assert!(app.formatted_view);
+    assert_eq!(app.doc.source_cursor(app.cursor_line), source);
+    assert!(
+        !app.doc.link_spans().is_empty(),
+        "links remain after format"
+    );
+    app.update(Action::ToggleFormattedView);
+    assert!(!app.formatted_view);
+    assert_eq!(app.doc.source_cursor(app.cursor_line), source);
 }
 
 #[test]

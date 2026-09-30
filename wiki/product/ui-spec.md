@@ -129,6 +129,7 @@ Two focusable panes: **Side nav** and **Viewer**. The search overlay is modal wh
 | `[` / `]` | Previous / next page |
 | `Backspace` (primary) · `Alt+←` / `Alt+→` · `Alt+b` / `Alt+f` | Back / forward. `Alt+b`/`Alt+f` are what macOS Ghostty sends for Option+←/→. |
 | `r` | Rendered / raw |
+| Header `○`/`◉` | Toggle syntax (markers) ↔ formatted (ADR-0012); default syntax |
 | `e` | Open in `$EDITOR` at cursor line |
 | `y` / `Y` | Copy page path / focused link target (OSC 52) |
 

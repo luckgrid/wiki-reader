@@ -16,6 +16,8 @@ Architecture decision records. Accepted ADRs are immutable — supersede, don't 
 | [0008](0008-side-nav-as-site-nav.md) | Side nav as site navigation | accepted |
 | [0009](0009-tui-tree-widget.md) | Adopt tui-tree-widget for side nav | superseded |
 | [0010](0010-flat-side-nav-rows.md) | Flat visible rows for side nav | accepted |
+| [0011](0011-renderer-source.md) | Keep the current renderer; port patterns not modules | accepted |
+| [0012](0012-syntax-vs-formatted.md) | Syntax vs formatted rendered view | accepted |
 
 ## Related
 

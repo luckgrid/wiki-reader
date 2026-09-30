@@ -197,6 +197,13 @@ pub static BINDINGS: &[Binding] = &[
         matcher: Some(Matcher::PlainChar('r')),
     },
     Binding {
+        keys: "◈",
+        scope: BindingScope::Global,
+        action: Some(Action::ToggleFormattedView),
+        help: "Toggle syntax / formatted (eye)",
+        matcher: None,
+    },
+    Binding {
         keys: "e",
         scope: BindingScope::Global,
         action: Some(Action::OpenInEditor),
@@ -1018,6 +1025,7 @@ mod tests {
             Action::ViewerActivate,
             Action::FocusFooter,
             Action::ToggleViewMode,
+            Action::ToggleFormattedView,
             Action::OpenInEditor,
             Action::CopyPagePath,
             Action::CopyLinkTarget,

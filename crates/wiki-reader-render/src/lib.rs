@@ -790,6 +790,21 @@ mod tests {
             let doc = render(&src, page, &key, &index, w);
             let text = doc.lines.join("\n");
             insta::assert_snapshot!(format!("elements_{w}"), text);
+            let formatted = render_with(
+                &src,
+                page,
+                &key,
+                &index,
+                w,
+                &RenderOpts {
+                    formatted: true,
+                    ..RenderOpts::default()
+                },
+            );
+            insta::assert_snapshot!(
+                format!("elements_formatted_{w}"),
+                formatted.lines.join("\n")
+            );
         }
     }
 
