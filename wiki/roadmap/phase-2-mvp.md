@@ -24,15 +24,15 @@ All P0/P1 acceptance criteria in [product spec](../product/spec.md) pass; two we
 | P2-02 | "Linked from" backlinks | B1 | done | 47185bc |
 | P2-03 | Block actions in the Tab cycle | BA | done | d8c63e2 |
 | P2-04 | Heading jump | J1 | done | 19faa9e |
-| P2-05 | Tabs as secondary | TB | done | core `Disposition` ready; TUI bar + keys |
-| P2-06 | Mermaid tiers | D1 | done | text tier via mermaid-text; image tier deferred |
+| P2-05 | Tabs as secondary | TB | done | 81ea91f |
+| P2-06 | Mermaid tiers | D1 | done | 81ea91f text tier; image deferred |
 | P2-07 | Responsive side nav | R1 | done | shipped in P1-R6 |
 | P2-08 | `$EDITOR` | E1 | done | d130b92 |
 | P2-09 | Config incl. `nav.labels` | C1 | done | 19db10d |
 | P2-10 | Session restore | M1 | done | 36e00c2 |
-| P2-R31 | Config trust merge (exclude union, keys merge) | C1 | done | exclude union; keys merge; H3 on P2-09 |
-| P2-R32 | Session autosave + test isolation | M1 | done | debounce, signals, stable key, App::for_tests |
-| P2-R33 | Block/copy polish | BA | done | OSC52 messaging/cap, y/Y, stable block ids |
+| P2-R31 | Config trust merge (exclude union, keys merge) | C1 | done | 81ea91f |
+| P2-R32 | Session autosave + test isolation | M1 | done | 81ea91f |
+| P2-R33 | Block/copy polish | BA | done | 81ea91f |
 
 ## Proposed order (after Phase 1 exit)
 
