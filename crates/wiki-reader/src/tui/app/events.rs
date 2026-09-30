@@ -158,6 +158,10 @@ pub(crate) fn apply_mouse(
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) => {
             let hit = app.hit_map.hit_at(mouse.column, mouse.row)?.clone();
+            if matches!(hit, Hit::NavDivider) {
+                app.nav_dragging = true;
+                return None;
+            }
             // Click focuses the pane before the primary action (K1 / stale-cursor).
             match &hit {
                 Hit::NavItem(_) | Hit::NavGroupToggle(_) | Hit::NavSearchRow | Hit::FocusNav => {
@@ -189,6 +193,19 @@ pub(crate) fn apply_mouse(
             }
             Some(HitMap::action_for(&hit))
         }
+        MouseEventKind::Drag(MouseButton::Left) => {
+            if app.nav_dragging {
+                app.resize_nav_to_column(mouse.column);
+            }
+            None
+        }
+        MouseEventKind::Up(MouseButton::Left) => {
+            if app.nav_dragging {
+                app.nav_dragging = false;
+                app.note_session_change();
+            }
+            None
+        }
         MouseEventKind::Down(MouseButton::Middle) => {
             let hit = app.hit_map.hit_at(mouse.column, mouse.row)?.clone();
             app.middle_click_hit(hit);
@@ -206,6 +223,7 @@ pub(crate) fn apply_mouse(
                             | Hit::NavItem(_)
                             | Hit::NavGroupToggle(_)
                             | Hit::NavSearchRow
+                            | Hit::NavDivider
                     )
             });
             let up = matches!(mouse.kind, MouseEventKind::ScrollUp);

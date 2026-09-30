@@ -46,6 +46,10 @@ pub struct App {
     pub focus: FocusPane,
     /// Side nav visible (docked ≥80 cols, overlay &lt;80).
     pub nav_visible: bool,
+    /// User-resized nav column width (session); ignored when terminal &lt;80.
+    pub nav_width: Option<u16>,
+    /// Dragging the nav divider.
+    pub(crate) nav_dragging: bool,
     /// User toggled `b`/◫; cleared when width crosses the 80-col boundary.
     pub nav_user_override: bool,
     /// Last drawn terminal width (for overlay close on navigation).
@@ -198,6 +202,8 @@ impl App {
             provider,
             focus: FocusPane::Viewer,
             nav_visible: false,
+            nav_width: None,
+            nav_dragging: false,
             nav_user_override: false,
             term_width: 80,
             layout_width: 0,
@@ -264,6 +270,7 @@ impl App {
                 app.nav_visible = v;
                 app.nav_user_override = true;
             }
+            app.nav_width = loaded.state.nav_width;
         }
         let page = app.navigator.tab().current().page.clone();
         app.apply_effects(vec![
@@ -287,6 +294,7 @@ impl App {
             &self.navigator,
             focus,
             Some(self.nav_visible),
+            self.nav_width,
         );
         if wiki_reader_core::session::save(self.provider.root(), &state).is_ok() {
             self.session_saved_at = Some(Instant::now());
@@ -667,7 +675,8 @@ impl App {
             | Hit::FocusNav
             | Hit::FocusViewer
             | Hit::Tab(_)
-            | Hit::TabClose(_) => {}
+            | Hit::TabClose(_)
+            | Hit::NavDivider => {}
         }
     }
 
@@ -1296,5 +1305,18 @@ impl App {
             Some(_) if !self.nav_user_override => self.nav_visible = wide,
             Some(_) => {}
         }
+    }
+
+    /// Set preferred nav width from a drag column (no-op when terminal &lt;80).
+    pub(crate) fn resize_nav_to_column(&mut self, column: u16) {
+        if self.term_width < 80 {
+            return;
+        }
+        let cap = crate::tui::layout::NAV_WIDTH_MAX.min(self.term_width.saturating_sub(20));
+        let w = column.saturating_add(1).clamp(
+            crate::tui::layout::NAV_WIDTH_MIN,
+            cap.max(crate::tui::layout::NAV_WIDTH_MIN),
+        );
+        self.nav_width = Some(w);
     }
 }
