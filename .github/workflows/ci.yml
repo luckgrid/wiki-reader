@@ -38,7 +38,7 @@ jobs:
         run: cargo test --locked
 
       - name: Link check
-        run: python3 scripts/link-check.py
+        run: cargo run --locked --quiet -p wiki-reader-tools --bin link-check
 
       - name: ADR-0006 core has no terminal deps
         run: |

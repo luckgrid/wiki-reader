@@ -26,6 +26,13 @@ Local mirror of CI (run before every push):
 ./scripts/check.sh
 ```
 
+Optional: install the repo pre-push hook so those checks run automatically:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+
 Same steps individually:
 
 ```bash
