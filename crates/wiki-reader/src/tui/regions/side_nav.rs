@@ -247,14 +247,14 @@ mod tests {
     fn visible_rows_collapsed_and_expanded() {
         let tree = worked_tree();
         let collapsed = visible_rows(&tree, &HashSet::new());
-        assert!(collapsed.iter().any(|r| r.label.contains("Architecture")));
+        assert!(collapsed.iter().any(|r| r.label.contains("Readme")));
         assert!(!collapsed.iter().any(|r| r.label.contains("Token")));
 
         let mut expanded = HashSet::new();
         expanded.insert(NodeId::Group(PathBuf::from("architecture")));
         expanded.insert(NodeId::Group(PathBuf::from("architecture/design-system")));
         let open = visible_rows(&tree, &expanded);
-        assert!(open.iter().any(|r| r.label.contains("Token")));
+        assert!(open.iter().any(|r| r.label.contains("Tokens")));
         insta::assert_debug_snapshot!(
             "worked_nav_expanded",
             open.iter().map(|r| &r.label).collect::<Vec<_>>()

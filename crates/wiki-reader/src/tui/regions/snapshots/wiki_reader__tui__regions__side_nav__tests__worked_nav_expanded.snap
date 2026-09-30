@@ -3,12 +3,12 @@ source: crates/wiki-reader/src/tui/regions/side_nav.rs
 expression: "open.iter().map(|r| &r.label).collect::<Vec<_>>()"
 ---
 [
-    "Worked Example Wiki",
-    "▾ Architecture Overview",
+    "Readme",
+    "▾ Readme",
     "  Overview",
-    "  ▾ Design System",
+    "  ▾ Readme",
     "    Overview",
-    "    Token Projection",
-    "  Workflow OS",
+    "    Tokens",
+    "  Readme",
     "▸ Decisions",
 ]

@@ -1,5 +1,6 @@
 ---
 source: crates/wiki-reader-core/src/nav/tree.rs
+assertion_line: 1021
 expression: text
 ---
 Readme

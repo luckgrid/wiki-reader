@@ -185,24 +185,28 @@ fn breadcrumb_glyph_click_navigates() {
     }));
     let terminal = draw_app(&mut app, 120, 24);
     let buf = terminal.backend().buffer();
-    // Find "Architecture" crumb text in the header row (y=0).
+    // Find a clickable architecture crumb (Filename mode: "Readme" for architecture/README).
     let mut ax = None;
     for x in 0..buf.area.width {
-        if buf[(x, 0)].symbol().starts_with('A') {
-            // Walk to confirm "Architecture" run.
+        if buf[(x, 0)].symbol().starts_with('R') {
             let mut s = String::new();
-            for dx in 0..12 {
+            for dx in 0..6 {
                 if x + dx < buf.area.width {
                     s.push_str(buf[(x + dx, 0)].symbol());
                 }
             }
-            if s.starts_with("Architecture") {
-                ax = Some(x);
-                break;
+            if s.starts_with("Readme") {
+                // Prefer the architecture crumb (second "Readme"), not the root.
+                if let Some(Hit::Breadcrumb(k)) = app.hit_map.hit_at(x, 0)
+                    && k.relative_path.ends_with("architecture/README.md")
+                {
+                    ax = Some(x);
+                    break;
+                }
             }
         }
     }
-    let ax = ax.expect("Architecture crumb glyph");
+    let ax = ax.expect("architecture Readme crumb glyph");
     let hit = app.hit_map.hit_at(ax, 0).expect("crumb hit");
     assert!(
         matches!(hit, Hit::Breadcrumb(k) if k.relative_path.ends_with("architecture/README.md")),

@@ -136,7 +136,7 @@ impl Navigator {
     /// Returns [`Error::EmptyCollection`] when the index has no pages, or
     /// [`Error::PageNotFound`] when `start` is not in the index.
     pub fn new(index: Index, start: Option<PageKey>) -> Result<Self, Error> {
-        Self::new_with_labels(index, start, crate::config::LabelMode::Title)
+        Self::new_with_labels(index, start, crate::config::LabelMode::default())
     }
 
     /// Like [`new`] with an explicit nav label mode.
