@@ -2094,6 +2094,49 @@ fn new_tab_current_matches_replace_for_same_target() {
 }
 
 #[test]
+fn help_overlay_open_close_and_activate() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::OpenHelp);
+    assert!(app.help.is_some());
+    assert_eq!(app.input_mode, crate::tui::keymap::InputMode::Help);
+    let _ = draw_app(&mut app, 80, 24);
+    // Select Quit row and activate.
+    if let Some(help) = app.help.as_mut() {
+        let quit_idx = help
+            .rows
+            .iter()
+            .position(|r| matches!(r.action, Some(Action::Quit)))
+            .expect("quit row");
+        help.selected = quit_idx;
+    }
+    app.update(Action::HelpActivate);
+    assert!(app.quit);
+    assert!(app.help.is_none());
+}
+
+#[test]
+fn help_overlay_snapshots() {
+    let root = fixture();
+    for w in [60u16, 80, 120] {
+        let mut app = App::new(&root).expect("app");
+        app.update(Action::OpenHelp);
+        let backend = TestBackend::new(w, 24);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+        terminal.draw(|frame| draw(frame, &mut app)).expect("draw");
+        let buf = terminal.backend().buffer();
+        let mut out = String::new();
+        for y in 0..buf.area.height {
+            for x in 0..buf.area.width {
+                out.push_str(buf[(x, y)].symbol());
+            }
+            out.push('\n');
+        }
+        insta::assert_snapshot!(format!("help_{w}"), out);
+    }
+}
+
+#[test]
 fn nav_right_on_page_opens_and_focuses_viewer() {
     let root = fixture();
     let mut app = App::new(&root).unwrap();

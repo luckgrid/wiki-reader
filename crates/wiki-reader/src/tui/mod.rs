@@ -7,6 +7,7 @@ pub mod app;
 pub mod clipboard;
 pub mod editor;
 pub mod focus;
+pub mod help_ui;
 pub mod highlight;
 pub mod hit;
 pub mod keymap;

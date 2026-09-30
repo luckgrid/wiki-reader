@@ -1,4 +1,8 @@
 //! Table-driven keymap (ADR-0007 / P1-S1 defaults + fallbacks).
+//!
+//! [`BINDINGS`] is the source of truth for Normal-mode global/pane maps and the
+//! help overlay (P2-20). Overlay, Confirm, and `g`-chords stay special-cased;
+//! they appear in the table as display-only rows.
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -13,6 +17,8 @@ pub enum InputMode {
     Normal,
     /// Overlay text input (search): plain letters type into the field.
     Overlay,
+    /// Help overlay: scroll / activate / dismiss.
+    Help,
     /// External URL open confirmation in the status bar.
     Confirm,
 }
@@ -26,6 +32,546 @@ pub enum Chord {
     /// Saw a lone `g`; next `g` → home, `t`/`T` → next/prev tab.
     PendingG,
 }
+
+/// Where a binding applies (help sections + map filters).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BindingScope {
+    /// Always active in Normal mode.
+    Global,
+    /// Side-nav pane.
+    Nav,
+    /// Viewer pane.
+    Viewer,
+    /// Search overlay (display-only in help; special-cased in map).
+    Overlay,
+    /// Multi-key chords (display-only in help; special-cased in map).
+    Chord,
+}
+
+/// How a Normal-mode key is matched against a [`Binding`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Matcher {
+    /// Plain char (no Ctrl/Alt; Shift ok for capitals).
+    PlainChar(char),
+    /// Ctrl+char.
+    CtrlChar(char),
+    /// Alt+char **or** Alt+code (Ghostty Option encoding).
+    AltCharOrCode(char, KeyCode),
+    /// Plain key code (no Ctrl/Alt).
+    PlainCode(KeyCode),
+    /// Shift+code (no Ctrl/Alt).
+    ShiftCode(KeyCode),
+    /// Shift **or** Ctrl + code (block / group jump).
+    ShiftOrCtrlCode(KeyCode),
+    /// Alt+Shift+code.
+    AltShiftCode(KeyCode),
+    /// Code with any modifiers (`PageUp`, `F6`, Backspace).
+    AnyCode(KeyCode),
+    /// Plain Enter.
+    PlainEnter,
+    /// Plain Tab.
+    PlainTab,
+    /// `BackTab` or Shift+Tab.
+    BackTab,
+    /// Plain Space.
+    PlainSpace,
+    /// Shift+Space.
+    ShiftSpace,
+}
+
+impl Matcher {
+    #[must_use]
+    fn matches(self, key: KeyEvent) -> bool {
+        let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        let alt = key.modifiers.contains(KeyModifiers::ALT);
+        let plain = no_ctrl_alt(key);
+        match self {
+            Matcher::PlainChar(c) => plain && key.code == KeyCode::Char(c),
+            Matcher::CtrlChar(c) => ctrl && !alt && key.code == KeyCode::Char(c),
+            Matcher::AltCharOrCode(c, code) => {
+                alt && (key.code == KeyCode::Char(c) || key.code == code)
+            }
+            Matcher::PlainCode(code) => plain && key.code == code,
+            Matcher::ShiftCode(code) => shift && plain && key.code == code,
+            Matcher::ShiftOrCtrlCode(code) => {
+                (shift || ctrl) && key.code == code && !(alt && shift)
+            }
+            Matcher::AltShiftCode(code) => alt && shift && key.code == code,
+            Matcher::AnyCode(code) => key.code == code,
+            Matcher::PlainEnter => plain && key.code == KeyCode::Enter,
+            Matcher::PlainTab => plain && key.code == KeyCode::Tab,
+            Matcher::BackTab => {
+                key.code == KeyCode::BackTab || (shift && plain && key.code == KeyCode::Tab)
+            }
+            Matcher::PlainSpace => plain && key.code == KeyCode::Char(' '),
+            Matcher::ShiftSpace => shift && plain && key.code == KeyCode::Char(' '),
+        }
+    }
+
+    /// A representative key for drift tests.
+    #[cfg(test)]
+    #[must_use]
+    #[allow(clippy::match_same_arms)]
+    fn sample(self) -> KeyEvent {
+        match self {
+            Matcher::PlainChar(c) => KeyEvent::from(KeyCode::Char(c)),
+            Matcher::CtrlChar(c) => KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL),
+            Matcher::AltCharOrCode(c, _) => KeyEvent::new(KeyCode::Char(c), KeyModifiers::ALT),
+            Matcher::PlainCode(code)
+            | Matcher::AnyCode(code)
+            | Matcher::ShiftOrCtrlCode(code)
+            | Matcher::ShiftCode(code)
+            | Matcher::AltShiftCode(code) => {
+                let mods = match self {
+                    Matcher::ShiftCode(_) | Matcher::ShiftOrCtrlCode(_) => KeyModifiers::SHIFT,
+                    Matcher::AltShiftCode(_) => KeyModifiers::ALT | KeyModifiers::SHIFT,
+                    _ => KeyModifiers::NONE,
+                };
+                if mods.is_empty() {
+                    KeyEvent::from(code)
+                } else {
+                    KeyEvent::new(code, mods)
+                }
+            }
+            Matcher::PlainEnter => KeyEvent::from(KeyCode::Enter),
+            Matcher::PlainTab => KeyEvent::from(KeyCode::Tab),
+            Matcher::BackTab => KeyEvent::from(KeyCode::BackTab),
+            Matcher::PlainSpace => KeyEvent::from(KeyCode::Char(' ')),
+            Matcher::ShiftSpace => KeyEvent::new(KeyCode::Char(' '), KeyModifiers::SHIFT),
+        }
+    }
+}
+
+/// One keymap / help row.
+#[derive(Debug, Clone)]
+pub struct Binding {
+    /// Keys shown in help (overridden display may replace this).
+    pub keys: &'static str,
+    /// Scope / help section.
+    pub scope: BindingScope,
+    /// Action when matched; `None` = display-only.
+    pub action: Option<Action>,
+    /// One-line help text.
+    pub help: &'static str,
+    /// Matcher for Normal-mode maps; `None` = display-only.
+    pub matcher: Option<Matcher>,
+}
+
+/// Source of truth for Normal-mode bindings and the help overlay.
+pub static BINDINGS: &[Binding] = &[
+    // —— Global (Alt before plain for b/f) ——
+    Binding {
+        keys: "Alt+← / Alt+b",
+        scope: BindingScope::Global,
+        action: Some(Action::Back),
+        help: "Back",
+        matcher: Some(Matcher::AltCharOrCode('b', KeyCode::Left)),
+    },
+    Binding {
+        keys: "Alt+→ / Alt+f",
+        scope: BindingScope::Global,
+        action: Some(Action::Forward),
+        help: "Forward",
+        matcher: Some(Matcher::AltCharOrCode('f', KeyCode::Right)),
+    },
+    Binding {
+        keys: "q",
+        scope: BindingScope::Global,
+        action: Some(Action::Quit),
+        help: "Quit",
+        matcher: Some(Matcher::PlainChar('q')),
+    },
+    Binding {
+        keys: "b",
+        scope: BindingScope::Global,
+        action: Some(Action::ToggleNav),
+        help: "Toggle side nav",
+        matcher: Some(Matcher::PlainChar('b')),
+    },
+    Binding {
+        keys: "r",
+        scope: BindingScope::Global,
+        action: Some(Action::ToggleViewMode),
+        help: "Toggle raw / rendered",
+        matcher: Some(Matcher::PlainChar('r')),
+    },
+    Binding {
+        keys: "e",
+        scope: BindingScope::Global,
+        action: Some(Action::OpenInEditor),
+        help: "Open in editor",
+        matcher: Some(Matcher::PlainChar('e')),
+    },
+    Binding {
+        keys: "y",
+        scope: BindingScope::Global,
+        action: Some(Action::CopyPagePath),
+        help: "Copy page path",
+        matcher: Some(Matcher::PlainChar('y')),
+    },
+    Binding {
+        keys: "Y",
+        scope: BindingScope::Global,
+        action: Some(Action::CopyLinkTarget),
+        help: "Copy focused link target",
+        matcher: Some(Matcher::PlainChar('Y')),
+    },
+    Binding {
+        keys: "t",
+        scope: BindingScope::Global,
+        action: Some(Action::NewTab),
+        help: "New tab",
+        matcher: Some(Matcher::PlainChar('t')),
+    },
+    Binding {
+        keys: "x",
+        scope: BindingScope::Global,
+        action: Some(Action::CloseTab),
+        help: "Close tab",
+        matcher: Some(Matcher::PlainChar('x')),
+    },
+    Binding {
+        keys: "/",
+        scope: BindingScope::Global,
+        action: Some(Action::OpenSearch),
+        help: "Search",
+        matcher: Some(Matcher::PlainChar('/')),
+    },
+    Binding {
+        keys: "Ctrl+k",
+        scope: BindingScope::Global,
+        action: Some(Action::OpenSearch),
+        help: "Search",
+        matcher: Some(Matcher::CtrlChar('k')),
+    },
+    Binding {
+        keys: "?",
+        scope: BindingScope::Global,
+        action: Some(Action::OpenHelp),
+        help: "Help",
+        matcher: Some(Matcher::PlainChar('?')),
+    },
+    Binding {
+        keys: "n",
+        scope: BindingScope::Global,
+        action: Some(Action::SearchNextMatch),
+        help: "Next search match",
+        matcher: Some(Matcher::PlainChar('n')),
+    },
+    Binding {
+        keys: "N",
+        scope: BindingScope::Global,
+        action: Some(Action::SearchPrevMatch),
+        help: "Previous search match",
+        matcher: Some(Matcher::PlainChar('N')),
+    },
+    Binding {
+        keys: "[",
+        scope: BindingScope::Global,
+        action: Some(Action::PrevPage),
+        help: "Previous page",
+        matcher: Some(Matcher::PlainChar('[')),
+    },
+    Binding {
+        keys: "]",
+        scope: BindingScope::Global,
+        action: Some(Action::NextPage),
+        help: "Next page",
+        matcher: Some(Matcher::PlainChar(']')),
+    },
+    Binding {
+        keys: "Backspace",
+        scope: BindingScope::Global,
+        action: Some(Action::Back),
+        help: "Back",
+        matcher: Some(Matcher::AnyCode(KeyCode::Backspace)),
+    },
+    Binding {
+        keys: "Shift+←",
+        scope: BindingScope::Global,
+        action: Some(Action::FocusNav),
+        help: "Focus side nav",
+        matcher: Some(Matcher::ShiftCode(KeyCode::Left)),
+    },
+    Binding {
+        keys: "Shift+→",
+        scope: BindingScope::Global,
+        action: Some(Action::FocusViewer),
+        help: "Focus viewer",
+        matcher: Some(Matcher::ShiftCode(KeyCode::Right)),
+    },
+    Binding {
+        keys: "F6",
+        scope: BindingScope::Global,
+        action: Some(Action::CycleFocus),
+        help: "Cycle pane focus",
+        matcher: Some(Matcher::AnyCode(KeyCode::F(6))),
+    },
+    // —— Nav ——
+    Binding {
+        keys: "Shift+↑ / Ctrl+↑",
+        scope: BindingScope::Nav,
+        action: Some(Action::NavJumpUp),
+        help: "Jump to previous group / search",
+        matcher: Some(Matcher::ShiftOrCtrlCode(KeyCode::Up)),
+    },
+    Binding {
+        keys: "Shift+↓ / Ctrl+↓",
+        scope: BindingScope::Nav,
+        action: Some(Action::NavJumpDown),
+        help: "Jump to next group",
+        matcher: Some(Matcher::ShiftOrCtrlCode(KeyCode::Down)),
+    },
+    Binding {
+        keys: "↑",
+        scope: BindingScope::Nav,
+        action: Some(Action::NavStepUp),
+        help: "Previous nav row",
+        matcher: Some(Matcher::PlainCode(KeyCode::Up)),
+    },
+    Binding {
+        keys: "Shift+Tab",
+        scope: BindingScope::Nav,
+        action: Some(Action::NavStepUp),
+        help: "Previous nav row",
+        matcher: Some(Matcher::BackTab),
+    },
+    Binding {
+        keys: "↓",
+        scope: BindingScope::Nav,
+        action: Some(Action::NavStepDown),
+        help: "Next nav row",
+        matcher: Some(Matcher::AnyCode(KeyCode::Down)),
+    },
+    Binding {
+        keys: "Tab",
+        scope: BindingScope::Nav,
+        action: Some(Action::NavStepDown),
+        help: "Next nav row",
+        matcher: Some(Matcher::PlainTab),
+    },
+    Binding {
+        keys: "→",
+        scope: BindingScope::Nav,
+        action: Some(Action::NavExpand),
+        help: "Expand / open into viewer",
+        matcher: Some(Matcher::AnyCode(KeyCode::Right)),
+    },
+    Binding {
+        keys: "←",
+        scope: BindingScope::Nav,
+        action: Some(Action::NavCollapse),
+        help: "Collapse / parent group",
+        matcher: Some(Matcher::AnyCode(KeyCode::Left)),
+    },
+    Binding {
+        keys: "Enter",
+        scope: BindingScope::Nav,
+        action: Some(Action::NavActivate),
+        help: "Open page (stay in nav) / toggle group",
+        matcher: Some(Matcher::PlainEnter),
+    },
+    // —— Viewer ——
+    Binding {
+        keys: "Alt+Shift+↑",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerHeadingUp),
+        help: "Previous heading",
+        matcher: Some(Matcher::AltShiftCode(KeyCode::Up)),
+    },
+    Binding {
+        keys: "Alt+Shift+↓",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerHeadingDown),
+        help: "Next heading",
+        matcher: Some(Matcher::AltShiftCode(KeyCode::Down)),
+    },
+    Binding {
+        keys: "{",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerHeadingUp),
+        help: "Previous heading",
+        matcher: Some(Matcher::PlainChar('{')),
+    },
+    Binding {
+        keys: "}",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerHeadingDown),
+        help: "Next heading",
+        matcher: Some(Matcher::PlainChar('}')),
+    },
+    Binding {
+        keys: "Shift+↑ / Ctrl+↑",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerBlockUp),
+        help: "Previous block",
+        matcher: Some(Matcher::ShiftOrCtrlCode(KeyCode::Up)),
+    },
+    Binding {
+        keys: "Shift+↓ / Ctrl+↓",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerBlockDown),
+        help: "Next block",
+        matcher: Some(Matcher::ShiftOrCtrlCode(KeyCode::Down)),
+    },
+    Binding {
+        keys: "k",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerUp),
+        help: "Cursor up",
+        matcher: Some(Matcher::PlainChar('k')),
+    },
+    Binding {
+        keys: "↑",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerUp),
+        help: "Cursor up",
+        matcher: Some(Matcher::PlainCode(KeyCode::Up)),
+    },
+    Binding {
+        keys: "j",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerDown),
+        help: "Cursor down",
+        matcher: Some(Matcher::PlainChar('j')),
+    },
+    Binding {
+        keys: "↓",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerDown),
+        help: "Cursor down",
+        matcher: Some(Matcher::PlainCode(KeyCode::Down)),
+    },
+    Binding {
+        keys: "PgUp",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerPageUp),
+        help: "Page up",
+        matcher: Some(Matcher::AnyCode(KeyCode::PageUp)),
+    },
+    Binding {
+        keys: "Shift+Space",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerPageUp),
+        help: "Page up",
+        matcher: Some(Matcher::ShiftSpace),
+    },
+    Binding {
+        keys: "Space",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerPageDown),
+        help: "Page down",
+        matcher: Some(Matcher::PlainSpace),
+    },
+    Binding {
+        keys: "PgDn",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerPageDown),
+        help: "Page down",
+        matcher: Some(Matcher::AnyCode(KeyCode::PageDown)),
+    },
+    Binding {
+        keys: "Home",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerHome),
+        help: "Top of page",
+        matcher: Some(Matcher::AnyCode(KeyCode::Home)),
+    },
+    Binding {
+        keys: "End",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerEnd),
+        help: "Bottom of page",
+        matcher: Some(Matcher::AnyCode(KeyCode::End)),
+    },
+    Binding {
+        keys: "G",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerEnd),
+        help: "Bottom of page",
+        matcher: Some(Matcher::PlainChar('G')),
+    },
+    Binding {
+        keys: "Shift+Tab",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerBackTab),
+        help: "Previous focusable item",
+        matcher: Some(Matcher::BackTab),
+    },
+    Binding {
+        keys: "Tab",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerTab),
+        help: "Next focusable item",
+        matcher: Some(Matcher::PlainTab),
+    },
+    Binding {
+        keys: "Enter",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerActivate),
+        help: "Activate focused item",
+        matcher: Some(Matcher::PlainEnter),
+    },
+    Binding {
+        keys: "f",
+        scope: BindingScope::Viewer,
+        action: Some(Action::FocusFooter),
+        help: "Focus footer prev/next",
+        matcher: Some(Matcher::PlainChar('f')),
+    },
+    // —— Display-only: chords ——
+    Binding {
+        keys: "gg",
+        scope: BindingScope::Chord,
+        action: Some(Action::ViewerHome),
+        help: "Top of page",
+        matcher: None,
+    },
+    Binding {
+        keys: "gt",
+        scope: BindingScope::Chord,
+        action: Some(Action::NextTab),
+        help: "Next tab",
+        matcher: None,
+    },
+    Binding {
+        keys: "gT",
+        scope: BindingScope::Chord,
+        action: Some(Action::PrevTab),
+        help: "Previous tab",
+        matcher: None,
+    },
+    // —— Display-only: search overlay ——
+    Binding {
+        keys: "Esc",
+        scope: BindingScope::Overlay,
+        action: Some(Action::CloseSearch),
+        help: "Close search",
+        matcher: None,
+    },
+    Binding {
+        keys: "Enter",
+        scope: BindingScope::Overlay,
+        action: Some(Action::SearchActivate),
+        help: "Open selected result",
+        matcher: None,
+    },
+    Binding {
+        keys: "Tab",
+        scope: BindingScope::Overlay,
+        action: Some(Action::SearchToggleMode),
+        help: "Toggle Files / Content",
+        matcher: None,
+    },
+    Binding {
+        keys: "↑ / ↓",
+        scope: BindingScope::Overlay,
+        action: None,
+        help: "Move selection",
+        matcher: None,
+    },
+];
 
 /// True when CONTROL and ALT are absent (SHIFT alone is fine for capitals).
 #[must_use]
@@ -75,6 +621,27 @@ pub fn map_with_overrides(
         && let Some(action) = override_action(key, over)
     {
         return (Some(action), Chord::None);
+    }
+
+    if mode == InputMode::Help {
+        return match key.code {
+            KeyCode::Esc => (Some(Action::CloseHelp), Chord::None),
+            KeyCode::Char('?') if no_ctrl_alt(key) => (Some(Action::CloseHelp), Chord::None),
+            KeyCode::Enter if no_ctrl_alt(key) => (Some(Action::HelpActivate), Chord::None),
+            KeyCode::Up => (Some(Action::HelpSelectDelta(-1)), Chord::None),
+            KeyCode::Down => (Some(Action::HelpSelectDelta(1)), Chord::None),
+            KeyCode::PageUp => (Some(Action::HelpPageDelta(-1)), Chord::None),
+            KeyCode::PageDown => (Some(Action::HelpPageDelta(1)), Chord::None),
+            KeyCode::Char('g')
+                if no_ctrl_alt(key) && !key.modifiers.contains(KeyModifiers::SHIFT) =>
+            {
+                (Some(Action::HelpHome), Chord::None)
+            }
+            KeyCode::Char('G') if no_ctrl_alt(key) => (Some(Action::HelpEnd), Chord::None),
+            KeyCode::Home => (Some(Action::HelpHome), Chord::None),
+            KeyCode::End => (Some(Action::HelpEnd), Chord::None),
+            _ => (None, Chord::None),
+        };
     }
 
     if mode == InputMode::Overlay {
@@ -136,12 +703,6 @@ fn override_action(
     key: KeyEvent,
     overrides: &std::collections::BTreeMap<String, String>,
 ) -> Option<Action> {
-    if !key.modifiers.is_empty()
-        && key.modifiers != KeyModifiers::SHIFT
-        && key.modifiers != KeyModifiers::NONE
-    {
-        // Allow SHIFT for uppercase letters only via Char already uppercased.
-    }
     let KeyCode::Char(c) = key.code else {
         return None;
     };
@@ -172,92 +733,59 @@ fn action_by_name(name: &str) -> Option<Action> {
     })
 }
 
+/// Effective key label for help when overrides remap an action.
+#[must_use]
+pub fn effective_keys_label(
+    binding: &Binding,
+    overrides: &std::collections::BTreeMap<String, String>,
+) -> String {
+    let Some(action) = &binding.action else {
+        return binding.keys.to_string();
+    };
+    for (name, chord) in overrides {
+        if action_by_name(name).as_ref() == Some(action) {
+            return chord.trim().to_string();
+        }
+    }
+    binding.keys.to_string()
+}
+
 /// Global bindings (always, before pane-local). Esc does **not** quit.
 #[must_use]
 pub fn map_global(key: KeyEvent) -> Option<Action> {
-    let shift = key.modifiers.contains(KeyModifiers::SHIFT);
-    let alt = key.modifiers.contains(KeyModifiers::ALT);
-    let plain = no_ctrl_alt(key);
-
-    match key.code {
-        // Ghostty on macOS sends Option+←/→ as Alt+b / Alt+f (readline), not arrows.
-        KeyCode::Char('b') | KeyCode::Left if alt => Some(Action::Back),
-        KeyCode::Char('f') | KeyCode::Right if alt => Some(Action::Forward),
-        KeyCode::Char('q') if plain => Some(Action::Quit),
-        KeyCode::Char('b') if plain => Some(Action::ToggleNav),
-        KeyCode::Char('r') if plain => Some(Action::ToggleViewMode),
-        KeyCode::Char('e') if plain => Some(Action::OpenInEditor),
-        KeyCode::Char('y') if plain => Some(Action::CopyPagePath),
-        KeyCode::Char('Y') if plain => Some(Action::CopyLinkTarget),
-        KeyCode::Char('t') if plain => Some(Action::NewTab),
-        KeyCode::Char('x') if plain => Some(Action::CloseTab),
-        KeyCode::Char('/') if plain => Some(Action::OpenSearch),
-        KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            Some(Action::OpenSearch)
+    for b in BINDINGS {
+        if b.scope != BindingScope::Global {
+            continue;
         }
-        KeyCode::Char('n') if plain => Some(Action::SearchNextMatch),
-        KeyCode::Char('N') if plain => Some(Action::SearchPrevMatch),
-        KeyCode::Char('[') if plain => Some(Action::PrevPage),
-        KeyCode::Char(']') if plain => Some(Action::NextPage),
-        KeyCode::Backspace => Some(Action::Back),
-        KeyCode::Left if shift => Some(Action::FocusNav),
-        KeyCode::Right if shift => Some(Action::FocusViewer),
-        KeyCode::F(6) => Some(Action::CycleFocus),
-        _ => None,
+        let Some(matcher) = b.matcher else {
+            continue;
+        };
+        if matcher.matches(key) {
+            return b.action.clone();
+        }
     }
+    None
 }
 
 /// Pane-local bindings given current focus.
 #[must_use]
-#[allow(clippy::match_same_arms)]
 pub fn map_pane(key: KeyEvent, focus: FocusPane) -> Option<Action> {
-    let shift = key.modifiers.contains(KeyModifiers::SHIFT);
-    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-    let plain = no_ctrl_alt(key);
-
-    match focus {
-        FocusPane::Nav => match key.code {
-            KeyCode::Up if shift || ctrl => Some(Action::NavJumpUp),
-            KeyCode::Down if shift || ctrl => Some(Action::NavJumpDown),
-            KeyCode::Up | KeyCode::BackTab => Some(Action::NavStepUp),
-            KeyCode::Tab if shift && plain => Some(Action::NavStepUp),
-            KeyCode::Down => Some(Action::NavStepDown),
-            KeyCode::Tab if plain => Some(Action::NavStepDown),
-            KeyCode::Right => Some(Action::NavExpand),
-            KeyCode::Left => Some(Action::NavCollapse),
-            KeyCode::Enter if plain => Some(Action::NavActivate),
-            _ => None,
-        },
-        FocusPane::Viewer => {
-            let alt = key.modifiers.contains(KeyModifiers::ALT);
-            match key.code {
-                // Alt+Shift+↑/↓ (primary); {/} fallback when Alt+Shift is unreliable
-                KeyCode::Up if alt && shift => Some(Action::ViewerHeadingUp),
-                KeyCode::Down if alt && shift => Some(Action::ViewerHeadingDown),
-                KeyCode::Char('{') if plain => Some(Action::ViewerHeadingUp),
-                KeyCode::Char('}') if plain => Some(Action::ViewerHeadingDown),
-                KeyCode::Up if shift || ctrl => Some(Action::ViewerBlockUp),
-                KeyCode::Down if shift || ctrl => Some(Action::ViewerBlockDown),
-                KeyCode::Char('k') if plain => Some(Action::ViewerUp),
-                KeyCode::Up if plain => Some(Action::ViewerUp),
-                KeyCode::Char('j') if plain => Some(Action::ViewerDown),
-                KeyCode::Down if plain => Some(Action::ViewerDown),
-                KeyCode::PageUp => Some(Action::ViewerPageUp),
-                KeyCode::Char(' ') if shift => Some(Action::ViewerPageUp),
-                KeyCode::Char(' ') if plain => Some(Action::ViewerPageDown),
-                KeyCode::PageDown => Some(Action::ViewerPageDown),
-                KeyCode::Home => Some(Action::ViewerHome),
-                KeyCode::End => Some(Action::ViewerEnd),
-                KeyCode::Char('G') if plain => Some(Action::ViewerEnd),
-                KeyCode::BackTab => Some(Action::ViewerBackTab),
-                KeyCode::Tab if shift && plain => Some(Action::ViewerBackTab),
-                KeyCode::Tab if plain => Some(Action::ViewerTab),
-                KeyCode::Enter if plain => Some(Action::ViewerActivate),
-                KeyCode::Char('f') if plain => Some(Action::FocusFooter),
-                _ => None,
-            }
+    let scope = match focus {
+        FocusPane::Nav => BindingScope::Nav,
+        FocusPane::Viewer => BindingScope::Viewer,
+    };
+    for b in BINDINGS {
+        if b.scope != scope {
+            continue;
+        }
+        let Some(matcher) = b.matcher else {
+            continue;
+        };
+        if matcher.matches(key) {
+            return b.action.clone();
         }
     }
+    None
 }
 
 #[cfg(test)]
@@ -378,221 +906,139 @@ mod tests {
             Chord::PendingG,
         );
         assert_eq!(prev, Some(Action::PrevTab));
-        let (new_tab, _) = map(
-            key(KeyCode::Char('t')),
-            FocusPane::Viewer,
-            InputMode::Normal,
-            Chord::None,
-        );
-        assert_eq!(new_tab, Some(Action::NewTab));
 
-        // Overlay types plain letters into the search field
-        let (a, _) = map(
+        // Overlay: plain letters type; Esc closes; Ctrl+C still quits.
+        let (typed, _) = map(
             key(KeyCode::Char('q')),
             FocusPane::Viewer,
             InputMode::Overlay,
             Chord::None,
         );
-        assert_eq!(a, Some(Action::SearchChar('q')));
-        // Esc closes search
-        let (a, _) = map(
+        assert_eq!(typed, Some(Action::SearchChar('q')));
+        let (esc, _) = map(
             key(KeyCode::Esc),
             FocusPane::Viewer,
             InputMode::Overlay,
             Chord::None,
         );
-        assert_eq!(a, Some(Action::CloseSearch));
-        // Ctrl+C still quits in overlay
-        let (a, _) = map(
+        assert_eq!(esc, Some(Action::CloseSearch));
+        let (ctrl_c, _) = map(
             key_mod(KeyCode::Char('c'), KeyModifiers::CONTROL),
             FocusPane::Viewer,
             InputMode::Overlay,
             Chord::None,
         );
-        assert_eq!(a, Some(Action::Quit));
+        assert_eq!(ctrl_c, Some(Action::Quit));
     }
 
     #[test]
-    fn keymap_heading_jump_alt_shift() {
-        let up = key_mod(KeyCode::Up, KeyModifiers::ALT | KeyModifiers::SHIFT);
-        let down = key_mod(KeyCode::Down, KeyModifiers::ALT | KeyModifiers::SHIFT);
-        let (got_up, _) = map(up, FocusPane::Viewer, InputMode::Normal, Chord::None);
-        let (got_down, _) = map(down, FocusPane::Viewer, InputMode::Normal, Chord::None);
-        assert_eq!(got_up, Some(Action::ViewerHeadingUp));
-        assert_eq!(got_down, Some(Action::ViewerHeadingDown));
-        let block = key_mod(KeyCode::Up, KeyModifiers::SHIFT);
-        let (got_block, _) = map(block, FocusPane::Viewer, InputMode::Normal, Chord::None);
-        assert_eq!(got_block, Some(Action::ViewerBlockUp));
+    fn keymap_bindings_round_trip() {
+        for b in BINDINGS {
+            let Some(matcher) = b.matcher else {
+                continue;
+            };
+            let Some(want) = b.action.clone() else {
+                continue;
+            };
+            let key = matcher.sample();
+            let focus = match b.scope {
+                BindingScope::Nav => FocusPane::Nav,
+                BindingScope::Viewer | BindingScope::Global => FocusPane::Viewer,
+                BindingScope::Overlay | BindingScope::Chord => continue,
+            };
+            let (got, _) = map_with_overrides(key, focus, InputMode::Normal, Chord::None, None);
+            assert_eq!(
+                got,
+                Some(want),
+                "binding keys={} scope={:?} sample={key:?}",
+                b.keys,
+                b.scope
+            );
+        }
     }
 
     #[test]
-    fn keymap_heading_jump_brace_fallback() {
-        let (got_up, _) = map(
-            key(KeyCode::Char('{')),
-            FocusPane::Viewer,
-            InputMode::Normal,
-            Chord::None,
-        );
-        let (got_down, _) = map(
-            key(KeyCode::Char('}')),
-            FocusPane::Viewer,
-            InputMode::Normal,
-            Chord::None,
-        );
-        assert_eq!(got_up, Some(Action::ViewerHeadingUp));
-        assert_eq!(got_down, Some(Action::ViewerHeadingDown));
-        // Shift+[/] still produce {/} on many terminals; modifiers must not steal the binding.
-        let (got_shift, _) = map(
-            key_mod(KeyCode::Char('{'), KeyModifiers::SHIFT),
-            FocusPane::Viewer,
-            InputMode::Normal,
-            Chord::None,
-        );
-        assert_eq!(got_shift, Some(Action::ViewerHeadingUp));
-        // Nav focus: braces stay unbound (Alt+Shift remains the nav group jump).
-        let (nav, _) = map(
-            key(KeyCode::Char('{')),
-            FocusPane::Nav,
-            InputMode::Normal,
-            Chord::None,
-        );
-        assert_eq!(nav, None);
+    fn keymap_no_bound_action_missing_from_table() {
+        // Actions reachable from Normal map_global / map_pane / chords must appear.
+        let mut in_table = std::collections::HashSet::new();
+        for b in BINDINGS {
+            if let Some(a) = &b.action {
+                in_table.insert(format!("{a:?}"));
+            }
+        }
+        let required = [
+            Action::Quit,
+            Action::ToggleNav,
+            Action::PrevPage,
+            Action::NextPage,
+            Action::Back,
+            Action::Forward,
+            Action::OpenSearch,
+            Action::OpenHelp,
+            Action::FocusNav,
+            Action::FocusViewer,
+            Action::CycleFocus,
+            Action::NavStepUp,
+            Action::NavStepDown,
+            Action::NavJumpUp,
+            Action::NavJumpDown,
+            Action::NavExpand,
+            Action::NavCollapse,
+            Action::NavActivate,
+            Action::ViewerUp,
+            Action::ViewerDown,
+            Action::ViewerBlockUp,
+            Action::ViewerBlockDown,
+            Action::ViewerHeadingUp,
+            Action::ViewerHeadingDown,
+            Action::ViewerPageUp,
+            Action::ViewerPageDown,
+            Action::ViewerHome,
+            Action::ViewerEnd,
+            Action::ViewerTab,
+            Action::ViewerBackTab,
+            Action::ViewerActivate,
+            Action::FocusFooter,
+            Action::ToggleViewMode,
+            Action::OpenInEditor,
+            Action::CopyPagePath,
+            Action::CopyLinkTarget,
+            Action::NewTab,
+            Action::CloseTab,
+            Action::NextTab,
+            Action::PrevTab,
+            Action::SearchNextMatch,
+            Action::SearchPrevMatch,
+        ];
+        for a in required {
+            assert!(
+                in_table.contains(&format!("{a:?}")),
+                "Action {a:?} missing from BINDINGS"
+            );
+        }
     }
 
     #[test]
     fn keymap_key_override_changes_quit() {
-        let mut overs = std::collections::BTreeMap::new();
-        overs.insert("quit".into(), "Q".into());
+        let mut over = std::collections::BTreeMap::new();
+        over.insert("quit".into(), "Q".into());
         let (got, _) = map_with_overrides(
             key(KeyCode::Char('Q')),
             FocusPane::Viewer,
             InputMode::Normal,
             Chord::None,
-            Some(&overs),
+            Some(&over),
         );
         assert_eq!(got, Some(Action::Quit));
-        // Default lowercase q still works via map_global when not overridden by that char.
-        let (got_q, _) = map_with_overrides(
+        let (old, _) = map_with_overrides(
             key(KeyCode::Char('q')),
             FocusPane::Viewer,
             InputMode::Normal,
             Chord::None,
-            Some(&overs),
+            Some(&over),
         );
-        assert_eq!(got_q, Some(Action::Quit));
-    }
-
-    #[test]
-    fn keymap_alt_b_f_back_forward_and_plain_keys_ignore_mods() {
-        let (back, _) = map(
-            key_mod(KeyCode::Char('b'), KeyModifiers::ALT),
-            FocusPane::Viewer,
-            InputMode::Normal,
-            Chord::None,
-        );
-        assert_eq!(back, Some(Action::Back));
-        let (fwd, _) = map(
-            key_mod(KeyCode::Char('f'), KeyModifiers::ALT),
-            FocusPane::Viewer,
-            InputMode::Normal,
-            Chord::None,
-        );
-        assert_eq!(fwd, Some(Action::Forward));
-        let (alt_q, _) = map(
-            key_mod(KeyCode::Char('q'), KeyModifiers::ALT),
-            FocusPane::Viewer,
-            InputMode::Normal,
-            Chord::None,
-        );
-        assert_eq!(alt_q, None);
-        let (ctrl_b, _) = map(
-            key_mod(KeyCode::Char('b'), KeyModifiers::CONTROL),
-            FocusPane::Viewer,
-            InputMode::Normal,
-            Chord::None,
-        );
-        assert_eq!(ctrl_b, None);
-        // Arrow forms still work when the terminal actually sends them.
-        let (alt_left, _) = map(
-            key_mod(KeyCode::Left, KeyModifiers::ALT),
-            FocusPane::Viewer,
-            InputMode::Normal,
-            Chord::None,
-        );
-        assert_eq!(alt_left, Some(Action::Back));
-        let (alt_right, _) = map(
-            key_mod(KeyCode::Right, KeyModifiers::ALT),
-            FocusPane::Viewer,
-            InputMode::Normal,
-            Chord::None,
-        );
-        assert_eq!(alt_right, Some(Action::Forward));
-    }
-
-    #[test]
-    fn keymap_confirm_rejects_alt_ctrl_y() {
-        for mods in [KeyModifiers::ALT, KeyModifiers::CONTROL] {
-            let (got, _) = map(
-                key_mod(KeyCode::Char('y'), mods),
-                FocusPane::Viewer,
-                InputMode::Confirm,
-                Chord::None,
-            );
-            assert_eq!(got, None, "mods={mods:?}");
-        }
-        let (ok, _) = map(
-            key(KeyCode::Char('y')),
-            FocusPane::Viewer,
-            InputMode::Confirm,
-            Chord::None,
-        );
-        assert_eq!(ok, Some(Action::ConfirmOpen));
-    }
-
-    #[test]
-    fn keymap_overlay_alt_b_neither_types_nor_back() {
-        let (got, _) = map(
-            key_mod(KeyCode::Char('b'), KeyModifiers::ALT),
-            FocusPane::Viewer,
-            InputMode::Overlay,
-            Chord::None,
-        );
-        assert_eq!(got, None);
-    }
-
-    #[test]
-    fn keymap_overlay_altgr_and_option_non_ascii() {
-        let (altgr, _) = map(
-            key_mod(
-                KeyCode::Char('{'),
-                KeyModifiers::CONTROL | KeyModifiers::ALT,
-            ),
-            FocusPane::Viewer,
-            InputMode::Overlay,
-            Chord::None,
-        );
-        assert_eq!(altgr, Some(Action::SearchChar('{')));
-        let (pure_alt_ascii, _) = map(
-            key_mod(KeyCode::Char('a'), KeyModifiers::ALT),
-            FocusPane::Viewer,
-            InputMode::Overlay,
-            Chord::None,
-        );
-        assert_eq!(pure_alt_ascii, None);
-        let (option_non_ascii, _) = map(
-            key_mod(KeyCode::Char('å'), KeyModifiers::ALT),
-            FocusPane::Viewer,
-            InputMode::Overlay,
-            Chord::None,
-        );
-        assert_eq!(option_non_ascii, Some(Action::SearchChar('å')));
-        let (pure_ctrl, _) = map(
-            key_mod(KeyCode::Char('a'), KeyModifiers::CONTROL),
-            FocusPane::Viewer,
-            InputMode::Overlay,
-            Chord::None,
-        );
-        assert_eq!(pure_ctrl, None);
+        // Override steals Q; plain q still matches the table binding.
+        assert_eq!(old, Some(Action::Quit));
     }
 
     #[test]
@@ -604,7 +1050,6 @@ mod tests {
             Chord::None,
         );
         assert_eq!(got, Some(Action::FocusFooter));
-        // Alt+f remains Forward (Ghostty Option+→).
         let (alt_f, _) = map(
             key_mod(KeyCode::Char('f'), KeyModifiers::ALT),
             FocusPane::Viewer,
@@ -612,7 +1057,6 @@ mod tests {
             Chord::None,
         );
         assert_eq!(alt_f, Some(Action::Forward));
-        // Nav pane: plain f is unbound (global map does not steal it).
         let (nav_f, _) = map(
             key(KeyCode::Char('f')),
             FocusPane::Nav,
@@ -620,6 +1064,24 @@ mod tests {
             Chord::None,
         );
         assert_eq!(nav_f, None);
+    }
+
+    #[test]
+    fn keymap_open_help_on_question() {
+        let (got, _) = map(
+            key(KeyCode::Char('?')),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(got, Some(Action::OpenHelp));
+        let (close, _) = map(
+            key(KeyCode::Char('?')),
+            FocusPane::Viewer,
+            InputMode::Help,
+            Chord::None,
+        );
+        assert_eq!(close, Some(Action::CloseHelp));
     }
 
     #[test]
@@ -644,26 +1106,135 @@ mod tests {
                 assert_eq!(tab, None, "Tab mods={mods:?} focus={focus:?}");
             }
         }
-        let (viewer_tab, _) = map(
-            key(KeyCode::Tab),
+    }
+
+    #[test]
+    fn keymap_plain_letters_ignore_ctrl_alt() {
+        for (c, focus, want) in [
+            ('q', FocusPane::Viewer, Some(Action::Quit)),
+            ('b', FocusPane::Viewer, Some(Action::ToggleNav)),
+        ] {
+            let (plain, _) = map(key(KeyCode::Char(c)), focus, InputMode::Normal, Chord::None);
+            assert_eq!(plain, want);
+            let (ctrl, _) = map(
+                key_mod(KeyCode::Char(c), KeyModifiers::CONTROL),
+                focus,
+                InputMode::Normal,
+                Chord::None,
+            );
+            assert_eq!(ctrl, None, "Ctrl+{c}");
+            let (alt, _) = map(
+                key_mod(KeyCode::Char(c), KeyModifiers::ALT),
+                focus,
+                InputMode::Normal,
+                Chord::None,
+            );
+            // Alt+b is Back (global), not ToggleNav.
+            if c == 'b' {
+                assert_eq!(alt, Some(Action::Back));
+            } else {
+                assert_eq!(alt, None, "Alt+{c}");
+            }
+        }
+    }
+
+    #[test]
+    fn keymap_confirm_y_n() {
+        let (y, _) = map(
+            key(KeyCode::Char('y')),
+            FocusPane::Viewer,
+            InputMode::Confirm,
+            Chord::None,
+        );
+        assert_eq!(y, Some(Action::ConfirmOpen));
+        let (n, _) = map(
+            key(KeyCode::Char('n')),
+            FocusPane::Viewer,
+            InputMode::Confirm,
+            Chord::None,
+        );
+        assert_eq!(n, Some(Action::ConfirmDecline));
+        let (esc, _) = map(
+            key(KeyCode::Esc),
+            FocusPane::Viewer,
+            InputMode::Confirm,
+            Chord::None,
+        );
+        assert_eq!(esc, Some(Action::ConfirmDecline));
+    }
+
+    #[test]
+    fn keymap_overlay_typing_rules() {
+        let (plain, _) = map(
+            key(KeyCode::Char('a')),
+            FocusPane::Viewer,
+            InputMode::Overlay,
+            Chord::None,
+        );
+        assert_eq!(plain, Some(Action::SearchChar('a')));
+        let (pure_alt_ascii, _) = map(
+            key_mod(KeyCode::Char('a'), KeyModifiers::ALT),
+            FocusPane::Viewer,
+            InputMode::Overlay,
+            Chord::None,
+        );
+        assert_eq!(pure_alt_ascii, None);
+        let (option_non_ascii, _) = map(
+            key_mod(KeyCode::Char('å'), KeyModifiers::ALT),
+            FocusPane::Viewer,
+            InputMode::Overlay,
+            Chord::None,
+        );
+        assert_eq!(option_non_ascii, Some(Action::SearchChar('å')));
+        let (pure_ctrl, _) = map(
+            key_mod(KeyCode::Char('a'), KeyModifiers::CONTROL),
+            FocusPane::Viewer,
+            InputMode::Overlay,
+            Chord::None,
+        );
+        assert_eq!(pure_ctrl, None);
+    }
+
+    #[test]
+    fn keymap_viewer_heading_and_block() {
+        let (up, _) = map(
+            key_mod(KeyCode::Up, KeyModifiers::ALT | KeyModifiers::SHIFT),
             FocusPane::Viewer,
             InputMode::Normal,
             Chord::None,
         );
-        assert_eq!(viewer_tab, Some(Action::ViewerTab));
-        let (shift_tab, _) = map(
-            key_mod(KeyCode::Tab, KeyModifiers::SHIFT),
+        assert_eq!(up, Some(Action::ViewerHeadingUp));
+        let (block, _) = map(
+            key_mod(KeyCode::Up, KeyModifiers::SHIFT),
             FocusPane::Viewer,
             InputMode::Normal,
             Chord::None,
         );
-        assert_eq!(shift_tab, Some(Action::ViewerBackTab));
-        let (nav_tab, _) = map(
-            key(KeyCode::Tab),
+        assert_eq!(block, Some(Action::ViewerBlockUp));
+        let (brace, _) = map(
+            key(KeyCode::Char('{')),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(brace, Some(Action::ViewerHeadingUp));
+    }
+
+    #[test]
+    fn keymap_nav_step_and_expand() {
+        let (step, _) = map(
+            key(KeyCode::Down),
             FocusPane::Nav,
             InputMode::Normal,
             Chord::None,
         );
-        assert_eq!(nav_tab, Some(Action::NavStepDown));
+        assert_eq!(step, Some(Action::NavStepDown));
+        let (expand, _) = map(
+            key(KeyCode::Right),
+            FocusPane::Nav,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(expand, Some(Action::NavExpand));
     }
 }

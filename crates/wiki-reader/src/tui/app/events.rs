@@ -151,6 +151,7 @@ fn reenter_terminal(terminal: &mut DefaultTerminal) -> io::Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 pub(crate) fn apply_mouse(
     app: &mut App,
     mouse: ratatui::crossterm::event::MouseEvent,
@@ -189,16 +190,20 @@ pub(crate) fn apply_mouse(
             // Footer clicks keep focus on that side after the page loads (P2-22).
             match &hit {
                 Hit::Prev => {
-                    app.sticky_footer = Some(crate::tui::viewer_doc::FocusTarget::FooterPrev)
+                    app.sticky_footer = Some(crate::tui::viewer_doc::FocusTarget::FooterPrev);
                 }
                 Hit::Next => {
-                    app.sticky_footer = Some(crate::tui::viewer_doc::FocusTarget::FooterNext)
+                    app.sticky_footer = Some(crate::tui::viewer_doc::FocusTarget::FooterNext);
                 }
                 _ => {}
             }
             // TabClose carries the index; CloseTab alone would close the active tab.
             if let Hit::TabClose(i) = hit {
                 app.close_tab_at(i);
+                return None;
+            }
+            if let Hit::HelpRow(i) = hit {
+                app.help_activate(Some(i));
                 return None;
             }
             Some(HitMap::action_for(&hit))

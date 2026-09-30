@@ -25,6 +25,10 @@ pub enum Hit {
     Prev,
     /// Viewer footer next.
     Next,
+    /// Help overlay dismiss (click outside).
+    HelpDismiss,
+    /// Help overlay row (index into [`crate::tui::help_ui::HelpOverlay::rows`]).
+    HelpRow(usize),
     /// Viewer body line (0-based source line index).
     ViewerLine(u32),
     /// Link segment (`LinkId.0`).
@@ -97,6 +101,8 @@ impl HitMap {
             Hit::Link(id) => Action::FollowLinkId(*id),
             Hit::SearchResult(i) => Action::SearchActivateIndex(*i),
             Hit::SearchDismiss => Action::CloseSearch,
+            Hit::HelpDismiss => Action::CloseHelp,
+            Hit::HelpRow(_) => Action::HelpActivate, // index applied in apply_mouse
             Hit::FocusNav => Action::FocusNav,
             Hit::FocusViewer => Action::FocusViewer,
             Hit::Tab(i) => Action::SwitchTab(*i),
