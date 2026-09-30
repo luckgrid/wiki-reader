@@ -83,12 +83,36 @@ impl App {
     }
 
     pub(crate) fn nav_expand(&mut self) {
+        use crate::tui::focus::FocusPane;
+
         let NavStop::Node(id) = self.navigator.nav().cursor.clone() else {
             return;
         };
-        if matches!(id, NodeId::Group(_) | NodeId::OtherPages) {
-            self.navigator.set_group_expanded(id, true);
-            self.clamp_nav_scroll();
+        match id {
+            NodeId::Page(key) => {
+                self.navigator.set_nav_cursor(NodeId::Page(key.clone()));
+                let effects = self.navigator.go_to_page(key, self.view_state());
+                self.apply_effects(effects);
+                if self.focus != FocusPane::Viewer {
+                    self.navigator.nav_focus_lost();
+                    self.focus = FocusPane::Viewer;
+                }
+            }
+            NodeId::Group(_) | NodeId::OtherPages => {
+                if self.navigator.nav().expanded.contains(&id) {
+                    // Already open: step into the first visible child.
+                    let rows = self.nav_rows();
+                    if let Some(idx) = self.nav_cursor_index(&rows)
+                        && let Some(child) = rows.get(idx + 1)
+                    {
+                        self.navigator.set_nav_cursor(child.id.clone());
+                        self.ensure_nav_cursor_visible();
+                    }
+                } else {
+                    self.navigator.set_group_expanded(id, true);
+                    self.clamp_nav_scroll();
+                }
+            }
         }
     }
 

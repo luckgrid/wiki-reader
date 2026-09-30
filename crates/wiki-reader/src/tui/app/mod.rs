@@ -68,6 +68,8 @@ pub struct App {
     pub scroll: u32,
     /// Tab-cycle focused item index into `focus_list`.
     pub focused_item: Option<usize>,
+    /// Sticky footer focus kind restored after page load (P2-22).
+    pub(crate) sticky_footer: Option<crate::tui::viewer_doc::FocusTarget>,
     /// Status / notice message.
     pub message: String,
     /// Visible viewer body rows (from last layout).
@@ -213,6 +215,7 @@ impl App {
             cursor_line: 0,
             scroll: 0,
             focused_item: None,
+            sticky_footer: None,
             message,
             // ponytail: defaults until first draw; layout overwrites each frame
             viewer_rows: 20,
@@ -494,7 +497,7 @@ impl App {
                 let max =
                     u32::try_from(self.doc.lines().len().saturating_sub(1)).unwrap_or(u32::MAX);
                 self.cursor_line = line.min(max);
-                self.focused_item = None;
+                self.clear_item_focus();
             }
             Action::NavStepUp => self.nav_step(-1),
             Action::NavStepDown => self.nav_step(1),
@@ -518,12 +521,12 @@ impl App {
                 self.viewer_move_line(step);
             }
             Action::ViewerHome => {
-                self.focused_item = None;
+                self.clear_item_focus();
                 self.cursor_line = 0;
                 self.ensure_cursor_visible();
             }
             Action::ViewerEnd => {
-                self.focused_item = None;
+                self.clear_item_focus();
                 let max = u32::try_from(self.doc.lines().len().saturating_sub(1)).unwrap_or(0);
                 self.cursor_line = max;
                 self.ensure_cursor_visible();
@@ -531,6 +534,7 @@ impl App {
             Action::ViewerTab => self.viewer_tab(false),
             Action::ViewerBackTab => self.viewer_tab(true),
             Action::ViewerActivate => self.viewer_activate(),
+            Action::FocusFooter => self.focus_footer(),
             Action::FollowLinkId(id) => self.follow_link_id(id),
             Action::ConfirmOpen => {
                 if let Some(url) = self.pending_external.take() {
@@ -1154,7 +1158,7 @@ impl App {
                     ));
                     self.cursor_line = 0;
                     self.scroll = 0;
-                    self.focused_item = None;
+                    self.clear_item_focus();
                 }
             }
         }
@@ -1200,6 +1204,7 @@ impl App {
                 self.cursor_line = 0;
                 self.scroll = 0;
                 self.focused_item = None;
+                self.restore_sticky_footer();
                 if matches!(mode, ViewMode::Raw) {
                     self.spawn_highlight(src);
                 } else {

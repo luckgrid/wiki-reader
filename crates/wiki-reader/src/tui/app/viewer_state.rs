@@ -6,8 +6,49 @@ use crate::tui::page_doc::PageDoc;
 use crate::tui::viewer_doc::{FocusItem, FocusTarget, ViewerDoc, cycle};
 
 impl App {
-    pub(crate) fn viewer_move_line(&mut self, delta: i32) {
+    pub(crate) fn clear_item_focus(&mut self) {
         self.focused_item = None;
+        self.sticky_footer = None;
+    }
+
+    pub(crate) fn restore_sticky_footer(&mut self) {
+        let Some(want) = self.sticky_footer else {
+            return;
+        };
+        let items = self.focus_list();
+        let idx = items.iter().position(|it| it.kind == want).or_else(|| {
+            let other = match want {
+                FocusTarget::FooterPrev => FocusTarget::FooterNext,
+                FocusTarget::FooterNext => FocusTarget::FooterPrev,
+                _ => return None,
+            };
+            items.iter().position(|it| it.kind == other)
+        });
+        self.focused_item = idx;
+    }
+
+    pub(crate) fn focus_footer(&mut self) {
+        use crate::tui::focus::FocusPane;
+        if self.focus != FocusPane::Viewer {
+            self.navigator.nav_focus_lost();
+            self.focus = FocusPane::Viewer;
+        }
+        let items = self.focus_list();
+        // Prefer next; on the last page only prev exists.
+        let prefer = if items.iter().any(|it| it.kind == FocusTarget::FooterNext) {
+            FocusTarget::FooterNext
+        } else {
+            FocusTarget::FooterPrev
+        };
+        self.focused_item = items.iter().position(|it| it.kind == prefer).or_else(|| {
+            items
+                .iter()
+                .position(|it| matches!(it.kind, FocusTarget::FooterPrev | FocusTarget::FooterNext))
+        });
+    }
+
+    pub(crate) fn viewer_move_line(&mut self, delta: i32) {
+        self.clear_item_focus();
         let max = i64::try_from(self.doc.lines().len().saturating_sub(1)).unwrap_or(0);
         let cur = i64::from(self.cursor_line);
         let next = (cur + i64::from(delta)).clamp(0, max);
@@ -16,7 +57,7 @@ impl App {
     }
 
     pub(crate) fn viewer_block(&mut self, dir: i32) {
-        self.focused_item = None;
+        self.clear_item_focus();
         let blocks = self.doc.block_starts();
         // blocks are 1-based; cursor is 0-based
         let cur_src = self.cursor_line.saturating_add(1);
@@ -37,7 +78,7 @@ impl App {
     }
 
     pub(crate) fn viewer_heading(&mut self, dir: i32) {
-        self.focused_item = None;
+        self.clear_item_focus();
         let headings = self.doc.heading_lines();
         let cur = self.cursor_line.saturating_add(1);
         if dir < 0 {
@@ -121,8 +162,14 @@ impl App {
                 return;
             };
             match it.kind {
-                FocusTarget::FooterPrev => self.update(Action::PrevPage),
-                FocusTarget::FooterNext => self.update(Action::NextPage),
+                FocusTarget::FooterPrev => {
+                    self.sticky_footer = Some(FocusTarget::FooterPrev);
+                    self.update(Action::PrevPage);
+                }
+                FocusTarget::FooterNext => {
+                    self.sticky_footer = Some(FocusTarget::FooterNext);
+                    self.update(Action::NextPage);
+                }
                 FocusTarget::Link => self.follow_link_target(&it.target),
                 FocusTarget::BlockAction => self.activate_block(&it.target),
             }

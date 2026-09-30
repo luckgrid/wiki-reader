@@ -116,6 +116,7 @@ Two focusable panes: **Side nav** and **Viewer**. The search overlay is modal wh
 | `Home` / `End` (`gg` / `G`) | Top / bottom |
 | `Tab` / `Shift+Tab` | Next / previous focusable item (links, block actions, footer buttons) |
 | `Enter` | Activate focused item. With no item focused and exactly one link on the cursor line, follow it. |
+| `f` | Focus footer next (or prev on the last page) |
 | `t` · middle-click | Open focused link in a new tab |
 | `[` / `]` | Previous / next page |
 | `Backspace` (primary) · `Alt+←` / `Alt+→` · `Alt+b` / `Alt+f` | Back / forward. `Alt+b`/`Alt+f` are what macOS Ghostty sends for Option+←/→. |
@@ -123,7 +124,7 @@ Two focusable panes: **Side nav** and **Viewer**. The search overlay is modal wh
 | `e` | Open in `$EDITOR` at cursor line |
 | `y` / `Y` | Copy page path / focused link target (OSC 52) |
 
-**Tab ↔ cursor interplay:** `Tab` focuses the first item *after* the cursor line, and the cursor line moves to that item. Moving the cursor with arrows clears item focus. This keeps one visible "where am I" at all times.
+**Tab ↔ cursor interplay:** `Tab` focuses the first item *after* the cursor line, and the cursor line moves to that item. Moving the cursor with arrows clears item focus (and sticky footer focus). Activating a footer link keeps focus on that side after the page changes. This keeps one visible "where am I" at all times.
 
 ### Side nav
 
@@ -131,8 +132,8 @@ Two focusable panes: **Side nav** and **Viewer**. The search overlay is modal wh
 |-----|--------|
 | `↑` / `↓` · `Tab` / `Shift+Tab` | Previous / next visible item (identical behavior) |
 | `Shift+↑` / `Shift+↓` | Jump between **group headers and the search row** |
-| `→` / `←` | Expand / collapse group (on a child: `←` goes to its parent group) |
-| `Enter` · click | Page item: open (replace). Group header: toggle. Search row: open search overlay. |
+| `→` / `←` | Expand / collapse group. On an expanded group, `→` steps to the first child. On a page row, `→` opens it and focuses the viewer. On a child, `←` goes to its parent group. |
+| `Enter` · click | Page item: open (replace), stay in nav. Group header: toggle. Search row: open search overlay. |
 | `t` · middle-click | Open item in a new tab |
 
 ### Global
