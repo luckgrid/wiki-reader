@@ -4,15 +4,16 @@ use wiki_reader_core::nav::NavStop;
 use wiki_reader_core::search::{PageHit, TextHit};
 
 use super::focus::FocusPane;
+use super::regions::overlay::{clamp_scroll, ensure_visible};
 
-/// Pages vs full-text mode.
+/// Files vs full-text content mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SearchMode {
-    /// Fuzzy title/path.
+    /// Fuzzy title/path (Files).
     #[default]
-    Pages,
-    /// Full-text body scan.
-    Text,
+    Files,
+    /// Full-text body scan (Content).
+    Content,
 }
 
 /// Modal search panel.
@@ -20,13 +21,17 @@ pub enum SearchMode {
 pub struct SearchOverlay {
     /// Query string.
     pub query: String,
-    /// Pages / Text.
+    /// Files / Content.
     pub mode: SearchMode,
-    /// Selected result index.
+    /// Selected result index (absolute).
     pub selected: usize,
-    /// Page hits (when mode is Pages).
+    /// List scroll offset.
+    pub scroll: usize,
+    /// Visible list rows from last draw (for PgUp/PgDn).
+    pub list_height: usize,
+    /// Page hits (when mode is Files).
     pub page_hits: Vec<PageHit>,
-    /// Text hits (when mode is Text).
+    /// Text hits (when mode is Content).
     pub text_hits: Vec<TextHit>,
     /// Focus before open (restored on Esc).
     pub prev_focus: FocusPane,
@@ -42,8 +47,8 @@ impl SearchOverlay {
     #[must_use]
     pub fn result_len(&self) -> usize {
         match self.mode {
-            SearchMode::Pages => self.page_hits.len(),
-            SearchMode::Text => self.text_hits.len(),
+            SearchMode::Files => self.page_hits.len(),
+            SearchMode::Content => self.text_hits.len(),
         }
     }
 
@@ -51,8 +56,16 @@ impl SearchOverlay {
         let n = self.result_len();
         if n == 0 {
             self.selected = 0;
+            self.scroll = 0;
         } else {
             self.selected = self.selected.min(n.saturating_sub(1));
+            self.ensure_selection_visible();
         }
+    }
+
+    pub fn ensure_selection_visible(&mut self) {
+        let visible = self.list_height.max(1);
+        self.scroll = ensure_visible(self.selected, self.scroll, visible);
+        self.scroll = clamp_scroll(self.scroll, visible, self.result_len());
     }
 }

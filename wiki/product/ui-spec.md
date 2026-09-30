@@ -58,7 +58,8 @@ Future: this search row becomes a proper **side nav header**, and a **side nav f
 
 - Opens with `/` or `Ctrl-k` from anywhere, a click on the ⌕ row, or `Enter` on it.
 - Floats over the side nav and viewer. Input at the top; results below, grouped by page (title, path, snippet, match count).
-- A toggle (`Tab` inside the input, or clickable) switches between **Pages** (fuzzy title/path) and **Text** (full-text).
+- A toggle (`Tab` inside the overlay) switches between **Files** (fuzzy title/path) and **Content** (full-text). The header shows `Files | Content` with the active mode highlighted; Files is the default.
+- Results use a larger centered pane (~80% × ~70%, up to ~100 cols). The list scrolls; `Home`/`End`/`PgUp`/`PgDn` and the mouse wheel jump or step selection. Selected row uses the cursor-line background; paths are dim, titles/snippets bright, with query matches underlined.
 - `↑`/`↓` or mouse selects; `Enter` or click opens the result in the current view (replace + history), scrolls to the match and highlights it; `n`/`N` then cycle matches in the page.
 - `Esc` or a click outside closes it and restores the previous focus and cursor.
 - The last query and results are kept for the session.

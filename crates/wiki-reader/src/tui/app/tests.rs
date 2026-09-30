@@ -1503,7 +1503,7 @@ fn search_matches_survive_toggle_and_resize() {
     let root = fixture();
     let mut app = App::new(&root).unwrap();
     app.update(Action::OpenSearch);
-    app.update(Action::SearchToggleMode); // Text
+    app.update(Action::SearchToggleMode); // Content
     for c in "token".chars() {
         app.update(Action::SearchChar(c));
     }
@@ -1605,7 +1605,7 @@ fn search_n_n_wrap_and_highlight() {
     let root = fixture();
     let mut app = App::new(&root).unwrap();
     app.update(Action::OpenSearch);
-    app.update(Action::SearchToggleMode); // Text
+    app.update(Action::SearchToggleMode); // Content
     for c in "token".chars() {
         app.update(Action::SearchChar(c));
     }
@@ -1653,6 +1653,104 @@ fn search_click_result_and_outside() {
     app.update(Action::CloseSearch);
     assert!(app.search.is_none());
     assert_eq!(app.cursor_line, prev_cursor);
+}
+
+#[test]
+fn search_selection_scrolls_into_view_and_jumps() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::OpenSearch);
+    // Single-letter query yields many file hits.
+    app.update(Action::SearchChar('a'));
+    let _ = draw_app(&mut app, 100, 24);
+    let n = app.search.as_ref().unwrap().result_len();
+    assert!(n > 5, "expected several hits, got {n}");
+    let vh = app.search.as_ref().unwrap().list_height;
+    // Move past the first viewport.
+    for _ in 0..(vh + 2) {
+        app.update(Action::SearchSelectDelta(1));
+    }
+    let overlay = app.search.as_ref().unwrap();
+    assert!(
+        overlay.selected >= overlay.scroll
+            && overlay.selected < overlay.scroll + overlay.list_height.max(1),
+        "selected {} not visible in [{}, {})",
+        overlay.selected,
+        overlay.scroll,
+        overlay.scroll + overlay.list_height
+    );
+    app.update(Action::SearchJump(false));
+    let overlay = app.search.as_ref().unwrap();
+    assert_eq!(overlay.selected, overlay.result_len() - 1);
+    app.update(Action::SearchJump(true));
+    assert_eq!(app.search.as_ref().unwrap().selected, 0);
+    app.update(Action::SearchPageDelta(1));
+    assert!(app.search.as_ref().unwrap().selected > 0);
+}
+
+#[test]
+fn search_click_after_scroll_uses_absolute_index() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::OpenSearch);
+    app.update(Action::SearchChar('a'));
+    let _ = draw_app(&mut app, 100, 24);
+    let vh = app.search.as_ref().unwrap().list_height.max(1);
+    for _ in 0..=vh {
+        app.update(Action::SearchSelectDelta(1));
+    }
+    let want = app.search.as_ref().unwrap().selected;
+    let _ = draw_app(&mut app, 100, 24);
+    let abs = app
+        .hit_map
+        .entries()
+        .iter()
+        .find_map(|(r, h)| match h {
+            Hit::SearchResult(i) if *i == want => Some((r.x, r.y)),
+            _ => None,
+        })
+        .expect("absolute SearchResult hit after scroll");
+    let mouse = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: abs.0,
+        row: abs.1,
+        modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+    };
+    if let Some(a) = apply_mouse(&mut app, mouse) {
+        app.update(a);
+    }
+    assert!(app.search.is_none(), "click should activate and close");
+}
+
+#[test]
+fn search_mode_files_content_header() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::OpenSearch);
+    let terminal = draw_app(&mut app, 80, 24);
+    let buf = terminal.backend().buffer();
+    let mut row = String::new();
+    for x in 0..buf.area.width {
+        row.push_str(buf[(x, 0)].symbol());
+    }
+    // Find Files / Content somewhere in the buffer.
+    let mut all = String::new();
+    for y in 0..buf.area.height {
+        for x in 0..buf.area.width {
+            all.push_str(buf[(x, y)].symbol());
+        }
+    }
+    assert!(all.contains("Files"), "header missing Files: {all}");
+    assert!(all.contains("Content"), "header missing Content");
+    assert_eq!(
+        app.search.as_ref().unwrap().mode,
+        crate::tui::search_ui::SearchMode::Files
+    );
+    app.update(Action::SearchToggleMode);
+    assert_eq!(
+        app.search.as_ref().unwrap().mode,
+        crate::tui::search_ui::SearchMode::Content
+    );
 }
 
 #[test]

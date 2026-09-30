@@ -476,6 +476,8 @@ impl App {
             Action::SearchChar(c) => self.search_type(c),
             Action::SearchBackspace => self.search_backspace(),
             Action::SearchSelectDelta(d) => self.search_select(d),
+            Action::SearchJump(home) => self.search_jump(home),
+            Action::SearchPageDelta(d) => self.search_page(d),
             Action::SearchToggleMode => self.search_toggle_mode(),
             Action::SearchActivate => self.search_activate(None),
             Action::SearchActivateIndex(i) => self.search_activate(Some(i)),
@@ -673,8 +675,8 @@ impl App {
                     return;
                 };
                 let key = match overlay.mode {
-                    SearchMode::Pages => overlay.page_hits.get(i).map(|h| h.page.clone()),
-                    SearchMode::Text => overlay.text_hits.get(i).map(|h| h.page.clone()),
+                    SearchMode::Files => overlay.page_hits.get(i).map(|h| h.page.clone()),
+                    SearchMode::Content => overlay.text_hits.get(i).map(|h| h.page.clone()),
                 };
                 if let Some(key) = key {
                     self.open_page_new_tab(key);
@@ -748,8 +750,10 @@ impl App {
         self.navigator.set_nav_stop(NavStop::Search);
         self.search = Some(SearchOverlay {
             query: String::new(),
-            mode: SearchMode::Pages,
+            mode: SearchMode::Files,
             selected: 0,
+            scroll: 0,
+            list_height: 10,
             page_hits: Vec::new(),
             text_hits: Vec::new(),
             prev_focus: self.focus,
@@ -845,11 +849,11 @@ impl App {
         };
         let index = self.navigator.index();
         match overlay.mode {
-            SearchMode::Pages => {
+            SearchMode::Files => {
                 overlay.page_hits = search::search_pages(&overlay.query, index);
                 overlay.text_hits.clear();
             }
-            SearchMode::Text => {
+            SearchMode::Content => {
                 overlay.text_hits = search::search_text(&overlay.query, index);
                 overlay.page_hits.clear();
             }
@@ -881,16 +885,39 @@ impl App {
         }
         let cur = i32::try_from(overlay.selected).unwrap_or(0);
         let next = (cur + delta).rem_euclid(n);
-        overlay.selected = u32::try_from(next).unwrap_or(0) as usize;
+        overlay.selected = usize::try_from(next).unwrap_or(0);
+        overlay.ensure_selection_visible();
+    }
+
+    fn search_jump(&mut self, home: bool) {
+        let Some(overlay) = self.search.as_mut() else {
+            return;
+        };
+        if overlay.result_len() == 0 {
+            return;
+        }
+        overlay.selected = if home {
+            0
+        } else {
+            overlay.result_len().saturating_sub(1)
+        };
+        overlay.ensure_selection_visible();
+    }
+
+    fn search_page(&mut self, dir: i32) {
+        let step =
+            i32::try_from(self.search.as_ref().map_or(10, |o| o.list_height.max(1))).unwrap_or(10);
+        self.search_select(dir * step);
     }
 
     fn search_toggle_mode(&mut self) {
         if let Some(overlay) = self.search.as_mut() {
             overlay.mode = match overlay.mode {
-                SearchMode::Pages => SearchMode::Text,
-                SearchMode::Text => SearchMode::Pages,
+                SearchMode::Files => SearchMode::Content,
+                SearchMode::Content => SearchMode::Files,
             };
             overlay.selected = 0;
+            overlay.scroll = 0;
         }
         self.search_refresh();
     }
@@ -981,7 +1008,7 @@ impl App {
         };
         let selected = index.unwrap_or(overlay.selected);
         match overlay.mode {
-            SearchMode::Pages => {
+            SearchMode::Files => {
                 let Some(hit) = overlay.page_hits.get(selected) else {
                     return;
                 };
@@ -992,7 +1019,7 @@ impl App {
                 let effects = self.navigator.go_to_page(key, self.view_state());
                 self.apply_effects(effects);
             }
-            SearchMode::Text => {
+            SearchMode::Content => {
                 let Some(hit) = overlay.text_hits.get(selected) else {
                     return;
                 };

@@ -134,109 +134,267 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         &theme,
     );
 
-    if let Some(overlay) = &app.search {
-        draw_search_overlay(frame, area, overlay, &theme, &mut app.hit_map);
+    if let Some(overlay) = app.search.as_mut() {
+        draw_search_overlay(
+            frame,
+            area,
+            overlay,
+            app.navigator.index(),
+            &theme,
+            &mut app.hit_map,
+        );
     }
     if let Some(help) = &mut app.help {
         draw_help_overlay(frame, area, help, &theme, &mut app.hit_map);
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn draw_search_overlay(
     frame: &mut Frame<'_>,
     area: ratatui::layout::Rect,
-    overlay: &crate::tui::search_ui::SearchOverlay,
+    overlay: &mut crate::tui::search_ui::SearchOverlay,
+    index: &wiki_reader_core::Index,
     theme: &crate::tui::theme::Theme,
     hits: &mut crate::tui::hit::HitMap,
 ) {
     use crate::tui::hit::Hit;
+    use crate::tui::regions::overlay::{centered_panel, clamp_scroll, ensure_visible};
     use crate::tui::search_ui::SearchMode;
+    use ratatui::style::Modifier;
     use ratatui::text::{Line, Span};
-    use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph};
+    use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
-    // Full-frame dismiss hit under the panel.
     hits.push(area, Hit::SearchDismiss);
 
-    let width = area.width.clamp(20, 60);
-    let height = area.height.clamp(8, 16);
-    let x = area.x.saturating_add(area.width.saturating_sub(width) / 2);
-    let y = area
-        .y
-        .saturating_add(area.height.saturating_sub(height) / 2);
-    let rect = ratatui::layout::Rect {
-        x,
-        y,
-        width,
-        height,
-    };
+    // ~80% width up to ~100 cols, ~70% height.
+    let max_w = (u32::from(area.width) * 80 / 100).clamp(40, 100) as u16;
+    let max_h = (u32::from(area.height) * 70 / 100).clamp(10, 40) as u16;
+    let rect = centered_panel(area, max_w, max_h, 40, 10);
     frame.render_widget(Clear, rect);
-    let mode = match overlay.mode {
-        SearchMode::Pages => "Pages",
-        SearchMode::Text => "Text",
-    };
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(theme.border(true))
-        .title(format!(" Search [{mode}] (Tab) "));
+        .title(" Search ");
     let inner = block.inner(rect);
     frame.render_widget(block, rect);
-    // Panel itself absorbs clicks (no dismiss).
     hits.push(rect, Hit::FocusViewer);
-    let query_line = Paragraph::new(Line::from(vec![
-        Span::raw("> "),
-        Span::styled(overlay.query.clone(), theme.text()),
-        Span::raw("█"),
-    ]));
-    let q_rect = ratatui::layout::Rect {
+
+    if inner.height < 3 || inner.width == 0 {
+        return;
+    }
+
+    // Files | Content header.
+    let files_active = matches!(overlay.mode, SearchMode::Files);
+    let mode_spans = vec![
+        Span::styled(
+            " Files ",
+            if files_active {
+                theme
+                    .text()
+                    .add_modifier(Modifier::BOLD | Modifier::REVERSED)
+            } else {
+                theme.muted()
+            },
+        ),
+        Span::raw(" "),
+        Span::styled(
+            " Content ",
+            if files_active {
+                theme.muted()
+            } else {
+                theme
+                    .text()
+                    .add_modifier(Modifier::BOLD | Modifier::REVERSED)
+            },
+        ),
+        Span::styled("  (Tab)", theme.muted()),
+    ];
+    let header_rect = ratatui::layout::Rect {
         x: inner.x,
         y: inner.y,
         width: inner.width,
         height: 1,
     };
-    frame.render_widget(query_line, q_rect);
+    frame.render_widget(Paragraph::new(Line::from(mode_spans)), header_rect);
 
-    let list_rect = ratatui::layout::Rect {
+    let query_rect = ratatui::layout::Rect {
         x: inner.x,
         y: inner.y.saturating_add(1),
         width: inner.width,
-        height: inner.height.saturating_sub(1),
+        height: 1,
     };
-    let items: Vec<ListItem> = match overlay.mode {
-        SearchMode::Pages => overlay
-            .page_hits
-            .iter()
-            .enumerate()
-            .map(|(i, h)| {
-                let mark = if i == overlay.selected { "› " } else { "  " };
-                ListItem::new(format!("{mark}{}", h.page.relative_path.display()))
-            })
-            .collect(),
-        SearchMode::Text => overlay
-            .text_hits
-            .iter()
-            .enumerate()
-            .map(|(i, h)| {
-                let mark = if i == overlay.selected { "› " } else { "  " };
-                ListItem::new(format!(
-                    "{mark}{}:{} {}",
-                    h.page.relative_path.display(),
-                    h.line,
-                    h.snippet
-                ))
-            })
-            .collect(),
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::raw("> "),
+            Span::styled(overlay.query.clone(), theme.text()),
+            Span::raw("█"),
+        ])),
+        query_rect,
+    );
+
+    let n = overlay.result_len();
+    let count_rect = ratatui::layout::Rect {
+        x: inner.x,
+        y: inner.y.saturating_add(2),
+        width: inner.width,
+        height: 1,
+    };
+    let count_label = if overlay.query.is_empty() {
+        "type to search".to_string()
+    } else if n == 0 {
+        "no results".to_string()
+    } else {
+        format!("{n} result{}", if n == 1 { "" } else { "s" })
+    };
+    frame.render_widget(
+        Paragraph::new(Span::styled(count_label, theme.muted())),
+        count_rect,
+    );
+
+    let list_rect = ratatui::layout::Rect {
+        x: inner.x,
+        y: inner.y.saturating_add(3),
+        width: inner.width,
+        height: inner.height.saturating_sub(3),
     };
     let visible = usize::from(list_rect.height);
-    for i in 0..items.len().min(visible) {
-        let row = ratatui::layout::Rect {
+    overlay.list_height = visible;
+    if visible == 0 {
+        return;
+    }
+    overlay.scroll = ensure_visible(overlay.selected, overlay.scroll, visible);
+    overlay.scroll = clamp_scroll(overlay.scroll, visible, n);
+
+    if n == 0 {
+        if !overlay.query.is_empty() {
+            frame.render_widget(
+                Paragraph::new(Span::styled("No matches.", theme.muted())),
+                list_rect,
+            );
+        }
+        return;
+    }
+
+    let q = overlay.query.to_lowercase();
+    for row_i in 0..visible {
+        let abs = overlay.scroll + row_i;
+        if abs >= n {
+            break;
+        }
+        let y = list_rect
+            .y
+            .saturating_add(u16::try_from(row_i).unwrap_or(0));
+        let row_rect = ratatui::layout::Rect {
             x: list_rect.x,
-            y: list_rect.y.saturating_add(u16::try_from(i).unwrap_or(0)),
+            y,
             width: list_rect.width,
             height: 1,
         };
-        hits.push(row, Hit::SearchResult(i));
+        let selected = abs == overlay.selected;
+        let bg = if selected {
+            theme.cursor_line
+        } else {
+            theme.surface
+        };
+        let line = match overlay.mode {
+            SearchMode::Files => {
+                let hit = &overlay.page_hits[abs];
+                let title = index
+                    .pages
+                    .get(&hit.page)
+                    .map_or("", |p| p.title.as_str());
+                let path = hit.page.relative_path.display().to_string();
+                search_result_line(title, &path, None, &q, selected, bg, theme)
+            }
+            SearchMode::Content => {
+                let hit = &overlay.text_hits[abs];
+                let title = index
+                    .pages
+                    .get(&hit.page)
+                    .map_or("", |p| p.title.as_str());
+                let path = hit.page.relative_path.display().to_string();
+                let snip = format!("{}:{}", hit.line, hit.snippet);
+                search_result_line(title, &path, Some(&snip), &q, selected, bg, theme)
+            }
+        };
+        frame.render_widget(Paragraph::new(line), row_rect);
+        hits.push(row_rect, Hit::SearchResult(abs));
     }
-    frame.render_widget(List::new(items), list_rect);
+}
+
+fn search_result_line(
+    title: &str,
+    path: &str,
+    snippet: Option<&str>,
+    query_lower: &str,
+    selected: bool,
+    bg: ratatui::style::Color,
+    theme: &crate::tui::theme::Theme,
+) -> ratatui::text::Line<'static> {
+    use ratatui::style::Modifier;
+    use ratatui::text::{Line, Span};
+
+    let mark = if selected { "› " } else { "  " };
+    let mut spans = vec![Span::styled(mark, theme.text().bg(bg))];
+    spans.extend(highlight_spans(
+        title,
+        query_lower,
+        theme.text().bg(bg).add_modifier(Modifier::BOLD),
+        theme
+            .text()
+            .bg(bg)
+            .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+    ));
+    spans.push(Span::styled("  ", theme.muted().bg(bg)));
+    spans.extend(highlight_spans(
+        path,
+        query_lower,
+        theme.muted().bg(bg),
+        theme.muted().bg(bg).add_modifier(Modifier::UNDERLINED),
+    ));
+    if let Some(snip) = snippet {
+        spans.push(Span::styled("  ", theme.muted().bg(bg)));
+        spans.extend(highlight_spans(
+            snip,
+            query_lower,
+            theme.text().bg(bg),
+            theme.text().bg(bg).add_modifier(Modifier::UNDERLINED),
+        ));
+    }
+    Line::from(spans)
+}
+
+fn highlight_spans(
+    text: &str,
+    query_lower: &str,
+    normal: ratatui::style::Style,
+    match_style: ratatui::style::Style,
+) -> Vec<ratatui::text::Span<'static>> {
+    use ratatui::text::Span;
+    if query_lower.is_empty() {
+        return vec![Span::styled(text.to_owned(), normal)];
+    }
+    let lower = text.to_lowercase();
+    let mut spans = Vec::new();
+    let mut rest = text;
+    let mut rest_lower = lower.as_str();
+    while let Some(pos) = rest_lower.find(query_lower) {
+        if pos > 0 {
+            spans.push(Span::styled(rest[..pos].to_owned(), normal));
+        }
+        let end = pos + query_lower.len();
+        spans.push(Span::styled(rest[pos..end].to_owned(), match_style));
+        rest = &rest[end..];
+        rest_lower = &rest_lower[end..];
+    }
+    if !rest.is_empty() {
+        spans.push(Span::styled(rest.to_owned(), normal));
+    }
+    if spans.is_empty() {
+        spans.push(Span::styled(text.to_owned(), normal));
+    }
+    spans
 }
 
 fn draw_help_overlay(

@@ -227,6 +227,11 @@ pub(crate) fn apply_mouse(
             None
         }
         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
+            if app.search.is_some() {
+                let up = matches!(mouse.kind, MouseEventKind::ScrollUp);
+                app.update(Action::SearchSelectDelta(if up { -1 } else { 1 }));
+                return None;
+            }
             let over_nav = app.hit_map.entries().iter().any(|(r, h)| {
                 mouse.column >= r.x
                     && mouse.column < r.x.saturating_add(r.width)
