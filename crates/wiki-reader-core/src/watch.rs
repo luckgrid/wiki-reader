@@ -22,6 +22,7 @@ pub struct PollDirty {
 pub struct Watcher {
     rx: Receiver<notify_debouncer_mini::DebounceEventResult>,
     root: PathBuf,
+    exclude: Option<globset::GlobSet>,
     /// Keep the debouncer (and its thread) alive.
     _debouncer: notify_debouncer_mini::Debouncer<notify::RecommendedWatcher>,
 }
@@ -33,7 +34,19 @@ impl Watcher {
     ///
     /// Returns when the path cannot be canonicalized or notify cannot watch it.
     pub fn start(root: &Path) -> Result<Self, notify::Error> {
-        Self::start_with_debounce(root, Duration::from_millis(250))
+        Self::start_with_exclude(root, None)
+    }
+
+    /// Start watching with exclude globs (same rules as discovery).
+    ///
+    /// # Errors
+    ///
+    /// Returns when the path cannot be canonicalized or notify cannot watch it.
+    pub fn start_with_exclude(
+        root: &Path,
+        exclude: Option<globset::GlobSet>,
+    ) -> Result<Self, notify::Error> {
+        Self::start_with_debounce(root, Duration::from_millis(250), exclude)
     }
 
     /// Like [`start`] with a custom debounce window (tests use a short value).
@@ -41,7 +54,11 @@ impl Watcher {
     /// # Errors
     ///
     /// Returns when the path cannot be canonicalized or notify cannot watch it.
-    pub fn start_with_debounce(root: &Path, debounce: Duration) -> Result<Self, notify::Error> {
+    pub fn start_with_debounce(
+        root: &Path,
+        debounce: Duration,
+        exclude: Option<globset::GlobSet>,
+    ) -> Result<Self, notify::Error> {
         let root = std::fs::canonicalize(root).map_err(notify::Error::io)?;
         let (tx, rx) = mpsc::channel();
         let mut debouncer = new_debouncer(debounce, tx)?;
@@ -49,6 +66,7 @@ impl Watcher {
         Ok(Self {
             rx,
             root,
+            exclude,
             _debouncer: debouncer,
         })
     }
@@ -67,7 +85,7 @@ impl Watcher {
             match res {
                 Ok(events) => {
                     for ev in events {
-                        if path_is_relevant(&self.root, &ev.path) {
+                        if path_is_relevant_ex(&self.root, &ev.path, self.exclude.as_ref()) {
                             out.dirty = true;
                         }
                     }
@@ -91,16 +109,25 @@ pub fn is_vcs_dir_name(name: &str) -> bool {
 ///
 /// Markdown pages under the root count, including dot-dirs like `.planning/`.
 /// Directories (rename/delete) also count — including dotted names like `v1.2`.
-/// Non-markdown files do not.
+/// Non-markdown files do not. Paths matching `exclude` do not.
 ///
 /// ponytail: gitignore is not consulted on watch events (ceiling: may dirty
 /// ignored paths); upgrade with `ignore::gitignore` matching if noise bites.
 #[must_use]
 pub fn path_is_relevant(root: &Path, path: &Path) -> bool {
+    path_is_relevant_ex(root, path, None)
+}
+
+/// Like [`path_is_relevant`] with optional exclude globs (relative to `root`).
+#[must_use]
+pub fn path_is_relevant_ex(root: &Path, path: &Path, exclude: Option<&globset::GlobSet>) -> bool {
     let Ok(rel) = path.strip_prefix(root) else {
         return false;
     };
     if rel.as_os_str().is_empty() {
+        return false;
+    }
+    if crate::config::path_excluded(exclude, rel) {
         return false;
     }
     for c in rel.components() {
@@ -150,7 +177,7 @@ mod tests {
     const TEST_DEBOUNCE: Duration = Duration::from_millis(50);
 
     fn start_test(root: &Path) -> Watcher {
-        Watcher::start_with_debounce(root, TEST_DEBOUNCE).unwrap()
+        Watcher::start_with_debounce(root, TEST_DEBOUNCE, None).unwrap()
     }
 
     fn wait_dirty(watcher: &Watcher) -> bool {

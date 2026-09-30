@@ -11,4 +11,4 @@ pub use resolve::{ResolveOutcome, Target, resolve, unresolved_relative_path};
 pub use session::{
     Disposition, Effect, Location, NavState, NavStop, Navigator, Tab, ViewMode, ViewState,
 };
-pub use tree::{Crumb, NavItem, NavTree, NodeId, humanize_filename, page_label};
+pub use tree::{Crumb, NavItem, NavTree, NodeId, humanize_filename, page_label, page_label_with};

@@ -62,14 +62,20 @@ pub struct NavTree {
 }
 
 impl NavTree {
-    /// Build the nav tree from an index.
+    /// Build the nav tree from an index (title labels).
     #[must_use]
     pub fn build(index: &Index) -> Self {
-        if let Some(items) = build_from_summary(index) {
+        Self::build_with(index, crate::config::LabelMode::Title)
+    }
+
+    /// Build the nav tree with an explicit label mode.
+    #[must_use]
+    pub fn build_with(index: &Index, labels: crate::config::LabelMode) -> Self {
+        if let Some(items) = build_from_summary(index, labels) {
             return Self { items };
         }
         Self {
-            items: build_from_filesystem(index),
+            items: build_from_filesystem(index, labels),
         }
     }
 
@@ -268,19 +274,32 @@ fn render_items(
 /// used for index/search does not block humanization in the tree.
 #[must_use]
 pub fn page_label(index: &Index, key: &PageKey) -> String {
+    page_label_with(index, key, crate::config::LabelMode::Title)
+}
+
+/// Label with an explicit [`crate::config::LabelMode`].
+#[must_use]
+pub fn page_label_with(index: &Index, key: &PageKey, mode: crate::config::LabelMode) -> String {
+    let file = humanize_filename(&key.relative_path);
     let Some(page) = index.pages.get(key) else {
-        return humanize_filename(&key.relative_path);
+        return file;
     };
-    if let Some(ref t) = page.parsed.frontmatter.nav_title {
-        return t.clone();
+    let title = page
+        .parsed
+        .frontmatter
+        .nav_title
+        .clone()
+        .or_else(|| page.parsed.frontmatter.title.clone())
+        .or_else(|| page.parsed.h1.clone());
+    match mode {
+        crate::config::LabelMode::Filename => file,
+        crate::config::LabelMode::Title => title.unwrap_or(file),
+        crate::config::LabelMode::TitleFilename => match title {
+            Some(t) if t != file => format!("{t} ({file})"),
+            Some(t) => t,
+            None => file,
+        },
     }
-    if let Some(ref t) = page.parsed.frontmatter.title {
-        return t.clone();
-    }
-    if let Some(ref h1) = page.parsed.h1 {
-        return h1.clone();
-    }
-    humanize_filename(&key.relative_path)
 }
 
 /// Humanize a filename or folder segment (`02-token-projection` → `Token Projection`).
@@ -358,12 +377,12 @@ struct DirNode {
     dirs: BTreeMap<String, DirNode>,
 }
 
-fn build_from_filesystem(index: &Index) -> Vec<NavItem> {
+fn build_from_filesystem(index: &Index, labels: crate::config::LabelMode) -> Vec<NavItem> {
     let mut root = DirNode::default();
     for key in index.pages.keys() {
         insert_page(&mut root, &key.relative_path);
     }
-    fold_dir(Path::new(""), &root, index, true)
+    fold_dir(Path::new(""), &root, index, true, labels)
 }
 
 fn insert_page(dir: &mut DirNode, rel: &Path) {
@@ -381,7 +400,13 @@ fn insert_page(dir: &mut DirNode, rel: &Path) {
     node.pages.push(rel.to_path_buf());
 }
 
-fn fold_dir(dir_path: &Path, dir: &DirNode, index: &Index, is_root: bool) -> Vec<NavItem> {
+fn fold_dir(
+    dir_path: &Path,
+    dir: &DirNode,
+    index: &Index,
+    is_root: bool,
+    labels: crate::config::LabelMode,
+) -> Vec<NavItem> {
     let collection_id = index.collection_id.as_str();
 
     let landing = pick_landing(&dir.pages);
@@ -407,7 +432,7 @@ fn fold_dir(dir_path: &Path, dir: &DirNode, index: &Index, is_root: bool) -> Vec
     let mut child_dir_items: Vec<(String, Vec<NavItem>, bool)> = Vec::new();
     for (name, child) in &dir.dirs {
         let child_path = dir_path.join(name);
-        let folded = fold_dir(&child_path, child, index, false);
+        let folded = fold_dir(&child_path, child, index, false, labels);
         if !folded.is_empty() {
             // Single leaf result from "only README" folding is one Page item.
             let is_single_leaf = folded.len() == 1 && matches!(folded[0], NavItem::Page { .. });
@@ -416,7 +441,14 @@ fn fold_dir(dir_path: &Path, dir: &DirNode, index: &Index, is_root: bool) -> Vec
     }
 
     if is_root {
-        return fold_root(collection_id, landing, other_pages, child_dir_items, index);
+        return fold_root(
+            collection_id,
+            landing,
+            other_pages,
+            child_dir_items,
+            index,
+            labels,
+        );
     }
 
     // Non-root folding rules.
@@ -428,14 +460,14 @@ fn fold_dir(dir_path: &Path, dir: &DirNode, index: &Index, is_root: bool) -> Vec
             let key = page_key(collection_id, land);
             vec![NavItem::Page {
                 id: NodeId::Page(key.clone()),
-                label: page_label(index, &key),
+                label: page_label_with(index, &key, labels),
                 key,
             }]
         }
         (Some(land), true) => {
             // Group with landing first
             let key = page_key(collection_id, land);
-            let label = page_label(index, &key);
+            let label = page_label_with(index, &key, labels);
             let mut children = vec![NavItem::Page {
                 id: NodeId::Page(key.clone()),
                 label: label.clone(),
@@ -446,6 +478,7 @@ fn fold_dir(dir_path: &Path, dir: &DirNode, index: &Index, is_root: bool) -> Vec
                 other_pages,
                 child_dir_items,
                 index,
+                labels,
             ));
             vec![NavItem::Group {
                 id: NodeId::Group(dir_path.to_path_buf()),
@@ -460,7 +493,8 @@ fn fold_dir(dir_path: &Path, dir: &DirNode, index: &Index, is_root: bool) -> Vec
                 |s| s.to_string_lossy().into_owned(),
             );
             let label = humanize_stem(&folder_name);
-            let children = sorted_siblings(collection_id, other_pages, child_dir_items, index);
+            let children =
+                sorted_siblings(collection_id, other_pages, child_dir_items, index, labels);
             vec![NavItem::Group {
                 id: NodeId::Group(dir_path.to_path_buf()),
                 label,
@@ -476,13 +510,14 @@ fn fold_root(
     other_pages: Vec<PathBuf>,
     child_dir_items: Vec<(String, Vec<NavItem>, bool)>,
     index: &Index,
+    labels: crate::config::LabelMode,
 ) -> Vec<NavItem> {
     let mut items = Vec::new();
     if let Some(land) = landing {
         let key = page_key(collection_id, &land);
         items.push(NavItem::Page {
             id: NodeId::Page(key.clone()),
-            label: page_label(index, &key),
+            label: page_label_with(index, &key, labels),
             key,
         });
     }
@@ -491,6 +526,7 @@ fn fold_root(
         other_pages,
         child_dir_items,
         index,
+        labels,
     ));
     items
 }
@@ -507,6 +543,7 @@ fn sorted_siblings(
     pages: Vec<PathBuf>,
     child_dirs: Vec<(String, Vec<NavItem>, bool)>,
     index: &Index,
+    labels: crate::config::LabelMode,
 ) -> Vec<NavItem> {
     // Build sortable entries: (sort_key, nav_order, item)
     struct Entry {
@@ -531,7 +568,7 @@ fn sorted_siblings(
             nav_order,
             item: NavItem::Page {
                 id: NodeId::Page(key.clone()),
-                label: page_label(index, &key),
+                label: page_label_with(index, &key, labels),
                 key,
             },
         });
@@ -666,7 +703,7 @@ fn close_summary_stack_to(
 }
 
 #[allow(clippy::too_many_lines)] // SUMMARY event walk is one cohesive state machine.
-fn build_from_summary(index: &Index) -> Option<Vec<NavItem>> {
+fn build_from_summary(index: &Index, labels: crate::config::LabelMode) -> Option<Vec<NavItem>> {
     let collection_id = index.collection_id.as_str();
     let summary_key = ["SUMMARY.md", "_sidebar.md"].into_iter().find_map(|name| {
         let key = page_key(collection_id, Path::new(name));
@@ -706,7 +743,7 @@ fn build_from_summary(index: &Index) -> Option<Vec<NavItem>> {
     if index.pages.contains_key(&root_readme) {
         root_items.push(NavItem::Page {
             id: NodeId::Page(root_readme.clone()),
-            label: page_label(index, &root_readme),
+            label: page_label_with(index, &root_readme, labels),
             key: root_readme.clone(),
         });
         listed.insert(root_readme);
@@ -751,7 +788,7 @@ fn build_from_summary(index: &Index) -> Option<Vec<NavItem>> {
                 }
                 listed.insert(key.clone());
                 let label = if text.is_empty() {
-                    page_label(index, &key)
+                    page_label_with(index, &key, labels)
                 } else {
                     text
                 };
@@ -846,7 +883,7 @@ fn build_from_summary(index: &Index) -> Option<Vec<NavItem>> {
             .into_iter()
             .map(|key| NavItem::Page {
                 id: NodeId::Page(key.clone()),
-                label: page_label(index, &key),
+                label: page_label_with(index, &key, labels),
                 key,
             })
             .collect();
@@ -1028,6 +1065,23 @@ mod tests {
         assert_eq!(page_label(&index, &key), "Token Projection");
         // Page.title keeps raw stem for search/index.
         assert_eq!(index.pages[&key].title, "02-token-projection");
+    }
+
+    #[test]
+    fn page_label_modes_on_worked_example() {
+        let index = index_at("../../fixtures/worked-example");
+        let key = PageKey {
+            collection_id: index.collection_id.clone(),
+            relative_path: PathBuf::from("architecture/design-system/tokens.md"),
+        };
+        assert_eq!(
+            page_label_with(&index, &key, crate::config::LabelMode::Title),
+            page_label(&index, &key)
+        );
+        let file = page_label_with(&index, &key, crate::config::LabelMode::Filename);
+        assert!(!file.is_empty());
+        let both = page_label_with(&index, &key, crate::config::LabelMode::TitleFilename);
+        assert!(both.contains('('), "{both}");
     }
 
     #[test]

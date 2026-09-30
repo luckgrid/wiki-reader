@@ -48,6 +48,7 @@ pub trait CollectionProvider {
 pub struct FsProvider {
     root: PathBuf,
     collection_id: String,
+    exclude: Option<globset::GlobSet>,
 }
 
 impl FsProvider {
@@ -57,6 +58,15 @@ impl FsProvider {
     ///
     /// Returns [`Error::NotADirectory`] when `root` is missing or not a directory.
     pub fn open(root: impl AsRef<Path>) -> Result<Self, Error> {
+        Self::open_with_exclude(root, &[])
+    }
+
+    /// Open `root` with exclude globs (relative to the collection root).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::NotADirectory`] when `root` is missing or not a directory.
+    pub fn open_with_exclude(root: impl AsRef<Path>, exclude: &[String]) -> Result<Self, Error> {
         let root_ref = root.as_ref();
         let root = root_ref.canonicalize().map_err(|err| {
             if err.kind() == std::io::ErrorKind::NotFound {
@@ -72,10 +82,18 @@ impl FsProvider {
             || "collection".into(),
             |name| name.to_string_lossy().into_owned(),
         );
+        let (exclude, _) = crate::config::build_exclude_set(exclude);
         Ok(Self {
             root,
             collection_id,
+            exclude,
         })
+    }
+
+    /// Exclude globset used by discovery (and for watcher alignment).
+    #[must_use]
+    pub fn exclude_set(&self) -> Option<&globset::GlobSet> {
+        self.exclude.as_ref()
     }
 }
 
@@ -85,7 +103,6 @@ impl CollectionProvider for FsProvider {
     }
 
     fn list_pages(&self) -> Result<Vec<PageMeta>, Error> {
-        // TODO(C1): config exclude globs.
         let mut pages = Vec::new();
         let walker = ignore::WalkBuilder::new(&self.root)
             .hidden(false) // content-model: include dot-dirs unless gitignored
@@ -111,6 +128,9 @@ impl CollectionProvider for FsProvider {
                 .strip_prefix(&self.root)
                 .map_err(|_| Error::PathOutsideRoot(path.to_path_buf()))?
                 .to_path_buf();
+            if crate::config::path_excluded(self.exclude.as_ref(), &relative_path) {
+                continue;
+            }
             pages.push(PageMeta {
                 key: PageKey {
                     collection_id: self.collection_id.clone(),
@@ -288,5 +308,18 @@ mod tests {
             provider.read(&absolute),
             Err(Error::PathOutsideRoot(_))
         ));
+    }
+
+    #[test]
+    fn exclude_globs_hide_pages_from_index() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        fs::write(dir.path().join("README.md"), "# Root\n").unwrap();
+        fs::create_dir_all(dir.path().join("drafts")).unwrap();
+        fs::write(dir.path().join("drafts/secret.md"), "# Secret\n").unwrap();
+        let provider =
+            FsProvider::open_with_exclude(dir.path(), &["drafts/**".into()]).expect("open");
+        let paths = rel_paths(&provider);
+        assert_eq!(paths, vec!["README.md".to_owned()]);
+        assert!(!paths.iter().any(|p| p.contains("drafts")));
     }
 }

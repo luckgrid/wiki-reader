@@ -80,6 +80,16 @@ pub fn resolve_editor() -> Option<String> {
         })
 }
 
+/// Config editor wins over env.
+#[must_use]
+pub fn resolve_editor_with_config(config_editor: Option<&str>) -> Option<String> {
+    config_editor
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .or_else(resolve_editor)
+}
+
 /// Build argv for `editor` opening `path` at 1-based `line`.
 ///
 /// `editor` may include arguments (`code --wait`, `nvim -u NONE`); the first

@@ -33,15 +33,12 @@ All P0/P1 acceptance criteria in [product spec](../product/spec.md) pass; two we
 
 ## Proposed order (after Phase 1 exit)
 
-Cheapest / most reader-visible first. Refine once the Phase 1 exit pass results are in.
+1. P2-09 Config then P2-10 Session
+2. P2-03 Block actions
+3. P2-05 Tabs
+4. P2-06 Diagrams
 
-1. P2-02 Linked from
-2. P2-04 Heading jump
-3. P2-08 Open in `$EDITOR`
-4. P2-03 Block actions
-5. P2-09 Config then P2-10 Session
-6. P2-05 Tabs
-7. P2-06 Diagrams
+(Batch 1 done: P2-02, P2-04, P2-08.)
 
 ## Related
 
