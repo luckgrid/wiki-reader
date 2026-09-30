@@ -12,6 +12,7 @@ use wiki_reader_core::nav::{NavItem, NavStop, NavTree, NodeId};
 use wiki_reader_core::provider::PageKey;
 
 use crate::tui::hit::{Hit, HitMap};
+use crate::tui::layout::NAV_CHROME_ROWS;
 use crate::tui::theme::Theme;
 
 /// One visible side-nav row.
@@ -65,33 +66,53 @@ pub fn draw(
         return;
     }
 
+    // Inner chrome: blank, search box, blank — then the tree list.
+    // NAV_CHROME_ROWS = borders(2) + these three rows.
+    let list_offset: u16 = 3;
+    debug_assert_eq!(NAV_CHROME_ROWS, 2 + list_offset);
+
+    let search_y = inner.y.saturating_add(1);
     let search_rect = Rect {
         x: inner.x,
-        y: inner.y,
+        y: search_y,
         width: inner.width,
         height: 1,
     };
     hits.push(search_rect, Hit::NavSearchRow);
     let on_search = matches!(cursor, NavStop::Search);
-    let search_style = if on_search {
-        theme.text().bg(theme.cursor_line)
+    let search_bg = if on_search {
+        theme.cursor_line
     } else {
-        theme.muted()
+        theme.search_box
+    };
+    let search_style = if on_search {
+        theme.text().bg(search_bg)
+    } else {
+        theme.muted().bg(search_bg)
     };
     let search_mark = if on_search { "▌" } else { " " };
-    let search = Line::from(Span::styled(
-        format!("{search_mark}⌕ Search…"),
-        search_style,
-    ));
+    let search_label = format!("{search_mark}⌕ Search…");
+    let search_w = Span::raw(search_label.as_str()).width();
+    let mut search_spans = vec![Span::styled(search_label, search_style)];
+    if search_w < usize::from(inner.width) {
+        search_spans.push(Span::styled(
+            " ".repeat(usize::from(inner.width) - search_w),
+            Style::default().bg(search_bg),
+        ));
+    }
 
     let rows = visible_rows(tree, expanded);
     let scroll = usize::from(scroll);
-    let mut lines = vec![search];
-    let max_rows = usize::from(inner.height.saturating_sub(1));
+    let mut lines = vec![
+        Line::from(""), // gap under title
+        Line::from(search_spans),
+        Line::from(""), // gap under search
+    ];
+    let max_rows = usize::from(inner.height.saturating_sub(list_offset));
     for (i, row) in rows.into_iter().skip(scroll).take(max_rows).enumerate() {
         let y = inner
             .y
-            .saturating_add(1)
+            .saturating_add(list_offset)
             .saturating_add(u16::try_from(i).unwrap_or(0));
         let rect = Rect {
             x: inner.x,
@@ -132,7 +153,7 @@ pub fn draw(
         let mut used = 0usize;
         let mut clipped = Vec::new();
         for sp in spans {
-            let w = sp.content.chars().count();
+            let w = Span::raw(sp.content.as_ref()).width();
             if used >= max {
                 break;
             }
@@ -141,7 +162,17 @@ pub fn draw(
                 clipped.push(sp);
             } else {
                 let take = max.saturating_sub(used);
-                let text: String = sp.content.chars().take(take).collect();
+                // Truncate by display width (char-based is wrong for wide glyphs).
+                let mut text = String::new();
+                let mut tw = 0usize;
+                for ch in sp.content.chars() {
+                    let cw = Span::raw(ch.to_string()).width();
+                    if tw + cw > take {
+                        break;
+                    }
+                    text.push(ch);
+                    tw += cw;
+                }
                 clipped.push(Span::styled(text, sp.style));
                 used = max;
                 break;

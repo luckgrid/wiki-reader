@@ -64,6 +64,50 @@ fn snapshots_responsive_widths() {
         let out = render_at(&root, w, 24);
         insta::assert_snapshot!(format!("shell_{w}"), out);
     }
+    // Tall terminal: vertical gaps above/below header and status.
+    let tall = render_at(&root, 120, 40);
+    insta::assert_snapshot!("shell_120x40", tall);
+}
+
+#[test]
+fn viewer_text_width_matches_painted_content() {
+    use crate::tui::layout::{self, VIEWER_LEFT_PAD};
+    let area = ratatui::layout::Rect {
+        x: 0,
+        y: 0,
+        width: 80,
+        height: 24,
+    };
+    let regions = layout::split(area, true);
+    let want = layout::viewer_text_width(regions.viewer);
+    let inner_w = regions.viewer.width.saturating_sub(2);
+    let painted = inner_w.saturating_sub(VIEWER_LEFT_PAD).min(100);
+    assert_eq!(want, painted);
+}
+
+#[test]
+fn chrome_pad_hits_header_icons_and_nav_search() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let terminal = draw_app(&mut app, 120, 24);
+    let buf = terminal.backend().buffer();
+    let (tx, ty) = find_glyph(buf, "◫").expect("◫");
+    let (qx, qy) = find_glyph(buf, "✕").expect("✕");
+    assert_eq!(app.hit_map.hit_at(tx, ty), Some(&Hit::NavToggle));
+    assert_eq!(app.hit_map.hit_at(qx, qy), Some(&Hit::Quit));
+    // Padded: icons sit one col inset from the raw edge.
+    assert_eq!(qx, 120 - 2, "✕ at chrome_pad right edge");
+    assert_eq!(tx, 120 - 4, "◫ two cols left of ✕");
+
+    // Nav search row is below the blank gap under the title (inner.y + 1).
+    let search = (0..buf.area.width)
+        .find(|&x| buf[(x, 3)].symbol().contains('⌕'))
+        .expect("search glyph");
+    assert_eq!(
+        app.hit_map.hit_at(search, 3),
+        Some(&Hit::NavSearchRow),
+        "search hit on padded chrome row"
+    );
 }
 
 #[test]
