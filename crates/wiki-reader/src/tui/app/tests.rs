@@ -1193,6 +1193,28 @@ fn external_confirm_opens_with_recording_opener() {
 }
 
 #[test]
+fn unsupported_scheme_never_opens() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let log = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    app.opener = Box::new(LogOpener(log.clone()));
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("README.md"),
+    }));
+    app.follow_link_target("chatgpt-conversation://abc");
+    assert_ne!(app.input_mode, crate::tui::keymap::InputMode::Confirm);
+    assert!(app.pending_external.is_none());
+    assert!(
+        app.message.contains("unsupported link scheme"),
+        "message={}",
+        app.message
+    );
+    app.update(Action::ConfirmOpen);
+    assert!(log.lock().unwrap().is_empty());
+}
+
+#[test]
 fn page_removed_placeholder_survives_keypress() {
     let root = fixture();
     let mut app = App::new(&root).unwrap();

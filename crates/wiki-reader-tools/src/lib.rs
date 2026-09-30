@@ -192,13 +192,11 @@ fn check_doc(
     Ok(())
 }
 
-/// Schemes the reader does not resolve as files: `ftp://…`, `tel:…`, and so on.
-/// (`http`, `https`, and `mailto` are already classified as external by core.)
+/// Schemes the reader does not resolve as files. Aligns with
+/// [`wiki_reader_core::nav::uri_scheme`]: any URI scheme other than those already
+/// classified as external by core (`http` / `https` / `mailto`).
 fn is_foreign_scheme(target: &str) -> bool {
-    target.contains("://")
-        || target
-            .get(..4)
-            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("tel:"))
+    wiki_reader_core::nav::uri_scheme(target).is_some()
 }
 
 /// Heading slugs of a link destination, read on demand for markdown files

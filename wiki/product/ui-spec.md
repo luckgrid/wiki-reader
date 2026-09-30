@@ -118,7 +118,7 @@ Two focusable panes: **Side nav** and **Viewer**. The search overlay is modal wh
 | `Enter` | Activate focused item. With no item focused and exactly one link on the cursor line, follow it. |
 | `t` · middle-click | Open focused link in a new tab |
 | `[` / `]` | Previous / next page |
-| `Backspace` · `Alt+←` / `Alt+→` | Back / forward |
+| `Backspace` (primary) · `Alt+←` / `Alt+→` · `Alt+b` / `Alt+f` | Back / forward. `Alt+b`/`Alt+f` are what macOS Ghostty sends for Option+←/→. |
 | `r` | Rendered / raw |
 | `e` | Open in `$EDITOR` at cursor line |
 | `y` / `Y` | Copy page path / focused link target (OSC 52) |
@@ -146,16 +146,18 @@ Two focusable panes: **Side nav** and **Viewer**. The search overlay is modal wh
 | `?` | Help overlay |
 | `q` · click `✕` | Quit (saves session) |
 
-### Terminal key caveats (verify in the Phase 1 input spike)
+### Terminal key caveats (verified, Ghostty + herdr, macOS)
 
+- **K1:** Ghostty sends Option+←/→ as readline `Alt+b` / `Alt+f`, not as arrows with ALT. Bind `Alt+b`→Back and `Alt+f`→Forward (P1-R36); keep `Backspace` and `Alt+←/→` when those arrive as arrows.
+- **K2:** Plain-letter bindings must ignore CONTROL/ALT (P1-R36). Before that fix, Alt+q quit, Alt+e opened the editor, Ctrl+b toggled the nav.
+- **K3:** Right-click is reserved by herdr's context menu and never reaches the app — unused by wiki-reader.
+- **K4:** Alt+↑/↓ and Alt+Shift+↑/↓ arrive correctly; heading jump works.
 - `Shift+Tab` arrives as `BackTab`; fine everywhere.
-- `Shift+arrows` are reported by most modern terminals (crossterm exposes the modifier). Confirm that herdr forwards them to the pane and doesn't bind them itself.
-- `Ctrl+Enter` / `Shift+Enter` can't be told apart from `Enter` without the kitty keyboard protocol. Use `t` and middle-click for new tabs, and treat `Ctrl+Enter` as a bonus when the protocol is available.
-- `Alt+arrows` may be taken by macOS terminal settings ("Option as Meta"). `Backspace` is the reliable back key.
+- `Ctrl+Enter` / `Shift+Enter` can't be told apart from `Enter` without the kitty keyboard protocol. Use `t` and middle-click for new tabs.
 
 ## Mouse
 
-Click to focus a pane; click items, links, breadcrumbs, prev/next, header icons, and search results; middle-click for a new tab; wheel scrolls the pane under the pointer. Hover works only where motion events arrive. Verify click, middle-click, wheel, and motion inside herdr panes.
+Click to focus a pane; click items, links, breadcrumbs, prev/next, header icons, and search results; middle-click for a new tab; wheel scrolls the pane under the pointer. Hover works only where motion events arrive. Right-click is owned by herdr (see K3). Click, middle-click, and wheel verified inside herdr panes.
 
 ## Responsive rules
 

@@ -591,6 +591,7 @@ impl<'a> LayoutState<'a> {
                     coalesce_link_segment(&mut lb.segments, line, lb.start_col, end_col);
                     let class = match resolve(&lb.raw, self.from, self.index).target {
                         Target::External(_) => LinkClass::External,
+                        Target::Unsupported(_) => LinkClass::Unsupported,
                         Target::Unresolved(_) => LinkClass::Broken,
                         _ => LinkClass::Internal,
                     };

@@ -9,10 +9,12 @@ pub struct LinkId(pub u32);
 pub enum LinkClass {
     /// Internal markdown target.
     Internal,
-    /// External URL.
+    /// External URL (`http` / `https` / `mailto`).
     External,
     /// Broken or non-markdown target.
     Broken,
+    /// Non-openable URI scheme (`file:`, custom, …).
+    Unsupported,
 }
 
 /// One link, possibly split across wrapped lines (rendered mode).

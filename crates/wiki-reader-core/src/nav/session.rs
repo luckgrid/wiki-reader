@@ -371,6 +371,10 @@ impl Navigator {
                 // Leave history unchanged.
                 vec![Effect::ConfirmExternal(url)]
             }
+            Target::Unsupported(raw) => {
+                self.notice = Some(format!("unsupported link scheme: {raw}"));
+                vec![Effect::Notice(format!("unsupported link scheme: {raw}"))]
+            }
             Target::Unresolved(raw) => {
                 // Leave history unchanged.
                 self.notice = Some(format!("broken link: {raw}"));
@@ -784,6 +788,25 @@ mod tests {
         );
         assert_eq!(nav.tab().history, before);
         assert!(matches!(effects[0], Effect::ConfirmExternal(_)));
+    }
+
+    #[test]
+    fn unsupported_scheme_leaves_history_and_never_confirms() {
+        let mut nav = worked();
+        let before = nav.tab().history.clone();
+        let effects = nav.navigate(
+            Target::Unsupported("chatgpt-conversation://abc".into()),
+            Disposition::Replace,
+            ViewState::default(),
+        );
+        assert_eq!(nav.tab().history, before);
+        assert_eq!(effects.len(), 1);
+        match &effects[0] {
+            Effect::Notice(msg) => {
+                assert!(msg.contains("unsupported link scheme"), "{msg}");
+            }
+            other => panic!("expected Notice, got {other:?}"),
+        }
     }
 
     #[test]

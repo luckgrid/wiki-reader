@@ -100,9 +100,9 @@ For links, the renderer emits `LinkSpan { id, target, line, col_range }` per wra
 
 ## Runtime model
 
-- One tokio runtime; one `select!` loop over terminal events, index/watch events, and background results (diagram raster, search).
+- Synchronous crossterm `event::poll` loop on the UI thread (no tokio; [ADR-0011](../decisions/0011-renderer-source.md)).
+- Background workers on std threads with `mpsc` channels: index rebuild, syntect highlight for raw view. The `notify` debouncer runs on its own thread and posts into the same poll loop.
 - State lives in one `App`; rendering is a pure function of state (+ caches) that also produces the `HitMap`.
-- Heavy work (index build, search, diagram raster) runs off the UI thread.
 
 ## Persistence
 

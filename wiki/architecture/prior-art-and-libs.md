@@ -78,7 +78,7 @@ Tried as-is inside herdr. **Kept:** it's markdown-only, reads far better than su
 | TUI | `ratatui` 0.30.x + `crossterm` | 0.30 split into `ratatui-core`/`ratatui-widgets`. herdr itself is built on ratatui 0.30 + crossterm 0.29. |
 | Tree widget | flat `HitMap` rows ([ADR-0010](../decisions/0010-flat-side-nav-rows.md)) | Custom visible-row list; `tui-tree-widget` evaluated then rejected (ADR-0009 superseded) because `TreeState` duplicated core `NavState`. |
 | Scrolling | `tui-scrollview` (optional) | |
-| Async | `tokio` | Watcher, background render, herdr calls |
+| Async | not used ([ADR-0011](../decisions/0011-renderer-source.md)): std threads + `mpsc` | Watcher debounce, index rebuild, highlight |
 | CLI | `clap` (derive) | |
 | Errors | `anyhow` (bin), `thiserror` (libs), `color-eyre` optional | |
 | Opener | `open` crate (or shell `open`/`xdg-open`) | External links |

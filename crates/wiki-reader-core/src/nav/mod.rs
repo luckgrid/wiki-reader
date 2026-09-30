@@ -7,7 +7,7 @@ mod resolve;
 mod session;
 mod tree;
 
-pub use resolve::{ResolveOutcome, Target, resolve, unresolved_relative_path};
+pub use resolve::{ResolveOutcome, Target, resolve, unresolved_relative_path, uri_scheme};
 pub use session::{
     Disposition, Effect, Location, NavState, NavStop, Navigator, Tab, ViewMode, ViewState,
 };

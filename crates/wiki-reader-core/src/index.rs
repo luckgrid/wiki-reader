@@ -212,7 +212,10 @@ fn push_link_edges(edges: &mut Vec<Edge>, key: &PageKey, index: &Index) {
         let to = if kind == EdgeKind::Link {
             match nav::resolve(&link.target, key, index).target {
                 Target::Page(dest, _) => Some(dest),
-                Target::Anchor(_) | Target::External(_) | Target::Unresolved(_) => None,
+                Target::Anchor(_)
+                | Target::External(_)
+                | Target::Unsupported(_)
+                | Target::Unresolved(_) => None,
             }
         } else {
             None

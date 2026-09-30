@@ -50,7 +50,8 @@ YAML (`---`) or TOML (`+++`). Unknown keys are kept and shown raw in a "metadata
 | `IdMention` | text matching configured `id_pattern` | pages whose `id` matches, else a "virtual" work-unit node |
 | `FrontmatterRelated` | `related:` | page or ID |
 | `Parent` | directory structure | folder index page |
-| `External` | `http(s)://` | shown, never fetched |
+| `External` | `http(s)://`, `mailto:` | shown; confirm before open |
+| `Unsupported` | other URI schemes | muted; never opened |
 
 Backlinks are the reverse of every edge except `Parent`. The index keeps a flat `Vec<Edge>` plus two maps (`by_from` and `by_to`), so a graph view (R24) is just another consumer.
 
@@ -68,7 +69,7 @@ Backlinks are the reverse of every edge except `Parent`. The index keeps a flat 
 In order, for a link target `t` written in page `p`:
 
 1. `#anchor` → same page, anchor by GitHub-style slug.
-2. Scheme present (`http:`, `https:`, `mailto:`) → external.
+2. Scheme present: `http:` / `https:` / `mailto:` → external (confirm before open). Any other URI scheme (`file:`, `javascript:`, custom `…://…`) → unsupported: muted style, status `unsupported link scheme: …`, never passed to the system opener.
 3. If `t` starts with `/`, resolve relative to the collection root; otherwise relative to `p`'s directory.
 4. Try as written, then with `.md`, then `t/README.md`, then `t/index.md`.
 5. URL-decode (`%20`) and retry once.

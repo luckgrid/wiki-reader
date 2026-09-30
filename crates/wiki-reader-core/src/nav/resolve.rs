@@ -16,8 +16,10 @@ pub enum Target {
     Page(PageKey, Option<String>),
     /// Same-page heading jump.
     Anchor(String),
-    /// `http:` / `https:` / `mailto:` (never fetched).
+    /// `http:` / `https:` / `mailto:` (confirm before open).
     External(String),
+    /// Other URI schemes (`file:`, `javascript:`, custom) — never opened.
+    Unsupported(String),
     /// Could not resolve; styled as broken.
     Unresolved(String),
 }
@@ -44,10 +46,13 @@ pub fn resolve(t: &str, from: &PageKey, index: &Index) -> ResolveOutcome {
         return same_page_anchor(from, anchor, index);
     }
 
-    // 2. Scheme → external.
-    if has_scheme(t) {
+    // 2. Scheme → external (http/https/mailto) or unsupported (anything else).
+    if let Some(kind) = scheme_class(t) {
         return ResolveOutcome {
-            target: Target::External(t.to_owned()),
+            target: match kind {
+                SchemeClass::Openable => Target::External(t.to_owned()),
+                SchemeClass::Unsupported => Target::Unsupported(t.to_owned()),
+            },
             notice: None,
         };
     }
@@ -131,7 +136,7 @@ fn strip_query(path: &str) -> &str {
 #[must_use]
 pub fn unresolved_relative_path(t: &str, from: &PageKey) -> Option<PathBuf> {
     let t = t.trim();
-    if t.is_empty() || has_scheme(t) || t.starts_with('#') {
+    if t.is_empty() || scheme_class(t).is_some() || t.starts_with('#') {
         return None;
     }
     let (path_part, _) = split_anchor(t);
@@ -148,19 +153,52 @@ pub fn unresolved_relative_path(t: &str, from: &PageKey) -> Option<PathBuf> {
     normalize_dots(&joined)
 }
 
-fn has_scheme(t: &str) -> bool {
-    let b = t.as_bytes();
-    starts_with_ignore_case(b, b"http:")
-        || starts_with_ignore_case(b, b"https:")
-        || starts_with_ignore_case(b, b"mailto:")
+/// Openable in the reader (confirm + system opener) vs never opened.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SchemeClass {
+    Openable,
+    Unsupported,
 }
 
-fn starts_with_ignore_case(hay: &[u8], prefix: &[u8]) -> bool {
-    hay.len() >= prefix.len()
-        && hay[..prefix.len()]
-            .iter()
-            .zip(prefix)
-            .all(|(a, b)| a.to_ascii_lowercase() == *b)
+/// Classify a URI scheme, if `t` looks like one.
+///
+/// Openable: `http:`, `https:`, `mailto:`. Everything else with a scheme is unsupported
+/// (custom schemes, `file:`, `javascript:`, `tel:`, …) and must never hit the opener.
+fn scheme_class(t: &str) -> Option<SchemeClass> {
+    let scheme = uri_scheme(t)?;
+    Some(if is_openable_scheme(scheme) {
+        SchemeClass::Openable
+    } else {
+        SchemeClass::Unsupported
+    })
+}
+
+/// Leading URI scheme without the trailing `:`, if present.
+#[must_use]
+pub fn uri_scheme(t: &str) -> Option<&str> {
+    let b = t.as_bytes();
+    if b.is_empty() || !b[0].is_ascii_alphabetic() {
+        return None;
+    }
+    let mut i = 1;
+    while i < b.len() {
+        let c = b[i];
+        if c.is_ascii_alphanumeric() || c == b'+' || c == b'-' || c == b'.' {
+            i += 1;
+            continue;
+        }
+        if c == b':' {
+            return Some(&t[..i]);
+        }
+        return None;
+    }
+    None
+}
+
+fn is_openable_scheme(scheme: &str) -> bool {
+    scheme.eq_ignore_ascii_case("http")
+        || scheme.eq_ignore_ascii_case("https")
+        || scheme.eq_ignore_ascii_case("mailto")
 }
 
 fn url_decode_once(s: &str) -> Option<String> {
@@ -269,6 +307,26 @@ mod tests {
         for t in ["https://example.com", "http://x.test", "mailto:a@b.c"] {
             let out = resolve(t, &from, &index);
             assert!(matches!(out.target, Target::External(_)), "{t}");
+        }
+    }
+
+    #[test]
+    fn rule2_unsupported_schemes() {
+        let index = index_at("../../fixtures/broken-links");
+        let from = key("broken-links", "README.md");
+        for t in [
+            "chatgpt-conversation://abc",
+            "file:///tmp/x",
+            "javascript:alert(1)",
+            "tel:+15550100",
+            "ftp://host/x",
+        ] {
+            let out = resolve(t, &from, &index);
+            assert!(
+                matches!(out.target, Target::Unsupported(_)),
+                "{t} → {:?}",
+                out.target
+            );
         }
     }
 

@@ -30,6 +30,8 @@ pub struct Theme {
     pub link_broken: Color,
     /// External link.
     pub link_external: Color,
+    /// Unsupported scheme (muted).
+    pub link_unsupported: Color,
 }
 
 impl Default for Theme {
@@ -47,6 +49,7 @@ impl Default for Theme {
             link: Color::Blue,
             link_broken: Color::Red,
             link_external: Color::Magenta,
+            link_unsupported: Color::DarkGray,
         }
     }
 }
@@ -77,6 +80,7 @@ impl Theme {
             wiki_reader_render::LinkClass::Internal => self.link,
             wiki_reader_render::LinkClass::Broken => self.link_broken,
             wiki_reader_render::LinkClass::External => self.link_external,
+            wiki_reader_render::LinkClass::Unsupported => self.link_unsupported,
         };
         Style::default().fg(fg)
     }
