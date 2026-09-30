@@ -3,7 +3,7 @@ id: WR-ROADMAP-P3
 title: Phase 3 — Alpha polish
 summary: Sticky headers, nav chrome, help, themes, install, and early herdr niceties.
 status: planned
-updated: 2026-09-29
+updated: 2026-09-30
 related: [phase-2-mvp, v2-widget-sidebar]
 nav_order: 3
 ---
@@ -15,12 +15,11 @@ Phase 1 is closed. Detail later rows into spikes/acceptance only after Phase 2 d
 ## Proposed order
 
 1. **P3-08 Install** — `cargo install` path + GitHub Actions release binaries (macOS/Linux, checksums); document herdr setup.
-2. **P3-06 Help overlay (`?`)** — generated from the keymap table so it stays correct; clickable keys.
-3. **P3-07 Themes** — wire the stored `theme` config key to the semantic token table in `theme.rs`; ship dark/light presets. (R35 already warns when the key is set but inert.)
-4. **P3-01 / P3-02 / P3-04** — sticky section header, side nav header/footer regions, optional ‹ › header buttons.
-5. **P3-05 / P3-03** — link hover preview; nav label options (R35 already draws a dim `(filename)` suffix for `title+filename`; full “alt text below” remains here).
-6. **P3-09 / P3-10** — herdr integration (plugin pane; publish current page to herdr sidebar) after the herdr API is confirmed on a real install.
-7. **D1 image tier** (follow-up) — mermaid-rs-renderer → resvg → Kitty once herdr/Kitty detection is confirmed; text tier stays the default.
+2. **P3-07 Themes / P3-11 Layout config** — wire the stored `theme` config key to the semantic token table in `theme.rs`; ship dark/light presets plus a herdr-matching preset; add nav placement (left/right) and related layout options. (R35 already warns when the key is set but inert. The help overlay moved to P2-20.)
+3. **P3-01 / P3-02 / P3-04** — sticky section header, side nav header/footer regions, optional ‹ › header buttons.
+4. **P3-05 / P3-03** — link hover preview; nav label options (R35 already draws a dim `(filename)` suffix for `title+filename`; full “alt text below” remains here).
+5. **P3-09 / P3-10** — herdr integration (plugin pane; publish current page to herdr sidebar) after the herdr API is confirmed on a real install.
+6. **D1 image tier** — pulled forward into P2-24.
 
 Detail each row into spikes/acceptance only after the Phase 2 dogfood notes in [phase-2-mvp.md](phase-2-mvp.md).
 
@@ -29,8 +28,9 @@ Detail each row into spikes/acceptance only after the Phase 2 dogfood notes in [
 | ID | Task | Reqs | Status | Notes |
 |----|------|------|--------|-------|
 | P3-08 | Install via `cargo install` + release binaries | | done | daf8fc5; hygiene f90c378; release hardening 9012fce; [v0.1.0-alpha.1](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.0-alpha.1) |
-| P3-06 | Help overlay with clickable keys | | todo | from keymap table |
-| P3-07 | Themes | | todo | wire stored theme key |
+| P3-06 | Help overlay with clickable keys | | moved | moved to P2-20 (dogfood 2026-09-30) |
+| P3-07 | Themes | | todo | wire stored theme key; include a herdr-matching preset |
+| P3-11 | Layout and theme config | C1 | todo | nav placement (left/right), syntax vs formatted view (eye toggle from P2-24), and other layout options; feature request from 2026-09-30 dogfood |
 | P3-01 | Sticky viewer section header | U1 | todo | |
 | P3-02 | Side nav header/footer sub-regions | U2 | todo | |
 | P3-04 | Optional header ‹ › buttons | U4 | todo | |
