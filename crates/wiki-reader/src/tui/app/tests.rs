@@ -1122,6 +1122,46 @@ fn open_in_editor_splits_args_and_reloads_on_mtime_even_if_nonzero() {
     );
 }
 
+#[test]
+fn open_in_editor_fresh_parse_sees_new_heading_before_reindex() {
+    use crate::tui::editor::{EditorCmd, EditorExit, EditorLauncher};
+
+    struct AppendHeading {
+        path: PathBuf,
+    }
+    impl EditorLauncher for AppendHeading {
+        fn launch(&self, _cmd: &EditorCmd) -> std::io::Result<EditorExit> {
+            let mut body = std::fs::read_to_string(&self.path).unwrap();
+            body.push_str("\n## Brand New Heading\n\npara\n");
+            std::fs::write(&self.path, body).unwrap();
+            Ok(EditorExit { success: true })
+        }
+    }
+
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    std::fs::write(root.join("README.md"), "# Hi\n\nbody\n").unwrap();
+    let mut app = App::new(root).unwrap();
+    app.update(Action::ToggleViewMode); // raw — headings come from indexed Page when stale
+    assert!(matches!(app.doc, crate::tui::page_doc::PageDoc::Raw(_)));
+    let before = app.doc.heading_lines();
+    let path = crate::tui::editor::page_abs_path(app.provider.root(), Path::new("README.md"));
+    app.editor = Box::new(AppendHeading { path });
+    app.open_in_editor_with(Some("nvim".into()));
+    let after = app.doc.heading_lines();
+    assert!(
+        after.len() > before.len(),
+        "expected fresh parse to see new heading; before={before:?} after={after:?}"
+    );
+    assert!(
+        app.doc
+            .lines()
+            .iter()
+            .any(|l| l.contains("Brand New Heading")),
+        "raw lines should include new heading text"
+    );
+}
+
 #[derive(Default)]
 struct LogOpener(std::sync::Arc<std::sync::Mutex<Vec<String>>>);
 
