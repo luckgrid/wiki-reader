@@ -43,19 +43,21 @@ Old outer terminals can emit press+release as duplicate bytes under kitty keyboa
 
 ## Live herdr verification (2026-09-29)
 
-Ran `cargo run -p wiki-reader --example keylog` in a herdr pane (`herdr pane send-keys`). Outer terminal = Ghostty via herdr 0.9.0.
+Ran `cargo run -p wiki-reader --example keylog` in a herdr pane. Outer terminal = Ghostty via herdr 0.9.0.
 
-| Input | Result |
-|-------|--------|
-| Plain arrows | [x] `Up`/`Down`/`Left`/`Right` unmodified |
-| `Shift+↑/↓` | [x] `SHIFT` on Up/Down |
-| `Shift+←/→` / `F6` | [x] `SHIFT` on Left/Right; `F(6)` plain |
-| `Backspace` | [x] |
-| `Alt+←/→` | [x] `ALT` on Left/Right |
-| `Ctrl+↑/↓` | [x] `CONTROL` on Up/Down (block-jump fallback) |
-| `Alt+Shift+↑/↓` | [x] `SHIFT \| ALT` — use for P2-04 heading jump |
-| `Alt+[` / `Alt+]` | [ ] Arrive as plain `Char(']')` via `send-keys` (unreliable as fallback) |
-| Click / wheel | [x] Covered by existing hit-map / wheel unit tests; mouse capture on in keylog |
-| `Ctrl+Enter` | [x] Confirmed unreliable for binding — keep unbound |
+**Method note:** the 2026-09-29 keyboard rows were driven with `herdr pane send-keys`, which injects events inside herdr and **bypasses** the outer terminal's key encoding (Ghostty Option-as-Alt, modified-key reporting). Treat those ticks as **synthetic (send-keys)**. A **real keyboard** pass in Ghostty + herdr is still required before closing P1-G.
 
-Also: `q` and `Ctrl+C` restore the terminal (alt-screen / raw mode) after running wiki-reader under herdr.
+| Input | Synthetic (send-keys) | Real keyboard |
+|-------|----------------------|---------------|
+| Plain arrows | [x] `Up`/`Down`/`Left`/`Right` unmodified | [ ] to confirm |
+| `Shift+↑/↓` | [x] `SHIFT` on Up/Down | [ ] to confirm |
+| `Shift+←/→` / `F6` | [x] `SHIFT` on Left/Right; `F(6)` plain | [ ] to confirm |
+| `Backspace` | [x] | [ ] to confirm |
+| `Alt+←/→` | [x] `ALT` on Left/Right | [ ] to confirm |
+| `Ctrl+↑/↓` | [x] `CONTROL` on Up/Down (block-jump fallback) | [ ] to confirm |
+| `Alt+Shift+↑/↓` | [x] `SHIFT \| ALT` — used for P2-04 heading jump | [ ] to confirm |
+| `Alt+[` / `Alt+]` | [ ] Arrive as plain `Char(']')` via `send-keys` (unreliable as fallback) | [ ] to confirm |
+| Click / wheel | [ ] not tried live — hit-map / wheel **unit tests** cover geometry; mouse capture on in keylog | [ ] to confirm |
+| `Ctrl+Enter` | [x] Confirmed unreliable for binding — keep unbound | [ ] to confirm |
+
+Also: `q` and `Ctrl+C` restore the terminal (alt-screen / raw mode) after running wiki-reader under herdr (synthetic session; re-confirm on your machine).

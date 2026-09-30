@@ -14,6 +14,7 @@ How to pick up work in this repo.
 ## Toolchain
 
 - Rust from [`rust-toolchain.toml`](../../rust-toolchain.toml): channel `1.98.1`, with `rustfmt` and `clippy`.
+- Install [rumdl](https://github.com/rvben/rumdl) with `cargo install rumdl --locked` for Markdown linting and formatting.
 - Edition 2024; `rustfmt.toml` sets `style_edition = "2024"`.
 - Builds and CI use `--locked` against the committed `Cargo.lock`.
 
@@ -25,13 +26,22 @@ Local mirror of CI (run before every push):
 ./scripts/check.sh
 ```
 
+Optional: install the repo pre-push hook so those checks run automatically:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+
 Same steps individually:
 
 ```bash
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
-python3 scripts/link-check.py
+cargo run --locked --quiet -p wiki-reader-tools --bin link-check
+rumdl fmt --check .
+rumdl check .
 cargo tree -p wiki-reader-core -e normal  # must not list ratatui or crossterm (ADR-0006)
 ```
 
@@ -64,7 +74,8 @@ See [architecture overview](../architecture/overview.md) and [ADR-0006](../decis
 - Pin versions in `Cargo.toml`; commit `Cargo.lock`; always `--locked`.
 - Review `cargo tree` before adding a dep.
 - Prefer stdlib / already-chosen crates from [prior art & libraries](../architecture/prior-art-and-libs.md).
-- When porting code (e.g. markdown-reader render), keep copyright notices in the ported files and list them in [`THIRD_PARTY.md`](../../THIRD_PARTY.md).
+- Markdown is checked and formatted with [rumdl](https://github.com/rvben/rumdl); run `rumdl fmt .` when making documentation changes.
+- When porting code, keep copyright notices in the ported files and list them in [`THIRD_PARTY.md`](../../THIRD_PARTY.md).
 
 ## Docs and ADRs
 
@@ -73,7 +84,7 @@ See [architecture overview](../architecture/overview.md) and [ADR-0006](../decis
 
 ## Task workflow
 
-1. Open the current phase file under [roadmap](../roadmap/README.md) (Phase 1: [phase-1-reader-shell.md](../roadmap/phase-1-reader-shell.md)).
+1. Open the current phase file under [roadmap](../roadmap/README.md) (Phase 2: [phase-2-mvp.md](../roadmap/phase-2-mvp.md)).
 2. Pick a `todo` row; set Status to `doing`; implement the smallest change that completes it.
 3. Run the three checks above.
 4. Set Status to `done`; reference the ID in commit messages. Leave exit criteria visible.

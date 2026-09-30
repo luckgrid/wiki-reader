@@ -28,7 +28,7 @@ Existing terminal markdown tools behave like editors or file browsers: opening a
 
 ## Status
 
-Phase 1 in progress (scaffolded). Start at [wiki/README.md](wiki/README.md).
+Phase 1 is complete; Phase 2 is active. The reader shell, backlinks, heading jumps, and `$EDITOR` support are shipped. Start at [wiki/README.md](wiki/README.md) and see the [roadmap](wiki/roadmap/README.md) for the next tasks.
 
 ## Quickstart
 
@@ -43,6 +43,9 @@ cargo run -p wiki-reader -- fixtures/worked-example
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
+cargo run --locked --quiet -p wiki-reader-tools --bin link-check
+rumdl fmt --check .
+rumdl check .
 ```
 
 ## Workspace
@@ -51,4 +54,4 @@ Cargo workspace with `wiki-reader-core` (terminal-free), `wiki-reader-render`, a
 
 ## License
 
-Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option. See [THIRD_PARTY.md](THIRD_PARTY.md) for ported-code attributions.
+Copyright © 2026 LUCKGRID. Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option. The two licenses are alternatives: users need to comply with only the one they choose.

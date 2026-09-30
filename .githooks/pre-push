@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Blocks push if local checks fail (same as CI via scripts/check.sh).
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec ./scripts/check.sh

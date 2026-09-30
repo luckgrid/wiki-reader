@@ -5,7 +5,9 @@ cd "$(dirname "$0")/.."
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
-python3 scripts/link-check.py
+cargo run --locked --quiet -p wiki-reader-tools --bin link-check
+rumdl fmt --check .
+rumdl check .
 
 tree=$(cargo tree -p wiki-reader-core -e normal)
 echo "$tree"
