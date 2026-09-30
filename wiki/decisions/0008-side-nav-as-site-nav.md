@@ -1,6 +1,6 @@
 ---
 id: WR-ADR-0008
-title: ADR-0008: Side nav as site navigation
+title: "ADR-0008: Side nav as site navigation"
 summary: The side nav is a curated site navigation derived from the file tree — titles not filenames, root entry first, README-only folders folded to links.
 status: accepted
 updated: 2026-09-28

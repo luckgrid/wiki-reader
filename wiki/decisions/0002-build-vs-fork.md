@@ -1,6 +1,6 @@
 ---
 id: WR-ADR-0002
-title: ADR-0002: Build on existing pieces, don't fork the app
+title: "ADR-0002: Build on existing pieces, don't fork the app"
 summary: Build a new app shell and core; port rendering from markdown-reader instead of forking the whole app.
 status: accepted
 updated: 2026-09-28

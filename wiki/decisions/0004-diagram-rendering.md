@@ -1,6 +1,6 @@
 ---
 id: WR-ADR-0004
-title: ADR-0004: Tiered diagram rendering
+title: "ADR-0004: Tiered diagram rendering"
 summary: Render Mermaid in tiers — Kitty image, Unicode text, then source — with herdr-aware detection.
 status: proposed
 updated: 2026-09-28

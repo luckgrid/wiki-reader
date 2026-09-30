@@ -1,6 +1,6 @@
 ---
 id: WR-ADR-0007
-title: ADR-0007: Input & focus model
+title: "ADR-0007: Input & focus model"
 summary: Browser-standard Tab cycling in the viewer, cursor-line arrows with Shift block jumps, Shift+Left/Right pane focus with per-pane cursor memory.
 status: accepted
 updated: 2026-09-28

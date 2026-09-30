@@ -1,6 +1,6 @@
 ---
 id: WR-ADR-0005
-title: ADR-0005: Wiki navigation model
+title: "ADR-0005: Wiki navigation model"
 summary: Browser/wiki navigation — one navigate() path, replace-by-default with history, tabs opt-in.
 status: accepted
 updated: 2026-09-28

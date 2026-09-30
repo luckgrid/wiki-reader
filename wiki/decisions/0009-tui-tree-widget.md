@@ -1,6 +1,6 @@
 ---
 id: WR-ADR-0009
-title: ADR-0009: Adopt tui-tree-widget for side nav
+title: "ADR-0009: Adopt tui-tree-widget for side nav"
 summary: Use tui-tree-widget; it exposes position→identifier hit-testing via rendered_at/click_at.
 status: superseded
 updated: 2026-09-29

@@ -1,6 +1,6 @@
 ---
 id: WR-ADR-0003
-title: ADR-0003: Core library + CLI first, TUI second
+title: "ADR-0003: Core library + CLI first, TUI second"
 summary: The index and context engine are a terminal-free library with a JSON CLI; the TUI is one client.
 status: superseded
 updated: 2026-09-28

@@ -1,6 +1,6 @@
 ---
 id: WR-ADR-0006
-title: ADR-0006: Reader first; core stays terminal-free
+title: "ADR-0006: Reader first; core stays terminal-free"
 summary: Build the wiki reader first; defer the context engine and agent CLI, but keep the core terminal-free.
 status: accepted
 updated: 2026-09-28

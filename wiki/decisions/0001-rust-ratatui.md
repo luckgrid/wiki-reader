@@ -1,6 +1,6 @@
 ---
 id: WR-ADR-0001
-title: ADR-0001: Rust + ratatui
+title: "ADR-0001: Rust + ratatui"
 summary: Build wiki-reader in Rust with ratatui.
 status: accepted
 updated: 2026-09-28
