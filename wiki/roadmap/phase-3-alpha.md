@@ -19,7 +19,7 @@ Phase 1 is closed. Detail later rows into spikes/acceptance only after Phase 2 d
 3. **P3-01 / P3-02 / P3-04** — sticky section header, side nav header/footer regions, optional ‹ › header buttons.
 4. **P3-05 / P3-03** — link hover preview; nav label options (R35 already draws a dim `(filename)` suffix for `title+filename`; full “alt text below” remains here).
 5. **P3-09 / P3-10** — herdr integration (plugin pane; publish current page to herdr sidebar) after the herdr API is confirmed on a real install.
-6. **D1 image tier** — pulled forward into P2-24b (may return here if Phase 2 runs long).
+6. **P3-12 D1 image tier** — diagrams/images via Kitty (was P2-24b; slipped 2026-09-30). Needs ADR-0004 herdr/Kitty spike before deps.
 
 Detail each row into spikes/acceptance only after the Phase 2 dogfood notes in [phase-2-mvp.md](phase-2-mvp.md).
 
@@ -31,6 +31,7 @@ Detail each row into spikes/acceptance only after the Phase 2 dogfood notes in [
 | P3-06 | Help overlay with clickable keys | | done | done via P2-20 (#71) |
 | P3-07 | Themes | | todo | wire stored theme key; include a herdr-matching preset |
 | P3-11 | Layout and theme config | C1 | todo | nav placement (left/right), syntax vs formatted view (eye toggle from P2-24a), and other layout options; owns config keys (nav width stays in session for P2-14); feature request from 2026-09-30 dogfood |
+| P3-12 | Image diagrams and images (D1) | D1 | todo | was P2-24b; ADR-0004 spike → mermaid-rs-renderer / resvg / Kitty; alt-text fallback |
 | P3-01 | Sticky viewer section header | U1 | todo | |
 | P3-02 | Side nav header/footer sub-regions | U2 | todo | |
 | P3-04 | Optional header ‹ › buttons | U4 | todo | |

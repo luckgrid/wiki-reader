@@ -26,6 +26,8 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 - 2026-09-29: v0.1.0-alpha.1 released (macOS arm64/x86_64, Linux x86_64); dogfood from the installed binary
 - 2026-09-30: side-by-side review vs markdown-reader; UI/UX polish batch filed as P2-11…P2-22
 - 2026-09-30: markdown element rendering (Mermaid text tier garbled, truncated tables, mid-word wrapping, raw syntax markers) filed as P2-23; formatted-text view and eye toggle as P2-24a; image diagrams as P2-24b (may slip to Phase 3)
+- 2026-09-30: dogfood polish batch landed — P2-22 (#70), P2-20 (#71), P2-21 (#72), P2-24a (#73). P2-24b deferred to Phase 3. v0.1.0-alpha.2 gated on operator go-ahead after overlays.
+- 2026-09-30: **Phase 2 feature exit** — all P2 tasks except P2-24b done; status stays `active` through the dogfood clock (≈ 2026-10-13), then flip to `done`.
 
 ## Tasks
 
@@ -60,7 +62,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 | P2-22 | Keyboard flow: nav to viewer to footer | — | done | #70; `→` opens page + focuses viewer; `f` focuses footer; sticky footer focus; ADR-0007 |
 | P2-23 | Markdown syntax view: element styling (priority) | D1 | done | 09062f7 |
 | P2-24a | Formatted-text view and eye toggle | D1 / C1 | done | #73; ADR-0012; eye toggles syntax↔formatted; `r` stays Raw↔Rendered |
-| P2-24b | Image diagrams and images | D1 | todo | after P2-24a; see [P2-24b scope](#p2-24b-scope). May slip to Phase 3 without blocking exit |
+| P2-24b | Image diagrams and images | D1 | moved | slipped to Phase 3 as P3-12 (2026-09-30); needs ADR-0004 herdr/Kitty spike + deps |
 
 ## P2-23 scope
 
