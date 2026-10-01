@@ -40,7 +40,7 @@ Regions:
 
 - **Header:** one padded row with the breadcrumb on the left and the icon buttons on the right, directly above the panes. The last crumb is the current page and is drawn gray (read-only); the others are links.
 - **Side nav:** a bordered pane titled `Nav` holding the search row and the page tree. Its width defaults to 26 (30 at ≥ 120 columns) and can be dragged.
-- **View:** a bordered pane titled `View` with one blank row under the top border and the cursor line, which is marked `▌`. Its **prev/next footer is drawn on the pane's bottom border** and stays visible while the article scrolls.
+- **View:** a bordered pane titled `View`. Its first line sits directly under the top border, level with the Nav search row, and the cursor line is marked `▌`. Its **prev/next footer is drawn on the pane's bottom border** and stays visible while the article scrolls.
 - **Status bar:** one padded row directly under the panes.
 
 The tab bar appears at the top of the viewer pane only when two or more tabs are open. A right-hand widget slot is reserved for Phase 4.

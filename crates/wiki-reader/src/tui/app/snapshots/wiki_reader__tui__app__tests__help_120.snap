@@ -1,5 +1,6 @@
 ---
 source: crates/wiki-reader/src/tui/app/tests.rs
+assertion_line: 2340
 expression: out
 ---
  Worked Example Wiki                                                                                              ○ ◫ ✕ 
@@ -10,8 +11,8 @@ expression: out
 │  ▸ Architecture       │q             ✕   Quit                                                │                       │
 │  ▸ Decisions          │b             ◫   Toggle side nav                                     │                       │
 │                       │r                 Toggle raw / rendered                               │                       │
-│                       │v             ○ ◉ Toggle syntax / formatted                           │                       │
-│                       │e                 Open in editor                                      │turn via back when     │
+│                       │v             ○ ◉ Toggle syntax / formatted                           │turn via back when     │
+│                       │e                 Open in editor                                      │                       │
 │                       │y                 Copy page path                                      │                       │
 │                       │Y                 Copy focused link target                            │                       │
 │                       │t                 New tab                                             │                       │

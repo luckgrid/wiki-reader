@@ -1,18 +1,19 @@
 ---
 source: crates/wiki-reader/src/tui/app/tests.rs
+assertion_line: 65
 expression: out
 ---
  Worked Example Wiki                                                                                              ○ ◫ ✕ 
 ┌Nav─────────────────────────┐┌View────────────────────────────────────────────────────────────────────────────────────┐
-│▌⌕ Search…                  ││                                                                                        │
-│                            ││▌── frontmatter ▶ ───────────────────────                                               │
-│▌ Worked Example Wiki       ││                                                                                        │
-│  ▸ Architecture            ││ # Worked Example Wiki                                                                  │
-│  ▸ Decisions               ││                                                                                        │
-│                            ││ A tiny markdown collection used as the default smoke-test root.                        │
+│▌⌕ Search…                  ││▌── frontmatter ▶ ───────────────────────                                               │
+│                            ││                                                                                        │
+│▌ Worked Example Wiki       ││ # Worked Example Wiki                                                                  │
+│  ▸ Architecture            ││                                                                                        │
+│  ▸ Decisions               ││ A tiny markdown collection used as the default smoke-test root.                        │
 │                            ││                                                                                        │
 │                            ││ Start at Architecture Overview, follow Token Projection, then return via back when     │
 │                            ││ history exists.                                                                        │
+│                            ││                                                                                        │
 │                            ││                                                                                        │
 │                            ││                                                                                        │
 │                            ││                                                                                        │

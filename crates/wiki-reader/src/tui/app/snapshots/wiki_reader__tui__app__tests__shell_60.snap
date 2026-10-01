@@ -1,10 +1,10 @@
 ---
 source: crates/wiki-reader/src/tui/app/tests.rs
+assertion_line: 65
 expression: out
 ---
  Worked Example Wiki                                  ○ ◫ ✕ 
 ┌View──────────────────────────────────────────────────────┐
-│                                                          │
 │▌── frontmatter ▶ ───────────────────────                 │
 │                                                          │
 │ # Worked Example Wiki                                    │
@@ -14,6 +14,7 @@ expression: out
 │                                                          │
 │ Start at Architecture Overview, follow Token Projection, │
 │ then return via back when history exists.                │
+│                                                          │
 │                                                          │
 │                                                          │
 │                                                          │

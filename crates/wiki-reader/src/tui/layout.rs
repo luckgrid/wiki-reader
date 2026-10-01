@@ -9,7 +9,7 @@ pub const NAV_CHROME_ROWS: u16 = 4;
 pub const VIEWER_LEFT_PAD: u16 = 1;
 
 /// Blank rows between the View's top border and its first line.
-pub const VIEWER_TOP_PAD: u16 = 1;
+pub const VIEWER_TOP_PAD: u16 = 0;
 
 /// Text rows visible inside a View pane of `height` (borders + top pad removed).
 #[must_use]

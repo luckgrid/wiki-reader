@@ -59,6 +59,8 @@ pub fn draw(
         .title_bottom(footer.right);
     let bordered = block.inner(area);
     frame.render_widget(block, area);
+    // Clamp so the pad can be flipped back to a non-zero value without a rewrite.
+    #[allow(clippy::unnecessary_min_or_max)]
     let top_pad = VIEWER_TOP_PAD.min(bordered.height);
     let inner_area = Rect {
         y: bordered.y.saturating_add(top_pad),
