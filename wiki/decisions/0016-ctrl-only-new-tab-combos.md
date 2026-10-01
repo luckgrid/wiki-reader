@@ -18,7 +18,7 @@ related: [0015-new-tab-combos-kitty-keyboard, 0007-input-focus-model]
 ## Decision
 
 - The matcher is Ctrl only (`Matcher::CtrlCode`). Cmd (SUPER) is not special: if a terminal ever delivers it, it behaves like the plain key.
-- Bindings: `Ctrl+Enter` in the nav and in the view (opens the focused link), and `Ctrl+→` in the nav, all `NewTab`. They match before plain `Enter` and `→`.
+- Bindings: `Ctrl+Enter` in the nav and in the view (opens the focused link), and `Ctrl+→` in the nav, all `NewTab` (see the macOS caveat below). They match before plain `Enter` and `→`.
 - Mouse: Shift+click and Ctrl+click open a new tab (SUPER is no longer in the mask).
 - Keep `DISAMBIGUATE_ESCAPE_CODES`, `t`, middle-click, Shift+click and `Shift+Enter` from ADR-0015.
 
@@ -27,3 +27,4 @@ related: [0015-new-tab-combos-kitty-keyboard, 0007-input-focus-model]
 - ➕ The combos that work on macOS (Ctrl) are the documented ones; nothing relies on a modifier the OS owns.
 - ➕ One modifier to teach, the same on every platform.
 - ➖ `Ctrl+click` can still be stolen as right-click by some macOS hosts; `t`, middle-click and Shift+click remain the always-available routes.
+- ➖ `Ctrl+→` never reaches the app on a default macOS setup: it is the system "Move right a space" shortcut (confirmed in Ghostty QA). It is kept for other platforms and for macOS users who disable that shortcut (System Settings → Keyboard → Keyboard Shortcuts → Mission Control). `Ctrl+Enter` is the combo that works everywhere.

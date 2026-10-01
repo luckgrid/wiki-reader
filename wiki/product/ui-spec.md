@@ -241,7 +241,7 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 - **K3:** Right-click is reserved by herdr's context menu and never reaches the app — unused by wiki-reader.
 - **K4:** Alt+↑/↓ and Alt+Shift+↑/↓ arrive correctly; heading jump works.
 - `Shift+Tab` arrives as `BackTab`; fine everywhere.
-- `Ctrl+Enter` / `Ctrl+→` / `Shift+Enter` need the kitty keyboard protocol (`DISAMBIGUATE_ESCAPE_CODES`, [ADR-0015](../decisions/0015-new-tab-combos-kitty-keyboard.md)). Without it, `t`, middle-click and Shift+click still work (unless the terminal keeps Shift+click for its own text selection). Cmd is not used: it never arrives on mouse events, and macOS terminals keep Cmd+Enter (Ghostty makes it full screen). On some macOS hosts Ctrl+click is stolen as right-click.
+- `Ctrl+Enter` / `Ctrl+→` / `Shift+Enter` need the kitty keyboard protocol (`DISAMBIGUATE_ESCAPE_CODES`, [ADR-0015](../decisions/0015-new-tab-combos-kitty-keyboard.md)). Without it, `t`, middle-click and Shift+click still work (unless the terminal keeps Shift+click for its own text selection). Cmd is not used: it never arrives on mouse events, and macOS terminals keep Cmd+Enter (Ghostty makes it full screen). On some macOS hosts Ctrl+click is stolen as right-click. `Ctrl+→` is macOS's default "Move right a space" shortcut, so on macOS it never reaches the app unless that shortcut is disabled (System Settings → Keyboard → Keyboard Shortcuts → Mission Control); use `Ctrl+Enter` there.
 
 ## Mouse
 
