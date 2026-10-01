@@ -3,12 +3,12 @@ source: crates/wiki-reader-core/src/nav/tree.rs
 expression: "tree.render_text(&expanded, Some(&root))"
 ---
 ● Readme
-▾ Readme
+▾ Architecture
   Overview
-  ▾ Readme
+  ▾ Design System
     Overview
     Tokens
-  Readme
+  Wfos
 ▾ Decisions
   Stack
   Adapters

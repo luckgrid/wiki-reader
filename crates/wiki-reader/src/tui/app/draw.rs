@@ -70,12 +70,17 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     };
     let prev = nav.tree.prev(&page);
     let next = nav.tree.next(&page);
-    let prev_label = prev
-        .as_ref()
-        .map(|k| wiki_reader_core::nav::page_label(app.navigator.index(), k));
-    let next_label = next
-        .as_ref()
-        .map(|k| wiki_reader_core::nav::page_label(app.navigator.index(), k));
+    let footer_label = |k: &wiki_reader_core::provider::PageKey| {
+        nav.tree.page_display_label(k).unwrap_or_else(|| {
+            wiki_reader_core::nav::page_label_with(
+                app.navigator.index(),
+                k,
+                app.navigator.label_mode(),
+            )
+        })
+    };
+    let prev_label = prev.as_ref().map(footer_label);
+    let next_label = next.as_ref().map(footer_label);
     let footer_focus = focus_item.as_ref().and_then(|it| match it.kind {
         FocusTarget::FooterPrev | FocusTarget::FooterNext => Some(it.kind),
         FocusTarget::Link | FocusTarget::BlockAction => None,

@@ -3,10 +3,10 @@ source: crates/wiki-reader-core/src/nav/tree.rs
 expression: "tree.render_text(&expanded, None)"
 ---
 Readme
-▾ Readme
+▾ L1
   Overview
-  ▾ Readme
+  ▾ L2
     Overview
-    ▾ Readme
+    ▾ L3
       Overview
       Leaf
