@@ -95,7 +95,9 @@ fn run_loop(
         }
         app.poll_watcher();
         app.flush_session(false);
-        if event::poll(std::time::Duration::from_millis(250))? {
+        // Poll fast mid-drag so a held pointer keeps scrolling the View.
+        let idle = std::time::Duration::from_millis(if app.selecting { 40 } else { 250 });
+        if event::poll(idle)? {
             match event::read()? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => {
                     let (action, next_chord) = keymap::map_with_overrides(
@@ -119,6 +121,8 @@ fn run_loop(
                 }
                 _ => {}
             }
+        } else if app.selecting {
+            app.drag_autoscroll();
         }
     }
 }
@@ -223,6 +227,7 @@ pub(crate) fn apply_mouse(
             if app.nav_dragging {
                 app.resize_nav_to_column(mouse.column);
             } else if app.selecting {
+                app.drag_at = Some((mouse.column, mouse.row));
                 let pos = app.pos_at(mouse.column, mouse.row);
                 return Some(Action::SelectExtend(pos.line, pos.col));
             }

@@ -95,6 +95,20 @@ impl App {
         self.selecting = true;
     }
 
+    /// Idle tick during a drag: while the pointer rests above or below the pane,
+    /// keep scrolling and extending the selection.
+    pub(crate) fn drag_autoscroll(&mut self) {
+        let Some((x, y)) = self.drag_at else {
+            return;
+        };
+        let g = self.viewer_geom;
+        if y >= g.top_y && y < g.top_y.saturating_add(g.rows) {
+            return;
+        }
+        let pos = self.pos_at(x, y);
+        self.select_extend(pos.line, pos.col);
+    }
+
     pub(crate) fn select_extend(&mut self, line: u32, col: u16) {
         let Some(sel) = self.selection.as_mut() else {
             return;
@@ -108,6 +122,7 @@ impl App {
     /// link as following it.
     pub(crate) fn select_end(&mut self) {
         self.selecting = false;
+        self.drag_at = None;
         let link = self.pending_link.take();
         let Some(sel) = self.selection else {
             return;

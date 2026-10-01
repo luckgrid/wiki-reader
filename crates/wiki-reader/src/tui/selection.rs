@@ -73,28 +73,55 @@ fn has_kind(sl: &StyledLine, pred: impl Fn(StyleKind) -> bool) -> bool {
     sl.spans.iter().any(|s| pred(s.kind))
 }
 
+fn is_table(sl: &StyledLine) -> bool {
+    has_kind(sl, |k| {
+        matches!(k, StyleKind::Table | StyleKind::TableHeader)
+    })
+}
+
+/// Cells of table display row `text` within columns `[c0, c1)`, or `None` for
+/// border rows. The outer `│` are dropped; inner empty cells are kept so the
+/// columns stay aligned.
+fn table_cells(text: &str, c0: u16, c1: u16) -> Option<Vec<String>> {
+    let piece = slice_cols(text, c0, c1);
+    if is_box_row(&piece) {
+        return None;
+    }
+    let mut cells: Vec<&str> = piece.split('│').collect();
+    if piece.starts_with('│') {
+        cells.remove(0);
+    }
+    if piece.ends_with('│') {
+        cells.pop();
+    }
+    Some(cells.into_iter().map(|c| c.trim().to_owned()).collect())
+}
+
+/// One tab-separated line for a logical table row: the display rows a wrapped
+/// cell spans are merged column by column.
+fn merge_table_run(run: &[Vec<String>]) -> String {
+    let n = run.iter().map(Vec::len).max().unwrap_or(0);
+    (0..n)
+        .map(|k| {
+            run.iter()
+                .filter_map(|r| r.get(k).map(String::as_str))
+                .filter(|c| !c.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
+        .collect::<Vec<_>>()
+        .join("\t")
+}
+
 /// Text of display row `text` within columns `[c0, c1)`, or `None` for rows
-/// that carry no copyable content (rules, table borders).
+/// that carry no copyable content (rules). Table rows are handled by
+/// [`table_cells`].
 fn row_piece(text: &str, sl: Option<&StyledLine>, c0: u16, c1: u16) -> Option<String> {
     let Some(sl) = sl else {
         return Some(slice_cols(text, c0, c1));
     };
     if has_kind(sl, |k| k == StyleKind::Rule) {
         return None;
-    }
-    if has_kind(sl, |k| {
-        matches!(k, StyleKind::Table | StyleKind::TableHeader)
-    }) {
-        let piece = slice_cols(text, c0, c1);
-        if is_box_row(&piece) {
-            return None;
-        }
-        let cells: Vec<&str> = piece
-            .split('│')
-            .map(str::trim)
-            .filter(|c| !c.is_empty())
-            .collect();
-        return Some(cells.join("\t"));
     }
     // Quote / code rows start with a two-column "│ " gutter that isn't content.
     let gutter = sl.spans.first().is_some_and(|s| {
@@ -148,6 +175,8 @@ pub fn extract(doc: &PageDoc, sel: &Selection, wrap_width: u16) -> String {
     let mut out = String::new();
     // (full text, source line, prose?) of the previous emitted row.
     let mut prev: Option<(&str, u32, bool)> = None;
+    // Display rows of the table row being read (a wrapped cell spans several).
+    let mut run: Vec<Vec<String>> = Vec::new();
     for (i, text) in lines.iter().enumerate().take(last + 1).skip(first) {
         let text = text.as_str();
         let line = u32::try_from(i).unwrap_or(u32::MAX);
@@ -155,6 +184,15 @@ pub fn extract(doc: &PageDoc, sel: &Selection, wrap_width: u16) -> String {
         let Some((c0, c1)) = sel.cols_on(line, line_width(text)) else {
             continue;
         };
+        if sl.is_some_and(is_table) {
+            // Border rows end a logical table row; content rows accumulate.
+            match table_cells(text, c0, c1) {
+                Some(cells) => run.push(cells),
+                None => flush_table_run(&mut out, &mut run, &mut prev),
+            }
+            continue;
+        }
+        flush_table_run(&mut out, &mut run, &mut prev);
         let Some(piece) = row_piece(text, sl, c0, c1) else {
             continue;
         };
@@ -183,7 +221,25 @@ pub fn extract(doc: &PageDoc, sel: &Selection, wrap_width: u16) -> String {
         }
         prev = Some((text, source, prose));
     }
+    flush_table_run(&mut out, &mut run, &mut prev);
     out
+}
+
+/// Emit the pending table row (if any) as one tab-separated line.
+fn flush_table_run(
+    out: &mut String,
+    run: &mut Vec<Vec<String>>,
+    prev: &mut Option<(&str, u32, bool)>,
+) {
+    if run.is_empty() {
+        return;
+    }
+    if prev.is_some() {
+        out.push('\n');
+    }
+    out.push_str(&merge_table_run(run));
+    run.clear();
+    *prev = Some(("", 0, false));
 }
 
 #[cfg(test)]

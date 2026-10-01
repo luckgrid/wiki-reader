@@ -72,6 +72,9 @@ pub struct App {
     pub selection: Option<crate::tui::selection::Selection>,
     /// A mouse drag is in progress.
     pub(crate) selecting: bool,
+    /// Last mouse cell seen during a drag; the loop re-applies it on idle ticks
+    /// so holding the pointer past the pane edge keeps scrolling.
+    pub(crate) drag_at: Option<(u16, u16)>,
     /// Link under the pressed mouse button; followed on release if no drag happened.
     pub(crate) pending_link: Option<u32>,
     /// Where View text starts on screen (from last draw), for mouse → cell mapping.
@@ -238,6 +241,7 @@ impl App {
             cursor_col: 0,
             selection: None,
             selecting: false,
+            drag_at: None,
             pending_link: None,
             viewer_geom: crate::tui::regions::viewer::ViewerGeom::default(),
             nav_viewport: 20,

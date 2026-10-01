@@ -1235,6 +1235,84 @@ fn drag_select_table_copies_cells_not_borders() {
     assert_eq!(log.lock().unwrap().clone(), ["A\tB\none\ttwo\nthree\tfour"]);
 }
 
+const WRAP_TABLE_MD: &str = "# T\n\n| Name | Note | Kind |\n|---|---|---|\n| alpha |  | x |\n| beta | a long note that has to wrap inside its narrow column | y |\n| gamma | short | z |\n";
+
+fn select_all_table(app: &mut App) {
+    let head = row_of(app, "│ Name");
+    let tail = row_of(app, "gamma");
+    let end = last_col(app, tail);
+    drag_select(app, (head, 0), (tail, end));
+}
+
+#[test]
+fn drag_select_table_keeps_empty_cells_aligned() {
+    let (_d, mut app, log) = app_with_page(WRAP_TABLE_MD);
+    let _ = draw_app(&mut app, 100, 40);
+    select_all_table(&mut app);
+    let copied = log.lock().unwrap().clone();
+    assert_eq!(
+        copied,
+        [
+            "Name\tNote\tKind\nalpha\t\tx\nbeta\ta long note that has to wrap inside its narrow column\ty\ngamma\tshort\tz"
+        ]
+    );
+}
+
+#[test]
+fn drag_select_table_rejoins_a_wrapped_cell() {
+    let (_d, mut app, log) = app_with_page(WRAP_TABLE_MD);
+    let _ = draw_app(&mut app, 40, 40);
+    let beta = row_of(&app, "beta");
+    let gamma = row_of(&app, "gamma");
+    assert!(gamma - beta > 1, "the note cell must wrap at this width");
+    select_all_table(&mut app);
+    let copied = log.lock().unwrap().clone();
+    assert_eq!(
+        copied,
+        [
+            "Name\tNote\tKind\nalpha\t\tx\nbeta\ta long note that has to wrap inside its narrow column\ty\ngamma\tshort\tz"
+        ]
+    );
+}
+
+#[test]
+fn drag_select_table_partial_cell_copies_only_the_selected_text() {
+    let (_d, mut app, log) = app_with_page(WRAP_TABLE_MD);
+    let _ = draw_app(&mut app, 100, 40);
+    let alpha = row_of(&app, "alpha");
+    // Cells 3..=5 of "│ alpha │ ..." are "lph".
+    drag_select(&mut app, (alpha, 3), (alpha, 5));
+    assert_eq!(log.lock().unwrap().clone(), ["lph"]);
+}
+
+#[test]
+fn held_drag_past_the_bottom_edge_keeps_scrolling_on_idle_ticks() {
+    let md = "line\n\n".repeat(80);
+    let (_d, mut app, _log) = app_with_page(&md);
+    let _ = draw_app(&mut app, 80, 20);
+    let g = app.viewer_geom;
+    let (x, y) = cell_xy(&app, 0, 0);
+    mouse_at(&mut app, MouseEventKind::Down(MouseButton::Left), x, y);
+    // One drag event below the pane, then the pointer stays still.
+    let below = g.top_y + g.rows + 2;
+    mouse_at(&mut app, MouseEventKind::Drag(MouseButton::Left), x, below);
+    let after_drag = app.scroll;
+    let head_after_drag = app.selection.unwrap().head.line;
+    for _ in 0..5 {
+        app.drag_autoscroll();
+    }
+    assert_eq!(app.scroll, after_drag + 5, "one row per idle tick");
+    assert!(app.selection.unwrap().head.line > head_after_drag);
+    // Inside the pane, ticks do nothing; releasing ends the drag.
+    let (_, inside) = cell_xy(&app, app.scroll, 0);
+    mouse_at(&mut app, MouseEventKind::Drag(MouseButton::Left), x, inside);
+    let still = app.scroll;
+    app.drag_autoscroll();
+    assert_eq!(app.scroll, still);
+    mouse_at(&mut app, MouseEventKind::Up(MouseButton::Left), x, inside);
+    assert!(app.drag_at.is_none());
+}
+
 #[test]
 fn drag_select_code_drops_the_gutter() {
     let (_d, mut app, log) = app_with_page(SELECT_MD);
