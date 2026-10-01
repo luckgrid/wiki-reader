@@ -32,7 +32,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 - 2026-09-30: dogfood QA after polish batch — P2-22/20/24a pass; herdr keys (`?`/`f`/PageUp/Down/Home/End) pass; headings pass; Linked from backlinks heading ignored formatted mode — fixed in #75 (heading→list colour-match follow-up reverted as misdiagnosis)
 - 2026-09-30: `scripts/check.sh` green on main tip after #75 (`d7cc560`); no new bites
 - 2026-09-30: **feature freeze** through ≈ 2026-10-13 — bug fixes / papercuts only; each small PR with a snapshot or test + dated dogfood line. Watch: heading hierarchy, light-terminal contrast (P3-07), nav labels / resize persistence, search ergonomics, herdr key delivery, formatted-mode checkbox/`[NOTE]`/quote-bar markers (known deviation)
-- 2026-09-30: v0.1.0-alpha.2 cut (P2-11…P2-24a + #75); clock continues on alpha.2
+- 2026-09-30: v0.1.0-alpha.2 cut (#76); clock continues on alpha.2
 
 ## Tasks
 
