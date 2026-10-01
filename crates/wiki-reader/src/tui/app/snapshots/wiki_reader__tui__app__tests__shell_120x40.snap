@@ -10,7 +10,7 @@ expression: tall
 │ ⌕ Search…                  ││                                                                                        │
 │                            ││ # Worked Example Wiki                                                                  │
 │▌● Readme                   ││                                                                                        │
-│   ▸ Readme                 ││ A tiny markdown collection used as the default smoke-test root.                        │
+│   ▸ Architecture           ││ A tiny markdown collection used as the default smoke-test root.                        │
 │   ▸ Decisions              ││                                                                                        │
 │                            ││ Start at Architecture Overview, follow Token Projection, then return via back when     │
 │                            ││ history exists.                                                                        │
@@ -38,6 +38,6 @@ expression: tall
 │                            ││                                                                                        │
 │                            ││                                                                                        │
 │                            ││                                                                                        │
-└────────────────────────────┘└‹ —─────────────────────────────────────────────────────────────────────────────Readme ›┘
+└────────────────────────────┘└‹ —───────────────────────────────────────────────────────────────────────Architecture ›┘
                                                                                                                         
  VIEWER · README.md · L1 12% · 29w · 1m · 2026-09-28

@@ -213,28 +213,20 @@ fn breadcrumb_glyph_click_navigates() {
     }));
     let terminal = draw_app(&mut app, 120, 24);
     let buf = terminal.backend().buffer();
-    // Find a clickable architecture crumb (Filename mode: "Readme" for architecture/README).
+    // Find the clickable architecture crumb (Filename mode: folder name, not "Readme").
     let mut ax = None;
     for x in 0..buf.area.width {
-        if buf[(x, 0)].symbol().starts_with('R') {
-            let mut s = String::new();
-            for dx in 0..6 {
-                if x + dx < buf.area.width {
-                    s.push_str(buf[(x + dx, 0)].symbol());
-                }
-            }
-            if s.starts_with("Readme") {
-                // Prefer the architecture crumb (second "Readme"), not the root.
-                if let Some(Hit::Breadcrumb(k)) = app.hit_map.hit_at(x, 0)
-                    && k.relative_path.ends_with("architecture/README.md")
-                {
-                    ax = Some(x);
-                    break;
-                }
-            }
+        let end = (x + 12).min(buf.area.width);
+        let word: String = (x..end).map(|xx| buf[(xx, 0)].symbol()).collect();
+        if word == "Architecture"
+            && let Some(Hit::Breadcrumb(k)) = app.hit_map.hit_at(x, 0)
+            && k.relative_path.ends_with("architecture/README.md")
+        {
+            ax = Some(x);
+            break;
         }
     }
-    let ax = ax.expect("architecture Readme crumb glyph");
+    let ax = ax.expect("architecture crumb glyph");
     let hit = app.hit_map.hit_at(ax, 0).expect("crumb hit");
     assert!(
         matches!(hit, Hit::Breadcrumb(k) if k.relative_path.ends_with("architecture/README.md")),
@@ -2368,4 +2360,62 @@ fn mouse_footer_next_keeps_sticky_focus() {
     let items = app.focus_list();
     let i = app.focused_item.expect("sticky after click");
     assert_eq!(items[i].kind, FocusTarget::FooterNext);
+}
+
+fn copy_dir(src: &Path, dst: &Path) {
+    std::fs::create_dir_all(dst).unwrap();
+    for entry in std::fs::read_dir(src).unwrap() {
+        let entry = entry.unwrap();
+        let to = dst.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_dir(&entry.path(), &to);
+        } else {
+            std::fs::copy(entry.path(), to).unwrap();
+        }
+    }
+}
+
+/// Text of the viewer's bottom border row (where prev/next are drawn).
+fn footer_row(root: &Path) -> String {
+    let mut app = App::new(root).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: app.navigator.index().collection_id.clone(),
+        relative_path: PathBuf::from("architecture/design-system/tokens.md"),
+    }));
+    let terminal = draw_app(&mut app, 100, 24);
+    let buf = terminal.backend().buffer();
+    (0..buf.area.height)
+        .map(|y| {
+            (0..buf.area.width)
+                .map(|x| buf[(x, y)].symbol())
+                .collect::<String>()
+        })
+        .find(|row| row.contains("‹ "))
+        .expect("footer border row")
+}
+
+#[test]
+fn footer_prev_next_use_folder_names_by_default() {
+    let row = footer_row(&fixture());
+    assert!(row.contains("‹ Design System"), "{row}");
+    assert!(row.contains("Wfos ›"), "{row}");
+    assert!(
+        !row.contains("Readme") && !row.contains("Overview"),
+        "{row}"
+    );
+}
+
+#[test]
+fn footer_prev_next_follow_title_label_mode() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("wiki");
+    copy_dir(&fixture(), &root);
+    std::fs::write(
+        root.join(".wiki-reader.toml"),
+        "[nav]\nlabels = \"title\"\n",
+    )
+    .unwrap();
+    let row = footer_row(&root);
+    assert!(row.contains("‹ Design System"), "{row}");
+    assert!(row.contains("Workflow OS ›"), "{row}");
 }
