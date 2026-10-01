@@ -33,6 +33,50 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 - 2026-09-30: `scripts/check.sh` green on main tip after #75 (`d7cc560`); no new bites
 - 2026-09-30: **feature freeze** through ≈ 2026-10-13 — bug fixes / papercuts only; each small PR with a snapshot or test + dated dogfood line. Watch: heading hierarchy, light-terminal contrast (P3-07), nav labels / resize persistence, search ergonomics, herdr key delivery, formatted-mode checkbox/`[NOTE]`/quote-bar markers (known deviation)
 - 2026-09-30: v0.1.0-alpha.2 cut (#76); clock continues on alpha.2
+- 2026-09-30: interim P0/P1 acceptance walk recorded below (code + tests + dogfood); **status stays `active`** until ≈ 2026-10-13 for the two-weeks-without-GUI verdict, then flip to `done`
+
+## Interim acceptance walk (2026-09-30)
+
+Judged from tests, dogfood QA, and code — not a full interactive sweep of every row. Formal exit review ≈ 2026-10-13 re-confirms the adoption verdict.
+
+### P0
+
+| ID | Result | Notes |
+|----|--------|-------|
+| N1 | pass | navigate() invariant tests |
+| N2 | pass | ordinary_navigation_does_not_create_tabs |
+| N3 | pass | history + cursor restore tests |
+| N4 | pass | nav sync / expand tests |
+| T1 | pass | tree snapshots (page_label modes; default filename via P2-13) |
+| K1–K4 | pass | focus/keymap/nav tests; sticky footer via P2-22 |
+| L1–L3 | pass | link click / resolve / broken+external tests |
+| H1 | pass | breadcrumb + header icon hits |
+| F1–F2 | pass | footer prev/next; status bar |
+| S1 | pass | search overlay; modes named Files/Content (was Pages/Text in older copy) |
+| V1 | pass | rendered elements + P2-23/24a |
+| V2 | pass | raw toggle |
+| V3 | pass | watch/dirty reload tests |
+
+### P1
+
+| ID | Result | Notes |
+|----|--------|-------|
+| P1 | pass | SUMMARY.md / nav_order |
+| B1 | pass | Linked from; formatted heading fixed #75 |
+| TB | pass | tabs secondary |
+| BA | pass | block actions in Tab cycle |
+| D1 | partial | text Mermaid tier pass; **image tier → P3-12** (exit-allowed slip) |
+| R1 | pass | responsive nav |
+| E1 | pass | `$EDITOR` |
+| C1 | partial | keys/opener/excludes/nav.labels ship; **theme key still inert → P3-07/11** |
+| M1 | pass | session restore |
+| J1 | pass | heading jump |
+
+### Adoption
+
+| Measure | Result | Notes |
+|---------|--------|-------|
+| Two weeks without a GUI markdown app | pending | clock 2026-09-29 → ≈ 2026-10-13 |
 
 ## Tasks
 
