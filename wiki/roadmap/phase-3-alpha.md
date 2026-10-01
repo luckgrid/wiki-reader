@@ -4,7 +4,7 @@ title: Phase 3 — Alpha polish
 summary: Sticky headers, nav chrome, help, themes, install, and early herdr niceties.
 status: planned
 updated: 2026-09-30
-related: [phase-2-mvp, v2-widget-sidebar]
+related: [phase-2-mvp, phase-4-beta]
 nav_order: 3
 ---
 

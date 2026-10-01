@@ -3,7 +3,7 @@ id: WR-UI
 title: UI spec
 summary: Layout, side nav, header/footers, focus and cursor model, keyboard and mouse behavior for the wiki-reader reader.
 status: draft
-updated: 2026-09-29
+updated: 2026-09-30
 related: [spec, content-model]
 nav_order: 4
 ---
@@ -33,7 +33,7 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Five regions: **Header**, **Side nav**, **Viewer** (with its own sticky **Viewer footer**), and **Status bar**. The tab bar appears above the viewer only when two or more tabs are open. A right-hand widget slot is reserved for v2.
+Five regions: **Header**, **Side nav**, **Viewer** (with its own sticky **Viewer footer**), and **Status bar**. The tab bar appears above the viewer only when two or more tabs are open. A right-hand widget slot is reserved for Phase 4.
 
 ## Header (full width, 1 row)
 
@@ -184,7 +184,7 @@ Click to focus a pane; click items, links, breadcrumbs, prev/next, header icons,
 | Viewer header | Sticky heading of the section in view |
 | Side nav header | Search field (replacing the search row), mode tabs |
 | Side nav footer | Widget actions, tabbed features (Pages / Outline / …) |
-| Right widget sidebar | v2 widgets, incl. context engine ([context engine](../architecture/context-engine.md)) |
+| Right widget sidebar | Phase 4 widgets, incl. context engine ([context engine](../architecture/context-engine.md)) |
 | Header ‹ › buttons | Optional back/forward |
 
 ## Theming

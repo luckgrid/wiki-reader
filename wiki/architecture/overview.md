@@ -3,7 +3,7 @@ id: WR-ARCH
 title: Architecture
 summary: Crate layout, the navigation core, hit-testing, and runtime model for wiki-reader.
 status: draft
-updated: 2026-09-28
+updated: 2026-09-30
 related: [rendering, context-engine, integrations]
 nav_order: 1
 ---
@@ -45,7 +45,7 @@ wiki-reader/
 └── fixtures/                  # sample collections incl. broken links, SUMMARY.md, deep trees
 ```
 
-The context engine ([context engine](context-engine.md)) and agent CLI are v2. They'll live in `wiki-reader-core/context` and a `cli` module, which is why `core` stays free of terminal code ([ADR-0006](../decisions/0006-reader-first.md)).
+The context engine ([context engine](context-engine.md)) and agent CLI are Phase 4. They'll live in `wiki-reader-core/context` and a `cli` module, which is why `core` stays free of terminal code ([ADR-0006](../decisions/0006-reader-first.md)).
 
 ## Navigation core (the heart of v1)
 

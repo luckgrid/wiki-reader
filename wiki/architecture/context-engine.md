@@ -3,7 +3,7 @@ id: WR-CONTEXT
 title: Context engine
 summary: How wiki-reader decides what is relevant right now — signals, resolution, ranking, and highlights.
 status: deferred
-updated: 2026-09-28
+updated: 2026-09-30
 related: [overview, integrations]
 nav_order: 2
 ---
@@ -11,7 +11,7 @@ nav_order: 2
 # Context engine
 
 > [!NOTE]
-> **Deferred to v2.** v1 is the wiki reader (tree + reader + footer). This draft is kept as the likely first widget in a future right-hand **widget sidebar** (a slot for custom features/plugins). The requirements aren't settled. Treat everything below as exploration, not spec.
+> **Deferred to Phase 4.** The current release is the wiki reader (tree + reader + footer). This draft is kept as the likely first widget in a future right-hand **widget sidebar** (a slot for custom features/plugins). The requirements aren't settled. Treat everything below as exploration, not spec.
 
 ## Pipeline
 
