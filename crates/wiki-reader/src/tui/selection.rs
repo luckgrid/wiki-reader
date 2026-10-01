@@ -151,7 +151,13 @@ fn row_piece(text: &str, sl: Option<&StyledLine>, c0: u16, c1: u16) -> Option<St
     } else {
         c1.max(c0)
     };
-    Some(slice_cols(text, c0, c1))
+    let piece = slice_cols(text, c0, c1);
+    // Backlink entry padding is content-area spaces; strip so copy is clean.
+    if trail {
+        Some(piece.trim_end().to_owned())
+    } else {
+        Some(piece)
+    }
 }
 
 /// Plain flowing text (not a table, code, rule or frontmatter box).

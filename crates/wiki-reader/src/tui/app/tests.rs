@@ -1330,6 +1330,12 @@ fn drag_select_backlink_drops_side_borders() {
         "side borders stripped: {:?}",
         copied[0]
     );
+    assert_eq!(
+        copied[0].trim_end(),
+        copied[0].as_str(),
+        "no trailing pad spaces: {:?}",
+        copied[0]
+    );
     assert!(
         copied[0].contains("Src Title"),
         "title kept: {:?}",
@@ -1632,6 +1638,20 @@ fn linked_from_backlink_in_tab_cycle_and_activate() {
             "selection bg on focused entry line {line} col {c0}"
         );
     }
+    // Wide view: selection must stop at the 100-col text cap, not fill the margin.
+    app.nav_visible = false;
+    let terminal = draw_app(&mut app, 160, 40);
+    let buf = terminal.backend().buffer();
+    let (past_x, past_y) = cell_xy(&app, title_line, 100);
+    assert!(
+        past_x < buf.area.width,
+        "col 100 must be on-screen in a 160-col view"
+    );
+    assert_ne!(
+        buf[(past_x, past_y)].bg,
+        sel_bg,
+        "selection must not spill past pane text width at ({past_x},{past_y})"
+    );
     // Unfocused: title stays link teal, summary is normal text (not link-teal).
     app.focused_item = None;
     // Keep the entry on-screen but cursor off it (cursor_line would recolour the row).
@@ -1665,14 +1685,20 @@ fn linked_from_backlink_in_tab_cycle_and_activate() {
 
 #[test]
 fn focused_ordinary_link_keeps_focus_bg_on_cursor_row() {
-    let md = "# T\n\nSee [here](missing.md) please.\n";
-    let (_d, mut app, _) = app_with_page(md);
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("README.md"),
+        "# T\n\nSee [here](other.md) please.\n",
+    )
+    .unwrap();
+    std::fs::write(dir.path().join("other.md"), "# Other\n").unwrap();
+    let mut app = App::new(dir.path()).unwrap();
     let _ = draw_app(&mut app, 80, 24);
     let link = app
         .doc
         .link_spans()
         .iter()
-        .find(|s| s.raw_target.contains("missing"))
+        .find(|s| s.raw_target.contains("other"))
         .expect("body link")
         .clone();
     let items = app.focus_list();
@@ -1697,9 +1723,17 @@ fn focused_ordinary_link_keeps_focus_bg_on_cursor_row() {
     let (x, y) = cell_xy(&app, link_line, link.segments[0].1.0);
     assert_eq!(
         buf[(x, y)].bg,
-        app.theme.focus_item,
-        "focus_item bg survives cursor row"
+        app.theme.selection,
+        "selection bg survives cursor row"
     );
+    assert_eq!(buf[(x, y)].fg, app.theme.link, "focused link keeps teal fg");
+    // Teal ▌ in the marker column (one cell left of text_x).
+    let marker_x = app.viewer_geom.text_x.saturating_sub(1);
+    assert!(
+        buf[(marker_x, y)].symbol().contains('▌'),
+        "teal ▌ on focused ordinary link marker"
+    );
+    assert_eq!(buf[(marker_x, y)].fg, app.theme.link, "marker ▌ is teal");
 }
 
 #[test]

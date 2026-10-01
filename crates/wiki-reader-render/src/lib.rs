@@ -1045,6 +1045,43 @@ mod tests {
     }
 
     #[test]
+    fn linked_from_ellipsis_pads_wide_title_to_right_border() {
+        // CJK glyphs are width 2; cutting mid-glyph undershoots `room` so without
+        // pad-after-… the closing │ would shift left.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::write(
+            root.join("src.md"),
+            "---\ntitle: 日本語タイトルですよ長い\n---\n\n# Src\n\nSee [dst](dst.md).\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("dst.md"), "# Dst\n\nBody.\n").unwrap();
+        let provider = FsProvider::open(root).unwrap();
+        let index = wiki_reader_core::Index::build(&provider).unwrap();
+        let key = PageKey {
+            collection_id: index.collection_id.clone(),
+            relative_path: std::path::PathBuf::from("dst.md"),
+        };
+        let src = provider.read(&key).unwrap();
+        let page = index.pages.get(&key);
+        let doc = render(&src, page, &key, &index, 20);
+        let title_line = doc
+            .lines
+            .iter()
+            .find(|l| l.contains('…') && l.contains('│'))
+            .expect("ellipsised title row");
+        assert!(
+            title_line.starts_with('│') && title_line.ends_with('│'),
+            "sides present: {title_line:?}"
+        );
+        assert_eq!(
+            title_line.width(),
+            20,
+            "ellipsis row must pad to full width: {title_line:?}"
+        );
+    }
+
+    #[test]
     fn expanded_frontmatter_snapshot() {
         let src = "---\ntitle: Hello\ntags:\n  - a\n  - b\nupdated: 2026-01-01\n---\n\n# Body\n";
         let index = wiki_reader_core::Index {

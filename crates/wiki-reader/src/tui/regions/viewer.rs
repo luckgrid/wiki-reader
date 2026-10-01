@@ -158,8 +158,9 @@ pub fn draw(
     let visible_h = usize::from(content.height);
     let scroll = usize::try_from(scroll).unwrap_or(0);
     let mut out_lines = Vec::with_capacity(visible_h);
+    // Block-action focus keeps yellow; ordinary/backlink links use selection bg.
     let focus_style = Style::default().bg(theme.focus_item).fg(theme.text);
-    let backlink_focus_bg = theme.selection;
+    let link_focus_bg = theme.selection;
     let focused_link = focused_item.and_then(|it| it.link_id);
     let focused_backlink =
         focused_link.is_some_and(|id| link_spans.iter().any(|s| s.id == id && s.backlink));
@@ -247,12 +248,25 @@ pub fn draw(
                     && Some(s.id) == focused_link
                     && s.segments.iter().any(|&(seg_line, _)| seg_line == line_no)
             });
+        let on_focused_ordinary_link = focused_link.is_some()
+            && !focused_backlink
+            && link_spans.iter().any(|s| {
+                !s.backlink
+                    && Some(s.id) == focused_link
+                    && s.segments.iter().any(|&(seg_line, _)| seg_line == line_no)
+            });
 
         // Marker column: focused backlink paints teal ▌ over the left │ in-content;
-        // pad stays blank so we don't double up. Cursor ▌ otherwise.
+        // pad stays blank so we don't double up. Ordinary focused links get a teal ▌
+        // here. Cursor ▌ otherwise.
         let mut spans: Vec<Span<'static>> = Vec::new();
         if on_focused_backlink {
             spans.push(Span::raw(" "));
+        } else if on_focused_ordinary_link {
+            spans.push(Span::styled(
+                "▌",
+                Style::default().fg(theme.link).bg(link_focus_bg),
+            ));
         } else if on_cursor {
             spans.push(Span::styled("▌", cursor_bg));
         } else {
@@ -303,7 +317,7 @@ pub fn draw(
                 focused_block_cols,
                 base,
                 focus_style,
-                backlink_focus_bg,
+                link_focus_bg,
                 theme,
                 on_cursor,
             ));
@@ -318,19 +332,25 @@ pub fn draw(
                 focused_block_cols,
                 base,
                 focus_style,
+                link_focus_bg,
                 theme,
             ));
         }
         if on_focused_backlink || on_cursor {
-            // Pad highlight across the full inner width (marker + content).
+            // Pad highlight to the text pane edge (not past the 100-col cap / right │).
             let used: usize = spans
                 .iter()
                 .map(|s| Span::raw(s.content.as_ref()).width())
                 .sum();
-            let pad = usize::from(inner_area.width).saturating_sub(used);
+            let target = if on_focused_backlink {
+                origin + text_width
+            } else {
+                usize::from(inner_area.width)
+            };
+            let pad = target.saturating_sub(used);
             if pad > 0 {
                 let bg = if on_focused_backlink {
-                    backlink_focus_bg
+                    link_focus_bg
                 } else {
                     theme.cursor_line
                 };
@@ -395,7 +415,7 @@ fn paint_styled_line(
     focused_block_cols: Option<(u16, u16)>,
     base: Style,
     focus_style: Style,
-    backlink_focus_bg: Color,
+    link_focus_bg: Color,
     theme: &Theme,
     on_cursor: bool,
 ) -> Vec<Span<'static>> {
@@ -430,9 +450,15 @@ fn paint_styled_line(
             if col >= c0 && col < c1 {
                 st = if is_focus && is_backlink {
                     // Selection bg; keep Link / BacklinkSummary fg.
-                    st.bg(backlink_focus_bg)
+                    st.bg(link_focus_bg)
                 } else if is_focus {
-                    focus_style
+                    if let Some(class) = class {
+                        // Ordinary focused link: selection bg + teal (link class) fg.
+                        theme.link_class(class).bg(link_focus_bg)
+                    } else {
+                        // Block actions keep yellow focus_item.
+                        focus_style
+                    }
                 } else if is_backlink {
                     // Title already teal via style_kind(Link); summary stays text.
                     st
@@ -476,9 +502,9 @@ fn paint_styled_line(
                 && ch == '│'
                 && col == 0
             {
-                ('▌', Style::default().fg(theme.link).bg(backlink_focus_bg))
+                ('▌', Style::default().fg(theme.link).bg(link_focus_bg))
             } else if focused_bl && matches!(run.kind, StyleKind::BacklinkBorder) {
-                (ch, theme.style_kind(run.kind).bg(backlink_focus_bg))
+                (ch, theme.style_kind(run.kind).bg(link_focus_bg))
             } else {
                 (ch, style_at(col, run.kind))
             };
@@ -502,7 +528,7 @@ fn paint_styled_line(
         if pad > 0 {
             spans.push(Span::styled(
                 " ".repeat(pad),
-                Style::default().bg(backlink_focus_bg),
+                Style::default().bg(link_focus_bg),
             ));
         }
     } else if !on_cursor {
@@ -534,6 +560,7 @@ fn styled_line(
     focused_block_cols: Option<(u16, u16)>,
     base: Style,
     focus_style: Style,
+    link_focus_bg: Color,
     theme: &Theme,
 ) -> Vec<Span<'static>> {
     let mut ranges: Vec<(u16, u16, Option<LinkClass>, bool)> = Vec::new();
@@ -573,7 +600,11 @@ fn styled_line(
         for &(c0, c1, class, is_focus) in &ranges {
             if col >= c0 && col < c1 {
                 next_style = if is_focus {
-                    focus_style
+                    if let Some(class) = class {
+                        theme.link_class(class).bg(link_focus_bg)
+                    } else {
+                        focus_style
+                    }
                 } else if let Some(class) = class {
                     theme.link_class(class)
                 } else {

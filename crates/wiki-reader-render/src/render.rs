@@ -1213,6 +1213,12 @@ impl<'a> LayoutState<'a> {
                 self.push_span(take, kind, src);
             }
             self.push_span("…".into(), kind, src);
+            // Pad after … — split_at_width can undershoot `room` on a wide glyph.
+            let leading = if with_sides { 2 } else { 0 };
+            let used = self.cur_width().saturating_sub(leading);
+            if used < avail {
+                self.push_span(" ".repeat(avail.saturating_sub(used)), kind, src);
+            }
         } else {
             let (take, _) = split_at_width(text, avail);
             self.push_span(take, kind, src);
