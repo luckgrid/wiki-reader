@@ -23,6 +23,8 @@ Phase 1 is closed. Detail later rows into spikes/acceptance only after Phase 2 d
 
 Detail each row into spikes/acceptance only after the Phase 2 dogfood notes in [phase-2-mvp.md](phase-2-mvp.md).
 
+Dogfood → Phase 3 feed (2026-09-30): start with **P3-07/11** (light-terminal contrast, eye default, nav placement); then chrome (P3-01/02/04); then P3-05/03; herdr (P3-09/10) after API; **P3-12** after ADR-0004 spike. Known formatted-view deviations (checkbox/`[NOTE]`/quote bar) stay unless they bite during freeze.
+
 ## Tasks
 
 | ID | Task | Reqs | Status | Notes |
