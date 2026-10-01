@@ -34,6 +34,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 - 2026-09-30: **feature freeze** through ≈ 2026-10-13 — bug fixes / papercuts only; each small PR with a snapshot or test + dated dogfood line. Watch: heading hierarchy, light-terminal contrast (P3-07), nav labels / resize persistence, search ergonomics, herdr key delivery, formatted-mode checkbox/`[NOTE]`/quote-bar markers (known deviation)
 - 2026-09-30: v0.1.0-alpha.2 cut (#76); clock continues on alpha.2
 - 2026-09-30: interim P0/P1 acceptance walk recorded below (code + tests + dogfood); **status stays `active`** until ≈ 2026-10-13 for the two-weeks-without-GUI verdict, then flip to `done`
+- 2026-09-30: Linked-from formatted underline uses dim `Rule` (same as H1/H2), not Heading colour
 
 ## Interim acceptance walk (2026-09-30)
 

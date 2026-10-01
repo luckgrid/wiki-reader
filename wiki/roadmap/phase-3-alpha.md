@@ -31,8 +31,8 @@ Dogfood → Phase 3 feed (2026-09-30): start with **P3-07/11** (light-terminal c
 |----|------|------|--------|-------|
 | P3-08 | Install via `cargo install` + release binaries | | done | daf8fc5; hygiene f90c378; release hardening 9012fce; [v0.1.0-alpha.1](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.0-alpha.1); [v0.1.0-alpha.2](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.0-alpha.2) |
 | P3-06 | Help overlay with clickable keys | | done | done via P2-20 (#71) |
-| P3-07 | Themes | | todo | wire stored theme key; include a herdr-matching preset |
-| P3-11 | Layout and theme config | C1 | todo | nav placement (left/right), syntax vs formatted view (eye toggle from P2-24a), and other layout options; owns config keys (nav width stays in session for P2-14); feature request from 2026-09-30 dogfood |
+| P3-07 | Themes | | todo | wire stored theme key; include a herdr-matching preset; fix fixed-RGB colours that look wrong on light terminals |
+| P3-11 | Layout and theme config | C1 | todo | nav placement (left/right), syntax vs formatted view (eye toggle from P2-24a), and other layout options; owns config keys (nav width stays in session for P2-14); feature request from 2026-09-30 dogfood; formatted mode still shows `[ ]`/`[x]` (and related `[NOTE]`/quote-bar marker residuals) |
 | P3-12 | Image diagrams and images (D1) | D1 | todo | was P2-24b; ADR-0004 spike → mermaid-rs-renderer / resvg / Kitty; alt-text fallback |
 | P3-01 | Sticky viewer section header | U1 | todo | |
 | P3-02 | Side nav header/footer sub-regions | U2 | todo | |
