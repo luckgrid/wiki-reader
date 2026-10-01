@@ -57,6 +57,12 @@ pub struct Theme {
     pub heading: [Color; 6],
     /// Alert colours by kind id (0 unused, 1=NOTE …).
     pub alert: [Color; 9],
+    /// Frontmatter status: accepted / active / done (was heading[2]).
+    pub status_ok: Color,
+    /// Frontmatter status: draft / proposed / wip (was heading[1]).
+    pub status_warn: Color,
+    /// Frontmatter status: planned / todo / open (was heading[3]).
+    pub status_plan: Color,
 }
 
 impl Default for Theme {
@@ -82,18 +88,18 @@ impl Default for Theme {
             tab_active: Color::Rgb(50, 60, 80),
             tab_inactive: Color::Rgb(35, 38, 48),
             focus_item: Color::Yellow,
-            link: Color::Blue,
+            link: Color::Cyan,
             link_broken: Color::Red,
             link_external: Color::Magenta,
             link_unsupported: Color::DarkGray,
             code_bg: Color::Rgb(30, 32, 36),
             quote_bar: Color::Rgb(80, 80, 100),
             heading: [
-                Color::Rgb(255, 120, 80),  // H1
-                Color::Rgb(255, 180, 60),  // H2
-                Color::Rgb(100, 200, 120), // H3
-                Color::Rgb(80, 180, 220),  // H4
-                Color::Rgb(160, 140, 220), // H5
+                Color::Cyan,               // H1 = accent
+                Color::Rgb(246, 201, 159), // H2 = peach
+                Color::Rgb(160, 165, 175), // H3 = text_secondary
+                Color::Rgb(160, 165, 175), // H4
+                Color::Rgb(160, 165, 175), // H5
                 Color::Rgb(180, 180, 180), // H6
             ],
             alert: [
@@ -107,6 +113,10 @@ impl Default for Theme {
                 Color::Rgb(140, 160, 220), // DECISION
                 Color::Rgb(220, 100, 120), // RISK
             ],
+            // Kept off the heading ramp so recolouring H1–H6 does not shift status pills.
+            status_ok: Color::Rgb(100, 200, 120),
+            status_warn: Color::Rgb(255, 180, 60),
+            status_plan: Color::Rgb(80, 180, 220),
         }
     }
 }
@@ -200,9 +210,9 @@ impl Theme {
     #[must_use]
     pub fn status_style(&self, status: &str) -> Style {
         let fg = match status.to_ascii_lowercase().as_str() {
-            "accepted" | "active" | "done" | "stable" | "approved" | "published" => self.heading[2],
-            "draft" | "proposed" | "review" | "doing" | "wip" => self.heading[1],
-            "planned" | "todo" | "open" => self.heading[3],
+            "accepted" | "active" | "done" | "stable" | "approved" | "published" => self.status_ok,
+            "draft" | "proposed" | "review" | "doing" | "wip" => self.status_warn,
+            "planned" | "todo" | "open" => self.status_plan,
             "deferred" | "superseded" | "deprecated" | "rejected" | "archived" => self.text_muted,
             _ => self.text,
         };

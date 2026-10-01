@@ -2991,7 +2991,7 @@ fn status_bar_pill_and_page_status() {
     assert!(row.contains(" VIEW "), "{row}");
     assert!(row.contains("accepted"), "status after date: {row}");
     let col = u16::try_from(row[..row.find("accepted").unwrap()].chars().count()).unwrap();
-    assert_eq!(buf[(col, y)].fg, app.theme.heading[2], "accepted is green");
+    assert_eq!(buf[(col, y)].fg, app.theme.status_ok, "accepted is green");
     let px = u16::try_from(row[..row.find(" VIEW ").unwrap()].chars().count()).unwrap() + 1;
     assert_eq!(buf[(px, y)].bg, app.theme.peach, "pill background");
 }

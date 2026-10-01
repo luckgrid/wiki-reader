@@ -488,6 +488,8 @@ impl<'a> LayoutState<'a> {
             Tag::Strong => self.style_stack.push(StyleKind::Strong),
             Tag::Strikethrough => self.style_stack.push(StyleKind::Strikethrough),
             Tag::Link { dest_url, .. } => {
+                // Marker before start_col so the link hit does not cover the bullet.
+                self.ensure_list_marker(src);
                 let col = u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(0);
                 let line = u32::try_from(self.styled.len()).unwrap_or(0);
                 self.in_link = Some(LinkBuild {
@@ -729,6 +731,8 @@ impl<'a> LayoutState<'a> {
         } else {
             t.to_owned()
         };
+        // Colour emoji ignore terminal fg; ASCII +/- take the text colour.
+        let text = text.replace('➕', "+").replace('➖', "-");
         if self.heading_level.is_some() {
             self.heading_text.push_str(&text);
         }
@@ -742,6 +746,7 @@ impl<'a> LayoutState<'a> {
     }
 
     fn inline_code(&mut self, t: &CowStr<'_>, src: u32) {
+        self.ensure_list_marker(src);
         let s = t.to_string();
         if let Some(lb) = self.in_link.as_mut() {
             lb.text.push_str(&s);

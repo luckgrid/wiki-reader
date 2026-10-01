@@ -92,6 +92,71 @@ mod tests {
     }
 
     #[test]
+    fn list_item_starting_with_inline_code_gets_marker_first() {
+        for (src, marker_prefix) in [
+            ("- `code` only\n- `more` item\n", "• "),
+            ("1. `first` item\n2. `second` item\n", "1. "),
+        ] {
+            let doc = render_src(src, 40);
+            let items: Vec<_> = doc
+                .styled
+                .iter()
+                .filter(|l| l.spans.iter().any(|s| s.kind == StyleKind::InlineCode))
+                .collect();
+            assert!(
+                items.len() >= 2,
+                "expected ≥2 code items in {src:?}, got {:?}",
+                doc.lines
+            );
+            for line in &items {
+                assert_eq!(
+                    line.spans[0].kind,
+                    StyleKind::ListMarker,
+                    "marker must lead: {:?}",
+                    line.spans
+                );
+                assert!(
+                    line.spans[0].text.starts_with(marker_prefix)
+                        || line.spans[0].text.contains('.'),
+                    "unexpected marker {:?} for {src:?}",
+                    line.spans[0].text
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn list_item_starting_with_link_marker_precedes_hit() {
+        let src = "- [label](target.md) rest\n";
+        let doc = render_src(src, 40);
+        let line = doc
+            .styled
+            .iter()
+            .find(|l| l.spans.iter().any(|s| s.kind == StyleKind::Link))
+            .expect("link row");
+        assert_eq!(line.spans[0].kind, StyleKind::ListMarker);
+        let marker_w = line.spans[0].text.width();
+        let bl = doc.links.first().expect("link span");
+        assert_eq!(
+            usize::from(bl.segments[0].1.0),
+            marker_w,
+            "link hit must start after marker: segments={:?} marker={:?}",
+            bl.segments,
+            line.spans[0].text
+        );
+    }
+
+    #[test]
+    fn plus_minus_emoji_render_as_ascii() {
+        let src = "- ➕ good\n- ➖ bad\n";
+        let doc = render_src(src, 40);
+        let plain = doc.lines.join("\n");
+        assert!(plain.contains("+ good"), "{plain}");
+        assert!(plain.contains("- bad"), "{plain}");
+        assert!(!plain.contains('➕') && !plain.contains('➖'), "{plain}");
+    }
+
+    #[test]
     fn code_block_preserves_newlines() {
         let src = "```\nlet x = 1;\nlet y = 2;\n```\n";
         let doc = render_src(src, 40);

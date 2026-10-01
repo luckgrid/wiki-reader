@@ -42,6 +42,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 - 2026-10-01: dogfood round 4 (PR 3): reopened nav no longer starts mid-list (P2-R39); content-search results land in place with the phrase highlighted, `…` on cut-off result rows and bottom padding in Search, tighter Help dividers (P2-33)
 - 2026-10-01: final review before alpha.3: manual pass in a real terminal found no visual bugs in rounds 2–4 (tabs, popups, content-search landing, raw wrap, hide/show nav, drag-select and paste). A code review then fixed: Help on a terminal under 22 columns panicked; a trailing space in a Content query lost the phrase highlight; clicking in the View left the search highlight; a resize or reload kept a stale selection; a raw-view resize re-read the file and dropped the syntax colours (now re-wraps in place); the raw status bar column restarted on each wrapped row
 - 2026-10-01: dogfood rounds 2–4 merged to main (#83, #84, #85); v0.1.0-alpha.3 cut; clock continues on alpha.3
+- 2026-10-01: dogfood round 5 (PR 1): numbered/bulleted items that start with code or a link keep their marker first and no longer paint as one code band (P2-34); ADR ➕/➖ render as ASCII `+`/`-` so they take the text colour (P2-35); H1 teal, H2 peach, H3–H5 light gray, links teal; status pills keep their own colours (P2-36)
 
 ## Interim acceptance walk (2026-09-30)
 
@@ -131,6 +132,9 @@ Judged from tests, dogfood QA, and code — not a full interactive sweep of ever
 | P2-R37 | Table cell wider than the pane no longer spills out above the table | D1 | done | `push_span` wrapped cell text at pane width |
 | P2-R39 | Reopened nav starts mid-list: footer navigation while the nav was hidden scrolled the list against a 1-row viewport | N4 | done | round 4; the viewport only updates while the nav is drawn, and a list that fits always starts under the search bar |
 | P2-33 | Search landing and popup polish: a content result keeps the page in place (centred only if off-screen), the phrase is highlighted in peach with the cursor inverted on it; cut-off rows end in `…`; bottom breathing room; Help dividers one row above, none below | U3 | done | round 4 |
+| P2-34 | List items that start with inline code or a link emit the marker first; inline code no longer full-row shades adjacent items into one band | D1 | done | round 5 PR 1 |
+| P2-35 | Consequence ➕/➖ emoji render as ASCII `+`/`-` so they take the text colour | D1 | done | round 5 PR 1 |
+| P2-36 | Heading ramp: H1 accent/teal, H2 peach, H3–H5 light gray; internal links teal; status pills use dedicated tokens | U3 | done | round 5 PR 1 |
 | P2-R38 | Copy fixes: empty table cells kept, wrapped cells rejoined, OSC 52 cap on the encoded payload (75 KB of text), held drag keeps scrolling | CP | done | round 2 follow-ups (PR 2) |
 | P2-24b | Image diagrams and images | D1 | moved | slipped to Phase 3 as P3-12 (2026-09-30); needs ADR-0004 herdr/Kitty spike + deps |
 

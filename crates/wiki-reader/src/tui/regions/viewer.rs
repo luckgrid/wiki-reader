@@ -455,12 +455,11 @@ fn paint_styled_line(
     }
     flush(&mut buf, style, &mut spans);
 
-    // Full-row code/quote shading (glyphs alone leave a ragged right edge).
+    // Full-row shade for fenced blocks / quotes only. InlineCode keeps code_bg
+    // on its own glyphs so adjacent list items do not paint as one solid band.
     if !on_cursor {
         let shade = sl.spans.iter().find_map(|s| match s.kind {
-            StyleKind::CodeBlock | StyleKind::CodeLang | StyleKind::InlineCode => {
-                Some(theme.code_bg)
-            }
+            StyleKind::CodeBlock | StyleKind::CodeLang => Some(theme.code_bg),
             StyleKind::Quote => Some(theme.quote_bar),
             _ => None,
         });
