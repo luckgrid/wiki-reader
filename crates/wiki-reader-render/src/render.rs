@@ -552,23 +552,12 @@ impl<'a> LayoutState<'a> {
                 self.headings.push((slug, rendered.saturating_add(1)));
                 self.commit_line(src);
                 if self.formatted {
-                    // Colour-matched rules (Heading kind, not dim Rule) so the cue
-                    // still reads when a list sits immediately below.
-                    let rule_w = match level {
-                        1 | 2 => self.width.min(40),
-                        3 => self.width.min(24),
-                        _ => 0,
-                    };
-                    if rule_w > 0 {
-                        self.push_span("─".repeat(rule_w), StyleKind::Heading(level), src);
+                    if level <= 2 {
+                        self.push_span("─".repeat(self.width.min(40)), StyleKind::Rule, src);
                         self.commit_line(src);
-                        // Own blank: next list's ensure_block_gap no-ops, never flush.
-                        self.styled.push(StyledLine {
-                            spans: Vec::new(),
-                            source_line: src,
-                        });
                     } else {
-                        // H4–H6: two blanks → one more than a normal block gap.
+                        // Two blanks: next block's ensure_block_gap no-ops, leaving
+                        // one more empty line than a normal block gap.
                         self.styled.push(StyledLine {
                             spans: Vec::new(),
                             source_line: src,
