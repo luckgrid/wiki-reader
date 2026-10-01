@@ -27,7 +27,7 @@ Detail each row into spikes/acceptance only after the Phase 2 dogfood notes in [
 
 | ID | Task | Reqs | Status | Notes |
 |----|------|------|--------|-------|
-| P3-08 | Install via `cargo install` + release binaries | | done | daf8fc5; hygiene f90c378; release hardening 9012fce; [v0.1.0-alpha.1](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.0-alpha.1) |
+| P3-08 | Install via `cargo install` + release binaries | | done | daf8fc5; hygiene f90c378; release hardening 9012fce; [v0.1.0-alpha.1](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.0-alpha.1); [v0.1.0-alpha.2](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.0-alpha.2) |
 | P3-06 | Help overlay with clickable keys | | done | done via P2-20 (#71) |
 | P3-07 | Themes | | todo | wire stored theme key; include a herdr-matching preset |
 | P3-11 | Layout and theme config | C1 | todo | nav placement (left/right), syntax vs formatted view (eye toggle from P2-24a), and other layout options; owns config keys (nav width stays in session for P2-14); feature request from 2026-09-30 dogfood |
