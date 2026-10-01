@@ -418,10 +418,23 @@ impl<'a> LayoutState<'a> {
                 self.ensure_list_marker(src);
             }
             Tag::Heading { level, .. } => {
+                let lv = heading_u8(level);
                 self.ensure_block_gap(src);
+                // H3 and under: one more blank above than below (the gap below is the
+                // normal single block gap), so a small heading groups with its body.
+                let n = self.styled.len();
+                if lv >= 3
+                    && n >= 2
+                    && self.last_line_blank()
+                    && !self.styled[n - 2].spans.is_empty()
+                {
+                    self.styled.push(StyledLine {
+                        spans: Vec::new(),
+                        source_line: src,
+                    });
+                }
                 self.mark_block(src);
                 self.cur_src = src;
-                let lv = heading_u8(level);
                 self.heading_level = Some(lv);
                 self.heading_text.clear();
                 self.style_stack.push(StyleKind::Heading(lv));
@@ -567,18 +580,8 @@ impl<'a> LayoutState<'a> {
                 if level <= 2 {
                     self.push_span("─".repeat(self.width.min(40)), StyleKind::Rule, src);
                     self.commit_line(src);
-                } else {
-                    // Two blanks: next block's ensure_block_gap no-ops, leaving
-                    // one more empty line than a normal block gap.
-                    self.styled.push(StyledLine {
-                        spans: Vec::new(),
-                        source_line: src,
-                    });
-                    self.styled.push(StyledLine {
-                        spans: Vec::new(),
-                        source_line: src,
-                    });
                 }
+                // H3+: nothing extra below; the next block's normal gap is one blank.
                 self.heading_text.clear();
             }
             TagEnd::BlockQuote(_) => {

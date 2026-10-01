@@ -159,7 +159,9 @@ pub fn draw(
     let scroll = usize::try_from(scroll).unwrap_or(0);
     let mut out_lines = Vec::with_capacity(visible_h);
     // Block-action focus keeps yellow; ordinary/backlink links use selection bg.
-    let focus_style = Style::default().bg(theme.focus_item).fg(theme.text);
+    // Focused block actions (frontmatter, code titles, expand/copy): the active tab /
+    // footer link colours, dark text on peach.
+    let focus_style = Style::default().bg(theme.peach).fg(theme.on_peach);
     let link_focus_bg = theme.selection;
     let focused_link = focused_item.and_then(|it| it.link_id);
     let focused_backlink =
@@ -470,7 +472,7 @@ fn paint_styled_line(
                         // Ordinary focused link: selection bg + teal (link class) fg.
                         theme.link_class(class).bg(link_focus_bg)
                     } else {
-                        // Block actions keep yellow focus_item.
+                        // Block actions: peach bg, dark text (like the active tab).
                         focus_style
                     }
                 } else if is_backlink {

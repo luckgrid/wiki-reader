@@ -39,8 +39,6 @@ pub struct Theme {
     pub tab_active: Color,
     /// Inactive tab fill.
     pub tab_inactive: Color,
-    /// Focused Tab-cycle item.
-    pub focus_item: Color,
     /// Internal link text.
     pub link: Color,
     /// Broken / unresolved link.
@@ -87,7 +85,6 @@ impl Default for Theme {
             search_box: Color::DarkGray,
             tab_active: Color::Rgb(50, 60, 80),
             tab_inactive: Color::Rgb(35, 38, 48),
-            focus_item: Color::Yellow,
             link: Color::Cyan,
             link_broken: Color::Red,
             link_external: Color::Magenta,

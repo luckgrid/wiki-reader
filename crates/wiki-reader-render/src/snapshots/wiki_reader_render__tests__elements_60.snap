@@ -1,6 +1,5 @@
 ---
 source: crates/wiki-reader-render/src/lib.rs
-assertion_line: 858
 expression: text
 ---
 ── frontmatter ▸ ───────────────────────────────────────────
@@ -16,6 +15,7 @@ pane is narrow.
 Heading two
 ────────────────────────────────────────
 
+
 Heading three
 
 
@@ -26,7 +26,6 @@ Heading five
 
 
 Heading six
-
 
 Lists
 ────────────────────────────────────────

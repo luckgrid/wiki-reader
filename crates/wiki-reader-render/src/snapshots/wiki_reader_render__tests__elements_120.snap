@@ -1,6 +1,5 @@
 ---
 source: crates/wiki-reader-render/src/lib.rs
-assertion_line: 858
 expression: text
 ---
 ── frontmatter ▸ ───────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -14,6 +13,7 @@ instead of mid-word when the pane is narrow.
 Heading two
 ────────────────────────────────────────
 
+
 Heading three
 
 
@@ -24,7 +24,6 @@ Heading five
 
 
 Heading six
-
 
 Lists
 ────────────────────────────────────────

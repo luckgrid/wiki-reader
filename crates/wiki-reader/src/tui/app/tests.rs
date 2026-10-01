@@ -1684,6 +1684,40 @@ fn linked_from_backlink_in_tab_cycle_and_activate() {
 }
 
 #[test]
+fn focused_block_action_uses_peach_bg_and_dark_text() {
+    // Frontmatter / code-title / expand / copy targets: the active tab and footer link
+    // colours (dark text on peach), not yellow with white text.
+    let md = "---\ntitle: T\n---\n\n# T\n\n```rust\nfn main() {}\n```\n";
+    let (_d, mut app, _) = app_with_page(md);
+    let _ = draw_app(&mut app, 80, 30);
+    let items = app.focus_list();
+    let idx = items
+        .iter()
+        .position(|it| it.kind == FocusTarget::BlockAction)
+        .expect("a block action");
+    let line = items[idx].line.expect("block action line");
+    let col = items[idx].cols.0;
+    app.update(Action::FocusViewer);
+    for on_cursor_row in [false, true] {
+        app.focused_item = Some(idx);
+        app.cursor_line = if on_cursor_row { line } else { 0 };
+        let terminal = draw_app(&mut app, 80, 30);
+        let buf = terminal.backend().buffer();
+        let (x, y) = cell_xy(&app, line, col);
+        assert_eq!(
+            buf[(x, y)].bg,
+            app.theme.peach,
+            "bg on_cursor_row={on_cursor_row}"
+        );
+        assert_eq!(
+            buf[(x, y)].fg,
+            app.theme.on_peach,
+            "fg on_cursor_row={on_cursor_row}"
+        );
+    }
+}
+
+#[test]
 fn focused_ordinary_link_keeps_focus_bg_on_cursor_row() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(

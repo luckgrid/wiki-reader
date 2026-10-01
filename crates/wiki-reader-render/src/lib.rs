@@ -1145,6 +1145,29 @@ mod tests {
     }
 
     #[test]
+    fn small_headings_have_more_space_above_than_below() {
+        // H3 and under: two blank rows above, one below. H1/H2 keep their rule.
+        for lv in 3..=6 {
+            let hashes = "#".repeat(lv);
+            let src = format!("Intro paragraph.\n\n{hashes} Small\n\nBody paragraph.\n");
+            let doc = render_src(&src, 60);
+            let at = doc
+                .lines
+                .iter()
+                .position(|l| l == "Small")
+                .unwrap_or_else(|| panic!("H{lv} line in {:?}", doc.lines));
+            assert_eq!(doc.lines[at - 1], "", "H{lv}: blank above");
+            assert_eq!(doc.lines[at - 2], "", "H{lv}: second blank above");
+            assert!(!doc.lines[at - 3].is_empty(), "H{lv}: exactly two above");
+            assert_eq!(doc.lines[at + 1], "", "H{lv}: blank below");
+            assert!(!doc.lines[at + 2].is_empty(), "H{lv}: exactly one below");
+        }
+        // No leading blank rows when a small heading opens the document.
+        let doc = render_src("### First\n\nBody.\n", 60);
+        assert_eq!(doc.lines[0], "First", "{:?}", doc.lines);
+    }
+
+    #[test]
     fn table_link_after_a_wrap_break_maps_onto_its_own_text() {
         // `wrap_cell` drops the space at each break, so a link after the break must
         // be located in the source text, not by summing part widths.

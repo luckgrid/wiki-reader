@@ -269,4 +269,4 @@ Click to focus a pane; click items, links, breadcrumbs, prev/next, header icons,
 
 ## Theming
 
-Semantic tokens only (`tui/theme.rs`): `surface`, `surface_muted`, `border`, `border_focus`, `text`, `text_muted`, `accent`, `cursor_line`, `search_box`, `tab_active`, `tab_inactive`, `focus_item`, `link`, `link_broken`, `link_external`, `link_unsupported`, `code_bg`, `quote_bar`, `heading[1..6]`, `alert[…]`. The `theme` config key is stored but not wired yet; presets arrive with [Phase 3](../roadmap/phase-3-alpha.md).
+Semantic tokens only (`tui/theme.rs`): `surface`, `surface_muted`, `border`, `border_focus`, `text`, `text_muted`, `accent`, `cursor_line`, `search_box`, `tab_active`, `tab_inactive`, `peach` / `on_peach` (active tab, footer links, focused block actions), `link`, `link_broken`, `link_external`, `link_unsupported`, `code_bg`, `quote_bar`, `heading[1..6]`, `alert[…]`. The `theme` config key is stored but not wired yet; presets arrive with [Phase 3](../roadmap/phase-3-alpha.md).
