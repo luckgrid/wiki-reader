@@ -3,9 +3,9 @@ source: crates/wiki-reader/src/tui/app/tests.rs
 assertion_line: 65
 expression: out
 ---
- Worked Example Wiki                                  ○ ◫ ✕ 
-┌View──────────────────────────────────────────────────────┐
-│▌── frontmatter ▶ ───────────────────────                 │
+ Worked Example Wiki                                    ◫ ✕ 
+┌┤ README × ├──────────────────────────────────────────────┐
+│▌── frontmatter ▶ ────────────────────────────────────────│
 │                                                          │
 │ # Worked Example Wiki                                    │
 │                                                          │

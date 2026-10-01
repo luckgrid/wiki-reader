@@ -1,4 +1,4 @@
-//! Header region (H1): breadcrumb + ○/◉ (syntax/formatted) / ◫ / ✕.
+//! Header region (H1): breadcrumb + ◫ / ✕.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -16,21 +16,14 @@ fn col_width(s: &str) -> u16 {
 }
 
 /// Draw the header and register breadcrumb / icon hits.
-pub fn draw(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    crumbs: &[Crumb],
-    formatted: bool,
-    theme: &Theme,
-    hits: &mut HitMap,
-) {
+pub fn draw(frame: &mut Frame<'_>, area: Rect, crumbs: &[Crumb], theme: &Theme, hits: &mut HitMap) {
     let area = layout::chrome_pad(area);
     if area.width == 0 {
         return;
     }
 
-    // Trailer: " ○ ◫ ✕" → 6 columns.
-    let icon_w: u16 = 6;
+    // Trailer: " ◫ ✕" → 4 columns.
+    let icon_w: u16 = 4;
     let trail_w = area.width.saturating_sub(icon_w);
     let trail = truncate_crumbs(crumbs, usize::from(trail_w));
 
@@ -67,19 +60,9 @@ pub fn draw(
         x = x.saturating_add(w);
     }
 
-    // Glyph columns within padded area (right-aligned): ○/◉ ◫ ✕
-    let eye_x = area.x.saturating_add(area.width.saturating_sub(5));
+    // Glyph columns within padded area (right-aligned): ◫ ✕
     let toggle_x = area.x.saturating_add(area.width.saturating_sub(3));
     let quit_x = area.x.saturating_add(area.width.saturating_sub(1));
-    hits.push(
-        Rect {
-            x: eye_x,
-            y: area.y,
-            width: 1,
-            height: 1,
-        },
-        Hit::ViewToggle,
-    );
     hits.push(
         Rect {
             x: toggle_x,
@@ -105,9 +88,6 @@ pub fn draw(
     if pad > 0 {
         line_spans.push(Span::raw(" ".repeat(usize::from(pad))));
     }
-    // ◉ = formatted on; ○ = syntax (markers visible).
-    let eye = if formatted { " ◉" } else { " ○" };
-    line_spans.push(Span::styled(eye, theme.accent()));
     line_spans.push(Span::styled(" ◫", theme.accent()));
     line_spans.push(Span::styled(" ✕", theme.accent()));
 

@@ -50,13 +50,14 @@ Both indexes are computed once per layout and stay valid across focus changes.
 
 Headings (distinct per level), paragraphs with wrapping, bold/italic/strike/inline code, ordered/unordered/task lists (nested), blockquotes and GitHub-style alerts (`> [!NOTE]`, plus custom `goal`/`decision`/`risk`), fenced code with theme `StyleKind` spans (not syntect), tables (fit to width, wrap cells; too-wide tables fall back to an unwrapped dump with a note), links (styled, focusable), horizontal rules, and frontmatter as a collapsible properties block (every YAML key, aligned, with lists shown as lists). Top-level blocks are separated by one blank line; list items stay tight; quote and alert continuation rows keep their `│` bar.
 
-## Syntax and formatted views
+## Markers stay visible
 
-Rendered mode has two presentations ([ADR-0012](../decisions/0012-syntax-vs-formatted.md)). **Syntax** (the default) keeps markdown markers visible. **Formatted** drops them at layout time (`RenderOpts.formatted`): no `#`, `**`, backticks, fence lines, or link brackets and URLs; H1 and H2 get an underline rule, H3-H6 extra spacing, and code blocks a language label. Because markers are omitted as spans are pushed, link column geometry, the source map, and block actions stay correct in both. The header eye (`○`/`◉`) toggles it, and the choice is saved with the session.
+Rendered mode keeps markdown markers visible (`#`, `**`, backticks, fences, link brackets), so link column geometry, the source map and block actions line up with the visible spans. There is no marker-free presentation: the formatted view and its eye toggle were removed ([ADR-0014](../decisions/0014-remove-formatted-view-toggle.md), which supersedes [ADR-0012](../decisions/0012-syntax-vs-formatted.md)).
 
 ## Raw view
 
 - Syntax-highlighted markdown via syntect's markdown grammar (off the UI thread, with a cache), with a line-number gutter.
+- Long source lines **soft-wrap** to the pane width (breaking after spaces, so the rows concatenate back to the source line). The gutter number appears on a line's first row only. Highlight runs, link geometry and block/heading positions are re-sliced per row, and the app maps display rows to source lines for the cursor and `$EDITOR` jumps.
 - Same cursor line as rendered mode.
 - Always available, even if rendering fails. It is the universal fallback.
 

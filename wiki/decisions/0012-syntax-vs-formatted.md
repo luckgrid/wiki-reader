@@ -2,14 +2,14 @@
 id: WR-ADR-0012
 title: "ADR-0012: Syntax vs formatted rendered view"
 summary: Raw stays on r; an eye toggle switches Rendered between syntax (markers visible) and formatted (markers hidden). Default is syntax until dogfood says otherwise; config key waits for P3-11.
-status: accepted
+status: superseded
 updated: 2026-09-30
 related: [0011-renderer-source, phase-2-mvp]
 ---
 
 # ADR-0012: Syntax vs formatted rendered view
 
-**Status:** Accepted · **Date:** 2026-09-30
+**Status:** Superseded by [ADR-0014](0014-remove-formatted-view-toggle.md) · **Date:** 2026-09-30
 
 ## Context
 

@@ -85,7 +85,7 @@ pub fn draw(
     styled: Option<&[StyledLine]>,
     link_spans: &[LinkSpan],
     highlights: Option<&[Vec<HlSpan>]>,
-    show_gutter: bool,
+    gutter: Option<&[Option<u32>]>,
     scroll: u32,
     cursor_line: u32,
     cursor_col: u16,
@@ -97,6 +97,8 @@ pub fn draw(
     prev_label: Option<&str>,
     next_label: Option<&str>,
     footer_focus: Option<FocusTarget>,
+    tabs: &[wiki_reader_core::nav::Tab],
+    active_tab: usize,
     theme: &Theme,
     hits: &mut HitMap,
 ) -> ViewerGeom {
@@ -116,10 +118,12 @@ pub fn draw(
         hits,
     );
 
+    let tab_bar = crate::tui::regions::tabs::titles(area, tabs, active_tab, focused, theme, hits);
+
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(theme.border(focused))
-        .title("View")
+        .title(tab_bar)
         .title_bottom(footer.left)
         .title_bottom(footer.right);
     let bordered = block.inner(area);
@@ -141,6 +145,7 @@ pub fn draw(
         height: inner_area.height,
     };
 
+    let show_gutter = gutter.is_some();
     let gutter_w: u16 = if show_gutter { 6 } else { 0 };
     let geom = ViewerGeom {
         text_x: content.x.saturating_add(gutter_w),
@@ -251,9 +256,13 @@ pub fn draw(
             spans.push(Span::raw(" "));
         }
 
-        if show_gutter {
-            let n = src_idx.saturating_add(1);
-            spans.push(Span::styled(format!("{n:4}│ "), gutter_style));
+        if let Some(numbers) = gutter {
+            // Soft-wrapped continuation rows carry no number.
+            let label = match numbers.get(src_idx).copied().flatten() {
+                Some(n) => format!("{n:4}│ "),
+                None => "    │ ".to_owned(),
+            };
+            spans.push(Span::styled(label, gutter_style));
         }
 
         if let Some(hl_lines) = highlights
@@ -394,12 +403,18 @@ fn paint_styled_line(
 
     let style_at = |col: u16, kind: StyleKind| -> Style {
         let mut st = theme.style_kind(kind);
-        if on_cursor {
-            st = st.bg(theme.cursor_line);
-        } else if !matches!(
+        let flat = !matches!(
             kind,
             StyleKind::CodeBlock | StyleKind::CodeLang | StyleKind::InlineCode | StyleKind::Quote
-        ) {
+        );
+        if on_cursor {
+            st = st.bg(theme.cursor_line);
+            // Same text colour on and off the cursor line (the frontmatter label
+            // used to read gray until the cursor left it).
+            if flat {
+                st = st.fg(theme.text);
+            }
+        } else if flat {
             st = st.patch(base);
         }
         for &(c0, c1, class, is_focus) in &ranges {

@@ -7,6 +7,8 @@ use wiki_reader_core::parse::{self, MdLink};
 use wiki_reader_core::provider::{FsProvider, PageKey};
 use wiki_reader_render::{LinkClass, LinkId, LinkSpan};
 
+use super::text_col;
+
 /// Kind of a Tab-cycle focus item.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FocusTarget {
@@ -90,15 +92,37 @@ pub trait ViewerDoc {
 }
 
 /// Raw source document backed by provider text + parsed metadata.
+///
+/// Source lines are soft-wrapped into display rows by [`RawDoc::wrapped`];
+/// `lines`, links, blocks and highlights are all in display-row terms, and the
+/// `rows` map says which source line each row came from.
 #[derive(Debug, Clone)]
 pub struct RawDoc {
+    /// Display rows (soft-wrapped source lines).
     lines: Vec<String>,
+    /// Unwrapped source lines.
+    src_lines: Vec<String>,
+    /// Per display row: (0-based source line, char offset of the row in it).
+    rows: Vec<(u32, usize)>,
+    /// First display row of each source line.
+    first_row: Vec<u32>,
+    /// Gutter number per display row: `Some` on a source line's first row.
+    numbers: Vec<Option<u32>>,
+    /// Block starts, 1-based source lines.
+    src_blocks: Vec<u32>,
+    /// Block starts in 1-based display rows.
     blocks: Vec<u32>,
-    headings: Vec<(String, u32)>,
+    /// Heading slugs with 1-based source lines.
+    src_headings: Vec<(String, u32)>,
+    /// Link geometry on source lines (one segment each).
+    src_links: Vec<LinkSpan>,
+    /// Link geometry on display rows.
     links: Vec<LinkSpan>,
     word_count: u32,
     updated: String,
-    /// Syntect highlight runs per source line (parallel to `lines`).
+    /// Syntect runs per source line (parallel to `src_lines`).
+    src_highlights: Vec<Vec<crate::tui::highlight::HlSpan>>,
+    /// Syntect runs per display row (parallel to `lines`).
     pub highlights: Vec<Vec<crate::tui::highlight::HlSpan>>,
 }
 
@@ -155,20 +179,159 @@ impl RawDoc {
         };
         let link_spans = link_spans_from_md(&lines, &md_links, from, index, provider);
         // ponytail: highlights filled async by App; draw falls back to plain until then
-        Self {
-            lines,
-            blocks,
-            headings,
-            links: link_spans,
+        let mut doc = Self {
+            lines: Vec::new(),
+            src_lines: lines,
+            rows: Vec::new(),
+            first_row: Vec::new(),
+            numbers: Vec::new(),
+            src_blocks: blocks,
+            blocks: Vec::new(),
+            src_headings: headings,
+            src_links: link_spans,
+            links: Vec::new(),
             word_count,
             updated,
+            src_highlights: Vec::new(),
             highlights: Vec::new(),
+        };
+        doc.relayout(0);
+        doc
+    }
+
+    /// Soft-wrap source lines to `width` display columns (`0` = no wrapping).
+    #[must_use]
+    pub fn wrapped(mut self, width: u16) -> Self {
+        self.relayout(width);
+        self
+    }
+
+    fn relayout(&mut self, width: u16) {
+        self.lines.clear();
+        self.rows.clear();
+        self.first_row.clear();
+        self.numbers.clear();
+        // (source line, row index, display col range of the row within the line)
+        let mut row_cols: Vec<Vec<(u32, u16, u16)>> = Vec::with_capacity(self.src_lines.len());
+        for (src, line) in self.src_lines.iter().enumerate() {
+            let src = u32::try_from(src).unwrap_or(u32::MAX);
+            self.first_row
+                .push(u32::try_from(self.lines.len()).unwrap_or(u32::MAX));
+            let chars: Vec<char> = line.chars().collect();
+            let starts = wrap_starts(&chars, usize::from(width));
+            let mut cols = Vec::with_capacity(starts.len());
+            let mut col_at = 0u16;
+            for (k, &start) in starts.iter().enumerate() {
+                let end = starts.get(k + 1).copied().unwrap_or(chars.len());
+                let text: String = chars[start..end].iter().collect();
+                let w = text_col::line_width(&text);
+                cols.push((
+                    u32::try_from(self.lines.len()).unwrap_or(u32::MAX),
+                    col_at,
+                    col_at.saturating_add(w),
+                ));
+                col_at = col_at.saturating_add(w);
+                self.rows.push((src, start));
+                self.numbers
+                    .push((start == 0).then_some(src.saturating_add(1)));
+                self.lines.push(text);
+            }
+            row_cols.push(cols);
+        }
+        let to_row = |src1: u32| -> u32 {
+            let src0 = usize::try_from(src1.saturating_sub(1)).unwrap_or(usize::MAX);
+            self.first_row
+                .get(src0)
+                .copied()
+                .unwrap_or_else(|| u32::try_from(self.lines.len()).unwrap_or(u32::MAX))
+                .saturating_add(1)
+        };
+        self.blocks = self.src_blocks.iter().map(|&b| to_row(b)).collect();
+        self.links = self
+            .src_links
+            .iter()
+            .map(|l| {
+                let mut segments = Vec::new();
+                for &(src, (c0, c1)) in &l.segments {
+                    let rows = usize::try_from(src).ok().and_then(|i| row_cols.get(i));
+                    match rows {
+                        Some(rows) if c0 < c1 => {
+                            for &(row, r0, r1) in rows {
+                                let a = c0.max(r0);
+                                let b = c1.min(r1);
+                                if a < b {
+                                    segments.push((row, (a - r0, b - r0)));
+                                }
+                            }
+                        }
+                        Some(rows) => {
+                            let row = rows.first().map_or(src, |r| r.0);
+                            segments.push((row, (c0, c1)));
+                        }
+                        None => segments.push((src, (c0, c1))),
+                    }
+                }
+                LinkSpan {
+                    segments,
+                    ..l.clone()
+                }
+            })
+            .collect();
+        self.rebuild_highlights();
+    }
+
+    fn rebuild_highlights(&mut self) {
+        self.highlights.clear();
+        if self.src_highlights.is_empty() {
+            return;
+        }
+        for (k, &(src, start)) in self.rows.iter().enumerate() {
+            let end = self
+                .rows
+                .get(k + 1)
+                .map_or(
+                    usize::MAX,
+                    |&(next_src, next)| {
+                        if next_src == src { next } else { usize::MAX }
+                    },
+                );
+            let runs = usize::try_from(src)
+                .ok()
+                .and_then(|i| self.src_highlights.get(i));
+            self.highlights
+                .push(runs.map_or_else(Vec::new, |r| slice_runs(r, start, end)));
         }
     }
 
-    /// Replace syntect highlights (from a background job).
+    /// Replace syntect highlights (from a background job; one entry per source line).
     pub fn set_highlights(&mut self, highlights: Vec<Vec<crate::tui::highlight::HlSpan>>) {
-        self.highlights = highlights;
+        self.src_highlights = highlights;
+        self.rebuild_highlights();
+    }
+
+    /// Gutter number per display row (`None` on soft-wrapped continuation rows).
+    #[must_use]
+    pub fn numbers(&self) -> &[Option<u32>] {
+        &self.numbers
+    }
+
+    /// 0-based source line of a 0-based display row.
+    #[must_use]
+    pub fn source_line_of_row(&self, row: u32) -> u32 {
+        usize::try_from(row)
+            .ok()
+            .and_then(|i| self.rows.get(i))
+            .map_or(row, |r| r.0)
+    }
+
+    /// First 0-based display row of a 0-based source line.
+    #[must_use]
+    pub fn first_row_of(&self, source: u32) -> u32 {
+        usize::try_from(source)
+            .ok()
+            .and_then(|i| self.first_row.get(i))
+            .copied()
+            .unwrap_or(source)
     }
 
     /// Raw target for a link id.
@@ -203,19 +366,78 @@ impl ViewerDoc for RawDoc {
     }
 
     fn heading_lines(&self) -> Vec<u32> {
-        self.headings.iter().map(|(_, line)| *line).collect()
+        self.src_headings
+            .iter()
+            .map(|(_, line)| self.first_row_of(line.saturating_sub(1)).saturating_add(1))
+            .collect()
     }
 
     fn anchor_line(&self, slug: &str) -> Option<u32> {
-        self.headings
+        self.src_headings
             .iter()
             .find(|(s, _)| s == slug)
-            .map(|(_, line)| *line)
+            .map(|(_, line)| self.first_row_of(line.saturating_sub(1)).saturating_add(1))
     }
 
     fn link_spans(&self) -> &[LinkSpan] {
         &self.links
     }
+}
+
+/// Char offsets where each soft-wrapped row of `chars` starts (first is 0).
+///
+/// Rows break after the last space that fits, else hard at `width` columns, so
+/// concatenating the rows gives the source line back exactly.
+fn wrap_starts(chars: &[char], width: usize) -> Vec<usize> {
+    let mut starts = vec![0];
+    if width == 0 {
+        return starts;
+    }
+    let widths: Vec<usize> = chars
+        .iter()
+        .map(|&c| usize::from(text_col::char_width(c)))
+        .collect();
+    let (mut start, mut w, mut brk, mut i) = (0usize, 0usize, None::<usize>, 0usize);
+    while i < chars.len() {
+        if w + widths[i] > width && i > start {
+            let b = brk.take().filter(|&b| b > start).unwrap_or(i);
+            starts.push(b);
+            start = b;
+            w = widths[b..i].iter().sum();
+            continue;
+        }
+        w += widths[i];
+        if chars[i] == ' ' {
+            brk = Some(i + 1);
+        }
+        i += 1;
+    }
+    starts
+}
+
+/// Highlight runs restricted to chars `[start, end)` of their line.
+fn slice_runs(
+    runs: &[crate::tui::highlight::HlSpan],
+    start: usize,
+    end: usize,
+) -> Vec<crate::tui::highlight::HlSpan> {
+    let mut out = Vec::new();
+    let mut at = 0usize;
+    for run in runs {
+        let len = run.text.chars().count();
+        let (a, b) = (at.max(start), (at + len).min(end));
+        if a < b {
+            out.push(crate::tui::highlight::HlSpan {
+                style: run.style,
+                text: run.text.chars().skip(a - at).take(b - a).collect(),
+            });
+        }
+        at += len;
+        if at >= end {
+            break;
+        }
+    }
+    out
 }
 
 fn link_spans_from_md(
@@ -409,7 +631,7 @@ more words here
         let doc = RawDoc::from_source(src, None);
         assert!(doc.block_starts().len() >= 3);
         assert!(doc.word_count() > 0);
-        assert_eq!(doc.anchor_line("h2"), Some(doc.headings[1].1));
+        assert_eq!(doc.anchor_line("h2"), Some(doc.src_headings[1].1));
     }
 
     #[test]

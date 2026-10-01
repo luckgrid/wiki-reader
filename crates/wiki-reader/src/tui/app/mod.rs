@@ -26,6 +26,9 @@ use super::viewer_doc::{RawDoc, ViewerDoc};
 use wiki_reader_core::nav::ViewMode;
 use wiki_reader_core::search;
 
+/// Columns the raw view's line-number gutter takes from the wrap width.
+const RAW_GUTTER_COLS: u16 = 6;
+
 mod draw;
 mod events;
 mod nav_ui;
@@ -143,8 +146,6 @@ pub struct App {
     pub(crate) clipboard: Box<dyn ClipboardWriter>,
     /// Diagram tier preference from config.
     diagram_mode: wiki_reader_core::config::DiagramMode,
-    /// Formatted (marker-free) rendered view (ADR-0012).
-    pub formatted_view: bool,
     /// When false, skip session load/save (tests).
     persist_session: bool,
     /// Last successful session save (debounce).
@@ -271,7 +272,6 @@ impl App {
             expanded_for_page: None,
             clipboard: Box::new(Osc52Clipboard),
             diagram_mode: config.diagrams,
-            formatted_view: false,
             persist_session,
             session_saved_at: None,
             session_dirty: false,
@@ -301,7 +301,6 @@ impl App {
                 app.nav_user_override = true;
             }
             app.nav_width = loaded.state.nav_width;
-            app.formatted_view = loaded.state.formatted_view;
         }
         let page = app.navigator.tab().current().page.clone();
         app.apply_effects(vec![
@@ -326,7 +325,6 @@ impl App {
             focus,
             Some(self.nav_visible),
             self.nav_width,
-            self.formatted_view,
         );
         if wiki_reader_core::session::save(self.provider.root(), &state).is_ok() {
             self.session_saved_at = Some(Instant::now());
@@ -401,7 +399,6 @@ impl App {
         RenderOpts {
             expanded: self.expanded_blocks.clone(),
             diagram_mode: self.diagram_mode,
-            formatted: self.formatted_view,
         }
     }
 
@@ -602,7 +599,6 @@ impl App {
                 self.message.clear();
             }
             Action::ToggleViewMode => self.toggle_view_mode(),
-            Action::ToggleFormattedView => self.toggle_formatted_view(),
             Action::OpenInEditor => self.open_in_editor(),
             Action::CopyPagePath => self.copy_page_path(),
             Action::CopyLinkTarget => self.copy_link_target(),
@@ -727,7 +723,6 @@ impl App {
             | Hit::NavGroupToggle(_)
             | Hit::NavSearchRow
             | Hit::NavToggle
-            | Hit::ViewToggle
             | Hit::Quit
             | Hit::Block(_)
             | Hit::ViewerLine(_)
@@ -1091,18 +1086,6 @@ impl App {
         self.reload_page_keeping_view(&key, source, source_scroll);
     }
 
-    fn toggle_formatted_view(&mut self) {
-        self.formatted_view = !self.formatted_view;
-        self.note_session_change();
-        // Only re-layout when currently in rendered mode.
-        if matches!(self.navigator.tab().current().mode, ViewMode::Rendered) {
-            let key = self.navigator.tab().current().page.clone();
-            let source = self.doc.source_cursor(self.cursor_line);
-            let source_scroll = self.doc.source_cursor(self.scroll);
-            self.reload_page_keeping_view(&key, source, source_scroll);
-        }
-    }
-
     /// Open the current page in `$VISUAL`/`$EDITOR` at the cursor's source line.
     ///
     /// Callers that own the terminal must suspend/restore around this (see
@@ -1340,13 +1323,16 @@ impl App {
                 let mode = self.navigator.tab().current().mode;
                 let width = self.layout_width.max(20);
                 self.doc = match mode {
-                    ViewMode::Raw => PageDoc::Raw(RawDoc::from_source_ctx(
-                        &src,
-                        page,
-                        Some(key),
-                        Some(index),
-                        Some(&self.provider),
-                    )),
+                    ViewMode::Raw => PageDoc::Raw(
+                        RawDoc::from_source_ctx(
+                            &src,
+                            page,
+                            Some(key),
+                            Some(index),
+                            Some(&self.provider),
+                        )
+                        .wrapped(width.saturating_sub(RAW_GUTTER_COLS)),
+                    ),
                     ViewMode::Rendered => {
                         let opts = self.render_opts();
                         PageDoc::Rendered(RenderedViewerDoc::build_with(
@@ -1379,12 +1365,11 @@ impl App {
             return;
         }
         self.layout_width = w;
-        if matches!(self.navigator.tab().current().mode, ViewMode::Rendered) {
-            let key = self.navigator.tab().current().page.clone();
-            let source = self.doc.source_cursor(self.cursor_line);
-            let source_scroll = self.doc.source_cursor(self.scroll);
-            self.reload_page_keeping_view(&key, source, source_scroll);
-        }
+        // Both views lay out to the pane width (raw soft-wraps source lines).
+        let key = self.navigator.tab().current().page.clone();
+        let source = self.doc.source_cursor(self.cursor_line);
+        let source_scroll = self.doc.source_cursor(self.scroll);
+        self.reload_page_keeping_view(&key, source, source_scroll);
     }
 
     fn reload_page_keeping_view(&mut self, key: &PageKey, source_cursor: u32, source_scroll: u32) {
@@ -1411,13 +1396,16 @@ impl App {
                 let mode = self.navigator.tab().current().mode;
                 let width = self.layout_width.max(20);
                 self.doc = match mode {
-                    ViewMode::Raw => PageDoc::Raw(RawDoc::from_source_ctx(
-                        &src,
-                        page,
-                        Some(key),
-                        Some(index),
-                        Some(&self.provider),
-                    )),
+                    ViewMode::Raw => PageDoc::Raw(
+                        RawDoc::from_source_ctx(
+                            &src,
+                            page,
+                            Some(key),
+                            Some(index),
+                            Some(&self.provider),
+                        )
+                        .wrapped(width.saturating_sub(RAW_GUTTER_COLS)),
+                    ),
                     ViewMode::Rendered => {
                         let opts = self.render_opts();
                         PageDoc::Rendered(RenderedViewerDoc::build_with(

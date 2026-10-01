@@ -22,11 +22,13 @@ pub struct Theme {
     pub text_secondary: Color,
     /// Mouse-selection background.
     pub selection: Color,
-    /// Collapsible folder rows in the nav.
+    /// Collapsible folder rows in the nav (herdr yellow).
     pub nav_folder: Color,
-    /// Selected button fill (prev/next footer, matches herdr's peach tab).
+    /// Mode pill fill in the status bar (herdr yellow).
+    pub gold: Color,
+    /// Selected button / tab fill (prev/next footer, View tabs; herdr's peach tab).
     pub peach: Color,
-    /// Text on [`peach`](Self::peach).
+    /// Dark text on [`peach`](Self::peach) and [`gold`](Self::gold) fills.
     pub on_peach: Color,
     /// Accent (current page, icons).
     pub accent: Color,
@@ -69,9 +71,11 @@ impl Default for Theme {
             text_muted: Color::DarkGray,
             text_secondary: Color::Rgb(160, 165, 175),
             selection: Color::Rgb(45, 95, 125),
-            nav_folder: Color::Rgb(230, 190, 110),
-            peach: Color::Rgb(250, 179, 135),
-            on_peach: Color::Rgb(40, 42, 54),
+            // Sampled from herdr / markdown-reader: yellow #f1bf4f, peach tab #f6c99f.
+            nav_folder: Color::Rgb(241, 191, 79),
+            gold: Color::Rgb(241, 191, 79),
+            peach: Color::Rgb(246, 201, 159),
+            on_peach: Color::Rgb(26, 26, 26),
             accent: Color::Cyan,
             // Stronger than near-black so the row reads on Reset surfaces (P3-07 owns presets).
             cursor_line: Color::Rgb(70, 75, 100),

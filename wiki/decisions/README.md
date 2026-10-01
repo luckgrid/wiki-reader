@@ -17,8 +17,9 @@ Architecture decision records. Accepted ADRs are immutable — supersede, don't 
 | [0009](0009-tui-tree-widget.md) | Adopt tui-tree-widget for side nav | superseded |
 | [0010](0010-flat-side-nav-rows.md) | Flat visible rows for side nav | accepted |
 | [0011](0011-renderer-source.md) | Keep the current renderer; port patterns not modules | accepted |
-| [0012](0012-syntax-vs-formatted.md) | Syntax vs formatted rendered view | accepted |
+| [0012](0012-syntax-vs-formatted.md) | Syntax vs formatted rendered view | superseded by [0014](0014-remove-formatted-view-toggle.md) |
 | [0013](0013-nav-labels-folder-names-and-titles.md) | Nav shows folder names and page titles, no Overview | accepted |
+| [0014](0014-remove-formatted-view-toggle.md) | Remove the syntax/formatted view toggle | accepted |
 
 ## Related
 

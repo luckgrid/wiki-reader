@@ -38,6 +38,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 - 2026-09-30: Linked-from formatted underline uses dim `Rule` (same as H1/H2), not Heading colour
 - 2026-09-30: dogfood round 2 (PR 1): nav shows folder names and titles with no `Overview`/`●` ([ADR-0013](../decisions/0013-nav-labels-folder-names-and-titles.md)); nav highlight follows every navigation; search bar readable; frontmatter toggle works on first load (`▼` when open, YAML colored); outlined prev/next buttons; status pill + page status; `v` toggles formatted view; Help dividers/icons; wheel scrolls popups; header/status gaps removed. Column cursor and drag-select are PR 2 (below)
 - 2026-09-30: dogfood round 2 (PR 2): `←`/`→` move a sticky column cursor in the View (`L12:C5` in the status bar; `←` at column 0 focuses the nav); mouse drag selects text and copies it via OSC 52 (wrapped rows rejoined, gutters/borders dropped, tables tab-separated)
+- 2026-09-30: dogfood round 3 (PR 3, from live-terminal notes + herdr/markdown-reader screenshots): tabs become outlined buttons on the View's top border (P2-25); `Nav`/`View` title tags dropped and yellow/peach re-sampled from herdr (P2-26); the eye/formatted toggle is removed (P2-27, ADR-0014); Search and Help popups restyled after markdown-reader (P2-28); Shift+click / Shift+Enter open a new tab (P2-29); raw view soft-wraps (P2-30); nav indent and `/` search icon (P2-31); frontmatter rules full width and colour fixed (P2-32). Found while testing: a table cell wider than the pane leaked above the table (P2-R37)
 
 ## Interim acceptance walk (2026-09-30)
 
@@ -115,7 +116,17 @@ Judged from tests, dogfood QA, and code — not a full interactive sweep of ever
 | P2-21 | Search overlay layout and scroll | — | done | #72; larger pane, scroll + jumps, Files\|Content rename, styled results |
 | P2-22 | Keyboard flow: nav to viewer to footer | — | done | #70; `→` opens page + focuses viewer; `f` focuses footer; sticky footer focus; ADR-0007 |
 | P2-23 | Markdown syntax view: element styling (priority) | D1 | done | 09062f7 |
-| P2-24a | Formatted-text view and eye toggle | D1 / C1 | done | #73; ADR-0012; eye toggles syntax↔formatted; `r` stays Raw↔Rendered |
+| P2-24a | Formatted-text view and eye toggle | D1 / C1 | removed → P2-27 | #73; ADR-0012, superseded by ADR-0014 |
+| P2-25 | View tabs: outlined buttons on the View's top border, styled like the prev/next footer; always shown (the current page's tab even when alone); filled peach only while the View has focus | TB | done | round 3 (PR 3) |
+| P2-26 | Chrome: no `Nav`/`View` title tags; status pill, nav folders and popups use the herdr yellow `#f1bf4f`; peach re-sampled to the herdr tab `#f6c99f` | U3 | done | round 3; colours sampled from a herdr screenshot |
+| P2-27 | Remove the eye / formatted-view toggle (key `v`, header icon, Help row, docs, `RenderOpts.formatted`, session field) | D1 | done | round 3; [ADR-0014](../decisions/0014-remove-formatted-view-toggle.md) supersedes ADR-0012; also retires the "Linked from" rule/gap, which only existed in formatted mode |
+| P2-28 | Search and Help popups borrow markdown-reader's layout: full-width selected row, 2-col padding, gold border, mode + Tab hint in the title, `/` input with inline placeholder, footer with counts and key hints, content rows `[line] title path – snippet` in separate colours, Help tall and thin with icons joined to keys (`b / ◫`) and long group dividers; both panes behind go gray | U3 | done | round 3; status pill reads `SEARCH` / `HELP` while open |
+| P2-29 | Shift+click (nav row, link, crumb, prev/next) and `Shift+Enter` (nav row) open in a new tab | TB | done | round 3; `Shift+Enter` needs a terminal that reports it (kitty keyboard protocol) |
+| P2-30 | Raw view soft-wraps instead of running off the pane | D1 | done | round 3; display rows map to source lines (cursor, `$EDITOR`, copy, links, highlights) |
+| P2-31 | Nav nested rows indent one more column (3 per level); search bar icon becomes a text-height `/` | U3 | done | round 3 |
+| P2-32 | Frontmatter box rules span the full pane width; text colour no longer depends on the cursor line | D1 | done | round 3 |
+| P2-R37 | Table cell wider than the pane no longer spills out above the table | D1 | done | `push_span` wrapped cell text at pane width |
+| P2-R38 | Copy fixes: empty table cells kept, wrapped cells rejoined, OSC 52 cap on the encoded payload (75 KB of text), held drag keeps scrolling | CP | done | round 2 follow-ups (PR 2) |
 | P2-24b | Image diagrams and images | D1 | moved | slipped to Phase 3 as P3-12 (2026-09-30); needs ADR-0004 herdr/Kitty spike + deps |
 
 ## P2-23 scope

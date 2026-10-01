@@ -10,7 +10,8 @@ use ratatui::DefaultTerminal;
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::crossterm::event::{
-    self, DisableMouseCapture, EnableMouseCapture, Event, KeyEventKind, MouseButton, MouseEventKind,
+    self, DisableMouseCapture, EnableMouseCapture, Event, KeyEventKind, KeyModifiers, MouseButton,
+    MouseEventKind,
 };
 use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{EnterAlternateScreen, enable_raw_mode};
@@ -20,7 +21,7 @@ use super::draw::draw;
 use crate::tui::action::Action;
 use crate::tui::hit::{Hit, HitMap};
 use crate::tui::keymap;
-use wiki_reader_core::nav::NavStop;
+use wiki_reader_core::nav::{NavStop, NodeId};
 
 /// Run the TUI until quit. Restores the terminal on every exit path.
 ///
@@ -165,6 +166,20 @@ pub(crate) fn apply_mouse(
             let hit = app.hit_map.hit_at(mouse.column, mouse.row)?.clone();
             if matches!(hit, Hit::NavDivider) {
                 app.nav_dragging = true;
+                return None;
+            }
+            // Shift+click opens in a new tab, like a browser (same as middle-click).
+            if mouse.modifiers.contains(KeyModifiers::SHIFT)
+                && matches!(
+                    hit,
+                    Hit::NavItem(NodeId::Page(_))
+                        | Hit::Breadcrumb(_)
+                        | Hit::Link(_)
+                        | Hit::Prev
+                        | Hit::Next
+                )
+            {
+                app.middle_click_hit(hit);
                 return None;
             }
             // Text in the View: press starts a selection. A link is followed on

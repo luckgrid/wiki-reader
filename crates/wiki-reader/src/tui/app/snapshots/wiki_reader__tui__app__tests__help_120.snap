@@ -1,29 +1,29 @@
 ---
 source: crates/wiki-reader/src/tui/app/tests.rs
-assertion_line: 2340
+assertion_line: 2751
 expression: out
 ---
- Worked Example Wiki                                                                                              ○ ◫ ✕ 
-┌Nav────────────────────┌ Help (? or Esc to close) ────────────────────────────────────────────┐───────────────────────┐
-│▌⌕ Search…             │── Global ────────────────────────────────────────────────────────────│                       │
-│                       │Alt+← / Alt+b     Back                                                │                       │
-│▌ Worked Example Wiki  │Alt+→ / Alt+f     Forward                                             │                       │
-│  ▸ Architecture       │q             ✕   Quit                                                │                       │
-│  ▸ Decisions          │b             ◫   Toggle side nav                                     │                       │
-│                       │r                 Toggle raw / rendered                               │                       │
-│                       │v             ○ ◉ Toggle syntax / formatted                           │turn via back when     │
-│                       │e                 Open in editor                                      │                       │
-│                       │y                 Copy page path                                      │                       │
-│                       │Y                 Copy focused link target                            │                       │
-│                       │t                 New tab                                             │                       │
-│                       │x                 Close tab                                           │                       │
-│                       │/                 Search                                              │                       │
-│                       │Ctrl+k            Search                                              │                       │
-│                       │?                 Help                                                │                       │
-│                       │n                 Next search match                                   │                       │
-│                       │N                 Previous search match                               │                       │
-│                       │[                 Previous page                                       │                       │
-│                       │]                 Next page                                           │                       │
-│                       │Backspace         Back                                                │                       │
-└───────────────────────└──────────────────────────────────────────────────────────────────────┘chitecture Overview › ├┘
-  VIEW  · README.md · L1:C1 12% · 2026-09-28 · draft · 29w · 1m
+ Worked Example Wiki                                                                                                ◫ ✕ 
+┌────────────────────────────┐┌┌ Help (? or Esc to close) ──────────────────────────────┐──────────────────────────────┐
+│▌/ Search…                  │││  ── Global ──────────────────────────────────────────  │──────────────────────────────│
+│                            │││  Alt+← / Alt+b     Back                                │                              │
+│▌ Worked Example Wiki       │││  Alt+→ / Alt+f     Forward                             │                              │
+│  ▸ Architecture            │││  q / ✕             Quit                                │                              │
+│  ▸ Decisions               │││  b / ◫             Toggle side nav                     │ root.                        │
+│                            │││  r                 Toggle raw / rendered               │                              │
+│                            │││  e                 Open in editor                      │then return via back when     │
+│                            │││  y                 Copy page path                      │                              │
+│                            │││  Y                 Copy focused link target            │                              │
+│                            │││  t                 New tab                             │                              │
+│                            │││  x                 Close tab                           │                              │
+│                            │││  /                 Search                              │                              │
+│                            │││  Ctrl+k            Search                              │                              │
+│                            │││  ?                 Help                                │                              │
+│                            │││  n                 Next search match                   │                              │
+│                            │││  N                 Previous search match               │                              │
+│                            │││  [                 Previous page                       │                              │
+│                            │││  ]                 Next page                           │                              │
+│                            │││  Backspace         Back                                │                              │
+│                            │││  Shift+←           Focus side nav                      │                              │
+└────────────────────────────┘└└────────────────────────────────────────────────────────┘───┤ Architecture Overview › ├┘
+  HELP  · README.md · L1:C1 12% · 2026-09-28 · draft · 29w · 1m

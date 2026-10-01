@@ -765,55 +765,6 @@ mod tests {
     }
 
     #[test]
-    fn linked_from_formatted_drops_hashes() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/worked-example");
-        let provider = FsProvider::open(&root).unwrap();
-        let index = wiki_reader_core::Index::build(&provider).unwrap();
-        let key = PageKey {
-            collection_id: index.collection_id.clone(),
-            relative_path: std::path::PathBuf::from("architecture/design-system/README.md"),
-        };
-        let src = provider.read(&key).unwrap();
-        let page = index.pages.get(&key);
-        let doc = render_with(
-            &src,
-            page,
-            &key,
-            &index,
-            80,
-            &RenderOpts {
-                formatted: true,
-                ..RenderOpts::default()
-            },
-        );
-        let text = doc.lines.join("\n");
-        assert!(
-            !text.contains("## Linked from"),
-            "formatted must drop hashes: {text:?}"
-        );
-        assert!(
-            text.contains("Linked from"),
-            "formatted still shows the label: {text:?}"
-        );
-        let section = doc
-            .lines
-            .iter()
-            .position(|l| l == "Linked from")
-            .expect("Linked from heading line");
-        let rule = doc
-            .styled
-            .get(section + 1)
-            .expect("rule line under Linked from");
-        assert!(
-            rule.spans
-                .iter()
-                .any(|s| s.text.contains('─') && matches!(s.kind, StyleKind::Rule)),
-            "dim Rule under Linked from (not Heading): {:?}",
-            rule.spans
-        );
-    }
-
-    #[test]
     fn expanded_frontmatter_snapshot() {
         let src = "---\ntitle: Hello\ntags:\n  - a\n  - b\nupdated: 2026-01-01\n---\n\n# Body\n";
         let index = wiki_reader_core::Index {
@@ -865,21 +816,6 @@ mod tests {
             let doc = render(&src, page, &key, &index, w);
             let text = doc.lines.join("\n");
             insta::assert_snapshot!(format!("elements_{w}"), text);
-            let formatted = render_with(
-                &src,
-                page,
-                &key,
-                &index,
-                w,
-                &RenderOpts {
-                    formatted: true,
-                    ..RenderOpts::default()
-                },
-            );
-            insta::assert_snapshot!(
-                format!("elements_formatted_{w}"),
-                formatted.lines.join("\n")
-            );
         }
     }
 

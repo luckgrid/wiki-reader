@@ -1,8 +1,9 @@
 ---
 source: crates/wiki-reader-render/src/lib.rs
+assertion_line: 818
 expression: text
 ---
-── frontmatter ▶ ───────────────────────
+── frontmatter ▶ ───────────────────────────────────────────────────────────────
 
 # Element gallery
 

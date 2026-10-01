@@ -132,8 +132,6 @@ pub enum Action {
     ConfirmDecline,
     /// Toggle raw / rendered view (`r`).
     ToggleViewMode,
-    /// Toggle syntax / formatted rendered view (eye / ADR-0012).
-    ToggleFormattedView,
     /// Open current page in `$VISUAL` / `$EDITOR` at the cursor line (`e`).
     OpenInEditor,
     /// Copy current page relative path (`y`).

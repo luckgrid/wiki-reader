@@ -16,12 +16,12 @@ pub struct FooterTitles {
     pub right: Line<'static>,
 }
 
-fn col_width(s: &str) -> usize {
+pub(crate) fn col_width(s: &str) -> usize {
     Span::raw(s).width()
 }
 
 /// Ellipsis-truncate `s` to at most `max` display columns (`…` when clipped).
-fn ellipsis(s: &str, max: usize) -> String {
+pub(crate) fn ellipsis(s: &str, max: usize) -> String {
     if max == 0 {
         return String::new();
     }
@@ -49,11 +49,11 @@ fn ellipsis(s: &str, max: usize) -> String {
 }
 
 /// Columns a button adds around its text: `┤ ` … ` ├`.
-const BUTTON_CHROME: usize = 4;
+pub(crate) const BUTTON_CHROME: usize = 4;
 
 /// One outlined button sitting on the border row: `┤ ‹ Name ├` in the pane's
 /// border colour; selected (Tab-focused) fills the inside peach.
-fn button(text: &str, selected: bool, border: Style, theme: &Theme) -> Line<'static> {
+pub(crate) fn button(text: &str, selected: bool, border: Style, theme: &Theme) -> Line<'static> {
     let inner = if selected {
         Style::default().bg(theme.peach).fg(theme.on_peach)
     } else {

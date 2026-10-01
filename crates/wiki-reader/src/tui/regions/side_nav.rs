@@ -71,8 +71,7 @@ pub fn draw(
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(theme.border(focused))
-        .title("Nav");
+        .border_style(theme.border(focused));
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -101,7 +100,8 @@ pub fn draw(
         (theme.border, theme.text)
     };
     let search_bg = theme.cursor_line;
-    let search_label = "⌕ Search…";
+    // `/` is the key that opens search, and renders at text height in every font.
+    let search_label = "/ Search…";
     let search_w = 1 + Span::raw(search_label).width();
     let mut search_spans = vec![
         Span::styled("▌", Style::default().fg(mark_fg).bg(search_bg)),
@@ -152,7 +152,8 @@ pub fn draw(
         });
         let mut spans = vec![
             Span::styled(if on_row { "▌" } else { " " }, row_bg(theme.text())),
-            Span::styled(" ".repeat(1 + row.depth * 2), row_bg(theme.text())),
+            // 3 columns per level: a child starts one column right of its parent's label.
+            Span::styled(" ".repeat(1 + row.depth * 3), row_bg(theme.text())),
         ];
         if row.is_group {
             let tri = if row.open { "▾ " } else { "▸ " };

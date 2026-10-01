@@ -91,50 +91,27 @@ fn chrome_pad_hits_header_icons_and_nav_search() {
     let mut app = App::new(&root).unwrap();
     let terminal = draw_app(&mut app, 120, 24);
     let buf = terminal.backend().buffer();
-    let (ex, ey) = find_glyph(buf, "○").expect("○ eye");
     let (tx, ty) = find_glyph(buf, "◫").expect("◫");
     let (qx, qy) = find_glyph(buf, "✕").expect("✕");
-    assert_eq!(app.hit_map.hit_at(ex, ey), Some(&Hit::ViewToggle));
     assert_eq!(app.hit_map.hit_at(tx, ty), Some(&Hit::NavToggle));
     assert_eq!(app.hit_map.hit_at(qx, qy), Some(&Hit::Quit));
     // Padded: icons sit one col inset from the raw edge.
     assert_eq!(qx, 120 - 2, "✕ at chrome_pad right edge");
     assert_eq!(tx, 120 - 4, "◫ two cols left of ✕");
-    assert_eq!(ex, 120 - 6, "○ two cols left of ◫");
+    assert!(
+        find_glyph(buf, "○").is_none(),
+        "no eye toggle in the header"
+    );
 
     // Nav search row is the first inner row (header row 0, nav border row 1).
     let search = (0..buf.area.width)
-        .find(|&x| buf[(x, 2)].symbol().contains('⌕'))
+        .find(|&x| buf[(x, 2)].symbol() == "/")
         .expect("search glyph");
     assert_eq!(
         app.hit_map.hit_at(search, 2),
         Some(&Hit::NavSearchRow),
         "search hit on padded chrome row"
     );
-}
-
-#[test]
-fn formatted_view_preserves_cursor_source_and_links() {
-    let root = fixture();
-    let mut app = App::new(&root).unwrap();
-    // Skip frontmatter so we land on body with links.
-    for _ in 0..12 {
-        app.update(Action::ViewerDown);
-    }
-    let source = app.doc.source_cursor(app.cursor_line);
-    assert!(source > 0);
-    let links_before = app.doc.link_spans().len();
-    assert!(links_before > 0, "fixture page should have links");
-    app.update(Action::ToggleFormattedView);
-    assert!(app.formatted_view);
-    assert_eq!(app.doc.source_cursor(app.cursor_line), source);
-    assert!(
-        !app.doc.link_spans().is_empty(),
-        "links remain after format"
-    );
-    app.update(Action::ToggleFormattedView);
-    assert!(!app.formatted_view);
-    assert_eq!(app.doc.source_cursor(app.cursor_line), source);
 }
 
 #[test]
@@ -1800,11 +1777,10 @@ fn open_in_editor_fresh_parse_sees_new_heading_before_reindex() {
         after.len() > before.len(),
         "expected fresh parse to see new heading; before={before:?} after={after:?}"
     );
+    // Raw rows are soft-wrapped at the (narrow, undrawn) layout width; they
+    // rejoin to the source line exactly.
     assert!(
-        app.doc
-            .lines()
-            .iter()
-            .any(|l| l.contains("Brand New Heading")),
+        app.doc.lines().concat().contains("## Brand New Heading"),
         "raw lines should include new heading text"
     );
 }
@@ -2158,8 +2134,8 @@ fn search_mode_files_content_header() {
             all.push_str(buf[(x, y)].symbol());
         }
     }
-    assert!(all.contains("Files"), "header missing Files: {all}");
-    assert!(all.contains("Content"), "header missing Content");
+    assert!(all.contains("[Files]"), "title missing mode tag: {all}");
+    assert!(all.contains("Tab: toggle mode"), "title missing Tab hint");
     assert_eq!(
         app.search.as_ref().unwrap().mode,
         crate::tui::search_ui::SearchMode::Files
@@ -2169,6 +2145,13 @@ fn search_mode_files_content_header() {
         app.search.as_ref().unwrap().mode,
         crate::tui::search_ui::SearchMode::Content
     );
+    let terminal = draw_app(&mut app, 80, 24);
+    let buf = terminal.backend().buffer();
+    let all: String = (0..buf.area.height)
+        .flat_map(|y| (0..buf.area.width).map(move |x| (x, y)))
+        .map(|(x, y)| buf[(x, y)].symbol().to_owned())
+        .collect();
+    assert!(all.contains("[Content]"), "title follows the mode");
 }
 
 #[test]
@@ -2438,25 +2421,59 @@ fn tab_bar_hit_by_coordinate() {
     app.update(Action::NewTab);
     assert_eq!(app.navigator.tab_count(), 2);
     let _ = draw_app(&mut app, 120, 24);
-    let tab_hit = app
-        .hit_map
-        .entries()
-        .iter()
-        .find(|(_, h)| matches!(h, Hit::Tab(0)));
-    let Some((rect, _)) = tab_hit else {
-        panic!("expected Hit::Tab(0) after NewTab");
+    let rect_of = |app: &App, want: Hit| {
+        app.hit_map
+            .entries()
+            .iter()
+            .find(|(_, h)| *h == want)
+            .map(|(r, _)| *r)
     };
-    // Padded label: 1 + stem + 1.
-    assert!(rect.width >= 3, "padded tab hit width, got {}", rect.width);
-    assert_eq!(app.hit_map.hit_at(rect.x, rect.y), Some(&Hit::Tab(0)));
+    let tab = rect_of(&app, Hit::Tab(0)).expect("Hit::Tab(0) after NewTab");
+    let close = rect_of(&app, Hit::TabClose(0)).expect("Hit::TabClose(0)");
+    // Buttons sit on the View's top border: `┤ label × ├`.
+    assert_eq!(tab.y, close.y);
+    assert!(tab.width >= 7, "outlined button, got {}", tab.width);
+    assert_eq!(app.hit_map.hit_at(tab.x, tab.y), Some(&Hit::Tab(0)));
     assert_eq!(
-        app.hit_map.hit_at(rect.x + rect.width - 1, rect.y),
+        app.hit_map.hit_at(tab.x + tab.width - 1, tab.y),
         Some(&Hit::Tab(0))
     );
-    let close_x = rect.x + rect.width;
-    assert_eq!(app.hit_map.hit_at(close_x, rect.y), Some(&Hit::TabClose(0)));
+    assert!(close.x > tab.x && close.x < tab.x + tab.width - 1);
+    assert_eq!(
+        app.hit_map.hit_at(close.x, close.y),
+        Some(&Hit::TabClose(0))
+    );
     app.update(Action::SwitchTab(0));
     assert_eq!(app.navigator.active(), 0);
+}
+
+#[test]
+fn single_tab_is_shown_and_only_highlighted_with_view_focus() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    assert_eq!(app.navigator.tab_count(), 1);
+    let theme = app.theme;
+    let tab_fill = |app: &mut App| {
+        let terminal = draw_app(app, 120, 24);
+        let buf = terminal.backend().buffer();
+        let y = app
+            .hit_map
+            .entries()
+            .iter()
+            .find(|(_, h)| *h == Hit::Tab(0))
+            .map(|(r, _)| (r.x, r.y))
+            .expect("the current page's tab is always drawn");
+        // Label cell, one past the `┤ `.
+        buf[(y.0 + 2, y.1)].bg
+    };
+    app.update(Action::FocusViewer);
+    assert_eq!(tab_fill(&mut app), theme.peach, "active tab fills peach");
+    app.update(Action::FocusNav);
+    assert_ne!(
+        tab_fill(&mut app),
+        theme.peach,
+        "Nav focus: tab not highlighted"
+    );
 }
 
 #[test]
@@ -2791,12 +2808,16 @@ fn help_shows_icon_beside_key_and_v_toggles_view() {
         .find(|r| matches!(r.action, Some(Action::ToggleNav)))
         .unwrap();
     assert_eq!((nav.keys.as_str(), nav.icon), ("b", Some("◫")));
-    let eye = help
+    let quit = help
         .rows
         .iter()
-        .find(|r| matches!(r.action, Some(Action::ToggleFormattedView)))
+        .find(|r| matches!(r.action, Some(Action::Quit)))
         .unwrap();
-    assert_eq!((eye.keys.as_str(), eye.icon), ("v", Some("○ ◉")));
+    assert_eq!((quit.keys.as_str(), quit.icon), ("q", Some("✕")));
+    assert!(
+        !help.rows.iter().any(|r| r.help.contains("formatted")),
+        "the eye / formatted toggle is gone"
+    );
 }
 
 #[test]
@@ -2890,7 +2911,14 @@ fn footer_button_colours_follow_pane_focus_and_selection() {
     let find_style = |app: &mut App| {
         let terminal = draw_app(app, 100, 24);
         let buf = terminal.backend().buffer();
-        let (x, y) = find_glyph(buf, "┤").expect("prev button");
+        // The View tabs sit on the top border; the footer buttons on the bottom one.
+        let y = (0..buf.area.height)
+            .rev()
+            .find(|&y| (0..buf.area.width).any(|x| buf[(x, y)].symbol() == "┤"))
+            .expect("footer row");
+        let x = (0..buf.area.width)
+            .find(|&x| buf[(x, y)].symbol() == "┤")
+            .expect("prev button");
         // The header breadcrumb also uses `›`; the next button is on the border row.
         let nx = (0..buf.area.width)
             .find(|&nx| buf[(nx, y)].symbol() == "›")
@@ -2930,7 +2958,7 @@ fn status_bar_pill_and_page_status() {
     let col = u16::try_from(row[..row.find("accepted").unwrap()].chars().count()).unwrap();
     assert_eq!(buf[(col, y)].fg, app.theme.heading[2], "accepted is green");
     let px = u16::try_from(row[..row.find(" VIEW ").unwrap()].chars().count()).unwrap() + 1;
-    assert_eq!(buf[(px, y)].bg, app.theme.accent, "pill background");
+    assert_eq!(buf[(px, y)].bg, app.theme.gold, "pill background");
 }
 
 #[test]
@@ -3113,4 +3141,273 @@ fn footer_landing_labels_use_titles_in_filename_mode() {
     let row = footer_row(&root);
     assert!(row.contains("‹ Design System"), "{row}");
     assert!(row.contains("Workflow OS ›"), "{row}");
+}
+
+fn screen_rows(app: &mut App, w: u16, h: u16) -> Vec<String> {
+    let terminal = draw_app(app, w, h);
+    let buf = terminal.backend().buffer();
+    (0..buf.area.height)
+        .map(|y| (0..buf.area.width).map(|x| buf[(x, y)].symbol()).collect())
+        .collect()
+}
+
+#[test]
+fn panes_have_no_title_tags() {
+    let mut app = App::new(&fixture()).unwrap();
+    let rows = screen_rows(&mut app, 120, 24);
+    // Row 1 is the top border of both panes; the status pill names the focus.
+    assert!(
+        !rows[1].contains("Nav") && !rows[1].contains("View"),
+        "{}",
+        rows[1]
+    );
+}
+
+#[test]
+fn nested_nav_rows_sit_one_column_right_of_their_parent_label() {
+    let mut app = App::new(&fixture()).unwrap();
+    app.update(Action::FocusNav);
+    app.navigator.set_nav_stop(NavStop::Search);
+    app.update(Action::NavStepDown);
+    app.update(Action::NavJumpDown);
+    app.update(Action::NavExpand); // Architecture group
+    let rows = screen_rows(&mut app, 120, 30);
+    let col = |needle: &str| {
+        let row = rows
+            .iter()
+            .find(|r| r.contains(needle))
+            .unwrap_or_else(|| panic!("{needle} not drawn"));
+        row[..row.find(needle).unwrap()].chars().count()
+    };
+    assert_eq!(
+        col("Architecture Overview"),
+        col("Architecture") + 1,
+        "leaf label one column right of the group label"
+    );
+}
+
+#[test]
+fn shift_click_nav_item_opens_a_new_tab() {
+    let mut app = App::new(&fixture()).unwrap();
+    // Expand the first group so a page other than the current one is listed.
+    app.update(Action::FocusNav);
+    app.navigator.set_nav_stop(NavStop::Search);
+    app.update(Action::NavStepDown);
+    app.update(Action::NavJumpDown);
+    app.update(Action::NavExpand);
+    let _ = draw_app(&mut app, 120, 30);
+    let (rect, id) = app
+        .hit_map
+        .entries()
+        .iter()
+        .find_map(|(r, h)| match h {
+            Hit::NavItem(id @ NodeId::Page(_)) => Some((*r, id.clone())),
+            _ => None,
+        })
+        .expect("a page row");
+    let before = app.navigator.tab_count();
+    let ev = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: rect.x + 2,
+        row: rect.y,
+        modifiers: ratatui::crossterm::event::KeyModifiers::SHIFT,
+    };
+    assert!(apply_mouse(&mut app, ev).is_none());
+    assert_eq!(app.navigator.tab_count(), before + 1, "opened in a new tab");
+    let NodeId::Page(key) = id else {
+        unreachable!()
+    };
+    assert_eq!(app.navigator.tab().current().page, key);
+}
+
+#[test]
+fn shift_enter_in_nav_opens_a_new_tab_and_enter_does_not() {
+    use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let mut app = App::new(&fixture()).unwrap();
+    app.update(Action::FocusNav);
+    app.navigator.set_nav_stop(NavStop::Search);
+    app.update(Action::NavStepDown);
+    app.update(Action::NavJumpDown);
+    app.update(Action::NavExpand);
+    app.update(Action::NavStepDown); // first child page of the group
+    let (shifted, _) = crate::tui::keymap::map_with_overrides(
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT),
+        app.focus,
+        app.input_mode,
+        app.chord,
+        None,
+    );
+    assert_eq!(shifted, Some(Action::NewTab));
+    let (plain, _) = crate::tui::keymap::map_with_overrides(
+        KeyEvent::from(KeyCode::Enter),
+        app.focus,
+        app.input_mode,
+        app.chord,
+        None,
+    );
+    assert_eq!(plain, Some(Action::NavActivate));
+    let before = app.navigator.tab_count();
+    app.update(Action::NewTab);
+    assert_eq!(app.navigator.tab_count(), before + 1);
+}
+
+#[test]
+fn frontmatter_label_colour_does_not_depend_on_the_cursor_line() {
+    let mut app = App::new(&fixture()).unwrap();
+    app.update(Action::FocusViewer);
+    let fg_of_label = |app: &mut App| {
+        let terminal = draw_app(app, 120, 24);
+        let buf = terminal.backend().buffer();
+        let (y, x) = (0..buf.area.height)
+            .find_map(|y| {
+                let row: Vec<&str> = (0..buf.area.width).map(|x| buf[(x, y)].symbol()).collect();
+                row.concat()
+                    .contains("frontmatter")
+                    .then(|| (y, row.iter().position(|s| *s == "f").unwrap()))
+            })
+            .expect("frontmatter label");
+        buf[(u16::try_from(x).unwrap(), y)].fg
+    };
+    assert_eq!(app.cursor_line, 0, "cursor starts on the frontmatter row");
+    let on_cursor = fg_of_label(&mut app);
+    app.update(Action::ViewerDown);
+    app.update(Action::ViewerDown);
+    let off_cursor = fg_of_label(&mut app);
+    assert_eq!(on_cursor, off_cursor);
+}
+
+#[test]
+fn popups_gray_out_the_panes_behind_them() {
+    let mut app = App::new(&fixture()).unwrap();
+    let theme = app.theme;
+    app.update(Action::FocusViewer);
+    let corner_fg = |app: &mut App| {
+        let terminal = draw_app(app, 120, 30);
+        let buf = terminal.backend().buffer();
+        // Top-left corner of the View pane (right of the nav column).
+        let nav_w = app
+            .hit_map
+            .entries()
+            .iter()
+            .find_map(|(r, h)| matches!(h, Hit::FocusNav).then_some(r.width));
+        let x = nav_w.expect("nav drawn");
+        buf[(x, 1)].fg
+    };
+    assert_eq!(corner_fg(&mut app), theme.border_focus, "View focused");
+    app.update(Action::OpenHelp);
+    assert_eq!(corner_fg(&mut app), theme.border, "help open: gray");
+    app.update(Action::CloseHelp);
+    app.update(Action::OpenSearch);
+    assert_eq!(corner_fg(&mut app), theme.border, "search open: gray");
+}
+
+#[test]
+fn search_popup_follows_the_markdown_reader_layout() {
+    let mut app = App::new(&fixture()).unwrap();
+    app.update(Action::OpenSearch);
+    let rows = screen_rows(&mut app, 100, 30);
+    let all = rows.join("\n");
+    assert!(
+        all.contains("/ █ type to search"),
+        "prompt + placeholder inline:\n{all}"
+    );
+    assert!(all.contains("type to search  ↑/↓: navigate  Enter: open  Tab: toggle mode"));
+    assert!(!all.contains("(Tab)"), "no Files/Content tab row");
+    for c in "ar".chars() {
+        app.update(Action::SearchChar(c));
+    }
+    app.update(Action::SearchToggleMode);
+    let rows = screen_rows(&mut app, 100, 30);
+    let row = rows
+        .iter()
+        .find(|r| r.contains("] ") && r.contains(" – "))
+        .unwrap_or_else(|| panic!("no content result row:\n{}", rows.join("\n")));
+    let after_border = row.trim_start_matches(|c: char| c != '[');
+    assert!(
+        after_border.starts_with('['),
+        "line number comes first: {row}"
+    );
+    assert!(
+        rows.iter().any(|r| r.contains("matches")),
+        "metadata in the footer"
+    );
+}
+
+#[test]
+fn help_popup_is_tall_and_thin_with_icons_beside_keys() {
+    let mut app = App::new(&fixture()).unwrap();
+    app.update(Action::OpenHelp);
+    let rows = screen_rows(&mut app, 120, 40);
+    let all = rows.join("\n");
+    assert!(all.contains("b / ◫"), "icon joined to its key with ` / `");
+    assert!(all.contains("q / ✕"));
+    let top = rows.iter().position(|r| r.contains("Help (")).unwrap();
+    let bottom = rows
+        .iter()
+        .rposition(|r| r.contains('└') && r.contains('┘'))
+        .unwrap();
+    assert!(bottom - top >= 30, "tall: {} rows", bottom - top);
+    let chars: Vec<char> = rows[top].chars().collect();
+    let title_at = rows[top][..rows[top].find("Help (").unwrap()]
+        .chars()
+        .count();
+    let left = chars[..title_at].iter().rposition(|&c| c == '┌').unwrap();
+    let right = title_at + chars[title_at..].iter().position(|&c| c == '┐').unwrap();
+    assert!(right - left < 70, "thin: {} cols", right - left);
+}
+
+#[test]
+fn raw_view_wraps_long_lines_and_numbers_only_the_first_row() {
+    use crate::tui::page_doc::PageDoc;
+    let para = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon";
+    let (_d, mut app, log) = app_with_page(&format!("# T\n\n{para}\n\nafter\n"));
+    app.update(Action::ToggleViewMode);
+    let rows = screen_rows(&mut app, 60, 24);
+    let PageDoc::Raw(doc) = &app.doc else {
+        panic!("raw doc expected")
+    };
+    let width = usize::from(app.layout_width) - 6;
+    assert!(
+        doc.lines().iter().all(|l| l.chars().count() <= width),
+        "{:?}",
+        doc.lines()
+    );
+    assert!(doc.lines().len() > 5, "the long line took several rows");
+    assert_eq!(
+        doc.lines().concat(),
+        format!("# T{para}after"),
+        "rows rejoin exactly"
+    );
+    let nums: Vec<Option<u32>> = doc.numbers().to_vec();
+    assert_eq!(nums[0], Some(1));
+    assert!(nums.contains(&None), "continuation rows have no number");
+    assert_eq!(
+        nums.iter().flatten().copied().collect::<Vec<_>>(),
+        [1, 2, 3, 4, 5]
+    );
+    assert!(
+        rows.iter().any(|r| r.contains("    │ ")),
+        "blank gutter on wrapped rows"
+    );
+    // Copying across the wrapped rows gives the source line back.
+    let first = u32::try_from(
+        doc.lines()
+            .iter()
+            .position(|l| l.starts_with("alpha"))
+            .unwrap(),
+    )
+    .unwrap();
+    let last = u32::try_from(
+        doc.lines()
+            .iter()
+            .position(|l| l.contains("upsilon"))
+            .unwrap(),
+    )
+    .unwrap();
+    let end = last_col(&app, last);
+    drag_select(&mut app, (first, 0), (last, end));
+    assert_eq!(log.lock().unwrap().clone(), [para]);
+    // Cursor mapping: a display row maps back to its source line and forward again.
+    assert_eq!(app.doc.source_cursor(last), 2);
+    assert_eq!(app.doc.display_cursor(2), first);
 }
