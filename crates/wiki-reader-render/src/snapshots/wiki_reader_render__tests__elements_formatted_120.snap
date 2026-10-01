@@ -11,16 +11,22 @@ A paragraph with a long word like antidisestablishmentarianism and normal wrappi
 instead of mid-word when the pane is narrow.
 
 Heading two
+────────────────────────────────────────
 
 Heading three
 
+
 Heading four
+
 
 Heading five
 
+
 Heading six
 
+
 Lists
+────────────────────────────────────────
 
 • bullet one
 • bullet two
@@ -33,10 +39,12 @@ Lists
 • [x] checked task
 
 Inline
+────────────────────────────────────────
 
 This has bold, italic, strike, inline code, and a working link plus a broken link.
 
 Quote and alert
+────────────────────────────────────────
 
 │ A plain blockquote with enough text that it wraps on a narrow pane.
 
@@ -47,6 +55,7 @@ Quote and alert
 │ Warning alert body.
 
 Code
+────────────────────────────────────────
 
 ── rust ──
 │ fn main() {
@@ -58,6 +67,7 @@ Code
 │     return f"hi {name}"
 
 Tables
+────────────────────────────────────────
 
 ┌───────┬───────────────┬───────────────────────────────┐
 │ Short │ Medium column │ Long cell that needs wrapping │
@@ -76,21 +86,25 @@ Tables
 └─────────┴───────┴─────────┴───────┴────────┘
 
 Rule
+────────────────────────────────────────
 
 ────────────────────────────────────────
 
 Mermaid good
+────────────────────────────────────────
 
 ┌───────┐     ┌─────┐
 │ Start │────▸│ End │
 └───────┘     └─────┘
 
 Mermaid bad
+────────────────────────────────────────
 
 │ diagram (source; unsupported diagram type: 'this')
 this is not valid mermaid at all {{{
 
 Mermaid wide
+────────────────────────────────────────
 
 ┌────────────────────────┐   ┌────────────────────────┐   ┌──────────────────────────┐   ┌────────────────────────┐
 │ VeryLongNodeLabelAlpha │──▸│ VeryLongNodeLabelBravo │──▸│ VeryLongNodeLabelCharlie │──▸│ VeryLongNodeLabelDelta │
