@@ -329,12 +329,15 @@ pub fn format_target_with_provider(
 pub mod cycle {
     use super::FocusItem;
 
-    /// Next item after `cursor_line` (wrap; footer items last in `items`).
     #[must_use]
     fn sort_key(it: &FocusItem) -> u32 {
         it.line.unwrap_or(u32::MAX)
     }
 
+    /// First item on or after `cursor_line` going forward (so an item on the
+    /// cursor's own line, e.g. the frontmatter toggle on line 0, is reachable),
+    /// or last item strictly before it going backward; wraps. Footer items sort last.
+    #[must_use]
     pub fn next_after(items: &[FocusItem], cursor_line: u32, backward: bool) -> Option<usize> {
         if items.is_empty() {
             return None;
@@ -351,7 +354,7 @@ pub mod cycle {
             items
                 .iter()
                 .enumerate()
-                .find(|(_, it)| sort_key(it) > cursor_line)
+                .find(|(_, it)| sort_key(it) >= cursor_line)
                 .map(|(i, _)| i)
                 .or(Some(0))
         }

@@ -15,7 +15,7 @@ impl FocusPane {
     pub fn label(self) -> &'static str {
         match self {
             Self::Nav => "NAV",
-            Self::Viewer => "VIEWER",
+            Self::Viewer => "VIEW",
         }
     }
 }

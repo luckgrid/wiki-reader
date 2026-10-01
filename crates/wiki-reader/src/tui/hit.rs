@@ -35,6 +35,8 @@ pub enum Hit {
     ViewerLine(u32),
     /// Link segment (`LinkId.0`).
     Link(u32),
+    /// Block action button (frontmatter toggle, code copy) by block id.
+    Block(u32),
     /// Search overlay result row.
     SearchResult(usize),
     /// Click outside the search panel (dismiss).
@@ -102,6 +104,7 @@ impl HitMap {
             Hit::NavSearchRow => Action::OpenSearch,
             Hit::ViewerLine(line) => Action::SetCursorLine(*line),
             Hit::Link(id) => Action::FollowLinkId(*id),
+            Hit::Block(id) => Action::ActivateBlock(*id),
             Hit::SearchResult(i) => Action::SearchActivateIndex(*i),
             Hit::SearchDismiss => Action::CloseSearch,
             Hit::HelpDismiss => Action::CloseHelp,

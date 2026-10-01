@@ -55,7 +55,7 @@ impl BindingScope {
         match self {
             Self::Global => "Global",
             Self::Nav => "Side nav",
-            Self::Viewer => "Viewer",
+            Self::Viewer => "View",
             Self::Chord => "Chords",
             Self::Overlay => "Search overlay",
         }
@@ -172,6 +172,17 @@ pub struct Binding {
     pub matcher: Option<Matcher>,
 }
 
+/// Header icon that also triggers `action`, shown next to its key in help.
+#[must_use]
+pub fn binding_icon(action: &Action) -> Option<&'static str> {
+    match action {
+        Action::ToggleNav => Some("◫"),
+        Action::ToggleFormattedView => Some("○ ◉"),
+        Action::Quit => Some("✕"),
+        _ => None,
+    }
+}
+
 /// Source of truth for Normal-mode bindings and the help overlay.
 pub static BINDINGS: &[Binding] = &[
     // —— Global (Alt before plain for b/f) ——
@@ -211,11 +222,11 @@ pub static BINDINGS: &[Binding] = &[
         matcher: Some(Matcher::PlainChar('r')),
     },
     Binding {
-        keys: "○ / ◉",
+        keys: "v",
         scope: BindingScope::Global,
         action: Some(Action::ToggleFormattedView),
-        help: "Toggle syntax / formatted (header eye icon)",
-        matcher: None,
+        help: "Toggle syntax / formatted",
+        matcher: Some(Matcher::PlainChar('v')),
     },
     Binding {
         keys: "e",
@@ -319,7 +330,7 @@ pub static BINDINGS: &[Binding] = &[
         keys: "Shift+→",
         scope: BindingScope::Global,
         action: Some(Action::FocusViewer),
-        help: "Focus viewer",
+        help: "Focus view",
         matcher: Some(Matcher::ShiftCode(KeyCode::Right)),
     },
     Binding {
@@ -376,7 +387,7 @@ pub static BINDINGS: &[Binding] = &[
         keys: "→",
         scope: BindingScope::Nav,
         action: Some(Action::NavExpand),
-        help: "Expand / open into viewer",
+        help: "Expand / open into view",
         matcher: Some(Matcher::AnyCode(KeyCode::Right)),
     },
     Binding {
@@ -768,6 +779,9 @@ fn action_by_name(name: &str) -> Option<Action> {
         "back" => Action::Back,
         "forward" => Action::Forward,
         "toggle_view" | "toggle-view" | "raw" => Action::ToggleViewMode,
+        "toggle_formatted_view" | "toggle-formatted-view" | "formatted" => {
+            Action::ToggleFormattedView
+        }
         _ => return None,
     })
 }
@@ -858,6 +872,16 @@ mod tests {
                 key(KeyCode::Char('b')),
                 FocusPane::Viewer,
                 Some(Action::ToggleNav),
+            ),
+            (
+                key(KeyCode::Char('v')),
+                FocusPane::Viewer,
+                Some(Action::ToggleFormattedView),
+            ),
+            (
+                key(KeyCode::Char('v')),
+                FocusPane::Nav,
+                Some(Action::ToggleFormattedView),
             ),
             (
                 key(KeyCode::Char('[')),
@@ -1305,7 +1329,12 @@ mod docs_sync {
                     b.scope.title()
                 );
             }
-            let _ = writeln!(out, "| `{}` | {} |", b.keys, b.help);
+            let icon = b
+                .action
+                .as_ref()
+                .and_then(super::binding_icon)
+                .map_or_else(String::new, |i| format!(" {i}"));
+            let _ = writeln!(out, "| `{}`{icon} | {} |", b.keys, b.help);
         }
         out
     }

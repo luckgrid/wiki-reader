@@ -50,8 +50,14 @@ pub enum StyleKind {
     ListMarker,
     /// Task list checkbox marker.
     TaskMarker,
-    /// Frontmatter metadata box.
+    /// Frontmatter metadata box (rules and label).
     Frontmatter,
+    /// Frontmatter YAML key.
+    FrontmatterKey,
+    /// Frontmatter YAML value.
+    FrontmatterValue,
+    /// Frontmatter YAML punctuation (`:` and list dashes).
+    FrontmatterPunct,
 }
 
 /// One styled run on a line.
@@ -792,12 +798,16 @@ impl<'a> LayoutState<'a> {
         let id = content_block_id(BlockActionKind::ToggleFrontmatter, &fm_fp);
         let expanded = self.expanded.contains(&id);
         let line = u32::try_from(self.styled.len()).unwrap_or(0);
-        let label = if expanded {
-            "── frontmatter ──"
-        } else {
-            "── frontmatter ▶ ──"
-        };
-        self.push_span(label.into(), StyleKind::Frontmatter, 1);
+        // Top and bottom rules share one width so the box reads as a unit.
+        let rule_w = self.width.clamp(1, 40);
+        let arrow = if expanded { '▼' } else { '▶' };
+        let label = format!("── frontmatter {arrow} ");
+        let fill = rule_w.saturating_sub(label.width());
+        self.push_span(
+            format!("{label}{}", "─".repeat(fill)),
+            StyleKind::Frontmatter,
+            1,
+        );
         let end = u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(1);
         self.block_actions.push(BlockAction {
             id,
@@ -822,21 +832,25 @@ impl<'a> LayoutState<'a> {
             match val {
                 parse::FmProp::Scalar(s) => {
                     let pad = " ".repeat(key_w.saturating_sub(key.width()));
-                    self.push_span(format!("{key}:{pad} {s}"), StyleKind::Frontmatter, 1);
+                    self.push_span(key.clone(), StyleKind::FrontmatterKey, 1);
+                    self.push_span(":".into(), StyleKind::FrontmatterPunct, 1);
+                    self.push_span(format!("{pad} {s}"), StyleKind::FrontmatterValue, 1);
                     self.commit_line(1);
                 }
                 parse::FmProp::List(xs) => {
                     let pad = " ".repeat(key_w.saturating_sub(key.width()));
-                    self.push_span(format!("{key}:{pad}"), StyleKind::Frontmatter, 1);
+                    self.push_span(key.clone(), StyleKind::FrontmatterKey, 1);
+                    self.push_span(format!(":{pad}"), StyleKind::FrontmatterPunct, 1);
                     self.commit_line(1);
                     for item in xs {
-                        self.push_span(format!("  - {item}"), StyleKind::Frontmatter, 1);
+                        self.push_span("  - ".into(), StyleKind::FrontmatterPunct, 1);
+                        self.push_span(item.clone(), StyleKind::FrontmatterValue, 1);
                         self.commit_line(1);
                     }
                 }
             }
         }
-        self.push_span("─".repeat(self.width.min(40)), StyleKind::Frontmatter, 1);
+        self.push_span("─".repeat(rule_w), StyleKind::Frontmatter, 1);
         self.commit_line(1);
     }
 

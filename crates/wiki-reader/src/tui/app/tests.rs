@@ -102,12 +102,12 @@ fn chrome_pad_hits_header_icons_and_nav_search() {
     assert_eq!(tx, 120 - 4, "◫ two cols left of ✕");
     assert_eq!(ex, 120 - 6, "○ two cols left of ◫");
 
-    // Nav search row is below the blank gap under the title (inner.y + 1).
+    // Nav search row is the first inner row (header row 0, nav border row 1).
     let search = (0..buf.area.width)
-        .find(|&x| buf[(x, 3)].symbol().contains('⌕'))
+        .find(|&x| buf[(x, 2)].symbol().contains('⌕'))
         .expect("search glyph");
     assert_eq!(
-        app.hit_map.hit_at(search, 3),
+        app.hit_map.hit_at(search, 2),
         Some(&Hit::NavSearchRow),
         "search hit on padded chrome row"
     );
@@ -583,11 +583,16 @@ fn focus_stale_cursor_round_trip() {
     app.update(Action::NextPage);
     app.update(Action::NextPage);
     let current = app.navigator.tab().current().page.clone();
+    assert_eq!(
+        app.navigator.nav().cursor,
+        NavStop::Node(NodeId::Page(current.clone())),
+        "nav highlight follows the page even while the viewer is focused"
+    );
     app.update(Action::FocusNav);
     assert_eq!(
         app.navigator.nav().cursor,
         NavStop::Node(NodeId::Page(current)),
-        "stale-cursor should jump to current page"
+        "and stays on it when the nav gains focus"
     );
 }
 
@@ -1826,6 +1831,89 @@ fn block_action_toggle_frontmatter() {
 }
 
 #[test]
+fn frontmatter_toggle_is_reachable_on_first_tab_and_enter() {
+    let root = fixture();
+    // First Tab lands on the frontmatter toggle (line 0), not the next item.
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::ViewerTab);
+    let items = app.focus_list();
+    let it = &items[app.focused_item.expect("focused after first Tab")];
+    assert_eq!(it.kind, FocusTarget::BlockAction);
+    app.update(Action::ViewerActivate);
+    assert!(!app.expanded_blocks.is_empty());
+    assert!(app.doc.lines().join("\n").contains("frontmatter ▼"));
+
+    // Enter with nothing focused, cursor on the toggle line, also toggles.
+    let mut app = App::new(&root).unwrap();
+    assert_eq!(app.cursor_line, 0);
+    app.update(Action::ViewerActivate);
+    assert!(!app.expanded_blocks.is_empty());
+}
+
+#[test]
+fn frontmatter_toggle_is_clickable() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let _ = draw_app(&mut app, 100, 24);
+    let (rect, id) = app
+        .hit_map
+        .entries()
+        .iter()
+        .find_map(|(r, h)| match h {
+            Hit::Block(id) => Some((*r, *id)),
+            _ => None,
+        })
+        .expect("block hit for frontmatter toggle");
+    assert_eq!(app.hit_map.hit_at(rect.x, rect.y), Some(&Hit::Block(id)));
+    let click = ratatui::crossterm::event::MouseEvent {
+        kind: ratatui::crossterm::event::MouseEventKind::Down(
+            ratatui::crossterm::event::MouseButton::Left,
+        ),
+        column: rect.x,
+        row: rect.y,
+        modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+    };
+    let action = crate::tui::app::events::apply_mouse(&mut app, click).expect("action");
+    app.update(action);
+    assert!(app.doc.lines().join("\n").contains("frontmatter ▼"));
+}
+
+#[test]
+fn frontmatter_rules_share_one_width() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::ViewerTab);
+    app.update(Action::ViewerActivate);
+    let lines = app.doc.lines();
+    let top = lines
+        .iter()
+        .find(|l| l.contains("frontmatter"))
+        .expect("top rule");
+    let bottom = lines
+        .iter()
+        .skip_while(|l| !l.contains("frontmatter"))
+        .skip(1)
+        .find(|l| l.chars().all(|c| c == '─') && !l.is_empty())
+        .expect("bottom rule");
+    // Rules are single-width box glyphs, so char count is column count.
+    assert_eq!(top.chars().count(), bottom.chars().count());
+}
+
+#[test]
+fn nav_highlight_follows_viewer_link() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    assert_eq!(app.focus, FocusPane::Viewer);
+    app.follow_link_target("architecture/README.md");
+    let page = app.navigator.tab().current().page.clone();
+    assert_eq!(
+        app.navigator.nav().cursor,
+        NavStop::Node(NodeId::Page(page)),
+        "link followed from the View moves the nav highlight"
+    );
+}
+
+#[test]
 fn for_tests_starts_on_collection_root_not_saved_session() {
     let root = fixture();
     let app = App::for_tests(&root).unwrap();
@@ -2253,6 +2341,219 @@ fn help_overlay_snapshots() {
     }
 }
 
+fn scroll_event(app: &mut App, up: bool) {
+    let kind = if up {
+        MouseEventKind::ScrollUp
+    } else {
+        MouseEventKind::ScrollDown
+    };
+    let _ = apply_mouse(
+        app,
+        MouseEvent {
+            kind,
+            column: 40,
+            row: 10,
+            modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+        },
+    );
+}
+
+#[test]
+fn help_groups_are_full_width_heading_rows() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::OpenHelp);
+    let help = app.help.as_ref().unwrap();
+    assert!(help.rows[0].heading, "first row is the Global heading");
+    assert!(!help.rows[help.selected].heading);
+    let terminal = draw_app(&mut app, 80, 24);
+    let buf = terminal.backend().buffer();
+    let row = |y: u16| {
+        (0..buf.area.width)
+            .map(|x| buf[(x, y)].symbol())
+            .collect::<String>()
+    };
+    let heading = (0..buf.area.height)
+        .map(row)
+        .find(|r| r.contains("── Global"))
+        .expect("heading row");
+    assert!(
+        !heading.contains("Back") && !heading.contains("Alt+"),
+        "heading owns its row: {heading}"
+    );
+    assert!(heading.trim_end().ends_with('│'), "{heading}");
+    assert!(heading.contains("─────"), "rule fills the row: {heading}");
+}
+
+#[test]
+fn help_shows_icon_beside_key_and_v_toggles_view() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::OpenHelp);
+    let help = app.help.as_ref().unwrap();
+    let nav = help
+        .rows
+        .iter()
+        .find(|r| matches!(r.action, Some(Action::ToggleNav)))
+        .unwrap();
+    assert_eq!((nav.keys.as_str(), nav.icon), ("b", Some("◫")));
+    let eye = help
+        .rows
+        .iter()
+        .find(|r| matches!(r.action, Some(Action::ToggleFormattedView)))
+        .unwrap();
+    assert_eq!((eye.keys.as_str(), eye.icon), ("v", Some("○ ◉")));
+}
+
+#[test]
+fn help_selection_skips_headings() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::OpenHelp);
+    app.update(Action::HelpHome);
+    let first = app.help.as_ref().unwrap().selected;
+    assert!(!app.help.as_ref().unwrap().rows[first].heading);
+    // Walk the whole list both ways: never rests on a heading.
+    for _ in 0..80 {
+        app.update(Action::HelpSelectDelta(1));
+        let h = app.help.as_ref().unwrap();
+        assert!(!h.rows[h.selected].heading);
+    }
+    for _ in 0..80 {
+        app.update(Action::HelpSelectDelta(-1));
+        let h = app.help.as_ref().unwrap();
+        assert!(!h.rows[h.selected].heading);
+    }
+}
+
+#[test]
+fn wheel_scrolls_popups_not_the_page_behind() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let _ = draw_app(&mut app, 80, 12);
+    app.update(Action::OpenHelp);
+    let _ = draw_app(&mut app, 80, 12);
+    let before = app.help.as_ref().unwrap().scroll;
+    let page_scroll = app.scroll;
+    for _ in 0..3 {
+        scroll_event(&mut app, false);
+    }
+    let _ = draw_app(&mut app, 80, 12);
+    assert!(app.help.as_ref().unwrap().scroll > before, "help scrolled");
+    assert_eq!(app.scroll, page_scroll, "page behind did not move");
+    for _ in 0..10 {
+        scroll_event(&mut app, true);
+    }
+    let _ = draw_app(&mut app, 80, 12);
+    assert_eq!(app.help.as_ref().unwrap().scroll, 0);
+}
+
+fn footer_border(root: &Path, page: &str, w: u16) -> (App, String) {
+    let mut app = App::new(root).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: app.navigator.index().collection_id.clone(),
+        relative_path: PathBuf::from(page),
+    }));
+    let terminal = draw_app(&mut app, w, 24);
+    let buf = terminal.backend().buffer();
+    let row = (0..buf.area.height)
+        .map(|y| {
+            (0..buf.area.width)
+                .map(|x| buf[(x, y)].symbol())
+                .collect::<String>()
+        })
+        .find(|r| r.contains('└'))
+        .expect("bottom border row");
+    (app, row)
+}
+
+#[test]
+fn footer_missing_side_leaves_the_border_unbroken() {
+    let root = fixture();
+    // First page: no prev, so no dangling arrow or dash on the left.
+    let (app, row) = footer_border(&root, "README.md", 100);
+    assert!(!row.contains("‹"), "{row}");
+    assert!(!row.contains('—'), "{row}");
+    assert!(row.contains("├"), "next button present: {row}");
+    assert!(
+        !app.hit_map
+            .entries()
+            .iter()
+            .any(|(_, h)| matches!(h, Hit::Prev)),
+        "no prev hit"
+    );
+    // Padded outline buttons.
+    let (_, row) = footer_border(&root, "architecture/design-system/tokens.md", 100);
+    assert!(row.contains("┤ ‹ Design System ├"), "{row}");
+}
+
+#[test]
+fn footer_button_colours_follow_pane_focus_and_selection() {
+    let root = fixture();
+    let (mut app, _) = footer_border(&root, "architecture/design-system/tokens.md", 100);
+    let theme = app.theme;
+    // (outline colour of the prev button, fill of the next button's label)
+    let find_style = |app: &mut App| {
+        let terminal = draw_app(app, 100, 24);
+        let buf = terminal.backend().buffer();
+        let (x, y) = find_glyph(buf, "┤").expect("prev button");
+        // The header breadcrumb also uses `›`; the next button is on the border row.
+        let nx = (0..buf.area.width)
+            .find(|&nx| buf[(nx, y)].symbol() == "›")
+            .expect("next button");
+        (buf[(x, y)].fg, buf[(nx, y)].bg)
+    };
+    // View focused: teal outline, no fill.
+    app.update(Action::FocusViewer);
+    let (fg, bg) = find_style(&mut app);
+    assert_eq!(fg, theme.border_focus);
+    assert_ne!(bg, theme.peach);
+    // Nav focused: gray outline.
+    app.update(Action::FocusNav);
+    let (fg, _) = find_style(&mut app);
+    assert_eq!(fg, theme.border);
+    // Tab-selected button fills peach.
+    app.update(Action::FocusViewer);
+    app.update(Action::FocusFooter);
+    let (_, bg) = find_style(&mut app);
+    assert_eq!(bg, theme.peach);
+}
+
+#[test]
+fn status_bar_pill_and_page_status() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: app.navigator.index().collection_id.clone(),
+        relative_path: PathBuf::from("decisions/0001-stack.md"),
+    }));
+    let terminal = draw_app(&mut app, 120, 24);
+    let buf = terminal.backend().buffer();
+    let y = buf.area.height - 1;
+    let row: String = (0..buf.area.width).map(|x| buf[(x, y)].symbol()).collect();
+    assert!(row.contains(" VIEW "), "{row}");
+    assert!(row.contains("accepted"), "status after date: {row}");
+    let col = u16::try_from(row[..row.find("accepted").unwrap()].chars().count()).unwrap();
+    assert_eq!(buf[(col, y)].fg, app.theme.heading[2], "accepted is green");
+    let px = u16::try_from(row[..row.find(" VIEW ").unwrap()].chars().count()).unwrap() + 1;
+    assert_eq!(buf[(px, y)].bg, app.theme.accent, "pill background");
+}
+
+#[test]
+fn nav_right_on_current_page_keeps_view_position() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::FocusNav);
+    for _ in 0..3 {
+        app.update(Action::ViewerDown);
+    }
+    let cursor = app.cursor_line;
+    // Nav cursor is on the current page: Right just hands focus to the View.
+    app.update(Action::NavExpand);
+    assert_eq!(app.focus, FocusPane::Viewer);
+    assert_eq!(app.cursor_line, cursor);
+}
+
 #[test]
 fn nav_right_on_page_opens_and_focuses_viewer() {
     let root = fixture();
@@ -2398,7 +2699,7 @@ fn footer_row(root: &Path) -> String {
 fn footer_prev_next_use_folder_names_by_default() {
     let row = footer_row(&fixture());
     assert!(row.contains("‹ Design System"), "{row}");
-    assert!(row.contains("Wfos ›"), "{row}");
+    assert!(row.contains("Workflow OS ›"), "{row}");
     assert!(
         !row.contains("Readme") && !row.contains("Overview"),
         "{row}"
@@ -2406,13 +2707,13 @@ fn footer_prev_next_use_folder_names_by_default() {
 }
 
 #[test]
-fn footer_prev_next_follow_title_label_mode() {
+fn footer_landing_labels_use_titles_in_filename_mode() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("wiki");
     copy_dir(&fixture(), &root);
     std::fs::write(
         root.join(".wiki-reader.toml"),
-        "[nav]\nlabels = \"title\"\n",
+        "[nav]\nlabels = \"filename\"\n",
     )
     .unwrap();
     let row = footer_row(&root);

@@ -8,7 +8,7 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 
 use crate::tui::highlight::HlSpan;
 use crate::tui::hit::{Hit, HitMap};
-use crate::tui::layout::VIEWER_LEFT_PAD;
+use crate::tui::layout::{VIEWER_LEFT_PAD, VIEWER_TOP_PAD};
 use crate::tui::theme::Theme;
 use crate::tui::viewer_doc::{FocusItem, FocusTarget};
 use wiki_reader_render::{LinkClass, LinkId, LinkSpan, StyleKind, StyledLine};
@@ -28,6 +28,7 @@ pub fn draw(
     match_highlight: Option<u32>,
     focused: bool,
     focused_item: Option<&FocusItem>,
+    focus_items: &[FocusItem],
     prev_label: Option<&str>,
     next_label: Option<&str>,
     footer_focus: Option<FocusTarget>,
@@ -45,6 +46,7 @@ pub fn draw(
         prev_label,
         next_label,
         footer_focus,
+        focused,
         theme,
         hits,
     );
@@ -52,11 +54,17 @@ pub fn draw(
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(theme.border(focused))
-        .title("Viewer")
+        .title("View")
         .title_bottom(footer.left)
         .title_bottom(footer.right);
-    let inner_area = block.inner(area);
+    let bordered = block.inner(area);
     frame.render_widget(block, area);
+    let top_pad = VIEWER_TOP_PAD.min(bordered.height);
+    let inner_area = Rect {
+        y: bordered.y.saturating_add(top_pad),
+        height: bordered.height.saturating_sub(top_pad),
+        ..bordered
+    };
 
     // Left pad column holds the ▌ cursor marker (P2-19); text starts one col in.
     let content = Rect {
@@ -122,6 +130,32 @@ pub fn draw(
                         Hit::Link(span.id.0),
                     );
                 }
+            }
+        }
+
+        for it in focus_items {
+            if it.kind != FocusTarget::BlockAction || it.line != Some(line_no) {
+                continue;
+            }
+            let Some(id) = it
+                .target
+                .strip_prefix("block:")
+                .and_then(|n| n.parse::<u32>().ok())
+            else {
+                continue;
+            };
+            let x0 = gutter_w.saturating_add(it.cols.0);
+            let x1 = gutter_w.saturating_add(it.cols.1).min(content.width);
+            if x0 < x1 {
+                hits.push(
+                    Rect {
+                        x: content.x.saturating_add(x0),
+                        y,
+                        width: x1 - x0,
+                        height: 1,
+                    },
+                    Hit::Block(id),
+                );
             }
         }
 

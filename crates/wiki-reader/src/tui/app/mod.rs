@@ -434,6 +434,7 @@ impl App {
                 | Action::ViewerTab
                 | Action::ViewerBackTab
                 | Action::FollowLinkId(_)
+                | Action::ActivateBlock(_)
                 | Action::ViewerActivate
         ) {
             self.clear_search_matches();
@@ -479,6 +480,11 @@ impl App {
             Action::HelpHome => self.help_jump(true),
             Action::HelpEnd => self.help_jump(false),
             Action::HelpActivate => self.help_activate(None),
+            Action::HelpScroll(d) => {
+                if let Some(help) = self.help.as_mut() {
+                    help.scroll_by(d);
+                }
+            }
             Action::SearchChar(c) => self.search_type(c),
             Action::SearchBackspace => self.search_backspace(),
             Action::SearchSelectDelta(d) => self.search_select(d),
@@ -555,6 +561,7 @@ impl App {
             Action::ViewerActivate => self.viewer_activate(),
             Action::FocusFooter => self.focus_footer(),
             Action::FollowLinkId(id) => self.follow_link_id(id),
+            Action::ActivateBlock(id) => self.activate_block(&format!("block:{id}")),
             Action::ConfirmOpen => {
                 if let Some(url) = self.pending_external.take() {
                     let _ = self.opener.open(&url);
@@ -695,6 +702,7 @@ impl App {
             | Hit::NavToggle
             | Hit::ViewToggle
             | Hit::Quit
+            | Hit::Block(_)
             | Hit::ViewerLine(_)
             | Hit::SearchDismiss
             | Hit::HelpDismiss
@@ -825,11 +833,7 @@ impl App {
         let Some(help) = self.help.as_mut() else {
             return;
         };
-        help.selected = if home {
-            0
-        } else {
-            help.rows.len().saturating_sub(1)
-        };
+        help.select_edge(home);
     }
 
     pub(crate) fn help_activate(&mut self, index: Option<usize>) {
@@ -1286,8 +1290,9 @@ impl App {
         if let Some(n) = self.navigator.notice() {
             self.message = n.to_owned();
         }
-        // Navigation while nav is focused: cursor follows the current page.
-        if self.focus == FocusPane::Nav {
+        // The nav highlight follows the current page however we got there (links,
+        // footer, search, history), and stays put while the nav is focused.
+        if page_changed || self.focus == FocusPane::Nav {
             let page = self.navigator.tab().current().page.clone();
             self.navigator.set_nav_cursor(NodeId::Page(page.clone()));
             self.reveal_page_in_nav(&page);

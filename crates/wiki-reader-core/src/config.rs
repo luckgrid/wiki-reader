@@ -14,9 +14,9 @@ use serde::Deserialize;
 #[serde(rename_all = "kebab-case")]
 pub enum LabelMode {
     /// `nav_title` → `title` → H1 → humanized filename.
+    #[default]
     Title,
     /// Always the humanized filename / stem.
-    #[default]
     Filename,
     /// Title with dim filename suffix at draw time (label itself is title-only).
     #[serde(rename = "title+filename")]
@@ -299,7 +299,7 @@ mod tests {
         let tmp = tempdir().unwrap();
         let cfg = load_isolated(tmp.path(), None);
         assert!(cfg.exclude.is_empty());
-        assert_eq!(cfg.nav.labels, LabelMode::Filename);
+        assert_eq!(cfg.nav.labels, LabelMode::Title);
         assert!(cfg.diagnostics.is_empty());
     }
 

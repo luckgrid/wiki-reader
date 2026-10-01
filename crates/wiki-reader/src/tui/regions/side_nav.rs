@@ -9,7 +9,6 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use wiki_reader_core::nav::{NavItem, NavStop, NavTree, NodeId};
-use wiki_reader_core::provider::PageKey;
 
 use crate::tui::hit::{Hit, HitMap};
 use crate::tui::layout::NAV_CHROME_ROWS;
@@ -20,10 +19,14 @@ use crate::tui::theme::Theme;
 pub struct NavRow {
     /// Node id (page or group).
     pub id: NodeId,
-    /// Display label (with indent / triangle).
+    /// Display label (no indent or triangle).
     pub label: String,
     /// True when this row is a collapsible group header.
     pub is_group: bool,
+    /// True when a group row is expanded (drives the triangle glyph).
+    pub open: bool,
+    /// Nesting depth (0 = top level).
+    pub depth: usize,
 }
 
 /// Flatten the tree to currently visible rows (respecting `expanded`).
@@ -41,7 +44,6 @@ pub fn draw(
     area: Rect,
     tree: &NavTree,
     expanded: &std::collections::HashSet<NodeId>,
-    current: &PageKey,
     cursor: &NavStop,
     scroll: u16,
     focused: bool,
@@ -78,12 +80,12 @@ pub fn draw(
         return;
     }
 
-    // Inner chrome: blank, search box, blank — then the tree list.
-    // NAV_CHROME_ROWS = borders(2) + these three rows.
-    let list_offset: u16 = 3;
+    // Inner chrome: search box, blank — then the tree list.
+    // NAV_CHROME_ROWS = borders(2) + these two rows.
+    let list_offset: u16 = 2;
     debug_assert_eq!(NAV_CHROME_ROWS, 2 + list_offset);
 
-    let search_y = inner.y.saturating_add(1);
+    let search_y = inner.y;
     let search_rect = Rect {
         x: inner.x,
         y: search_y,
@@ -91,21 +93,20 @@ pub fn draw(
         height: 1,
     };
     hits.push(search_rect, Hit::NavSearchRow);
+    // Same bar in both states; focus switches the bar and text to the accent.
     let on_search = matches!(cursor, NavStop::Search);
-    let search_bg = if on_search {
-        theme.cursor_line
+    let (mark_fg, text_fg) = if on_search {
+        (theme.accent, theme.accent)
     } else {
-        theme.search_box
+        (theme.border, theme.text)
     };
-    let search_style = if on_search {
-        theme.text().bg(search_bg)
-    } else {
-        theme.muted().bg(search_bg)
-    };
-    let search_mark = if on_search { "▌" } else { " " };
-    let search_label = format!("{search_mark}⌕ Search…");
-    let search_w = Span::raw(search_label.as_str()).width();
-    let mut search_spans = vec![Span::styled(search_label, search_style)];
+    let search_bg = theme.cursor_line;
+    let search_label = "⌕ Search…";
+    let search_w = 1 + Span::raw(search_label).width();
+    let mut search_spans = vec![
+        Span::styled("▌", Style::default().fg(mark_fg).bg(search_bg)),
+        Span::styled(search_label, Style::default().fg(text_fg).bg(search_bg)),
+    ];
     if search_w < usize::from(inner.width) {
         search_spans.push(Span::styled(
             " ".repeat(usize::from(inner.width) - search_w),
@@ -116,7 +117,6 @@ pub fn draw(
     let rows = visible_rows(tree, expanded);
     let scroll = usize::from(scroll);
     let mut lines = vec![
-        Line::from(""), // gap under title
         Line::from(search_spans),
         Line::from(""), // gap under search
     ];
@@ -137,28 +137,34 @@ pub fn draw(
         } else {
             hits.push(rect, Hit::NavItem(row.id.clone()));
         }
-        let marker = match &row.id {
-            NodeId::Page(k) if k == current => "● ",
-            _ => "  ",
-        };
         let on_row = matches!(cursor, NavStop::Node(id) if id == &row.id);
-        let cursor_mark = if on_row { "▌" } else { " " };
-        let style = if on_row {
-            theme.text().bg(theme.cursor_line)
+        let row_bg = |style: Style| {
+            if on_row {
+                style.bg(theme.cursor_line)
+            } else {
+                style
+            }
+        };
+        let label_style = row_bg(if row.is_group {
+            Style::default().fg(theme.nav_folder)
         } else {
             theme.text()
-        };
-        let mut spans = vec![Span::styled(
-            format!("{cursor_mark}{marker}{}", row.label),
-            style,
-        )];
+        });
+        let mut spans = vec![
+            Span::styled(if on_row { "▌" } else { " " }, row_bg(theme.text())),
+            Span::styled(" ".repeat(1 + row.depth * 2), row_bg(theme.text())),
+        ];
+        if row.is_group {
+            let tri = if row.open { "▾ " } else { "▸ " };
+            spans.push(Span::styled(tri, label_style));
+        }
+        spans.push(Span::styled(row.label.clone(), label_style));
         if labels == wiki_reader_core::config::LabelMode::TitleFilename
             && let NodeId::Page(key) = &row.id
         {
             let file = wiki_reader_core::nav::humanize_filename(&key.relative_path);
-            let title = row.label.trim_start();
-            if title != file {
-                spans.push(Span::styled(format!(" ({file})"), theme.muted()));
+            if row.label != file {
+                spans.push(Span::styled(format!(" ({file})"), row_bg(theme.muted())));
             }
         }
         let max = usize::from(inner.width);
@@ -211,14 +217,15 @@ fn collect_visible(
     depth: usize,
     out: &mut Vec<NavRow>,
 ) {
-    let indent = "  ".repeat(depth);
     for item in items {
         match item {
             NavItem::Page { id, label, .. } => {
                 out.push(NavRow {
                     id: id.clone(),
-                    label: format!("{indent}{label}"),
+                    label: label.clone(),
                     is_group: false,
+                    open: false,
+                    depth,
                 });
             }
             NavItem::Group {
@@ -227,11 +234,12 @@ fn collect_visible(
                 children,
             } => {
                 let open = expanded.contains(id);
-                let tri = if open { "▾ " } else { "▸ " };
                 out.push(NavRow {
                     id: id.clone(),
-                    label: format!("{indent}{tri}{label}"),
+                    label: label.clone(),
                     is_group: true,
+                    open,
+                    depth,
                 });
                 if open {
                     collect_visible(children, expanded, depth + 1, out);
@@ -259,17 +267,20 @@ mod tests {
     fn visible_rows_collapsed_and_expanded() {
         let tree = worked_tree();
         let collapsed = visible_rows(&tree, &HashSet::new());
-        assert!(collapsed.iter().any(|r| r.label.contains("Readme")));
+        assert!(collapsed.iter().any(|r| r.label == "Worked Example Wiki"));
+        assert!(!collapsed.iter().any(|r| r.label.contains("Readme")));
         assert!(!collapsed.iter().any(|r| r.label.contains("Token")));
 
         let mut expanded = HashSet::new();
         expanded.insert(NodeId::Group(PathBuf::from("architecture")));
         expanded.insert(NodeId::Group(PathBuf::from("architecture/design-system")));
         let open = visible_rows(&tree, &expanded);
-        assert!(open.iter().any(|r| r.label.contains("Tokens")));
+        assert!(open.iter().any(|r| r.label == "Token Projection"));
         insta::assert_debug_snapshot!(
             "worked_nav_expanded",
-            open.iter().map(|r| &r.label).collect::<Vec<_>>()
+            open.iter()
+                .map(|r| format!("{}{}", "  ".repeat(r.depth), r.label))
+                .collect::<Vec<_>>()
         );
     }
 }

@@ -2,7 +2,7 @@
 source: crates/wiki-reader-render/src/lib.rs
 expression: "formatted.lines.join(\"\\n\")"
 ---
-── frontmatter ▶ ──
+── frontmatter ▶ ───────────────────────
 
 Element gallery
 ────────────────────────────────────────

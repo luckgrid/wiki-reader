@@ -2,7 +2,7 @@
 source: crates/wiki-reader-render/src/lib.rs
 expression: text
 ---
-── frontmatter ▶ ──
+── frontmatter ▶ ───────────────────────
 
 # Element gallery
 

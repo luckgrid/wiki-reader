@@ -2,7 +2,8 @@
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::text::Span;
+use ratatui::style::{Modifier, Style};
+use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use crate::tui::focus::FocusPane;
@@ -25,6 +26,8 @@ pub struct StatusModel<'a> {
     pub minutes: u32,
     /// Updated frontmatter or "—".
     pub updated: &'a str,
+    /// Frontmatter `status:` value, shown after the date.
+    pub status: Option<&'a str>,
     /// Message area (focused-item target or transient notice).
     pub message: &'a str,
 }
@@ -52,6 +55,9 @@ fn truncate_cols(s: &str, max: usize) -> String {
     out
 }
 
+/// One status field: text + style.
+type Field = (String, Style);
+
 /// Draw the status bar. When narrow, drop lower-priority fields before the message.
 pub fn draw(frame: &mut Frame<'_>, area: Rect, model: &StatusModel<'_>, theme: &Theme) {
     let area = layout::chrome_pad(area);
@@ -65,38 +71,80 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, model: &StatusModel<'_>, theme: &
     };
     let w = usize::from(area.width);
     let msg = model.message;
-    let msg_suffix = if msg.is_empty() {
-        String::new()
+    let msg_len = if msg.is_empty() {
+        0
     } else {
-        format!(" · {msg}")
+        SEP.chars().count() + col_width(msg)
     };
-    let msg_len = col_width(&msg_suffix);
     let budget = w.saturating_sub(msg_len);
 
-    // High → low priority fields (drop from the end when narrowing).
-    let mut fields: Vec<String> = vec![
-        model.focus.label().to_owned(),
-        model.path.to_owned(),
-        format!("L{} {}%", model.line, model.pct),
-        format!("{}w", model.words),
-        reading,
-        model.updated.to_owned(),
+    let mode_bg = match model.focus {
+        FocusPane::Nav => theme.heading[4],
+        FocusPane::Viewer => theme.accent,
+    };
+    let text = theme.text();
+    // High → low priority fields (drop from the end when narrowing). Date and
+    // status outrank word count and reading time.
+    let mut fields: Vec<Field> = vec![
+        (
+            format!(" {} ", model.focus.label()),
+            Style::default()
+                .bg(mode_bg)
+                .fg(theme.on_peach)
+                .add_modifier(Modifier::BOLD),
+        ),
+        (model.path.to_owned(), text),
+        (format!("L{} {}%", model.line, model.pct), text),
+        (model.updated.to_owned(), theme.secondary()),
     ];
-    let mut head = join_fields(&fields);
-    while col_width(&head) > budget && fields.len() > 2 {
+    if let Some(status) = model.status.filter(|s| !s.is_empty()) {
+        fields.push((status.to_owned(), theme.status_style(status)));
+    }
+    fields.push((format!("{}w", model.words), text));
+    fields.push((reading, text));
+    while fields_width(&fields) > budget && fields.len() > 2 {
         fields.pop();
-        head = join_fields(&fields);
     }
-    if col_width(&head) > budget {
-        head = truncate_cols(&head, budget);
+
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    for (i, (text, style)) in fields.into_iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::styled(SEP, theme.muted()));
+        }
+        spans.push(Span::styled(text, style));
     }
-    let text = format!("{head}{msg_suffix}");
-    let chars = truncate_cols(&text, w);
-    frame.render_widget(Paragraph::new(chars).style(theme.muted()), area);
+    if !msg.is_empty() {
+        spans.push(Span::styled(SEP, theme.muted()));
+        spans.push(Span::styled(msg.to_owned(), theme.secondary()));
+    }
+    frame.render_widget(Paragraph::new(Line::from(clip_spans(spans, w))), area);
 }
 
-fn join_fields(fields: &[String]) -> String {
-    fields.join(" · ")
+const SEP: &str = " · ";
+
+fn fields_width(fields: &[Field]) -> usize {
+    let text: usize = fields.iter().map(|(t, _)| col_width(t)).sum();
+    text + fields.len().saturating_sub(1) * SEP.chars().count()
+}
+
+/// Clip a span list to `max` display columns.
+fn clip_spans(spans: Vec<Span<'static>>, max: usize) -> Vec<Span<'static>> {
+    let mut used = 0;
+    let mut out = Vec::new();
+    for sp in spans {
+        let w = col_width(&sp.content);
+        if used + w <= max {
+            used += w;
+            out.push(sp);
+        } else {
+            let cut = truncate_cols(&sp.content, max - used);
+            if !cut.is_empty() {
+                out.push(Span::styled(cut, sp.style));
+            }
+            break;
+        }
+    }
+    out
 }
 
 /// Reading time in minutes, rounded up (words / 230).

@@ -2,10 +2,10 @@
 source: crates/wiki-reader-core/src/nav/tree.rs
 expression: text
 ---
-Readme
+Summary Root
 ▾ Two
   Two
   One
 Three
 ▾ Other pages
-  Orphan
+  Orphan Page

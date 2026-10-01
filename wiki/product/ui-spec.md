@@ -17,31 +17,31 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 <!-- ui-diagram:start -->
 ```text
  Worked Example Wiki › Architecture › Design System › Token Projection    ○ ◫ ✕
-┌Nav─────────────────────┐┌Viewer──────────────────────────────────────────────┐
-│                        ││ ── frontmatter ▶ ──                                │
-│ ⌕ Search…              ││                                                    │
-│                        ││▌# Token Projection                                 │
-│   Worked Example Wiki  ││                                                    │
-│   ▾ Architecture       ││ The reusable adapter stays semantic-only; see      │
-│     Overview           ││ [ADR-0003](../decisions/0003.md) for why.          │
-│     ▾ Design System    ││                                                    │
-│       Overview         ││ ## Linked from                                     │
-│▌●     Token Projection ││ • Worked Example Wiki                              │
-│     Workflow OS        ││ • Architecture Overview                            │
-│   ▸ Decisions          ││                                                    │
-└────────────────────────┘└‹ Design System────────────────────────Workflow OS ›┘
- VIEWER · architecture/design-system/tokens.md · L5 9% · 13w · 1m · 2026-09-28
+┌Nav───────────────────────┐┌View──────────────────────────────────────────────┐
+│▌⌕ Search…                ││                                                  │
+│                          ││ ── frontmatter ▶ ───────────────────────         │
+│  Worked Example Wiki     ││                                                  │
+│  ▾ Architecture          ││▌# Token Projection                               │
+│    Architecture Overview ││                                                  │
+│    ▾ Design System       ││ The reusable adapter stays semantic-only;        │
+│      Design System       ││ see [ADR-0003](../decisions/0003.md).            │
+│▌     Token Projection    ││                                                  │
+│    ▸ Wfos                ││ ## Linked from                                   │
+│  ▸ Decisions             ││ • Worked Example Wiki                            │
+│                          ││ • Architecture Overview                          │
+└──────────────────────────┘└┤ ‹ Design System ├──────────────┤ Workflow OS › ├┘
+ VIEW  · architecture/design-system/tokens.md · L5 9% · 2026-09-28 · draft
 ```
 <!-- ui-diagram:end -->
 
-The diagram shows nav labels with `nav.labels = "title"` for readability; the default is `filename` (see [Side nav](#side-nav-left)). `○`/`◉` is the syntax/formatted toggle, `◫` toggles the side nav, `✕` quits.
+Nav rows show page titles by default and folders show the folder name (see [Side nav](#side-nav-left)). `○`/`◉` is the syntax/formatted toggle (`v`), `◫` toggles the side nav (`b`), `✕` quits (`q`).
 
 Regions:
 
-- **Header:** one padded row with the breadcrumb on the left and the icon buttons on the right. On terminals 30 rows or taller it gets one blank row above and below.
+- **Header:** one padded row with the breadcrumb on the left and the icon buttons on the right, directly above the panes. The last crumb is the current page and is drawn gray (read-only); the others are links.
 - **Side nav:** a bordered pane titled `Nav` holding the search row and the page tree. Its width defaults to 26 (30 at ≥ 120 columns) and can be dragged.
-- **Viewer:** a bordered pane titled `Viewer` with the cursor line, which is marked `▌`. Its **prev/next footer is drawn on the pane's bottom border** and stays visible while the article scrolls.
-- **Status bar:** one padded row under the panes, with the same tall-terminal gaps as the header.
+- **View:** a bordered pane titled `View` with one blank row under the top border and the cursor line, which is marked `▌`. Its **prev/next footer is drawn on the pane's bottom border** and stays visible while the article scrolls.
+- **Status bar:** one padded row directly under the panes.
 
 The tab bar appears at the top of the viewer pane only when two or more tabs are open. A right-hand widget slot is reserved for Phase 4.
 
@@ -56,12 +56,12 @@ The tab bar appears at the top of the viewer pane only when two or more tabs are
 A file tree **presented as a documentation site's side nav**. Construction rules are in [content model](content-model.md). In short:
 
 - The root entry page (root `README.md`/`index.md`) is the first item.
-- Items are labelled by the `nav.labels` option: **`filename`** (the default; humanized filename), `title` (`nav_title` → `title` → first H1 → humanized filename), or `title+filename` (title with a dim filename suffix).
-- A folder whose only page is its README is shown as a **single link**, not a collapsible. Folders with more content become **collapsible groups** with their README as the first item (the landing page), labelled `Overview` so the group name is not repeated.
-- The current page is marked `●`; the cursor row has a full-width background highlight and a `▌` marker. Ancestor groups auto-expand after every navigation.
+- Folders always show the **folder name**. Pages are labelled by the `nav.labels` option: **`title`** (the default: `nav_title` → `title` → first H1 → humanized filename), `filename` (humanized filename), or `title+filename` (title with a dim filename suffix). A folder's README and the root README always show their title (the root falls back to the collection name), never "Readme".
+- Every folder with a README is a **collapsible group** (the folder name) whose first item is the README, labelled with its title. A folder holding only a README is still a group with that one item.
+- Folder rows use their own color and nested rows indent two more columns per level. The selected row has a full-width background highlight and a `▌` marker; it follows the current page however you got there (a link, the footer, search, history). Ancestor groups auto-expand after every navigation.
 - The pane is **resizable**: drag the divider between the nav and the viewer (clamped to 16–50 columns; the width is saved with the session and ignored below 80 columns).
 
-**Search entry (top of the side nav).** The first row is `⌕ Search…`. Selecting it, clicking it, or pressing the search hotkey anywhere opens the **search overlay panel** (below). It's a nav stop for Shift+↑/↓ (see keyboard).
+**Search entry (top of the side nav).** The first row is `⌕ Search…`, drawn as a bar in both states; when it is the focused nav stop the bar and text turn the accent color. Selecting it, clicking it, or pressing the search hotkey anywhere opens the **search overlay panel** (below). It's a nav stop for Shift+↑/↓ (see keyboard).
 
 Future: this search row becomes a proper **side nav header**, and a **side nav footer** can hold widget actions or tabbed features (e.g. Pages / Outline).
 
@@ -78,19 +78,19 @@ Future: this search row becomes a proper **side nav header**, and a **side nav f
 ## Help overlay panel
 
 - Opens with `?` from Normal mode. Generated from the binding table in `keymap.rs` (same source as the live map).
-- Sections: Global, Side nav, Viewer, Chords, Search overlay. Key labels show config overrides when set.
-- `↑`/`↓` / `PgUp`/`PgDn` / `g`/`G` scroll; `Enter` or a click on a row closes help and runs that action (display-only rows are not clickable).
+- Sections: Global, Side nav, View, Chords, Search overlay. Each section is a full-width divider row with every binding on its own row. A header icon that also triggers an action (`◫`, `○ ◉`, `✕`) is shown beside its key. Key labels show config overrides when set.
+- `↑`/`↓` / `PgUp`/`PgDn` / `g`/`G` and the mouse wheel scroll; `Enter` or a click on a row closes help and runs that action (display-only rows are not clickable).
 - `Esc` or `?` closes without an action. Click outside dismisses.
 
-## Viewer (center)
+## View (center)
 
-Rendered by default; `r` toggles raw, and the header eye switches the rendered view between syntax and formatted (default syntax). All views share the **cursor line** (see Cursor model), so toggling keeps you on the same source line. The text column is capped at ~100 cols; tables and code may use the full width.
+Rendered by default; `r` toggles raw, and `v` (or the header eye) switches the rendered view between syntax and formatted (default syntax). All views share the **cursor line** (see Cursor model), so toggling keeps you on the same source line. The text column is capped at ~100 cols; tables and code may use the full width.
 
 **Focusable items ("actions")** are what `Tab` cycles through, in document order:
 
 1. Links (internal, anchor, external, broken)
-2. Block actions: show collapsed frontmatter, copy a code block (OSC 52)
-3. The viewer footer's ‹ Prev / Next › buttons (last in the cycle)
+2. Block actions: expand/collapse frontmatter (`▶`/`▼`, key-reachable and clickable from the first frame), copy a code block (OSC 52)
+3. The View footer's ‹ Prev / Next › buttons (last in the cycle)
 
 After the last item, `Tab` wraps to the first. The focused item renders inverted, and the status bar shows its target or action (`→ decisions/0003.md#context`, `↗ https://…`, `? not found: foo.md`, `copy code`).
 
@@ -100,19 +100,19 @@ After the last item, `Tab` wraps to the first. The focused item renders inverted
 
 Future: a **sticky section header** at the top of the viewer showing the heading of the section in view.
 
-## Viewer footer (prev/next)
+## View footer (prev/next)
 
-`‹ Prev title` on the left and `Next title ›` on the right, following side nav order ([content model](content-model.md)). They are drawn on the **viewer pane's bottom border**, so they stay pinned while the article scrolls. Each label is truncated with `…` to its half of the border so long titles cannot collide. Both are clickable, reachable by `Tab` or `f`, and bound to `[` / `]`. A side with no prev/next is dim and skipped by `Tab`.
+`┤ ‹ Prev title ├` on the left and `┤ Next title › ├` on the right, following side nav order ([content model](content-model.md)). They are outlined, padded buttons drawn on the **View pane's bottom border**, so they stay pinned while the article scrolls. The outline matches the pane border (teal when the View is focused, gray when the Nav is); a button reached with `Tab` or `f` fills peach with dark text. Each label is truncated with `…` to its half of the border so long titles cannot collide. Both are clickable and bound to `[` / `]`. A side with no prev/next draws nothing, so the border runs unbroken.
 
 ## Status bar (full width, 1 row)
 
-Like markdown-reader's: focused region (`NAV`/`VIEWER`/`SEARCH`), relative path, cursor line and scroll %, word count, reading time, updated (git or mtime), and a **message area** for link targets, notices ("not found"), confirmations, and search match `n/m`. Lower-priority items drop first when narrow.
+Like markdown-reader's: focused region as a highlighted pill (`NAV`/`VIEW`), relative path, cursor line and scroll %, updated date and the page's frontmatter `status` (colored by value), word count, reading time, and a **message area** for link targets, notices ("not found"), confirmations, and search match `n/m`. Lower-priority items drop first when narrow.
 
 ## Focus & cursor model
 
-Two focusable panes: **Side nav** and **Viewer**. The search overlay is modal while open.
+Two focusable panes: **Side nav** and **View**. The search overlay is modal while open.
 
-- `Shift+←` focuses the side nav; `Shift+→` focuses the viewer. Mouse click also focuses a pane.
+- `Shift+←` focuses the side nav; `Shift+→` focuses the View. Mouse click also focuses a pane.
 - **Each pane remembers its cursor.** Switching returns to the last known position in that pane.
 - **Defaults when a pane has no remembered position:**
   - Viewer: top of the current page.
@@ -135,10 +135,10 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 |-----|--------|
 | `Alt+← / Alt+b` | Back |
 | `Alt+→ / Alt+f` | Forward |
-| `q` | Quit |
-| `b` | Toggle side nav |
+| `q` ✕ | Quit |
+| `b` ◫ | Toggle side nav |
 | `r` | Toggle raw / rendered |
-| `○ / ◉` | Toggle syntax / formatted (header eye icon) |
+| `v` ○ ◉ | Toggle syntax / formatted |
 | `e` | Open in editor |
 | `y` | Copy page path |
 | `Y` | Copy focused link target |
@@ -153,7 +153,7 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 | `]` | Next page |
 | `Backspace` | Back |
 | `Shift+←` | Focus side nav |
-| `Shift+→` | Focus viewer |
+| `Shift+→` | Focus view |
 | `F6` | Cycle pane focus |
 
 ### Side nav
@@ -166,11 +166,11 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 | `Shift+Tab` | Previous nav row |
 | `↓` | Next nav row |
 | `Tab` | Next nav row |
-| `→` | Expand / open into viewer |
+| `→` | Expand / open into view |
 | `←` | Collapse / parent group |
 | `Enter` | Open page (stay in nav) / toggle group |
 
-### Viewer
+### View
 
 | Key | Action |
 |-----|--------|

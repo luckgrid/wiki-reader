@@ -2,14 +2,15 @@
 source: crates/wiki-reader/src/tui/app/tests.rs
 expression: out
 ---
- Readme                                                                                                           ○ ◫ ✕ 
-┌Nav─────────────────────────┐┌Viewer──────────────────────────────────────────────────────────────────────────────────┐
-│                            ││▌── frontmatter ▶ ──                                                                    │
-│ ⌕ Search…                  ││                                                                                        │
-│                            ││ # Worked Example Wiki                                                                  │
-│▌● Readme                   ││                                                                                        │
-│   ▸ Architecture           ││ A tiny markdown collection used as the default smoke-test root.                        │
-│   ▸ Decisions              ││                                                                                        │
+ Worked Example Wiki                                                                                              ○ ◫ ✕ 
+┌Nav─────────────────────────┐┌View────────────────────────────────────────────────────────────────────────────────────┐
+│▌⌕ Search…                  ││                                                                                        │
+│                            ││▌── frontmatter ▶ ───────────────────────                                               │
+│▌ Worked Example Wiki       ││                                                                                        │
+│  ▸ Architecture            ││ # Worked Example Wiki                                                                  │
+│  ▸ Decisions               ││                                                                                        │
+│                            ││ A tiny markdown collection used as the default smoke-test root.                        │
+│                            ││                                                                                        │
 │                            ││ Start at Architecture Overview, follow Token Projection, then return via back when     │
 │                            ││ history exists.                                                                        │
 │                            ││                                                                                        │
@@ -23,6 +24,5 @@ expression: out
 │                            ││                                                                                        │
 │                            ││                                                                                        │
 │                            ││                                                                                        │
-│                            ││                                                                                        │
-└────────────────────────────┘└‹ —───────────────────────────────────────────────────────────────────────Architecture ›┘
- VIEWER · README.md · L1 12% · 29w · 1m · 2026-09-28
+└────────────────────────────┘└─────────────────────────────────────────────────────────────┤ Architecture Overview › ├┘
+  VIEW  · README.md · L1 12% · 2026-09-28 · draft · 29w · 1m

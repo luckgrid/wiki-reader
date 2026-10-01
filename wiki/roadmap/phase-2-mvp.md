@@ -36,6 +36,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 - 2026-09-30: interim P0/P1 acceptance walk recorded below (code + tests + dogfood); **status stays `active`** until ≈ 2026-10-13 for the two-weeks-without-GUI verdict, then flip to `done`
 - 2026-09-30: nav showed `Readme › Readme › Readme` and `Readme` rows with the `filename` default (P2-13), and the footer prev/next ignored `nav.labels`; folders now use their folder name and the footer follows the label mode (P2-R36, #82)
 - 2026-09-30: Linked-from formatted underline uses dim `Rule` (same as H1/H2), not Heading colour
+- 2026-09-30: dogfood round 2 (PR 1): nav shows folder names and titles with no `Overview`/`●` ([ADR-0013](../decisions/0013-nav-labels-folder-names-and-titles.md)); nav highlight follows every navigation; search bar readable; frontmatter toggle works on first load (`▼` when open, YAML colored); outlined prev/next buttons; status pill + page status; `v` toggles formatted view; Help dividers/icons; wheel scrolls popups; header/status gaps removed. Column cursor and drag-select are PR 2
 
 ## Interim acceptance walk (2026-09-30)
 

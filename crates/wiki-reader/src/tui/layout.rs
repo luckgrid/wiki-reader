@@ -2,22 +2,31 @@
 
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
-/// Rows consumed by nav pane chrome: top/bottom borders + gap + search + gap.
-pub const NAV_CHROME_ROWS: u16 = 5;
+/// Rows consumed by nav pane chrome: top/bottom borders + search + gap.
+pub const NAV_CHROME_ROWS: u16 = 4;
 
 /// Inner left padding in the viewer (cursor marker column; P2-19).
 pub const VIEWER_LEFT_PAD: u16 = 1;
 
+/// Blank rows between the View's top border and its first line.
+pub const VIEWER_TOP_PAD: u16 = 1;
+
+/// Text rows visible inside a View pane of `height` (borders + top pad removed).
+#[must_use]
+pub fn viewer_visible_rows(height: u16) -> u16 {
+    height.saturating_sub(2 + VIEWER_TOP_PAD)
+}
+
 /// Computed region rectangles for one frame.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Regions {
-    /// Header content row (gaps above/below are blank when tall).
+    /// Header content row.
     pub header: Rect,
     /// Side nav (zero-sized when hidden).
     pub side_nav: Rect,
     /// Viewer pane (prev/next live on the bottom border).
     pub viewer: Rect,
-    /// Status content row (gaps above/below are blank when tall).
+    /// Status content row.
     pub status: Rect,
     /// Whether the nav is an overlay (narrow terminal).
     pub nav_overlay: bool,
@@ -32,12 +41,6 @@ pub fn chrome_pad(area: Rect) -> Rect {
         width: area.width.saturating_sub(2),
         height: area.height,
     }
-}
-
-/// Blank rows above and below header/status when the terminal is tall enough.
-#[must_use]
-pub fn vertical_gap(term_height: u16) -> u16 {
-    u16::from(term_height >= 30)
 }
 
 /// Wrap width for viewer text: borders + left pad, capped at 100.
@@ -81,32 +84,18 @@ pub fn nav_width(term_width: u16, nav_forced: bool, preferred: Option<u16>) -> O
 /// `nav_visible` is honored at every width: docked when ≥80, overlay when &lt;80.
 #[must_use]
 pub fn split(area: Rect, nav_visible: bool, preferred_nav: Option<u16>) -> Regions {
-    let gap = vertical_gap(area.height);
-    // gap + content + gap (or just content when gap == 0).
-    let band = 1 + gap.saturating_mul(2);
-
     let vert = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(band), // header band
-            Constraint::Min(3),       // mid
-            Constraint::Length(band), // status band
+            Constraint::Length(1), // header
+            Constraint::Min(3),    // mid
+            Constraint::Length(1), // status
         ])
         .split(area);
 
-    let header = Rect {
-        x: vert[0].x,
-        y: vert[0].y.saturating_add(gap),
-        width: vert[0].width,
-        height: 1,
-    };
+    let header = vert[0];
     let mid = vert[1];
-    let status = Rect {
-        x: vert[2].x,
-        y: vert[2].y.saturating_add(gap),
-        width: vert[2].width,
-        height: 1,
-    };
+    let status = vert[2];
 
     let narrow = area.width < 80;
     let show_nav = nav_visible && nav_width(area.width, nav_visible, preferred_nav).is_some();
@@ -185,14 +174,6 @@ mod tests {
     }
 
     #[test]
-    fn vertical_gap_at_30() {
-        assert_eq!(vertical_gap(24), 0);
-        assert_eq!(vertical_gap(29), 0);
-        assert_eq!(vertical_gap(30), 1);
-        assert_eq!(vertical_gap(40), 1);
-    }
-
-    #[test]
     fn viewer_text_width_subtracts_borders_and_left_pad() {
         let v = Rect {
             x: 30,
@@ -235,24 +216,18 @@ mod tests {
     }
 
     #[test]
-    fn split_places_header_below_gap_when_tall() {
-        let short = Rect {
-            x: 0,
-            y: 0,
-            width: 80,
-            height: 24,
-        };
-        assert_eq!(split(short, true, None).header.y, 0);
-
-        let tall = Rect {
+    fn split_header_and_status_hug_the_panes() {
+        let area = Rect {
             x: 0,
             y: 0,
             width: 80,
             height: 40,
         };
-        let r = split(tall, true, None);
-        assert_eq!(r.header.y, 1);
-        assert_eq!(r.status.y, 38); // band at bottom: y 37 gap, 38 status, 39 gap
+        let r = split(area, true, None);
+        assert_eq!(r.header.y, 0);
+        assert_eq!(r.side_nav.y, 1);
+        assert_eq!(r.status.y, 39);
+        assert_eq!(r.viewer.y + r.viewer.height, 39);
     }
 
     #[test]

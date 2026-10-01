@@ -2,11 +2,11 @@
 source: crates/wiki-reader-core/src/nav/tree.rs
 expression: text
 ---
-● Readme
+● Worked Example Wiki
 ▾ Architecture
-  Overview
+  Architecture Overview
   ▾ Design System
-    Overview
-    Tokens
-  Wfos
+    Design System
+    Token Projection
+  ▸ Wfos
 ▸ Decisions

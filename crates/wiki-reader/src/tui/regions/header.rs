@@ -42,7 +42,10 @@ pub fn draw(
             spans.push(Span::styled(sep, theme.muted()));
             x = x.saturating_add(col_width(sep));
         }
-        let style = if crumb.target.is_some() {
+        // The last crumb is the current (read-only) page.
+        let style = if i + 1 == trail.len() {
+            theme.secondary()
+        } else if crumb.target.is_some() {
             theme.accent()
         } else {
             theme.muted()

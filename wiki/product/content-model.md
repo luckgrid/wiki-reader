@@ -3,7 +3,7 @@ id: WR-CONTENT
 title: Content model
 summary: What counts as a page, link, ID, and relationship; frontmatter conventions wiki-reader reads.
 status: draft
-updated: 2026-09-28
+updated: 2026-09-30
 related: [spec, ui-spec]
 nav_order: 3
 ---
@@ -87,13 +87,13 @@ The side nav is built from the filesystem but **presented as a documentation sit
 
 ### Labels
 
-The label depends on `nav.labels`. With `filename` (the default) it is the humanized filename (`02-token-projection.md` → "Token Projection"; numeric prefixes are stripped for display but still used for sorting). With `title` or `title+filename` it is the first match of: frontmatter `nav_title` → `title` → first H1 → humanized filename.
+The label depends on `nav.labels`. With `title` (the default) or `title+filename` it is the first match of: frontmatter `nav_title` → `title` → first H1 → humanized filename. With `filename` it is always the humanized filename (`02-token-projection.md` → "Token Projection"; numeric prefixes are stripped for display but still used for sorting). Folder rows always use the folder name, and a folder's README (and the root README) always uses its title whatever the mode; the root falls back to the collection name, never "Readme".
 
 Config (P1/P2):
 
 ```toml
 [nav]
-labels = "filename"         # default; "title" | "filename" | "title+filename" (title with a dim filename suffix)
+labels = "title"            # default; "title" | "filename" | "title+filename" (title with a dim filename suffix)
 ```
 
 ### Folding rules (applied bottom-up, recursively)
@@ -103,8 +103,8 @@ Let a folder's **pages** be its markdown files, and its **children** be its page
 | Folder contains | Rendered as |
 |-----------------|-------------|
 | Nothing (after excludes) | Hidden |
-| Only a README (`README.md` / `index.md`) | **Leaf link** to that README, labeled like a group would be: the humanized folder name in `filename` mode, the README's title otherwise |
-| README + other children | **Collapsible group**: label = the humanized folder name in `filename` mode, or the README's title in `title` / `title+filename` mode; first item = the README (landing page), shown as `Overview` so the label is not repeated; then the other children |
+| Only a README (`README.md` / `index.md`) | **Collapsible group**: label = the humanized folder name; its only item is the README, labeled with its title |
+| README + other children | **Collapsible group**: label = the humanized folder name; first item = the README (landing page), labeled with its title; then the other children |
 | Other children, no README | **Collapsible group**: label = humanized folder name; no landing page |
 
 The root folder is special: the root README is always the **first top-level item** (the wiki entry), and its title is the header's root breadcrumb.
@@ -130,17 +130,17 @@ renders as (annotated; `render_text` omits the ← markers)
 
 ```text
 ● Worked Example Wiki          ← landing / root entry
-▾ Architecture Overview        ← group
-  Architecture Overview        ← landing page
+▾ Architecture                 ← group (folder name)
+  Architecture Overview        ← landing page (its title)
   ▾ Design System              ← group
     Design System              ← landing page
     Token Projection           ← leaf
-  Workflow OS                  ← leaf (folder with only README)
+  ▸ Wfos                       ← group (folder with only a README)
 ▸ Decisions                    ← group (collapsed)
 ```
 
 > [!NOTE]
-> Group headers and their landing pages share a label by default (the MkDocs/Docusaurus convention). If that reads as noise, a later option `nav.landing_label = "Overview"` can relabel landing items.
+> A group (folder name) and its landing page (README title) may read alike when the README title matches the folder. That is intentional: it keeps every row's label truthful and the tree uniform.
 
 ### Group header behavior
 

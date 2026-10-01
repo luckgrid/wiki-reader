@@ -2,27 +2,27 @@
 source: crates/wiki-reader/src/tui/app/tests.rs
 expression: out
 ---
- Readme                                                                   ○ ◫ ✕ 
+ Worked Example Wiki                                                      ○ ◫ ✕ 
 ┌Nav┌ Help (? or Esc to close) ────────────────────────────────────────────┐───┐
-│   │── Global Alt+← / Alt+b  Back                                         │   │
-│ ⌕ │Alt+→ / Alt+f  Forward                                                │   │
-│   │q              Quit                                                   │   │
-│▌● │b              Toggle side nav                                        │   │
-│   │r              Toggle raw / rendered                                  │   │
-│   │○ / ◉          Toggle syntax / formatted (header eye icon)            │   │
-│   │e              Open in editor                                         │   │
-│   │y              Copy page path                                         │   │
-│   │Y              Copy focused link target                               │   │
-│   │t              New tab                                                │   │
-│   │x              Close tab                                              │   │
-│   │/              Search                                                 │   │
-│   │Ctrl+k         Search                                                 │   │
-│   │?              Help                                                   │   │
-│   │n              Next search match                                      │   │
-│   │N              Previous search match                                  │   │
-│   │[              Previous page                                          │   │
-│   │]              Next page                                              │   │
-│   │Backspace      Back                                                   │   │
-│   │Shift+←        Focus side nav                                         │   │
-└───└──────────────────────────────────────────────────────────────────────┘e ›┘
- VIEWER · README.md · L1 10% · 29w · 1m · 2026-09-28
+│▌⌕ │── Global ────────────────────────────────────────────────────────────│   │
+│   │Alt+← / Alt+b     Back                                                │   │
+│▌ W│Alt+→ / Alt+f     Forward                                             │   │
+│  ▸│q             ✕   Quit                                                │   │
+│  ▸│b             ◫   Toggle side nav                                     │   │
+│   │r                 Toggle raw / rendered                               │   │
+│   │v             ○ ◉ Toggle syntax / formatted                           │   │
+│   │e                 Open in editor                                      │   │
+│   │y                 Copy page path                                      │   │
+│   │Y                 Copy focused link target                            │   │
+│   │t                 New tab                                             │   │
+│   │x                 Close tab                                           │   │
+│   │/                 Search                                              │   │
+│   │Ctrl+k            Search                                              │   │
+│   │?                 Help                                                │   │
+│   │n                 Next search match                                   │   │
+│   │N                 Previous search match                               │   │
+│   │[                 Previous page                                       │   │
+│   │]                 Next page                                           │   │
+│   │Backspace         Back                                                │   │
+└───└──────────────────────────────────────────────────────────────────────┘› ├┘
+  VIEW  · README.md · L1 10% · 2026-09-28 · draft · 29w · 1m
