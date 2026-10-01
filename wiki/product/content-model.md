@@ -103,8 +103,8 @@ Let a folder's **pages** be its markdown files, and its **children** be its page
 | Folder contains | Rendered as |
 |-----------------|-------------|
 | Nothing (after excludes) | Hidden |
-| Only a README (`README.md` / `index.md`) | **Leaf link** to that README, labeled with its title |
-| README + other children | **Collapsible group**: label = the README's label (per `nav.labels`); first item = the README (landing page), shown as `Overview` so the label is not repeated; then the other children |
+| Only a README (`README.md` / `index.md`) | **Leaf link** to that README, labeled like a group would be: the humanized folder name in `filename` mode, the README's title otherwise |
+| README + other children | **Collapsible group**: label = the humanized folder name in `filename` mode, or the README's title in `title` / `title+filename` mode; first item = the README (landing page), shown as `Overview` so the label is not repeated; then the other children |
 | Other children, no README | **Collapsible group**: label = humanized folder name; no landing page |
 
 The root folder is special: the root README is always the **first top-level item** (the wiki entry), and its title is the header's root breadcrumb.
