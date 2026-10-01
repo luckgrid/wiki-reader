@@ -774,9 +774,16 @@ mod tests {
             .iter()
             .position(|l| l == "Linked from")
             .expect("Linked from heading line");
+        let rule = doc
+            .styled
+            .get(section + 1)
+            .expect("rule line under Linked from");
         assert!(
-            doc.lines.get(section + 1).is_some_and(|l| l.contains('─')),
-            "H2 rule under Linked from: {text:?}"
+            rule.spans
+                .iter()
+                .any(|s| s.text.contains('─') && matches!(s.kind, StyleKind::Rule)),
+            "dim Rule under Linked from (not Heading): {:?}",
+            rule.spans
         );
     }
 

@@ -1068,7 +1068,8 @@ impl<'a> LayoutState<'a> {
         self.push_span(label, StyleKind::Heading(2), src);
         self.commit_line(src);
         if self.formatted {
-            self.push_span("─".repeat(self.width.min(40)), StyleKind::Heading(2), src);
+            // Match normal H1/H2 rules (dim Rule), not Heading colour.
+            self.push_span("─".repeat(self.width.min(40)), StyleKind::Rule, src);
             self.commit_line(src);
             self.styled.push(StyledLine {
                 spans: Vec::new(),
