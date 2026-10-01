@@ -45,7 +45,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 - 2026-10-01: dogfood round 5 (PR 1): numbered/bulleted items that start with code or a link keep their marker first and no longer paint as one code band (P2-34); ADR ➕/➖ render as ASCII `+`/`-` so they take the text colour (P2-35); H1 teal, H2 peach, H3–H5 light gray, links teal; status pills keep their own colours (P2-36)
 - 2026-10-01: dogfood round 5 (PR 2): Linked from is a box-drawn pane with a tag header, teal title links, optional summaries and dividers (P2-37)
 - 2026-10-01: dogfood round 5 (PR 3): narrow nav rows end in `…` (drop the `(file)` suffix first in title+filename); Search query sits under the top border with no blank row (P2-38, P2-39)
-- 2026-10-01: dogfood round 5 (PR 4): Cmd/Ctrl+Enter open a new tab via kitty `DISAMBIGUATE_ESCAPE_CODES`; Ctrl+click joins Shift+click ([ADR-0015](../decisions/0015-new-tab-combos-kitty-keyboard.md), P2-40). Cmd/Ctrl+→ later dropped ([ADR-0016](../decisions/0016-drop-cmd-right-new-tab.md)).
+- 2026-10-01: dogfood round 5 (PR 4): Cmd/Ctrl+Enter and Cmd/Ctrl+→ (nav) open a new tab via kitty `DISAMBIGUATE_ESCAPE_CODES`; Ctrl+click joins Shift+click ([ADR-0015](../decisions/0015-new-tab-combos-kitty-keyboard.md), P2-40). Ghostty QA: Cmd+Enter is full screen, Ctrl+Enter works, so the combos are Ctrl-only: `Ctrl+Enter` (nav and view) and `Ctrl+→` (nav) ([ADR-0016](../decisions/0016-ctrl-only-new-tab-combos.md)).
 - 2026-10-01: dogfood round 5 brief deltas: leading ➕/➖ → `+`/U+2212 only at item/paragraph start (P2-41); viewer asserts inline code is not full-row shaded (P2-42); Linked from whole-entry hit/focus with selection bg, teal ▌ replacing left `│`, side borders, plain first-paragraph summary (P2-43)
 
 ## Interim acceptance walk (2026-09-30)
@@ -142,7 +142,7 @@ Judged from tests, dogfood QA, and code — not a full interactive sweep of ever
 | P2-37 | Linked from is a box-drawn pane: tag header, title links, optional summaries, dividers between entries | B1 | done | round 5 PR 2 |
 | P2-38 | Narrow nav rows end in `…`; in `title+filename` the dim `(file)` suffix is dropped before the title is ellipsised | U3 | done | round 5 PR 3 |
 | P2-39 | Search overlay: query row sits directly under the top border (no blank row) | U3 | done | round 5 PR 3 |
-| P2-40 | New-tab combos: Cmd/Ctrl+Enter, Ctrl+click; kitty DISAMBIGUATE flags ([ADR-0015](../decisions/0015-new-tab-combos-kitty-keyboard.md)); Cmd/Ctrl+→ dropped ([ADR-0016](../decisions/0016-drop-cmd-right-new-tab.md)) | TB | done | round 5 PR 4; ADR-0016 |
+| P2-40 | New-tab combos: `Ctrl+Enter` (nav, view), `Ctrl+→` (nav), Ctrl+click; kitty DISAMBIGUATE flags ([ADR-0015](../decisions/0015-new-tab-combos-kitty-keyboard.md)); Cmd dropped ([ADR-0016](../decisions/0016-ctrl-only-new-tab-combos.md)) | TB | done | round 5 PR 4; ADR-0016 |
 | P2-41 | Leading ➕/➖ at item/paragraph start only → `+` / U+2212; mid-sentence left alone | D1 | done | round 5 brief deltas |
 | P2-42 | Viewer test: inline code does not full-row shade adjacent list items | D1 | done | round 5 brief deltas |
 | P2-43 | Linked from: whole-entry LinkSpan (title+summary), side borders, BacklinkBorder/Tag/Summary styles, selection bg + teal ▌ (replaces left `│`) on Tab focus, plain first-paragraph summary fallback | B1 | done | round 5 brief deltas |

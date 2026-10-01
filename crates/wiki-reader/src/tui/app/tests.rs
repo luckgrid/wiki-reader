@@ -3558,7 +3558,7 @@ fn ctrl_click_nav_and_link_open_a_new_tab_plain_click_does_not() {
 }
 
 #[test]
-fn cmd_ctrl_enter_in_nav_opens_a_new_tab() {
+fn ctrl_enter_and_ctrl_right_in_nav_open_a_new_tab() {
     use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     let mut app = App::new(&fixture()).unwrap();
     app.update(Action::FocusNav);
@@ -3567,32 +3567,41 @@ fn cmd_ctrl_enter_in_nav_opens_a_new_tab() {
     app.update(Action::NavJumpDown);
     app.update(Action::NavExpand);
     app.update(Action::NavStepDown);
-    for mods in [KeyModifiers::CONTROL, KeyModifiers::SUPER] {
+    for code in [KeyCode::Enter, KeyCode::Right] {
         let (mapped, _) = crate::tui::keymap::map_with_overrides(
-            KeyEvent::new(KeyCode::Enter, mods),
+            KeyEvent::new(code, KeyModifiers::CONTROL),
             app.focus,
             app.input_mode,
             app.chord,
             None,
         );
-        assert_eq!(mapped, Some(Action::NewTab), "mods={mods:?}");
+        assert_eq!(mapped, Some(Action::NewTab), "Ctrl+{code:?}");
+        let before = app.navigator.tab_count();
+        app.update(mapped.expect("mapped"));
+        assert_eq!(app.navigator.tab_count(), before + 1, "Ctrl+{code:?}");
     }
-    // Cmd/Ctrl+→ is not a new-tab binding (ADR-0016).
-    let (ctrl_right, _) = crate::tui::keymap::map_with_overrides(
-        KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL),
+    // Cmd is not a new-tab modifier (ADR-0016): Cmd+Enter acts like Enter, no new tab.
+    let (cmd_enter, _) = crate::tui::keymap::map_with_overrides(
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::SUPER),
         app.focus,
         app.input_mode,
         app.chord,
         None,
     );
-    assert_eq!(ctrl_right, Some(Action::NavExpand));
-    let before = app.navigator.tab_count();
-    app.update(Action::NewTab);
-    assert_eq!(app.navigator.tab_count(), before + 1);
+    assert_ne!(cmd_enter, Some(Action::NewTab));
+    // Plain → still expands / opens in place.
+    let (plain_right, _) = crate::tui::keymap::map_with_overrides(
+        KeyEvent::from(KeyCode::Right),
+        app.focus,
+        app.input_mode,
+        app.chord,
+        None,
+    );
+    assert_eq!(plain_right, Some(Action::NavExpand));
 }
 
 #[test]
-fn cmd_enter_on_focused_viewer_link_opens_a_new_tab() {
+fn ctrl_enter_on_focused_viewer_link_opens_a_new_tab() {
     use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     let mut app = App::new(&fixture()).unwrap();
     app.update(Action::GoToPage(PageKey {
@@ -3608,7 +3617,7 @@ fn cmd_enter_on_focused_viewer_link_opens_a_new_tab() {
     app.update(Action::FocusViewer);
     app.focused_item = Some(idx);
     let (mapped, _) = crate::tui::keymap::map_with_overrides(
-        KeyEvent::new(KeyCode::Enter, KeyModifiers::SUPER),
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL),
         app.focus,
         app.input_mode,
         app.chord,
@@ -3616,7 +3625,7 @@ fn cmd_enter_on_focused_viewer_link_opens_a_new_tab() {
     );
     assert_eq!(mapped, Some(Action::NewTab));
     let before = app.navigator.tab_count();
-    app.update(Action::NewTab);
+    app.update(mapped.expect("mapped"));
     assert_eq!(app.navigator.tab_count(), before + 1);
 }
 

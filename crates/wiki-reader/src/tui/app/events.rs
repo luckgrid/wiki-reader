@@ -199,10 +199,10 @@ pub(crate) fn apply_mouse(
                 app.nav_dragging = true;
                 return None;
             }
-            // Shift/Ctrl/Cmd+click opens in a new tab, like a browser (same as middle-click).
-            // Crossterm mouse never reports SUPER on macOS; Ctrl+click may be stolen as
-            // right-click by the host — documented, not fixable here.
-            let new_tab_mods = KeyModifiers::SHIFT | KeyModifiers::CONTROL | KeyModifiers::SUPER;
+            // Shift/Ctrl+click opens in a new tab, like a browser (same as middle-click).
+            // Cmd never arrives on mouse events and is not used; Ctrl+click may be stolen
+            // as right-click by the host terminal on macOS (documented, not fixable here).
+            let new_tab_mods = KeyModifiers::SHIFT | KeyModifiers::CONTROL;
             if mouse.modifiers.intersects(new_tab_mods)
                 && matches!(
                     hit,

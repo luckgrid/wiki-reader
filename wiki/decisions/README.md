@@ -20,8 +20,8 @@ Architecture decision records. Accepted ADRs are immutable — supersede, don't 
 | [0012](0012-syntax-vs-formatted.md) | Syntax vs formatted rendered view | superseded by [0014](0014-remove-formatted-view-toggle.md) |
 | [0013](0013-nav-labels-folder-names-and-titles.md) | Nav shows folder names and page titles, no Overview | accepted |
 | [0014](0014-remove-formatted-view-toggle.md) | Remove the syntax/formatted view toggle | accepted |
-| [0015](0015-new-tab-combos-kitty-keyboard.md) | New-tab combos via kitty keyboard disambiguation | accepted (Cmd/Ctrl+→ dropped by [0016](0016-drop-cmd-right-new-tab.md)) |
-| [0016](0016-drop-cmd-right-new-tab.md) | Drop Cmd/Ctrl+→ new-tab in the nav | accepted |
+| [0015](0015-new-tab-combos-kitty-keyboard.md) | New-tab combos via kitty keyboard disambiguation | accepted (Cmd dropped by [0016](0016-ctrl-only-new-tab-combos.md)) |
+| [0016](0016-ctrl-only-new-tab-combos.md) | New-tab combos are Ctrl-only (no Cmd) | accepted |
 
 ## Related
 
