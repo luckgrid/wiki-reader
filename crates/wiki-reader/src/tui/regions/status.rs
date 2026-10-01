@@ -18,6 +18,8 @@ pub struct StatusModel<'a> {
     pub path: &'a str,
     /// Cursor line (1-based display).
     pub line: u32,
+    /// Cursor column (1-based display).
+    pub col: u16,
     /// Scroll percentage 0–100.
     pub pct: u32,
     /// Word count.
@@ -94,7 +96,10 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, model: &StatusModel<'_>, theme: &
                 .add_modifier(Modifier::BOLD),
         ),
         (model.path.to_owned(), text),
-        (format!("L{} {}%", model.line, model.pct), text),
+        (
+            format!("L{}:C{} {}%", model.line, model.col, model.pct),
+            text,
+        ),
         (model.updated.to_owned(), theme.secondary()),
     ];
     if let Some(status) = model.status.filter(|s| !s.is_empty()) {

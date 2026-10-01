@@ -95,7 +95,9 @@ fn run_loop(
         }
         app.poll_watcher();
         app.flush_session(false);
-        if event::poll(std::time::Duration::from_millis(250))? {
+        // Poll fast mid-drag so a held pointer keeps scrolling the View.
+        let idle = std::time::Duration::from_millis(if app.selecting { 40 } else { 250 });
+        if event::poll(idle)? {
             match event::read()? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => {
                     let (action, next_chord) = keymap::map_with_overrides(
@@ -119,6 +121,8 @@ fn run_loop(
                 }
                 _ => {}
             }
+        } else if app.selecting {
+            app.drag_autoscroll();
         }
     }
 }
@@ -162,6 +166,16 @@ pub(crate) fn apply_mouse(
             if matches!(hit, Hit::NavDivider) {
                 app.nav_dragging = true;
                 return None;
+            }
+            // Text in the View: press starts a selection. A link is followed on
+            // release instead, so a drag can start on link text.
+            if matches!(hit, Hit::ViewerLine(_) | Hit::Link(_)) {
+                app.pending_link = match hit {
+                    Hit::Link(id) => Some(id),
+                    _ => None,
+                };
+                let pos = app.pos_at(mouse.column, mouse.row);
+                return Some(Action::SelectStart(pos.line, pos.col));
             }
             // Click focuses the pane before the primary action (K1 / stale-cursor).
             match &hit {
@@ -212,6 +226,10 @@ pub(crate) fn apply_mouse(
         MouseEventKind::Drag(MouseButton::Left) => {
             if app.nav_dragging {
                 app.resize_nav_to_column(mouse.column);
+            } else if app.selecting {
+                app.drag_at = Some((mouse.column, mouse.row));
+                let pos = app.pos_at(mouse.column, mouse.row);
+                return Some(Action::SelectExtend(pos.line, pos.col));
             }
             None
         }
@@ -219,6 +237,8 @@ pub(crate) fn apply_mouse(
             if app.nav_dragging {
                 app.nav_dragging = false;
                 app.note_session_change();
+            } else if app.selecting {
+                return Some(Action::SelectEnd);
             }
             None
         }

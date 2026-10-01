@@ -65,6 +65,20 @@ pub struct App {
     pub doc: PageDoc,
     /// Viewer cursor (0-based source line index).
     pub cursor_line: u32,
+    /// Wanted display column of the View cursor; clamped to the row when used
+    /// (so moving through short rows and back keeps your column).
+    pub cursor_col: u16,
+    /// Mouse selection in the View.
+    pub selection: Option<crate::tui::selection::Selection>,
+    /// A mouse drag is in progress.
+    pub(crate) selecting: bool,
+    /// Last mouse cell seen during a drag; the loop re-applies it on idle ticks
+    /// so holding the pointer past the pane edge keeps scrolling.
+    pub(crate) drag_at: Option<(u16, u16)>,
+    /// Link under the pressed mouse button; followed on release if no drag happened.
+    pub(crate) pending_link: Option<u32>,
+    /// Where View text starts on screen (from last draw), for mouse → cell mapping.
+    pub(crate) viewer_geom: crate::tui::regions::viewer::ViewerGeom,
     /// Viewer scroll offset (lines from top).
     pub scroll: u32,
     /// Tab-cycle focused item index into `focus_list`.
@@ -224,6 +238,12 @@ impl App {
             message,
             // ponytail: defaults until first draw; layout overwrites each frame
             viewer_rows: 20,
+            cursor_col: 0,
+            selection: None,
+            selecting: false,
+            drag_at: None,
+            pending_link: None,
+            viewer_geom: crate::tui::regions::viewer::ViewerGeom::default(),
             nav_viewport: 20,
             hit_map: HitMap::default(),
             theme: Theme::default(),
@@ -426,6 +446,8 @@ impl App {
                 | Action::ViewerHome
                 | Action::ViewerEnd
                 | Action::SetCursorLine(_)
+                | Action::ViewerLeft
+                | Action::ViewerRight
                 | Action::GoToPage(_)
                 | Action::Back
                 | Action::Forward
@@ -524,6 +546,11 @@ impl App {
                 self.cursor_line = line.min(max);
                 self.clear_item_focus();
             }
+            Action::ViewerLeft => self.viewer_move_col(-1),
+            Action::ViewerRight => self.viewer_move_col(1),
+            Action::SelectStart(line, col) => self.select_start(line, col),
+            Action::SelectExtend(line, col) => self.select_extend(line, col),
+            Action::SelectEnd => self.select_end(),
             Action::NavStepUp => self.nav_step(-1),
             Action::NavStepDown => self.nav_step(1),
             Action::NavJumpUp => self.nav_jump_group(-1),
@@ -1328,8 +1355,10 @@ impl App {
                     }
                 };
                 self.cursor_line = 0;
+                self.cursor_col = 0;
                 self.scroll = 0;
                 self.focused_item = None;
+                self.selection = None;
                 self.restore_sticky_footer();
                 if matches!(mode, ViewMode::Raw) {
                     self.spawn_highlight(src);

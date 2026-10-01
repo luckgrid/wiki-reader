@@ -18,7 +18,7 @@ A terminal wiki reader for markdown collections. It browses like a documentation
 │  ▸ Decisions             ││ • Worked Example Wiki                            │
 │                          ││ • Architecture Overview                          │
 └──────────────────────────┘└┤ ‹ Design System ├──────────────┤ Workflow OS › ├┘
- VIEW  · architecture/design-system/tokens.md · L5 9% · 2026-09-28 · draft
+ VIEW  · architecture/design-system/tokens.md · L5:C1 9% · 2026-09-28 · draft
 ```
 <!-- ui-diagram:end -->
 
