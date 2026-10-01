@@ -49,6 +49,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 - 2026-10-01: dogfood round 5 brief deltas: leading ➕/➖ → `+`/U+2212 only at item/paragraph start (P2-41); viewer asserts inline code is not full-row shaded (P2-42); Linked from whole-entry hit/focus with selection bg, teal ▌ replacing left `│`, side borders, plain first-paragraph summary (P2-43)
 - 2026-10-01: dogfood round 5 follow-ups: Tab focus on a Linked-from entry paints selection + teal ▌ with no reverse-video column cursor, and the Tab cursor column follows the focused item (P2-44); summaries are one line ending in `…` (P2-45); bold/inline styles inside quotes and alerts keep the quote bg (P2-46); table links are remapped onto laid-out cells, including after a soft wrap, so Tab walks them row by row (P2-47); table headers are bold text, not link-teal (P2-48); links in the too-narrow unwrapped table dump have no hit targets yet (P2-49)
 - 2026-10-01: dogfood round 5 follow-ups (2, from Ghostty QA): focused block actions (frontmatter, code titles, expand/copy) use the active-tab/footer colours, dark text on peach, instead of yellow with white text (P2-50); H3 and under have two blank rows above and one below, not the reverse (P2-51)
+- 2026-10-01: dogfood round 5 merged to main (#92, #93, #94; the stacked #88–#91 were closed as superseded by #92); v0.1.0-alpha.4 cut; clock continues on alpha.4
 
 ## Interim acceptance walk (2026-09-30)
 

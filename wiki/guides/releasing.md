@@ -9,7 +9,7 @@ related: [development]
 
 # Releasing and upgrading
 
-Two audiences: people who install wiki-reader and want a newer (or older) version, and maintainers who publish releases. Releases are built by [`.github/workflows/release.yml`](../../.github/workflows/release.yml) from `v*` tags and published under [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases). Versions containing `-` (for example `v0.1.0-alpha.3`) are marked as prereleases automatically.
+Two audiences: people who install wiki-reader and want a newer (or older) version, and maintainers who publish releases. Releases are built by [`.github/workflows/release.yml`](../../.github/workflows/release.yml) from `v*` tags and published under [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases). Versions containing `-` (for example `v0.1.0-alpha.4`) are marked as prereleases automatically.
 
 ## Upgrade or replace an installed version
 
@@ -31,7 +31,7 @@ Quit any running wiki-reader before replacing the binary.
 cargo install --locked --force --git https://github.com/luckgrid/wiki-reader wiki-reader
 
 # A specific release (also how you roll back)
-cargo install --locked --force --git https://github.com/luckgrid/wiki-reader --tag v0.1.0-alpha.3 wiki-reader
+cargo install --locked --force --git https://github.com/luckgrid/wiki-reader --tag v0.1.0-alpha.4 wiki-reader
 ```
 
 `--force` is what replaces the already-installed binary in `~/.cargo/bin`. Confirm with `which wiki-reader` that you are not still hitting a copy elsewhere.
@@ -94,7 +94,7 @@ Cut a tag only from a commit whose CI is already green on `main`. The release wo
 
 ## Fix or replace a published release (maintainers)
 
-Treat a published tag as immutable once anyone may have installed it, and prefer fixing forward: merge the fix and cut the next version (for example `v0.1.0-alpha.3`). Notes can always be corrected in place:
+Treat a published tag as immutable once anyone may have installed it, and prefer fixing forward: merge the fix and cut the next version (for example `v0.1.0-alpha.5`). Notes can always be corrected in place:
 
 ```bash
 gh release edit vX.Y.Z --notes-file notes.md

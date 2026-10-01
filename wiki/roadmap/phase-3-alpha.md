@@ -29,7 +29,7 @@ Dogfood → Phase 3 feed (2026-09-30): start with **P3-07/11** (light-terminal c
 
 | ID | Task | Reqs | Status | Notes |
 |----|------|------|--------|-------|
-| P3-08 | Install via `cargo install` + release binaries | | done | daf8fc5; hygiene f90c378; release hardening 9012fce; [v0.1.0-alpha.1](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.0-alpha.1); [v0.1.0-alpha.2](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.0-alpha.2); [v0.1.0-alpha.3](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.0-alpha.3) |
+| P3-08 | Install via `cargo install` + release binaries | | done | daf8fc5; hygiene f90c378; release hardening 9012fce; [v0.1.0-alpha.1](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.0-alpha.1); [v0.1.0-alpha.2](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.0-alpha.2); [v0.1.0-alpha.3](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.0-alpha.3); [v0.1.0-alpha.4](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.0-alpha.4) |
 | P3-06 | Help overlay with clickable keys | | done | done via P2-20 (#71) |
 | P3-07 | Themes | | todo | wire stored theme key; include a herdr-matching preset; fix fixed-RGB colours that look wrong on light terminals |
 | P3-11 | Layout and theme config | C1 | todo | nav placement (left/right) and other layout options; owns config keys (nav width stays in session for P2-14); feature request from 2026-09-30 dogfood. The formatted view was removed ([ADR-0014](../decisions/0014-remove-formatted-view-toggle.md)), so it owns no view-mode key |
