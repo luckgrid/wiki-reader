@@ -84,7 +84,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         FocusTarget::FooterPrev | FocusTarget::FooterNext => Some(it.kind),
         FocusTarget::Link | FocusTarget::BlockAction => None,
     });
-    viewer::draw(
+    app.viewer_geom = viewer::draw(
         frame,
         viewer_area,
         app.doc.lines(),
@@ -94,6 +94,8 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         gutter,
         app.scroll,
         app.cursor_line,
+        app.effective_col(),
+        app.selection,
         app.match_highlight,
         app.focus == FocusPane::Viewer,
         focus_item.as_ref(),
@@ -142,6 +144,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
             focus: app.focus,
             path: &path,
             line: app.cursor_line.saturating_add(1),
+            col: app.effective_col().saturating_add(1),
             pct,
             words: app.doc.word_count(),
             minutes: status::reading_minutes(app.doc.word_count()),

@@ -2,16 +2,79 @@
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 
 use crate::tui::highlight::HlSpan;
 use crate::tui::hit::{Hit, HitMap};
 use crate::tui::layout::{VIEWER_LEFT_PAD, VIEWER_TOP_PAD};
+use crate::tui::selection::Selection;
+use crate::tui::text_col;
 use crate::tui::theme::Theme;
 use crate::tui::viewer_doc::{FocusItem, FocusTarget};
 use wiki_reader_render::{LinkClass, LinkId, LinkSpan, StyleKind, StyledLine};
+
+/// Where the View's text sits on screen (for mouse → document-cell mapping).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ViewerGeom {
+    /// Screen column of the first text cell (after marker and gutter).
+    pub text_x: u16,
+    /// Screen row of the first text row.
+    pub top_y: u16,
+    /// Visible text rows.
+    pub rows: u16,
+}
+
+/// Restyle the cells in display columns `[from, to)` of a row's spans, splitting
+/// spans at char boundaries. A wide glyph is patched whole if it starts in range.
+fn patch_cols(
+    spans: Vec<Span<'static>>,
+    from: usize,
+    to: usize,
+    patch: Style,
+) -> Vec<Span<'static>> {
+    if from >= to {
+        return spans;
+    }
+    let mut out: Vec<Span<'static>> = Vec::with_capacity(spans.len() + 2);
+    let mut x = 0usize;
+    for sp in spans {
+        let w = Span::raw(sp.content.as_ref()).width();
+        if x + w <= from || x >= to {
+            x += w;
+            out.push(sp);
+            continue;
+        }
+        let mut run = String::new();
+        let mut run_hit = false;
+        let mut cx = x;
+        for ch in sp.content.chars() {
+            let hit = cx >= from && cx < to;
+            if !run.is_empty() && hit != run_hit {
+                let st = if run_hit {
+                    sp.style.patch(patch)
+                } else {
+                    sp.style
+                };
+                out.push(Span::styled(std::mem::take(&mut run), st));
+            }
+            run_hit = hit;
+            run.push(ch);
+            cx += Span::raw(ch.to_string()).width().max(1);
+        }
+        if !run.is_empty() {
+            let st = if run_hit {
+                sp.style.patch(patch)
+            } else {
+                sp.style
+            };
+            out.push(Span::styled(run, st));
+        }
+        x += w;
+    }
+    out
+}
 
 /// Draw lines into the viewer and register link + line hits.
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -25,6 +88,8 @@ pub fn draw(
     show_gutter: bool,
     scroll: u32,
     cursor_line: u32,
+    cursor_col: u16,
+    selection: Option<Selection>,
     match_highlight: Option<u32>,
     focused: bool,
     focused_item: Option<&FocusItem>,
@@ -34,9 +99,9 @@ pub fn draw(
     footer_focus: Option<FocusTarget>,
     theme: &Theme,
     hits: &mut HitMap,
-) {
+) -> ViewerGeom {
     if area.width == 0 || area.height == 0 {
-        return;
+        return ViewerGeom::default();
     }
 
     hits.push(area, Hit::FocusViewer);
@@ -77,6 +142,13 @@ pub fn draw(
     };
 
     let gutter_w: u16 = if show_gutter { 6 } else { 0 };
+    let geom = ViewerGeom {
+        text_x: content.x.saturating_add(gutter_w),
+        top_y: inner_area.y,
+        rows: inner_area.height,
+    };
+    // Columns before the text in each painted row: marker + gutter.
+    let origin = usize::from(VIEWER_LEFT_PAD + gutter_w);
     let text_width = usize::from(content.width.saturating_sub(gutter_w)).min(100);
     let visible_h = usize::from(content.height);
     let scroll = usize::try_from(scroll).unwrap_or(0);
@@ -254,11 +326,41 @@ pub fn draw(
                 spans.push(Span::styled(" ".repeat(pad), pad_style));
             }
         }
+        let row_text = lines.get(src_idx).map_or("", String::as_str);
+        if let Some(sel) = selection
+            && let Some((c0, c1)) = sel.cols_on(line_no, text_col::line_width(row_text))
+        {
+            spans = patch_cols(
+                spans,
+                origin + usize::from(c0),
+                (origin + usize::from(c1)).min(origin + text_width),
+                Style::default().bg(theme.selection),
+            );
+        }
+        if on_cursor && focused {
+            let col = usize::from(text_col::clamp_col(row_text, cursor_col));
+            let w = row_text
+                .chars()
+                .scan(0usize, |x, ch| {
+                    let start = *x;
+                    *x += usize::from(text_col::char_width(ch));
+                    Some((start, usize::from(text_col::char_width(ch))))
+                })
+                .find(|&(start, _)| start == col)
+                .map_or(1, |(_, w)| w);
+            spans = patch_cols(
+                spans,
+                origin + col,
+                origin + col + w,
+                Style::default().add_modifier(Modifier::REVERSED),
+            );
+        }
         out_lines.push(Line::from(spans));
     }
 
     // Paint into full inner (marker column + content).
     frame.render_widget(Paragraph::new(out_lines), inner_area);
+    geom
 }
 
 #[allow(clippy::too_many_arguments)]

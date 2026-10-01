@@ -70,6 +70,16 @@ pub enum Action {
     CycleFocus,
     /// Set viewer cursor to a source line.
     SetCursorLine(u32),
+    /// Move the View cursor one column left; at column 0 focus the side nav.
+    ViewerLeft,
+    /// Move the View cursor one column right.
+    ViewerRight,
+    /// Mouse press in the View: place the cursor and start a selection (line, col).
+    SelectStart(u32, u16),
+    /// Mouse drag in the View: extend the selection to (line, col).
+    SelectExtend(u32, u16),
+    /// Mouse release in the View: finish the selection and copy it.
+    SelectEnd,
     /// Side-nav: step to previous visible row (↑ / Shift+Tab).
     NavStepUp,
     /// Side-nav: step to next visible row (↓ / Tab).

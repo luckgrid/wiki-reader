@@ -20,6 +20,8 @@ pub struct Theme {
     pub text_muted: Color,
     /// Read-only text that should stay legible (current crumb, status bar).
     pub text_secondary: Color,
+    /// Mouse-selection background.
+    pub selection: Color,
     /// Collapsible folder rows in the nav.
     pub nav_folder: Color,
     /// Selected button fill (prev/next footer, matches herdr's peach tab).
@@ -66,6 +68,7 @@ impl Default for Theme {
             text: Color::Reset,
             text_muted: Color::DarkGray,
             text_secondary: Color::Rgb(160, 165, 175),
+            selection: Color::Rgb(45, 95, 125),
             nav_folder: Color::Rgb(230, 190, 110),
             peach: Color::Rgb(250, 179, 135),
             on_peach: Color::Rgb(40, 42, 54),

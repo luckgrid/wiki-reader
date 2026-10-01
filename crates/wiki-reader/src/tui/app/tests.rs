@@ -1092,6 +1092,7 @@ fn click_link_glyph_follows_page() {
         .map(|(r, _)| *r)
         .expect("tokens link hit rect");
     assert!(link_rect.width > 0, "link hit width {link_rect:?}");
+    let start_page = app.navigator.tab().current().page.clone();
     let col = link_rect.x.saturating_add(link_rect.width / 2);
     assert!(matches!(
         app.hit_map.hit_at(col, link_rect.y),
@@ -1106,13 +1107,328 @@ fn click_link_glyph_follows_page() {
             modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
         },
     );
+    // Press starts a selection; the link is followed on release (no drag).
     let action = action.expect("mouse action");
-    assert!(matches!(action, Action::FollowLinkId(id) if id == tokens_id));
+    assert!(matches!(action, Action::SelectStart(..)));
     app.update(action);
+    assert_eq!(
+        app.navigator.tab().current().page,
+        start_page,
+        "not followed on press"
+    );
+    let up = apply_mouse(
+        &mut app,
+        MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: col,
+            row: link_rect.y,
+            modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+        },
+    )
+    .expect("release action");
+    assert!(matches!(up, Action::SelectEnd));
+    app.update(up);
     assert_eq!(
         app.navigator.tab().current().page.relative_path,
         PathBuf::from("architecture/design-system/tokens.md")
     );
+}
+
+fn mouse_at(app: &mut App, kind: MouseEventKind, x: u16, y: u16) {
+    let ev = MouseEvent {
+        kind,
+        column: x,
+        row: y,
+        modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+    };
+    if let Some(a) = apply_mouse(app, ev) {
+        app.update(a);
+    }
+}
+
+/// Screen cell of document (line, col) after a draw.
+fn cell_xy(app: &App, line: u32, col: u16) -> (u16, u16) {
+    let g = app.viewer_geom;
+    (
+        g.text_x + col,
+        g.top_y + u16::try_from(line - app.scroll).unwrap(),
+    )
+}
+
+fn drag_select(app: &mut App, from: (u32, u16), to: (u32, u16)) {
+    let (x0, y0) = cell_xy(app, from.0, from.1);
+    let (x1, y1) = cell_xy(app, to.0, to.1);
+    mouse_at(app, MouseEventKind::Down(MouseButton::Left), x0, y0);
+    mouse_at(app, MouseEventKind::Drag(MouseButton::Left), x1, y1);
+    mouse_at(app, MouseEventKind::Up(MouseButton::Left), x1, y1);
+}
+
+fn app_with_page(md: &str) -> (tempfile::TempDir, App, Arc<std::sync::Mutex<Vec<String>>>) {
+    use crate::tui::clipboard::RecordingClipboard;
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("README.md"), md).unwrap();
+    let mut app = App::new(dir.path()).unwrap();
+    let rec = RecordingClipboard::default();
+    let log = Arc::clone(&rec.copied);
+    app.clipboard = Box::new(rec);
+    (dir, app, log)
+}
+
+fn row_of(app: &App, needle: &str) -> u32 {
+    u32::try_from(
+        app.doc
+            .lines()
+            .iter()
+            .position(|l| l.contains(needle))
+            .unwrap_or_else(|| panic!("no row containing {needle:?}")),
+    )
+    .unwrap()
+}
+
+fn last_col(app: &App, line: u32) -> u16 {
+    crate::tui::text_col::clamp_col(&app.doc.lines()[line as usize], u16::MAX)
+}
+
+const SELECT_MD: &str = "# Title\n\nFirst paragraph that is long enough to wrap across several rows of the pane when drawn at a narrow width so the copy has to rejoin the soft wrapped rows.\n\n| A | B |\n|---|---|\n| one | two |\n| three | four |\n\n```\ncode line 1\ncode line 2\n```\n";
+
+#[test]
+fn drag_select_copies_a_wrapped_paragraph_as_one_line() {
+    let (_d, mut app, log) = app_with_page(SELECT_MD);
+    let _ = draw_app(&mut app, 60, 40);
+    let first = row_of(&app, "First paragraph");
+    let last = row_of(&app, "wrapped rows.");
+    assert!(last > first, "paragraph must wrap at this width");
+    let end = last_col(&app, last);
+    drag_select(&mut app, (first, 0), (last, end));
+    let copied = log.lock().unwrap().clone();
+    assert_eq!(
+        copied,
+        [
+            "First paragraph that is long enough to wrap across several rows of the pane when drawn at a narrow width so the copy has to rejoin the soft wrapped rows."
+        ]
+    );
+    assert!(app.message.contains("copied"), "{}", app.message);
+}
+
+#[test]
+fn drag_select_partial_row_copies_exact_cells() {
+    let (_d, mut app, log) = app_with_page(SELECT_MD);
+    let _ = draw_app(&mut app, 60, 40);
+    let first = row_of(&app, "First paragraph");
+    // Cells 6..=14 of "First paragraph ..." are "paragraph".
+    drag_select(&mut app, (first, 6), (first, 14));
+    assert_eq!(log.lock().unwrap().clone(), ["paragraph"]);
+    // Dragging backwards selects the same cells.
+    log.lock().unwrap().clear();
+    drag_select(&mut app, (first, 14), (first, 6));
+    assert_eq!(log.lock().unwrap().clone(), ["paragraph"]);
+}
+
+#[test]
+fn drag_select_table_copies_cells_not_borders() {
+    let (_d, mut app, log) = app_with_page(SELECT_MD);
+    let _ = draw_app(&mut app, 60, 40);
+    let head = row_of(&app, "│ A");
+    let tail = row_of(&app, "three");
+    let end = last_col(&app, tail);
+    drag_select(&mut app, (head, 0), (tail, end));
+    assert_eq!(log.lock().unwrap().clone(), ["A\tB\none\ttwo\nthree\tfour"]);
+}
+
+#[test]
+fn drag_select_code_drops_the_gutter() {
+    let (_d, mut app, log) = app_with_page(SELECT_MD);
+    let _ = draw_app(&mut app, 60, 40);
+    let one = row_of(&app, "code line 1");
+    let two = row_of(&app, "code line 2");
+    let end = last_col(&app, two);
+    drag_select(&mut app, (one, 0), (two, end));
+    assert_eq!(log.lock().unwrap().clone(), ["code line 1\ncode line 2"]);
+}
+
+#[test]
+fn drag_select_in_raw_view_copies_source_text() {
+    let (_d, mut app, log) = app_with_page(SELECT_MD);
+    app.update(Action::ToggleViewMode);
+    let _ = draw_app(&mut app, 60, 40);
+    let title = row_of(&app, "# Title");
+    drag_select(&mut app, (title, 2), (title, 6));
+    assert_eq!(log.lock().unwrap().clone(), ["Title"]);
+}
+
+#[test]
+fn selection_and_cursor_cell_are_painted() {
+    use ratatui::style::Modifier;
+    for raw in [false, true] {
+        let (_d, mut app, _log) = app_with_page(SELECT_MD);
+        if raw {
+            app.update(Action::ToggleViewMode);
+        }
+        let _ = draw_app(&mut app, 60, 40);
+        let first = row_of(&app, if raw { "# Title" } else { "Title" });
+        drag_select(&mut app, (first, 2), (first, 4));
+        let terminal = draw_app(&mut app, 60, 40);
+        let buf = terminal.backend().buffer();
+        let sel_bg = app.theme.selection;
+        let (x, y) = cell_xy(&app, first, 0);
+        let bg = |c: u16| buf[(x + c, y)].bg;
+        assert_ne!(bg(1), sel_bg, "raw={raw}: before the selection");
+        for c in 2..=4 {
+            assert_eq!(bg(c), sel_bg, "raw={raw}: col {c} selected");
+        }
+        assert_ne!(bg(5), sel_bg, "raw={raw}: after the selection");
+        // The cursor (at the drag head) is reversed while the View is focused.
+        assert!(
+            buf[(x + 4, y)].modifier.contains(Modifier::REVERSED),
+            "raw={raw}: cursor cell"
+        );
+        app.update(Action::FocusNav);
+        let terminal = draw_app(&mut app, 60, 40);
+        assert!(
+            !terminal.backend().buffer()[(x + 4, y)]
+                .modifier
+                .contains(Modifier::REVERSED),
+            "raw={raw}: no cursor cell when the nav has focus"
+        );
+    }
+}
+
+#[test]
+fn bare_click_and_new_press_clear_the_selection() {
+    let (_d, mut app, log) = app_with_page(SELECT_MD);
+    let _ = draw_app(&mut app, 60, 40);
+    let first = row_of(&app, "First paragraph");
+    drag_select(&mut app, (first, 0), (first, 4));
+    assert!(app.selection.is_some());
+    // Plain click elsewhere: no new copy, selection gone, cursor placed.
+    let before = log.lock().unwrap().len();
+    drag_select(&mut app, (first, 8), (first, 8));
+    assert!(app.selection.is_none());
+    assert_eq!(log.lock().unwrap().len(), before);
+    assert_eq!((app.cursor_line, app.effective_col()), (first, 8));
+    // Keyboard movement also drops a selection.
+    drag_select(&mut app, (first, 0), (first, 4));
+    app.update(Action::ViewerDown);
+    assert!(app.selection.is_none());
+}
+
+#[test]
+fn drag_from_a_link_selects_instead_of_following() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let _ = draw_app(&mut app, 100, 40);
+    let (rect, _) = app
+        .hit_map
+        .entries()
+        .iter()
+        .find(|(_, h)| matches!(h, Hit::Link(_)))
+        .map(|(r, h)| (*r, h.clone()))
+        .expect("a link");
+    let page = app.navigator.tab().current().page.clone();
+    mouse_at(
+        &mut app,
+        MouseEventKind::Down(MouseButton::Left),
+        rect.x,
+        rect.y,
+    );
+    mouse_at(
+        &mut app,
+        MouseEventKind::Drag(MouseButton::Left),
+        rect.x + rect.width.min(3),
+        rect.y + 1,
+    );
+    mouse_at(
+        &mut app,
+        MouseEventKind::Up(MouseButton::Left),
+        rect.x + rect.width.min(3),
+        rect.y + 1,
+    );
+    assert_eq!(
+        app.navigator.tab().current().page,
+        page,
+        "stayed on the page"
+    );
+    assert!(app.selection.is_some_and(|s| !s.is_empty()));
+}
+
+#[test]
+fn column_cursor_moves_and_left_at_zero_focuses_nav() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let _ = draw_app(&mut app, 100, 40);
+    let line = row_of(&app, "Worked Example Wiki");
+    app.update(Action::SetCursorLine(line));
+    assert_eq!(app.effective_col(), 0);
+    for _ in 0..3 {
+        app.update(Action::ViewerRight);
+    }
+    assert_eq!(app.effective_col(), 3);
+    app.update(Action::ViewerLeft);
+    assert_eq!(app.effective_col(), 2);
+    app.update(Action::ViewerLeft);
+    app.update(Action::ViewerLeft);
+    assert_eq!((app.focus, app.effective_col()), (FocusPane::Viewer, 0));
+    // At column 0, Left hands focus to the nav...
+    app.update(Action::ViewerLeft);
+    assert_eq!(app.focus, FocusPane::Nav);
+    // ...and both panes remember where they were.
+    app.update(Action::FocusViewer);
+    assert_eq!((app.cursor_line, app.effective_col()), (line, 0));
+}
+
+#[test]
+fn column_is_sticky_across_short_rows_and_stops_at_row_end() {
+    let (_d, mut app, _log) = app_with_page("# Title\n\nA reasonably long line here\n\nshort\n");
+    let _ = draw_app(&mut app, 100, 40);
+    let long = row_of(&app, "reasonably");
+    app.update(Action::SetCursorLine(long));
+    for _ in 0..10 {
+        app.update(Action::ViewerRight);
+    }
+    assert_eq!(app.effective_col(), 10);
+    app.update(Action::ViewerDown); // blank row
+    assert_eq!(app.effective_col(), 0);
+    app.update(Action::ViewerUp);
+    assert_eq!(app.effective_col(), 10, "wanted column restored");
+    // Right stops on the last char of the row.
+    for _ in 0..100 {
+        app.update(Action::ViewerRight);
+    }
+    let last = last_col(&app, long);
+    assert_eq!(app.effective_col(), last);
+}
+
+#[test]
+fn status_bar_shows_line_and_column() {
+    let (_d, mut app, _log) = app_with_page("# Title\n\nhello world\n");
+    let hello = {
+        let _ = draw_app(&mut app, 100, 24);
+        row_of(&app, "hello world")
+    };
+    app.update(Action::SetCursorLine(hello));
+    for _ in 0..4 {
+        app.update(Action::ViewerRight);
+    }
+    let terminal = draw_app(&mut app, 100, 24);
+    let buf = terminal.backend().buffer();
+    let y = buf.area.height - 1;
+    let row: String = (0..buf.area.width).map(|x| buf[(x, y)].symbol()).collect();
+    assert!(
+        row.contains(&format!("L{}:C5", hello + 1)),
+        "status shows 1-based line:col: {row}"
+    );
+}
+
+#[test]
+fn left_at_column_zero_reveals_a_hidden_nav() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let _ = draw_app(&mut app, 100, 24);
+    app.update(Action::ToggleNav);
+    assert!(!app.nav_visible);
+    app.update(Action::ViewerLeft);
+    assert!(app.nav_visible);
+    assert_eq!(app.focus, FocusPane::Nav);
 }
 
 #[test]

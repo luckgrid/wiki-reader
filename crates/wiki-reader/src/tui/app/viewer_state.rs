@@ -2,13 +2,132 @@
 
 use super::App;
 use crate::tui::action::Action;
+use crate::tui::focus::FocusPane;
 use crate::tui::page_doc::PageDoc;
+use crate::tui::text_col;
 use crate::tui::viewer_doc::{FocusItem, FocusTarget, ViewerDoc, cycle};
 
 impl App {
+    /// Any cursor movement drops Tab focus, the footer stickiness and a selection.
     pub(crate) fn clear_item_focus(&mut self) {
         self.focused_item = None;
         self.sticky_footer = None;
+        self.selection = None;
+        self.selecting = false;
+        self.pending_link = None;
+    }
+
+    fn cursor_line_text(&self) -> String {
+        let i = usize::try_from(self.cursor_line).unwrap_or(usize::MAX);
+        self.doc.lines().get(i).cloned().unwrap_or_default()
+    }
+
+    /// The View cursor's column, snapped onto the current row.
+    pub(crate) fn effective_col(&self) -> u16 {
+        text_col::clamp_col(&self.cursor_line_text(), self.cursor_col)
+    }
+
+    /// ←/→ in the View. Left at column 0 hands focus to the side nav.
+    pub(crate) fn viewer_move_col(&mut self, dir: i32) {
+        let text = self.cursor_line_text();
+        let col = text_col::clamp_col(&text, self.cursor_col);
+        if dir < 0 {
+            let Some(left) = text_col::step_left(&text, col) else {
+                // Reveal a hidden nav so focus has somewhere visible to land.
+                if !self.nav_visible {
+                    self.nav_user_override = true;
+                    self.nav_visible = true;
+                }
+                self.update(Action::FocusNav);
+                return;
+            };
+            self.clear_item_focus();
+            self.cursor_col = left;
+        } else {
+            self.clear_item_focus();
+            self.cursor_col = text_col::step_right(&text, col);
+        }
+    }
+
+    /// Document cell under a screen position, clamped into the text. Dragging
+    /// above/below the pane scrolls it one row so selections can extend.
+    pub(crate) fn pos_at(&mut self, x: u16, y: u16) -> crate::tui::selection::Pos {
+        let g = self.viewer_geom;
+        if y < g.top_y {
+            self.scroll = self.scroll.saturating_sub(1);
+        } else if g.rows > 0 && y >= g.top_y.saturating_add(g.rows) {
+            self.scroll = self.scroll.saturating_add(1);
+            self.clamp_viewer_scroll();
+        }
+        let max = u32::try_from(self.doc.lines().len().saturating_sub(1)).unwrap_or(0);
+        let row = u32::from(y.saturating_sub(g.top_y).min(g.rows.saturating_sub(1)));
+        let line = self.scroll.saturating_add(row).min(max);
+        let text = self
+            .doc
+            .lines()
+            .get(usize::try_from(line).unwrap_or(usize::MAX))
+            .cloned()
+            .unwrap_or_default();
+        let col = text_col::clamp_col(&text, x.saturating_sub(g.text_x));
+        crate::tui::selection::Pos { line, col }
+    }
+
+    pub(crate) fn select_start(&mut self, line: u32, col: u16) {
+        if self.focus != FocusPane::Viewer {
+            self.navigator.nav_focus_lost();
+            self.focus = FocusPane::Viewer;
+        }
+        // The pressed link (if any) survives: it is followed on release.
+        let pressed = self.pending_link;
+        self.clear_item_focus();
+        self.pending_link = pressed;
+        let max = u32::try_from(self.doc.lines().len().saturating_sub(1)).unwrap_or(0);
+        self.cursor_line = line.min(max);
+        self.cursor_col = col;
+        let pos = crate::tui::selection::Pos {
+            line: self.cursor_line,
+            col: self.effective_col(),
+        };
+        self.selection = Some(crate::tui::selection::Selection {
+            anchor: pos,
+            head: pos,
+        });
+        self.selecting = true;
+    }
+
+    pub(crate) fn select_extend(&mut self, line: u32, col: u16) {
+        let Some(sel) = self.selection.as_mut() else {
+            return;
+        };
+        sel.head = crate::tui::selection::Pos { line, col };
+        self.cursor_line = line;
+        self.cursor_col = col;
+    }
+
+    /// Finish a drag: copy a non-empty selection, or treat a bare click on a
+    /// link as following it.
+    pub(crate) fn select_end(&mut self) {
+        self.selecting = false;
+        let link = self.pending_link.take();
+        let Some(sel) = self.selection else {
+            return;
+        };
+        if sel.is_empty() {
+            self.selection = None;
+            if let Some(id) = link {
+                self.follow_link_id(id);
+            }
+            return;
+        }
+        let text = crate::tui::selection::extract(&self.doc, &sel, self.layout_width);
+        if text.is_empty() {
+            return;
+        }
+        let n = text.chars().count();
+        match self.clipboard.copy(&text) {
+            Ok(()) => self.message = format!("copied {n} chars (OSC 52)"),
+            Err(err) => self.message = format!("copy failed: {err}"),
+        }
     }
 
     pub(crate) fn restore_sticky_footer(&mut self) {

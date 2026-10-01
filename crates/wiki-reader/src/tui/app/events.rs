@@ -163,6 +163,16 @@ pub(crate) fn apply_mouse(
                 app.nav_dragging = true;
                 return None;
             }
+            // Text in the View: press starts a selection. A link is followed on
+            // release instead, so a drag can start on link text.
+            if matches!(hit, Hit::ViewerLine(_) | Hit::Link(_)) {
+                app.pending_link = match hit {
+                    Hit::Link(id) => Some(id),
+                    _ => None,
+                };
+                let pos = app.pos_at(mouse.column, mouse.row);
+                return Some(Action::SelectStart(pos.line, pos.col));
+            }
             // Click focuses the pane before the primary action (K1 / stale-cursor).
             match &hit {
                 Hit::NavItem(_) | Hit::NavGroupToggle(_) | Hit::NavSearchRow | Hit::FocusNav => {
@@ -212,6 +222,9 @@ pub(crate) fn apply_mouse(
         MouseEventKind::Drag(MouseButton::Left) => {
             if app.nav_dragging {
                 app.resize_nav_to_column(mouse.column);
+            } else if app.selecting {
+                let pos = app.pos_at(mouse.column, mouse.row);
+                return Some(Action::SelectExtend(pos.line, pos.col));
             }
             None
         }
@@ -219,6 +232,8 @@ pub(crate) fn apply_mouse(
             if app.nav_dragging {
                 app.nav_dragging = false;
                 app.note_session_change();
+            } else if app.selecting {
+                return Some(Action::SelectEnd);
             }
             None
         }

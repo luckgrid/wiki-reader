@@ -30,7 +30,7 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 │  ▸ Decisions             ││ • Worked Example Wiki                            │
 │                          ││ • Architecture Overview                          │
 └──────────────────────────┘└┤ ‹ Design System ├──────────────┤ Workflow OS › ├┘
- VIEW  · architecture/design-system/tokens.md · L5 9% · 2026-09-28 · draft
+ VIEW  · architecture/design-system/tokens.md · L5:C1 9% · 2026-09-28 · draft
 ```
 <!-- ui-diagram:end -->
 
@@ -106,13 +106,15 @@ Future: a **sticky section header** at the top of the viewer showing the heading
 
 ## Status bar (full width, 1 row)
 
-Like markdown-reader's: focused region as a highlighted pill (`NAV`/`VIEW`), relative path, cursor line and scroll %, updated date and the page's frontmatter `status` (colored by value), word count, reading time, and a **message area** for link targets, notices ("not found"), confirmations, and search match `n/m`. Lower-priority items drop first when narrow.
+Like markdown-reader's: focused region as a highlighted pill (`NAV`/`VIEW`), relative path, cursor line:column (`L12:C5`) and scroll %, updated date and the page's frontmatter `status` (colored by value), word count, reading time, and a **message area** for link targets, notices ("not found"), confirmations, and search match `n/m`. Lower-priority items drop first when narrow.
 
 ## Focus & cursor model
 
 Two focusable panes: **Side nav** and **View**. The search overlay is modal while open.
 
 - `Shift+←` focuses the side nav; `Shift+→` focuses the View. Mouse click also focuses a pane.
+- In the View, `←`/`→` move the cursor one **column** within the row (shown in the status bar as `L12:C5`); `←` at column 0 moves focus to the side nav, mirroring `→` in the nav, which opens the page and focuses the View. Right on the page that is already open just moves focus, keeping the View's cursor and scroll.
+- The column is *sticky*: moving up/down through short rows and back returns to the column you wanted. A hidden nav is revealed when `←` hands focus to it.
 - **Each pane remembers its cursor.** Switching returns to the last known position in that pane.
 - **Defaults when a pane has no remembered position:**
   - Viewer: top of the current page.
@@ -184,6 +186,8 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 | `↑` | Cursor up |
 | `j` | Cursor down |
 | `↓` | Cursor down |
+| `←` | Cursor left (at column 0: focus side nav) |
+| `→` | Cursor right |
 | `PgUp` | Page up |
 | `Shift+Space` | Page up |
 | `Space` | Page down |
@@ -237,7 +241,9 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 
 ## Mouse
 
-Click to focus a pane; click items, links, breadcrumbs, prev/next, header icons, and search results; middle-click for a new tab; wheel scrolls the pane under the pointer. Hover works only where motion events arrive. Right-click is owned by herdr (see K3). Click, middle-click, and wheel verified inside herdr panes.
+Click to focus a pane; click items, links, breadcrumbs, prev/next, header icons, the frontmatter toggle and search results; middle-click for a new tab; wheel scrolls the pane under the pointer, or the Help/Search popup when one is open.
+
+**Selecting text.** Press and drag in the View to select; both end cells are included and the selection is copied to the clipboard (OSC 52) on release. A plain click only places the cursor, and a link is followed on release if the pointer did not move, so a drag can start on link text. Dragging above or below the pane scrolls it. Any cursor movement clears the selection. What is copied is the text, not the layout: soft-wrapped rows of one paragraph rejoin into one line, code and quote gutters are dropped, table cells are tab-separated (borders dropped), and in the raw view the source text is copied exactly. Hover works only where motion events arrive. Right-click is owned by herdr (see K3). Click, middle-click, and wheel verified inside herdr panes.
 
 ## Responsive rules
 
