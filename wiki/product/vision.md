@@ -3,7 +3,7 @@ id: WR-VISION
 title: Vision
 summary: Why wiki-reader exists, who it is for, and the principles that constrain it.
 status: draft
-updated: 2026-09-28
+updated: 2026-09-30
 related: [spec, content-model, ui-spec]
 nav_order: 1
 ---
@@ -47,8 +47,8 @@ A developer or architect working in herdr panes, with markdown collections sprea
 | Non-goal | Why |
 |----------|-----|
 | In-app editing | markdown-reader already does this well; we're a reader. |
-| Context/widget right sidebar | The requirements aren't clear yet. Designed as a v2 slot ([context engine](../architecture/context-engine.md), [integrations](../architecture/integrations.md)). |
-| Agent CLI / JSON output | Follows the widget sidebar in v2. The core stays terminal-free so it's easy to add. |
+| Context/widget right sidebar | The requirements aren't clear yet. Designed as a Phase 4 slot ([context engine](../architecture/context-engine.md), [integrations](../architecture/integrations.md)). |
+| Agent CLI / JSON output | Follows the widget sidebar in Phase 4. The core stays terminal-free so it's easy to add. |
 | Publishing / site export | mdBook, Zola, and similar tools own this. |
 | External providers / theme tokens | Seams now, decisions after MVP. |
 

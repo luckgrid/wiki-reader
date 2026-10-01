@@ -21,7 +21,7 @@ Entrypoint for wiki-reader documentation: product intent, architecture, decision
 7. [Prior art & libraries](architecture/prior-art-and-libs.md) — Phase 0 findings and deps.
 8. [Roadmap](roadmap/README.md) — what to build next.
 9. [Integrations](architecture/integrations.md) — external providers, design tokens, herdr (non-blocking).
-10. [Context engine](architecture/context-engine.md) — deferred v2 draft.
+10. [Context engine](architecture/context-engine.md) — deferred to Phase 4.
 
 ## Decisions (ADRs)
 

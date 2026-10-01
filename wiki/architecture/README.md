@@ -8,7 +8,7 @@ How wiki-reader is structured: crates, navigation core, rendering, and seams for
 2. [Rendering](rendering.md) — markdown, links, diagrams.
 3. [Prior art & libraries](prior-art-and-libs.md) — Phase 0 findings and crate choices.
 4. [Integrations](integrations.md) — external providers, design tokens, herdr (non-blocking).
-5. [Context engine](context-engine.md) — deferred v2 draft.
+5. [Context engine](context-engine.md) — deferred to Phase 4.
 
 ## Related
 

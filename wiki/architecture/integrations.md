@@ -3,7 +3,7 @@ id: WR-INTEGRATIONS
 title: Integration plan
 summary: When and how to integrate an external index provider, design-system themes, and herdr, and what to keep open now.
 status: draft
-updated: 2026-09-29
+updated: 2026-09-30
 related: [overview, context-engine]
 nav_order: 5
 ---
@@ -41,7 +41,7 @@ herdr is the host environment, so it's the integration most likely to pay off ea
 | Level | What | When |
 |-------|------|------|
 | Env awareness | Detect `HERDR_ENV`, choose Kitty-only graphics or the text tier | Phase 2 |
-| Context signals (v2, widget sidebar) | `herdr pane list --workspace $HERDR_WORKSPACE_ID` → sibling cwds and agent states | Phase 3 |
+| Context signals (Phase 4, widget sidebar) | `herdr pane list --workspace $HERDR_WORKSPACE_ID` → sibling cwds and agent states | Phase 4 |
 | Publish state | `herdr pane report-metadata --token page=… --token wu=…` so herdr's sidebar shows what the wiki pane is on | Alpha |
 | Plugin | A herdr plugin manifest with a pane entrypoint that opens wiki-reader as a split or popup for the current workspace | Alpha |
 
@@ -57,6 +57,6 @@ Ghostty (common outer terminal under herdr) encodes Option+← / Option+→ as r
 
 Check the herdr plugin manifest format and socket API against the installed version's docs when you get there. They are versioned and still moving.
 
-## Agents (v2)
+## Agents (Phase 4)
 
 Deferred with the widget sidebar. `wiki-reader context --json` and `wiki-reader show <page> --section <heading>` are the agent interface. An MCP wrapper is an easy later add-on and doesn't change the core.

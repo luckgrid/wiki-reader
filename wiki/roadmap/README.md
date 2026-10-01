@@ -1,6 +1,6 @@
 # Roadmap
 
-Phased plan from completed Phase 0 to MVP and v2. Each phase ends with a decision, not just a deliverable. Time boxes are guides for a solo builder.
+Phased plan from completed Phase 0 through the MVP, alpha polish and beta. Each phase ends with a decision, not just a deliverable. Time boxes are guides for a solo builder.
 
 ## Phases
 
@@ -10,7 +10,7 @@ Phased plan from completed Phase 0 to MVP and v2. Each phase ends with a decisio
 | Phase 1 | done | Reader shell (~1–2 weeks) | [phase-1-reader-shell.md](phase-1-reader-shell.md) |
 | Phase 2 | active | Wiki navigation MVP (~2 weeks) | [phase-2-mvp.md](phase-2-mvp.md) |
 | Phase 3 | planned | Alpha polish | [phase-3-alpha.md](phase-3-alpha.md) |
-| v2 | planned | Widget sidebar | [v2-widget-sidebar.md](v2-widget-sidebar.md) |
+| Phase 4 | planned | Beta: widget sidebar and agent surface | [phase-4-beta.md](phase-4-beta.md) |
 
 ## Phase 0 (done)
 
