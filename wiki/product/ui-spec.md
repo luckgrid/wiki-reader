@@ -26,10 +26,9 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 │     ▾ Design System      ││ The reusable adapter stays semantic-only;      │
 │        Design System     ││ see [ADR-0003](../decisions/0003.md).          │
 │▌       Token Projection  ││                                                │
-│     ▸ Wfos               ││ Linked from                                    │
-│  ▸ Decisions             ││ ────────────────────────────────────────       │
-│                          ││ • Worked Example Wiki                          │
-│                          ││ • Architecture Overview                        │
+│     ▸ Wfos               ││ ┌ Linked from ─────────────────────────────┐   │
+│  ▸ Decisions             ││ │ Worked Example Wiki                      │   │
+│                          ││ └──────────────────────────────────────────┘   │
 └──────────────────────────┘└┤ ‹ Design System ├────────────┤ Workflow OS › ├┘
  VIEW  · architecture/design-system/tokens.md · L3:C1 9% · 2026-09-28 · draft
 ```
@@ -98,7 +97,7 @@ After the last item, `Tab` wraps to the first. The focused item renders inverted
 
 **Links:** underlined; broken links in the error color with `?`; external links with `↗`. `Enter` or left-click follows. Middle-click or `t` opens in a new tab. External links ask `open https://… ? [y/N]` in the status bar, then use the system opener. Hovering (if the terminal reports motion) highlights the link and shows its target in the status bar.
 
-**End of article:** "Linked from" list (backlinks), each a focusable link.
+**End of article:** "Linked from" pane (box-drawn: tag header, each backlink title as a focusable link with an optional summary).
 
 Future: a **sticky section header** at the top of the viewer showing the heading of the section in view.
 

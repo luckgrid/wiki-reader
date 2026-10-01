@@ -120,7 +120,7 @@ fn row_piece(text: &str, sl: Option<&StyledLine>, c0: u16, c1: u16) -> Option<St
     let Some(sl) = sl else {
         return Some(slice_cols(text, c0, c1));
     };
-    if has_kind(sl, |k| k == StyleKind::Rule) {
+    if has_kind(sl, |k| matches!(k, StyleKind::Rule | StyleKind::Pane)) {
         return None;
     }
     // Quote / code rows start with a two-column "│ " gutter that isn't content.
@@ -141,6 +141,7 @@ fn is_prose(sl: &StyledLine) -> bool {
                 | StyleKind::CodeBlock
                 | StyleKind::CodeLang
                 | StyleKind::Rule
+                | StyleKind::Pane
                 | StyleKind::Frontmatter
                 | StyleKind::FrontmatterKey
                 | StyleKind::FrontmatterValue

@@ -14,10 +14,9 @@ A terminal wiki reader for markdown collections. It browses like a documentation
 │     ▾ Design System      ││ The reusable adapter stays semantic-only;      │
 │        Design System     ││ see [ADR-0003](../decisions/0003.md).          │
 │▌       Token Projection  ││                                                │
-│     ▸ Wfos               ││ Linked from                                    │
-│  ▸ Decisions             ││ ────────────────────────────────────────       │
-│                          ││ • Worked Example Wiki                          │
-│                          ││ • Architecture Overview                        │
+│     ▸ Wfos               ││ ┌ Linked from ─────────────────────────────┐   │
+│  ▸ Decisions             ││ │ Worked Example Wiki                      │   │
+│                          ││ └──────────────────────────────────────────┘   │
 └──────────────────────────┘└┤ ‹ Design System ├────────────┤ Workflow OS › ├┘
  VIEW  · architecture/design-system/tokens.md · L3:C1 9% · 2026-09-28 · draft
 ```

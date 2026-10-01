@@ -2906,7 +2906,9 @@ fn footer_border(root: &Path, page: &str, w: u16) -> (App, String) {
     }));
     let terminal = draw_app(&mut app, w, 24);
     let buf = terminal.backend().buffer();
+    // Bottom border (Linked from may also draw └ earlier in the View).
     let row = (0..buf.area.height)
+        .rev()
         .map(|y| {
             (0..buf.area.width)
                 .map(|x| buf[(x, y)].symbol())

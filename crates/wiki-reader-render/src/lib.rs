@@ -548,11 +548,25 @@ mod tests {
             .lines
             .iter()
             .position(|l| l.contains("Linked from"))
-            .expect("Linked from heading");
+            .expect("Linked from pane header");
+        assert!(
+            doc.lines[section].starts_with('┌') && doc.lines[section].ends_with('┐'),
+            "pane top border: {:?}",
+            doc.lines[section]
+        );
+        assert_eq!(
+            doc.lines[section].width(),
+            80,
+            "top border must match render width"
+        );
         let joined = doc.lines[section..].join("\n");
         assert!(
             joined.contains("Token") || joined.contains("tokens"),
             "expected tokens backlink label in {joined:?}"
+        );
+        assert!(
+            joined.contains("Example leaf page"),
+            "expected summary under title: {joined:?}"
         );
         let bl = doc
             .links
@@ -560,11 +574,18 @@ mod tests {
             .find(|s| s.raw_target == "/architecture/design-system/tokens.md")
             .expect("root-relative tokens backlink span");
         assert_eq!(bl.class, LinkClass::Internal);
-        // Backlink segments land on/after the Linked from heading line.
+        // Backlink segments land after the pane header line.
         let bl_line = bl.segments[0].0 as usize;
         assert!(
             bl_line > section,
-            "backlink after heading ({bl_line} > {section})"
+            "backlink after header ({bl_line} > {section})"
+        );
+        assert!(
+            doc.lines
+                .last()
+                .is_some_and(|l| l.starts_with('└') && l.ends_with('┘')),
+            "closing border: {:?}",
+            doc.lines.last()
         );
     }
 
@@ -592,7 +613,7 @@ mod tests {
         let root = tmp.path();
         std::fs::write(
             root.join("src0.md"),
-            "---\ntitle: \"A very long page title number 0 that certainly exceeds thirty columns of width\"\n---\n\n# Src\n\nSee [dst](dst.md).\n",
+            "---\ntitle: \"A very long page title number 0 that certainly exceeds thirty columns of width\"\nsummary: \"A short summary that also wraps when the pane is narrow enough.\"\n---\n\n# Src\n\nSee [dst](dst.md).\n",
         )
         .unwrap();
         std::fs::write(root.join("dst.md"), "# Dst\n\nBody.\n").unwrap();
@@ -606,34 +627,38 @@ mod tests {
         let page = index.pages.get(&key);
         for &width in &[30u16, 40u16, 80u16] {
             let doc = render(&src, page, &key, &index, width);
+            let header = doc
+                .lines
+                .iter()
+                .find(|l| l.contains("Linked from"))
+                .unwrap_or_else(|| panic!("header at width {width}"));
+            assert_eq!(
+                header.width(),
+                usize::from(width),
+                "border overflow at {width}: {header:?}"
+            );
+            assert!(header.starts_with('┌') && header.ends_with('┐'));
             let bl = doc
                 .links
                 .iter()
                 .find(|s| s.raw_target == "/src0.md")
                 .unwrap_or_else(|| panic!("backlink at width {width}"));
             assert!(!bl.segments.is_empty(), "width {width}: expected segments");
-            // Every link glyph on those rows must sit inside a segment.
+            // Title is a single ellipsised row; every link glyph sits inside a segment.
             for &(line, (start, end)) in &bl.segments {
                 let row = &doc.styled[line as usize];
                 let row_text: String = row.spans.iter().map(|s| s.text.as_str()).collect();
-                let link_text: String = row
-                    .spans
-                    .iter()
-                    .filter(|s| matches!(s.kind, StyleKind::Link))
-                    .map(|s| s.text.as_str())
-                    .collect();
                 assert!(
-                    end > start,
-                    "width {width} line {line}: empty segment in {row_text:?}"
+                    row_text.width() <= usize::from(width),
+                    "title overflow at {width}: {row_text:?}"
                 );
-                // Segment covers the full link run on that row (hang indent is Plain).
                 let mut col = 0u16;
                 for sp in &row.spans {
                     let w = u16::try_from(sp.text.width()).unwrap_or(0);
                     if matches!(sp.kind, StyleKind::Link) {
                         assert!(
                             col >= start && col + w <= end,
-                            "width {width} line {line}: link {:?} cols {col}..{} outside segment {start}..{end}; row={row_text:?} link={link_text:?}",
+                            "width {width} line {line}: link {:?} cols {col}..{} outside segment {start}..{end}; row={row_text:?}",
                             sp.text,
                             col + w
                         );
@@ -641,14 +666,24 @@ mod tests {
                     col = col.saturating_add(w);
                 }
             }
-            // Wrapped titles produce multiple segments at width 30.
             if width == 30 {
                 assert!(
-                    bl.segments.len() >= 2,
-                    "width 30 should wrap long title, segs={:?}",
+                    bl.segments.len() == 1,
+                    "title is one ellipsised row, segs={:?}",
                     bl.segments
                 );
             }
+            let joined = doc.lines.join("\n");
+            assert!(
+                joined.contains("short summary") || joined.contains("summary"),
+                "summary at {width}: {joined:?}"
+            );
+            assert!(
+                doc.lines
+                    .iter()
+                    .any(|l| l.starts_with('└') && l.width() == usize::from(width)),
+                "closing border width {width}"
+            );
         }
     }
 
@@ -809,7 +844,7 @@ mod tests {
     }
 
     #[test]
-    fn linked_from_gap_is_single_blank() {
+    fn linked_from_gap_is_two_blanks() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/worked-example");
         let provider = FsProvider::open(&root).unwrap();
         let index = wiki_reader_core::Index::build(&provider).unwrap();
@@ -822,17 +857,17 @@ mod tests {
         let doc = render(&src, page, &key, &index, 80);
         let text = doc.lines.join("\n");
         assert!(
-            !text.contains("\n\n\nLinked from"),
-            "no double blank before Linked from: {text:?}"
+            !text.contains("\n\n\n\n┌"),
+            "no triple blank before pane: {text:?}"
         );
         assert!(
-            text.contains("\n\nLinked from\n"),
-            "single blank before Linked from: {text:?}"
+            text.contains("\n\n\n┌") && text.contains("Linked from"),
+            "two blanks before pane top: {text:?}"
         );
     }
 
     #[test]
-    fn linked_from_drops_hashes_and_hugs_its_list() {
+    fn linked_from_pane_hugs_entries() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/worked-example");
         let provider = FsProvider::open(&root).unwrap();
         let index = wiki_reader_core::Index::build(&provider).unwrap();
@@ -848,24 +883,29 @@ mod tests {
         let section = doc
             .lines
             .iter()
-            .position(|l| l == "Linked from")
-            .expect("Linked from heading line");
-        let rule = doc
-            .styled
-            .get(section + 1)
-            .expect("rule line under Linked from");
+            .position(|l| l.contains("Linked from"))
+            .expect("Linked from pane header");
+        let header = &doc.styled[section];
         assert!(
-            rule.spans
+            header
+                .spans
                 .iter()
-                .any(|s| s.text.contains('─') && matches!(s.kind, StyleKind::Rule)),
-            "dim Rule under Linked from (not Heading): {:?}",
-            rule.spans
+                .any(|s| s.text.contains('┌') && matches!(s.kind, StyleKind::Pane)),
+            "Pane chrome on header: {:?}",
+            header.spans
         );
-        // The list starts on the very next row: no blank gap under the rule.
+        // First entry title is the next row (link), then optional summary, no blank.
         assert!(
-            doc.lines[section + 2].starts_with('•'),
-            "list hugs the rule: {:?}",
+            doc.styled[section + 1]
+                .spans
+                .iter()
+                .any(|s| matches!(s.kind, StyleKind::Link)),
+            "title hugs the header: {:?}",
             doc.lines
+        );
+        assert!(
+            doc.lines.last().is_some_and(|l| l.starts_with('└')),
+            "closing border present"
         );
     }
 

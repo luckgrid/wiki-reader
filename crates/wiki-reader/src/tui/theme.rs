@@ -199,7 +199,7 @@ impl Theme {
                 Style::default().fg(self.text_muted)
             }
             StyleKind::FrontmatterValue => Style::default().fg(self.text_secondary),
-            StyleKind::Rule => Style::default().fg(self.border),
+            StyleKind::Rule | StyleKind::Pane => Style::default().fg(self.border),
             StyleKind::FrontmatterKey | StyleKind::ListMarker | StyleKind::TaskMarker => {
                 Style::default().fg(self.accent)
             }

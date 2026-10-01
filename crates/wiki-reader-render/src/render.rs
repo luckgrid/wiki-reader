@@ -58,6 +58,8 @@ pub enum StyleKind {
     FrontmatterValue,
     /// Frontmatter YAML punctuation (`:` and list dashes).
     FrontmatterPunct,
+    /// Box-drawn pane chrome (Linked from borders / dividers).
+    Pane,
 }
 
 /// One styled run on a line.
@@ -1037,8 +1039,9 @@ impl<'a> LayoutState<'a> {
         });
     }
 
-    /// Append a "Linked from" section (B1). One entry per source page, sorted by
-    /// path, excluding self. Omitted when empty. Raw mode never calls this.
+    /// Append a "Linked from" pane (B1). Box-drawn section: tag header, title
+    /// rows (links), optional summaries, dividers between entries. Omitted when
+    /// empty. Raw mode never calls this.
     fn append_backlinks(&mut self, page: &PageKey) {
         let mut sources: Vec<&PageKey> = self
             .index
@@ -1055,20 +1058,23 @@ impl<'a> LayoutState<'a> {
         }
         let src = self.styled.last().map_or(1, |l| l.source_line.max(1));
         self.finish_block();
-        self.commit_line(src); // blank gap
+        // Two blank rows above the pane.
+        self.commit_line(src);
+        self.commit_line(src);
         self.mark_block(src);
         let heading_line = u32::try_from(self.styled.len()).unwrap_or(0);
-        self.push_span("Linked from".into(), StyleKind::Heading(2), src);
-        self.commit_line(src);
-        // Match normal H1/H2 rules (dim Rule), not Heading colour. The list
-        // follows directly: no blank row under the rule.
-        self.push_span("─".repeat(self.width.min(40)), StyleKind::Rule, src);
+        self.push_span(
+            pane_top_border(self.width, "Linked from"),
+            StyleKind::Pane,
+            src,
+        );
         self.commit_line(src);
         self.headings.push((
             unique_slug("linked-from", &mut self.used_slugs),
             heading_line.saturating_add(1),
         ));
-        for from in sources {
+        let last = sources.len().saturating_sub(1);
+        for (i, from) in sources.into_iter().enumerate() {
             let title = self.index.pages.get(from).map_or_else(
                 || {
                     from.relative_path.file_stem().map_or_else(
@@ -1078,23 +1084,28 @@ impl<'a> LayoutState<'a> {
                 },
                 |p| p.title.clone(),
             );
+            let summary = self
+                .index
+                .pages
+                .get(from)
+                .and_then(|p| p.parsed.frontmatter.summary.clone());
             let target = format!(
                 "/{}",
                 from.relative_path.to_string_lossy().replace('\\', "/")
             );
-            self.push_backlink_entry(&title, &target, src);
+            self.push_backlink_entry(&title, summary.as_deref(), &target, src);
+            if i < last {
+                self.push_span(pane_h_border(self.width, '├', '┤'), StyleKind::Pane, src);
+                self.commit_line(src);
+            }
         }
+        self.push_span(pane_h_border(self.width, '└', '┘'), StyleKind::Pane, src);
+        self.commit_line(src);
     }
 
-    /// Bullet + wrapped title with hanging indent; `LinkSpan` segments follow glyphs.
-    fn push_backlink_entry(&mut self, title: &str, target: &str, src: u32) {
-        const MAX_ROWS: usize = 3;
-        const BULLET: &str = "• ";
-        // Hang matches bullet display width ("• " → 2).
-        const HANG: &str = "  ";
-
-        self.push_span(BULLET.into(), StyleKind::Plain, src);
-        let col = u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(0);
+    /// Title (link) + optional 1–2 summary rows; `LinkSpan` on the title only.
+    fn push_backlink_entry(&mut self, title: &str, summary: Option<&str>, target: &str, src: u32) {
+        let col = 0u16;
         let line = u32::try_from(self.styled.len()).unwrap_or(0);
         self.in_link = Some(LinkBuild {
             raw: target.to_owned(),
@@ -1104,32 +1115,18 @@ impl<'a> LayoutState<'a> {
             segments: Vec::new(),
         });
 
-        let mut rest = title.to_owned();
-        for row in 0..MAX_ROWS {
-            if rest.is_empty() {
-                break;
-            }
-            if row > 0 {
-                self.push_span(HANG.into(), StyleKind::Plain, src);
-            }
-            let avail = self.width.saturating_sub(self.cur_width()).max(1);
-            let last = row + 1 == MAX_ROWS;
-            if last && rest.width() > avail {
-                let room = avail.saturating_sub(1).max(1);
-                let (take, _) = split_at_width(&rest, room);
-                if !take.is_empty() {
-                    self.push_span(take, StyleKind::Link, src);
-                }
-                self.push_span("…".into(), StyleKind::Link, src);
-                rest.clear();
-            } else {
-                let (take, next) = split_at_width(&rest, avail);
+        // One title row; ellipsis if it does not fit.
+        let avail = self.width.max(1);
+        let title_w = title.width();
+        if title_w > avail {
+            let room = avail.saturating_sub(1).max(1);
+            let (take, _) = split_at_width(title, room);
+            if !take.is_empty() {
                 self.push_span(take, StyleKind::Link, src);
-                rest = next;
             }
-            if !rest.is_empty() {
-                self.commit_line(src);
-            }
+            self.push_span("…".into(), StyleKind::Link, src);
+        } else {
+            self.push_span(title.to_owned(), StyleKind::Link, src);
         }
         if let Some(lb) = self.in_link.take() {
             self.links.push(LinkSpan {
@@ -1140,8 +1137,31 @@ impl<'a> LayoutState<'a> {
             });
             self.link_id = self.link_id.saturating_add(1);
         }
-        if !self.cur.is_empty() {
-            self.commit_line(src);
+        self.commit_line(src);
+
+        if let Some(summary) = summary.filter(|s| !s.is_empty()) {
+            let mut rest = summary.to_owned();
+            for row in 0..2 {
+                if rest.is_empty() {
+                    break;
+                }
+                let avail = self.width.max(1);
+                let last = row + 1 == 2;
+                if last && rest.width() > avail {
+                    let room = avail.saturating_sub(1).max(1);
+                    let (take, _) = split_at_width(&rest, room);
+                    if !take.is_empty() {
+                        self.push_span(take, StyleKind::Plain, src);
+                    }
+                    self.push_span("…".into(), StyleKind::Plain, src);
+                    rest.clear();
+                } else {
+                    let (take, next) = split_at_width(&rest, avail);
+                    self.push_span(take, StyleKind::Plain, src);
+                    rest = next;
+                }
+                self.commit_line(src);
+            }
         }
     }
 
@@ -1562,6 +1582,38 @@ fn format_table_separator(widths: &[usize]) -> String {
 
 fn format_table_row_sep(widths: &[usize]) -> String {
     format_table_border(widths, '├', '┼', '┤')
+}
+
+/// Horizontal pane border: `left` + fill + `right`, clipped to `width` columns.
+fn pane_h_border(width: usize, left: char, right: char) -> String {
+    if width == 0 {
+        return String::new();
+    }
+    if width == 1 {
+        return left.to_string();
+    }
+    format!("{left}{}{right}", "─".repeat(width.saturating_sub(2)))
+}
+
+/// Top border with an embedded tag, e.g. `┌ Linked from ────┐`.
+fn pane_top_border(width: usize, tag: &str) -> String {
+    if width == 0 {
+        return String::new();
+    }
+    if width == 1 {
+        return "┌".into();
+    }
+    // "┌ " + tag + " " + fill + "┐"
+    let prefix = format!("┌ {tag} ");
+    let suffix_w = 1; // ┐
+    if prefix.width() + suffix_w > width {
+        // Too narrow for the full tag: fall back to a plain top border.
+        return pane_h_border(width, '┌', '┐');
+    }
+    let fill = width
+        .saturating_sub(prefix.width())
+        .saturating_sub(suffix_w);
+    format!("{prefix}{}┐", "─".repeat(fill))
 }
 
 #[cfg(test)]

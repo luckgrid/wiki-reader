@@ -52,7 +52,7 @@ Headings (distinct per level), paragraphs with wrapping, bold/italic/strike/inli
 
 ## Rendered is formatted; raw shows the syntax
 
-Rendered mode drops markdown markers at layout time, as spans are pushed: no `#` on headings (H1/H2 get an underline rule, H3-H6 extra spacing), no fence lines (a `── lang ──` label instead), no backticks on inline code, and "Linked from" is a title, a dim rule and the list. Because markers are omitted as spans are pushed, link column geometry, the source map and block actions stay correct. The raw view (`r`) is where the markdown syntax is shown. There is no toggle between presentations ([ADR-0014](../decisions/0014-remove-formatted-view-toggle.md), which supersedes [ADR-0012](../decisions/0012-syntax-vs-formatted.md)).
+Rendered mode drops markdown markers at layout time, as spans are pushed: no `#` on headings (H1/H2 get an underline rule, H3-H6 extra spacing), no fence lines (a `── lang ──` label instead), no backticks on inline code, and "Linked from" is a box-drawn pane (tag header, title links, optional summaries, dividers). Because markers are omitted as spans are pushed, link column geometry, the source map and block actions stay correct. The raw view (`r`) is where the markdown syntax is shown. There is no toggle between presentations ([ADR-0014](../decisions/0014-remove-formatted-view-toggle.md), which supersedes [ADR-0012](../decisions/0012-syntax-vs-formatted.md)).
 
 ## Raw view
 
