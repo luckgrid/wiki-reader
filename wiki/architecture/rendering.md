@@ -82,7 +82,7 @@ Validate before building the image tier ([roadmap](../roadmap/phase-3-alpha.md),
 
 ### Other images
 
-`![alt](./local.png)` uses the same tiers: Kitty image → a `[image: alt]` placeholder with the path. Remote images are never fetched.
+`![alt](./local.png)` uses the same tiers: Kitty image → a `[image: alt]` placeholder with the path. Per [ADR-0017](../decisions/0017-static-local-images-only.md), images are static (PNG, JPEG, WebP, first GIF frame, SVG via `resvg`), must resolve inside the collection root, are size-capped, and remote or `file:` images are never fetched or read; they show the placeholder.
 
 ## Performance budgets
 
