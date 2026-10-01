@@ -48,6 +48,20 @@ pub enum BindingScope {
     Chord,
 }
 
+impl BindingScope {
+    /// Section title shared by the help overlay and the generated ui-spec keymap.
+    #[must_use]
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::Global => "Global",
+            Self::Nav => "Side nav",
+            Self::Viewer => "Viewer",
+            Self::Chord => "Chords",
+            Self::Overlay => "Search overlay",
+        }
+    }
+}
+
 /// How a Normal-mode key is matched against a [`Binding`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Matcher {
@@ -197,10 +211,10 @@ pub static BINDINGS: &[Binding] = &[
         matcher: Some(Matcher::PlainChar('r')),
     },
     Binding {
-        keys: "◈",
+        keys: "○ / ◉",
         scope: BindingScope::Global,
         action: Some(Action::ToggleFormattedView),
-        help: "Toggle syntax / formatted (eye)",
+        help: "Toggle syntax / formatted (header eye icon)",
         matcher: None,
     },
     Binding {
@@ -1262,5 +1276,58 @@ mod tests {
             Chord::None,
         );
         assert_eq!(expand, Some(Action::NavExpand));
+    }
+}
+
+/// Keeps the generated keymap block in `wiki/product/ui-spec.md` identical to
+/// [`BINDINGS`] (the table the `?` help overlay is built from).
+#[cfg(test)]
+mod docs_sync {
+    use super::{BINDINGS, BindingScope};
+    use std::fmt::Write as _;
+    use std::path::Path;
+
+    const START: &str = "<!-- keymap:start -->";
+    const END: &str = "<!-- keymap:end -->";
+
+    /// Markdown tables per scope, in help-overlay order, default (non-overridden) keys.
+    fn keymap_markdown() -> String {
+        let mut out = String::from(
+            "Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same table the `?` help overlay shows. Edit the table there, then run `UPDATE_DOCS=1 cargo test -p wiki-reader keymap_docs`.\n",
+        );
+        let mut last: Option<BindingScope> = None;
+        for b in BINDINGS {
+            if last != Some(b.scope) {
+                last = Some(b.scope);
+                let _ = write!(
+                    out,
+                    "\n### {}\n\n| Key | Action |\n|-----|--------|\n",
+                    b.scope.title()
+                );
+            }
+            let _ = writeln!(out, "| `{}` | {} |", b.keys, b.help);
+        }
+        out
+    }
+
+    #[test]
+    fn keymap_docs_match_bindings() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../wiki/product/ui-spec.md");
+        let doc = std::fs::read_to_string(&path).expect("read ui-spec.md");
+        let start = doc.find(START).expect("keymap:start marker in ui-spec.md");
+        let end = doc.find(END).expect("keymap:end marker in ui-spec.md");
+        assert!(start < end, "keymap markers out of order");
+        let body_start = start + START.len();
+        let want = format!("\n{}", keymap_markdown());
+        if std::env::var_os("UPDATE_DOCS").is_some() {
+            let updated = format!("{}{}{}", &doc[..body_start], want, &doc[end..]);
+            std::fs::write(&path, updated).expect("write ui-spec.md");
+            return;
+        }
+        assert_eq!(
+            &doc[body_start..end],
+            want,
+            "ui-spec keymap block is out of date; run `UPDATE_DOCS=1 cargo test -p wiki-reader keymap_docs`"
+        );
     }
 }

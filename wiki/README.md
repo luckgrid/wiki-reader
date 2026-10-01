@@ -25,16 +25,7 @@ Entrypoint for wiki-reader documentation: product intent, architecture, decision
 
 ## Decisions (ADRs)
 
-| ADR | Status |
-|-----|--------|
-| [0001 Rust + ratatui](decisions/0001-rust-ratatui.md) | accepted |
-| [0002 Build on existing pieces](decisions/0002-build-vs-fork.md) | accepted |
-| [0003 Core + CLI first](decisions/0003-core-cli-first.md) | superseded by 0006 |
-| [0004 Tiered diagram rendering](decisions/0004-diagram-rendering.md) | proposed |
-| [0005 Wiki navigation model](decisions/0005-navigation-model.md) | accepted |
-| [0006 Reader first; core terminal-free](decisions/0006-reader-first.md) | accepted |
-| [0007 Input & focus model](decisions/0007-input-focus-model.md) | accepted |
-| [0008 Side nav as site navigation](decisions/0008-side-nav-as-site-nav.md) | accepted |
+The full list with statuses is the index in [decisions/README.md](decisions/README.md).
 
 ## Document standard
 

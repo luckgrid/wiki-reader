@@ -87,13 +87,13 @@ The side nav is built from the filesystem but **presented as a documentation sit
 
 ### Labels
 
-Each page's label is the first match of: frontmatter `nav_title` → `title` → first H1 → humanized filename (`02-token-projection.md` → "Token Projection"; numeric prefixes are stripped for display but still used for sorting).
+The label depends on `nav.labels`. With `filename` (the default) it is the humanized filename (`02-token-projection.md` → "Token Projection"; numeric prefixes are stripped for display but still used for sorting). With `title` or `title+filename` it is the first match of: frontmatter `nav_title` → `title` → first H1 → humanized filename.
 
 Config (P1/P2):
 
 ```toml
 [nav]
-labels = "title"            # "title" | "filename" | "title+filename" (filename as dim alt text below)
+labels = "filename"         # default; "title" | "filename" | "title+filename" (title with a dim filename suffix)
 ```
 
 ### Folding rules (applied bottom-up, recursively)
@@ -104,7 +104,7 @@ Let a folder's **pages** be its markdown files, and its **children** be its page
 |-----------------|-------------|
 | Nothing (after excludes) | Hidden |
 | Only a README (`README.md` / `index.md`) | **Leaf link** to that README, labeled with its title |
-| README + other children | **Collapsible group**: label = README title; first item = the README (landing page); then the other children |
+| README + other children | **Collapsible group**: label = the README's label (per `nav.labels`); first item = the README (landing page), shown as `Overview` so the label is not repeated; then the other children |
 | Other children, no README | **Collapsible group**: label = humanized folder name; no landing page |
 
 The root folder is special: the root README is always the **first top-level item** (the wiki entry), and its title is the header's root breadcrumb.
