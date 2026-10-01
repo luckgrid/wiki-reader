@@ -44,6 +44,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 - 2026-10-01: dogfood rounds 2–4 merged to main (#83, #84, #85); v0.1.0-alpha.3 cut; clock continues on alpha.3
 - 2026-10-01: dogfood round 5 (PR 1): numbered/bulleted items that start with code or a link keep their marker first and no longer paint as one code band (P2-34); ADR ➕/➖ render as ASCII `+`/`-` so they take the text colour (P2-35); H1 teal, H2 peach, H3–H5 light gray, links teal; status pills keep their own colours (P2-36)
 - 2026-10-01: dogfood round 5 (PR 2): Linked from is a box-drawn pane with a tag header, teal title links, optional summaries and dividers (P2-37)
+- 2026-10-01: dogfood round 5 (PR 3): narrow nav rows end in `…` (drop the `(file)` suffix first in title+filename); Search query sits under the top border with no blank row (P2-38, P2-39)
 
 ## Interim acceptance walk (2026-09-30)
 
@@ -137,6 +138,8 @@ Judged from tests, dogfood QA, and code — not a full interactive sweep of ever
 | P2-35 | Consequence ➕/➖ emoji render as ASCII `+`/`-` so they take the text colour | D1 | done | round 5 PR 1 |
 | P2-36 | Heading ramp: H1 accent/teal, H2 peach, H3–H5 light gray; internal links teal; status pills use dedicated tokens | U3 | done | round 5 PR 1 |
 | P2-37 | Linked from is a box-drawn pane: tag header, title links, optional summaries, dividers between entries | B1 | done | round 5 PR 2 |
+| P2-38 | Narrow nav rows end in `…`; in `title+filename` the dim `(file)` suffix is dropped before the title is ellipsised | U3 | done | round 5 PR 3 |
+| P2-39 | Search overlay: query row sits directly under the top border (no blank row) | U3 | done | round 5 PR 3 |
 | P2-R38 | Copy fixes: empty table cells kept, wrapped cells rejoined, OSC 52 cap on the encoded payload (75 KB of text), held drag keeps scrolling | CP | done | round 2 follow-ups (PR 2) |
 | P2-24b | Image diagrams and images | D1 | moved | slipped to Phase 3 as P3-12 (2026-09-30); needs ADR-0004 herdr/Kitty spike + deps |
 

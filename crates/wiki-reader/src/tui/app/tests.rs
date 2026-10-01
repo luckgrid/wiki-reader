@@ -3628,6 +3628,47 @@ fn search_content_rows_end_in_an_ellipsis_and_footer_hugs_border() {
 }
 
 #[test]
+fn search_query_row_sits_directly_under_top_border() {
+    let mut app = App::new(&fixture()).unwrap();
+    app.update(Action::OpenSearch);
+    let rows = screen_rows(&mut app, 90, 24);
+    let top = rows
+        .iter()
+        .position(|r| r.contains('┌') && r.contains("Search"))
+        .expect("search popup top border");
+    let under = &rows[top + 1];
+    assert!(
+        under.contains('/') && (under.contains('█') || under.contains("type to search")),
+        "query row must sit under the top border: {under}"
+    );
+}
+
+#[test]
+fn narrow_nav_ellipsises_long_titles() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("wiki");
+    copy_dir(&fixture(), &root);
+    std::fs::write(
+        root.join("decisions/long-title.md"),
+        "---\ntitle: \"An extraordinarily long ADR title that must be clipped in a narrow nav\"\n---\n\n# Long\n\nBody.\n",
+    )
+    .unwrap();
+    let mut app = App::new(&root).unwrap();
+    app.nav_width = Some(22);
+    app.navigator
+        .set_group_expanded(NodeId::Group(PathBuf::from("decisions")), true);
+    let rows = screen_rows(&mut app, 80, 24);
+    let hit = rows
+        .iter()
+        .find(|r| r.contains('…') && (r.contains("extraordin") || r.contains("An extra")))
+        .unwrap_or_else(|| panic!("expected ellipsised nav title:\n{}", rows.join("\n")));
+    assert!(
+        !hit.contains("clipped in a narrow"),
+        "tail of title must be cut: {hit}"
+    );
+}
+
+#[test]
 fn help_dividers_have_one_row_above_and_none_below() {
     let app = App::new(&fixture()).unwrap();
     let help = crate::tui::help_ui::HelpOverlay::new(&app.key_overrides);

@@ -160,19 +160,29 @@ pub fn draw(
             spans.push(Span::styled(tri, label_style));
         }
         spans.push(Span::styled(row.label.clone(), label_style));
-        if labels == wiki_reader_core::config::LabelMode::TitleFilename
+        let suffix = if labels == wiki_reader_core::config::LabelMode::TitleFilename
             && let NodeId::Page(key) = &row.id
         {
             let file = wiki_reader_core::nav::humanize_filename(&key.relative_path);
-            if row.label != file {
-                spans.push(Span::styled(format!(" ({file})"), row_bg(theme.muted())));
+            if row.label == file {
+                None
+            } else {
+                Some(Span::styled(format!(" ({file})"), row_bg(theme.muted())))
             }
-        }
+        } else {
+            None
+        };
         let max = usize::from(inner.width);
+        let span_w = |sp: &Span<'_>| Span::raw(sp.content.as_ref()).width();
+        let total = spans.iter().map(span_w).sum::<usize>() + suffix.as_ref().map_or(0, span_w);
+        // Prefer dropping the muted (file) suffix over cutting the title.
+        if let Some(suf) = suffix.filter(|_| total <= max) {
+            spans.push(suf);
+        }
         let mut used = 0usize;
         let mut clipped = Vec::new();
         for sp in spans {
-            let w = Span::raw(sp.content.as_ref()).width();
+            let w = span_w(&sp);
             if used >= max {
                 break;
             }
@@ -180,19 +190,22 @@ pub fn draw(
                 used += w;
                 clipped.push(sp);
             } else {
-                let take = max.saturating_sub(used);
-                // Truncate by display width (char-based is wrong for wide glyphs).
+                // Clip then … in this span's style (display-width correct).
+                let take = max.saturating_sub(used).saturating_sub(1);
                 let mut text = String::new();
                 let mut tw = 0usize;
-                for ch in sp.content.chars() {
-                    let cw = Span::raw(ch.to_string()).width();
-                    if tw + cw > take {
-                        break;
+                if take > 0 {
+                    for ch in sp.content.chars() {
+                        let cw = Span::raw(ch.to_string()).width();
+                        if tw + cw > take {
+                            break;
+                        }
+                        text.push(ch);
+                        tw += cw;
                     }
-                    text.push(ch);
-                    tw += cw;
                 }
                 clipped.push(Span::styled(text, sp.style));
+                clipped.push(Span::styled("…", sp.style));
                 used = max;
                 break;
             }
