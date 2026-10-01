@@ -80,7 +80,7 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, model: &StatusModel<'_>, theme: &
     let budget = w.saturating_sub(msg_len);
 
     // One pill colour for both panes: the label says which pane has focus.
-    let mode_bg = theme.gold;
+    let mode_bg = theme.peach;
     let text = theme.text();
     // High → low priority fields (drop from the end when narrowing). Date and
     // status outrank word count and reading time.

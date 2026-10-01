@@ -198,8 +198,8 @@ fn draw_search_overlay(
     frame.render_widget(block, rect);
     hits.push(rect, Hit::FocusViewer);
 
-    // Query row, results, footer.
-    if inner.height < 3 || inner.width == 0 {
+    // Blank row, query row, results, footer.
+    if inner.height < 4 || inner.width == 0 {
         return;
     }
     let row_at = |dy: u16| Rect {
@@ -220,7 +220,7 @@ fn draw_search_overlay(
     }
     frame.render_widget(
         Paragraph::new(popup_row(query, inner.width, None)),
-        row_at(0),
+        row_at(1),
     );
 
     let n = overlay.result_len();
@@ -256,9 +256,9 @@ fn draw_search_overlay(
 
     let list_rect = Rect {
         x: inner.x,
-        y: inner.y.saturating_add(1),
+        y: inner.y.saturating_add(2),
         width: inner.width,
-        height: inner.height.saturating_sub(2),
+        height: inner.height.saturating_sub(3),
     };
     let visible = usize::from(list_rect.height);
     overlay.list_height = visible;
@@ -446,7 +446,11 @@ fn draw_help_overlay(
         return;
     }
 
-    let visible = usize::from(inner.height);
+    // One blank row top and bottom: about the same visual size as the side padding.
+    let visible = usize::from(inner.height.saturating_sub(2));
+    if visible == 0 {
+        return;
+    }
     help.list_height = visible;
     help.scroll = ensure_visible(help.selected, help.scroll, visible);
     help.scroll = clamp_scroll(help.scroll, visible, help.rows.len());
@@ -461,7 +465,7 @@ fn draw_help_overlay(
     let key_w = help
         .rows
         .iter()
-        .filter(|r| !r.heading)
+        .filter(|r| r.selectable())
         .map(|r| Span::raw(key_label(r)).width())
         .max()
         .unwrap_or(8)
@@ -472,7 +476,13 @@ fn draw_help_overlay(
         let Some(row) = help.rows.get(abs) else {
             break;
         };
-        let y = inner.y.saturating_add(u16::try_from(row_i).unwrap_or(0));
+        if row.spacer {
+            continue;
+        }
+        let y = inner
+            .y
+            .saturating_add(1)
+            .saturating_add(u16::try_from(row_i).unwrap_or(0));
         let row_rect = ratatui::layout::Rect {
             x: inner.x,
             y,

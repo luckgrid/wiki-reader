@@ -5,9 +5,10 @@ expression: out
 ---
  Worked Example Wiki                                    ◫ ✕ 
 ┌┤ README × ├──────────────────────────────────────────────┐
-│▌── frontmatter ▶ ────────────────────────────────────────│
+│▌── frontmatter ▸ ────────────────────────────────────────│
 │                                                          │
-│ # Worked Example Wiki                                    │
+│ Worked Example Wiki                                      │
+│ ────────────────────────────────────────                 │
 │                                                          │
 │ A tiny markdown collection used as the default           │
 │ smoke-test root.                                         │
@@ -24,6 +25,5 @@ expression: out
 │                                                          │
 │                                                          │
 │                                                          │
-│                                                          │
 └───────────────────────────────┤ Architecture Overview › ├┘
-  VIEW  · README.md · L1:C1 11% · 2026-09-28 · draft · 29w
+  VIEW  · README.md · L1:C1 10% · 2026-09-28 · draft · 29w

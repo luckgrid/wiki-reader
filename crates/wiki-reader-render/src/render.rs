@@ -404,8 +404,11 @@ impl<'a> LayoutState<'a> {
                 self.heading_level = Some(lv);
                 self.heading_text.clear();
                 self.style_stack.push(StyleKind::Heading(lv));
-                let hashes = "#".repeat(usize::from(lv));
-                self.push_span(format!("{hashes} "), StyleKind::Heading(lv), src);
+                // Rendered mode drops the `#` markers; extra top gap for H1/H2
+                // so levels read without hashes. Raw view shows the syntax.
+                if lv <= 2 && !self.styled.is_empty() {
+                    self.ensure_block_gap(src);
+                }
             }
             Tag::BlockQuote(kind) => {
                 self.ensure_block_gap(src);
@@ -441,9 +444,9 @@ impl<'a> LayoutState<'a> {
                     return;
                 }
                 let label = if self.code_fence_lang.is_empty() {
-                    "```".into()
+                    "── code ──".into()
                 } else {
-                    format!("```{}", self.code_fence_lang)
+                    format!("── {} ──", self.code_fence_lang)
                 };
                 let line = u32::try_from(self.styled.len()).unwrap_or(0);
                 self.push_span(label, StyleKind::CodeLang, src);
@@ -531,12 +534,27 @@ impl<'a> LayoutState<'a> {
                 self.commit_line(src);
             }
             TagEnd::Heading(_) => {
-                self.heading_level = None;
+                let level = self.heading_level.take().unwrap_or(1);
                 let _ = self.style_stack.pop();
                 let rendered = u32::try_from(self.styled.len()).unwrap_or(0);
                 let slug = unique_slug(&github_slug(&self.heading_text), &mut self.used_slugs);
                 self.headings.push((slug, rendered.saturating_add(1)));
                 self.commit_line(src);
+                if level <= 2 {
+                    self.push_span("─".repeat(self.width.min(40)), StyleKind::Rule, src);
+                    self.commit_line(src);
+                } else {
+                    // Two blanks: next block's ensure_block_gap no-ops, leaving
+                    // one more empty line than a normal block gap.
+                    self.styled.push(StyledLine {
+                        spans: Vec::new(),
+                        source_line: src,
+                    });
+                    self.styled.push(StyledLine {
+                        spans: Vec::new(),
+                        source_line: src,
+                    });
+                }
                 self.heading_text.clear();
             }
             TagEnd::BlockQuote(_) => {
@@ -582,9 +600,7 @@ impl<'a> LayoutState<'a> {
                     self.code_fence_lang.clear();
                     return;
                 }
-                // Closing fence maps to its own source line (range end), not the open.
-                self.push_span("```".into(), StyleKind::CodeBlock, close_src);
-                self.commit_line(close_src);
+                // No closing fence line: the label above frames the block.
                 if let Some(action) = self
                     .block_actions
                     .iter_mut()
@@ -726,7 +742,7 @@ impl<'a> LayoutState<'a> {
     }
 
     fn inline_code(&mut self, t: &CowStr<'_>, src: u32) {
-        let s = format!("`{t}`");
+        let s = t.to_string();
         if let Some(lb) = self.in_link.as_mut() {
             lb.text.push_str(&s);
         }
@@ -757,7 +773,7 @@ impl<'a> LayoutState<'a> {
         let line = u32::try_from(self.styled.len()).unwrap_or(0);
         // Top and bottom rules share one width (the full pane) so the box reads as a unit.
         let rule_w = self.width.max(1);
-        let arrow = if expanded { '▼' } else { '▶' };
+        let arrow = if expanded { '▾' } else { '▸' };
         let label = format!("── frontmatter {arrow} ");
         let fill = rule_w.saturating_sub(label.width());
         self.push_span(
@@ -1037,7 +1053,11 @@ impl<'a> LayoutState<'a> {
         self.commit_line(src); // blank gap
         self.mark_block(src);
         let heading_line = u32::try_from(self.styled.len()).unwrap_or(0);
-        self.push_span("## Linked from".into(), StyleKind::Heading(2), src);
+        self.push_span("Linked from".into(), StyleKind::Heading(2), src);
+        self.commit_line(src);
+        // Match normal H1/H2 rules (dim Rule), not Heading colour. The list
+        // follows directly: no blank row under the rule.
+        self.push_span("─".repeat(self.width.min(40)), StyleKind::Rule, src);
         self.commit_line(src);
         self.headings.push((
             unique_slug("linked-from", &mut self.used_slugs),

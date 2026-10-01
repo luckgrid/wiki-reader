@@ -147,10 +147,14 @@ mod tests {
             !doc.lines.iter().any(|l| l == "│ " || l == "│"),
             "trailing empty code gutter: {plain:?}"
         );
-        // Closing fence is its own row with its own source line (≥ last content).
+        // A label row frames the block; there are no ``` fence lines.
         assert!(
-            doc.lines.iter().any(|l| l.trim() == "```"),
-            "missing close fence: {plain}"
+            doc.lines.iter().any(|l| l == "── rust ──"),
+            "missing language label: {plain}"
+        );
+        assert!(
+            !doc.lines.iter().any(|l| l.trim().starts_with("```")),
+            "fences are dropped: {plain}"
         );
     }
 
@@ -588,7 +592,7 @@ mod tests {
         let src = "---\ntitle: Hello\nupdated: 2026-01-01\n---\n\n# Body\n";
         let doc = render_src(src, 40);
         assert!(
-            doc.lines.iter().any(|l| l.contains("frontmatter ▶")),
+            doc.lines.iter().any(|l| l.contains("frontmatter ▸")),
             "collapsed cue missing: {:?}",
             doc.lines
         );
@@ -674,8 +678,9 @@ mod tests {
         let src = "# H\n\npara\n\n- a\n- b\n\n## Next\n";
         let doc = render_src(src, 40);
         let text = doc.lines.join("\n");
+        let rule = "─".repeat(40);
         assert!(
-            text.contains("# H\n\npara\n\n• a\n• b\n\n## Next"),
+            text.contains(&format!("H\n{rule}\n\npara\n\n• a\n• b\n\nNext\n{rule}")),
             "expected blank gaps between blocks and tight list: {text:?}"
         );
     }
@@ -701,17 +706,14 @@ mod tests {
             "alert label tight to body: {text:?}"
         );
         assert!(
-            text.contains("```\n│ code\n```"),
+            text.contains("── code ──\n│ code\n\n"),
             "code block present: {text:?}"
         );
         assert!(
             text.contains('┌') && text.contains('└'),
             "table borders: {text:?}"
         );
-        assert!(
-            text.contains("─\n\n# After") || text.contains("──\n\n# After"),
-            "gap after rule: {text:?}"
-        );
+        assert!(text.contains("─\n\nAfter"), "gap after rule: {text:?}");
     }
 
     #[test]
@@ -755,12 +757,50 @@ mod tests {
         let doc = render(&src, page, &key, &index, 80);
         let text = doc.lines.join("\n");
         assert!(
-            !text.contains("\n\n\n## Linked from"),
+            !text.contains("\n\n\nLinked from"),
             "no double blank before Linked from: {text:?}"
         );
         assert!(
-            text.contains("\n\n## Linked from"),
+            text.contains("\n\nLinked from\n"),
             "single blank before Linked from: {text:?}"
+        );
+    }
+
+    #[test]
+    fn linked_from_drops_hashes_and_hugs_its_list() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/worked-example");
+        let provider = FsProvider::open(&root).unwrap();
+        let index = wiki_reader_core::Index::build(&provider).unwrap();
+        let key = PageKey {
+            collection_id: index.collection_id.clone(),
+            relative_path: std::path::PathBuf::from("architecture/design-system/README.md"),
+        };
+        let src = provider.read(&key).unwrap();
+        let page = index.pages.get(&key);
+        let doc = render(&src, page, &key, &index, 80);
+        let text = doc.lines.join("\n");
+        assert!(!text.contains("## Linked from"), "no hashes: {text:?}");
+        let section = doc
+            .lines
+            .iter()
+            .position(|l| l == "Linked from")
+            .expect("Linked from heading line");
+        let rule = doc
+            .styled
+            .get(section + 1)
+            .expect("rule line under Linked from");
+        assert!(
+            rule.spans
+                .iter()
+                .any(|s| s.text.contains('─') && matches!(s.kind, StyleKind::Rule)),
+            "dim Rule under Linked from (not Heading): {:?}",
+            rule.spans
+        );
+        // The list starts on the very next row: no blank gap under the rule.
+        assert!(
+            doc.lines[section + 2].starts_with('•'),
+            "list hugs the rule: {:?}",
+            doc.lines
         );
     }
 

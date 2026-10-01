@@ -16,14 +16,16 @@ pub const POPUP_PAD: u16 = 2;
 pub fn popup_block(title: Line<'static>, theme: &Theme) -> Block<'static> {
     Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(theme.gold))
+        .border_style(Style::default().fg(theme.peach))
         .title(title)
 }
 
 /// Gold bold style for popup titles and accents.
 #[must_use]
 pub fn popup_accent(theme: &Theme) -> Style {
-    Style::default().fg(theme.gold).add_modifier(Modifier::BOLD)
+    Style::default()
+        .fg(theme.peach)
+        .add_modifier(Modifier::BOLD)
 }
 
 /// One popup row of `inner_w` columns: padding, `spans` (clipped), then fill.

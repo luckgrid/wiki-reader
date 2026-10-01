@@ -2078,8 +2078,11 @@ fn search_selection_scrolls_into_view_and_jumps() {
     assert_eq!(overlay.selected, overlay.result_len() - 1);
     app.update(Action::SearchJump(true));
     assert_eq!(app.search.as_ref().unwrap().selected, 0);
+    // A page step is one list height; selection wraps around the result count.
+    let overlay = app.search.as_ref().unwrap();
+    let (step, n) = (overlay.list_height.max(1), overlay.result_len());
     app.update(Action::SearchPageDelta(1));
-    assert!(app.search.as_ref().unwrap().selected > 0);
+    assert_eq!(app.search.as_ref().unwrap().selected, step % n);
 }
 
 #[test]
@@ -2191,7 +2194,7 @@ fn block_action_toggle_frontmatter() {
         .expect("frontmatter block action");
     let joined = app.doc.lines().join("\n");
     assert!(
-        joined.contains("frontmatter ▶"),
+        joined.contains("frontmatter ▸"),
         "expected collapsed cue: {joined}"
     );
     app.focused_item = Some(fm);
@@ -2218,7 +2221,7 @@ fn frontmatter_toggle_is_reachable_on_first_tab_and_enter() {
     assert_eq!(it.kind, FocusTarget::BlockAction);
     app.update(Action::ViewerActivate);
     assert!(!app.expanded_blocks.is_empty());
-    assert!(app.doc.lines().join("\n").contains("frontmatter ▼"));
+    assert!(app.doc.lines().join("\n").contains("frontmatter ▾"));
 
     // Enter with nothing focused, cursor on the toggle line, also toggles.
     let mut app = App::new(&root).unwrap();
@@ -2252,7 +2255,7 @@ fn frontmatter_toggle_is_clickable() {
     };
     let action = crate::tui::app::events::apply_mouse(&mut app, click).expect("action");
     app.update(action);
-    assert!(app.doc.lines().join("\n").contains("frontmatter ▼"));
+    assert!(app.doc.lines().join("\n").contains("frontmatter ▾"));
 }
 
 #[test]
@@ -2338,7 +2341,7 @@ fn block_action_copy_code_via_clipboard() {
                     .doc
                     .lines()
                     .get(it.line.unwrap_or(0) as usize)
-                    .is_some_and(|l| l.contains("```"))
+                    .is_some_and(|l| l.contains("── code ──"))
         })
         .expect("copy code action");
     app.focused_item = Some(copy);
@@ -2958,7 +2961,7 @@ fn status_bar_pill_and_page_status() {
     let col = u16::try_from(row[..row.find("accepted").unwrap()].chars().count()).unwrap();
     assert_eq!(buf[(col, y)].fg, app.theme.heading[2], "accepted is green");
     let px = u16::try_from(row[..row.find(" VIEW ").unwrap()].chars().count()).unwrap() + 1;
-    assert_eq!(buf[(px, y)].bg, app.theme.gold, "pill background");
+    assert_eq!(buf[(px, y)].bg, app.theme.peach, "pill background");
 }
 
 #[test]

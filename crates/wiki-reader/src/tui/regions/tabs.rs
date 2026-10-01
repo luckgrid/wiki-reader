@@ -1,13 +1,14 @@
-//! View tabs: outlined buttons on the pane's top border, styled like the
+//! View tabs: one outlined group on the pane's top border, styled like the
 //! prev/next footer buttons. The active tab is filled peach while the View has
 //! focus; with the Nav focused every tab stays outlined.
 
 use ratatui::layout::{Alignment, Rect};
-use ratatui::text::Line;
+use ratatui::style::Style;
+use ratatui::text::{Line, Span};
 use wiki_reader_core::nav::Tab;
 
 use crate::tui::hit::{Hit, HitMap};
-use crate::tui::regions::footer::{BUTTON_CHROME, button, col_width, ellipsis};
+use crate::tui::regions::footer::{col_width, ellipsis};
 use crate::tui::theme::Theme;
 
 fn stem(tab: &Tab) -> String {
@@ -21,11 +22,12 @@ fn stem(tab: &Tab) -> String {
 /// Longest label a tab shows before it is ellipsized.
 const MAX_LABEL: usize = 18;
 
-/// Top-border title with one button per tab; registers [`Hit::Tab`] over the
-/// button and [`Hit::TabClose`] over its `×`.
+/// Top-border title: one outlined group `┤ a × │ b × ├`, tabs separated by a
+/// single `│`. Registers [`Hit::Tab`] over each padded cell and
+/// [`Hit::TabClose`] over its `×`.
 ///
 /// `area` is the whole View pane. Tabs that do not fit in the border are
-/// dropped from the right (the active tab is always kept).
+/// dropped from the right (the active tab is always kept if it fits).
 #[must_use]
 pub fn titles(
     area: Rect,
@@ -35,24 +37,28 @@ pub fn titles(
     theme: &Theme,
     hits: &mut HitMap,
 ) -> Line<'static> {
-    let inner_w = usize::from(area.width.saturating_sub(2));
+    // `┤` and `├` take one column each.
+    let inner_w = usize::from(area.width.saturating_sub(2)).saturating_sub(2);
     let border = theme.border(pane_focused);
-    let mut x = area.x.saturating_add(1);
+    let fill = Style::default().bg(theme.peach).fg(theme.on_peach);
+    let mut x = area.x.saturating_add(2);
     let mut used = 0usize;
-    let mut spans = Vec::new();
+    let mut cells: Vec<Span<'static>> = Vec::new();
     for (i, tab) in tabs.iter().enumerate() {
         let label = ellipsis(&stem(tab), MAX_LABEL);
-        let text = format!("{label} ×");
-        let w = col_width(&text) + BUTTON_CHROME;
-        if used + w > inner_w && i != active {
+        let text = format!(" {label} × ");
+        let w = col_width(&text);
+        let sep = usize::from(!cells.is_empty());
+        if used + sep + w > inner_w {
             continue;
         }
-        if used + w > inner_w {
-            break;
-        }
         let Ok(w16) = u16::try_from(w) else {
-            break;
+            continue;
         };
+        if sep == 1 {
+            cells.push(Span::styled("│", border));
+            x = x.saturating_add(1);
+        }
         hits.push(
             Rect {
                 x,
@@ -62,9 +68,9 @@ pub fn titles(
             },
             Hit::Tab(i),
         );
-        // `┤ ` + label + ` ` then the ×.
+        // ` ` + label + ` ` then the ×.
         let close_x = x
-            .saturating_add(2)
+            .saturating_add(1)
             .saturating_add(u16::try_from(col_width(&label) + 1).unwrap_or(0));
         hits.push(
             Rect {
@@ -76,9 +82,15 @@ pub fn titles(
             Hit::TabClose(i),
         );
         let selected = i == active && pane_focused;
-        spans.extend(button(&text, selected, border, theme).spans);
+        cells.push(Span::styled(text, if selected { fill } else { border }));
         x = x.saturating_add(w16);
-        used += w;
+        used += sep + w;
     }
+    if cells.is_empty() {
+        return Line::default();
+    }
+    let mut spans = vec![Span::styled("┤", border)];
+    spans.extend(cells);
+    spans.push(Span::styled("├", border));
     Line::from(spans).alignment(Alignment::Left)
 }

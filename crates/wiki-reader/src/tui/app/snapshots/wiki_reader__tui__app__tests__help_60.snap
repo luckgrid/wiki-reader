@@ -1,11 +1,13 @@
 ---
 source: crates/wiki-reader/src/tui/app/tests.rs
-assertion_line: 2751
+assertion_line: 2754
 expression: out
 ---
  Worked Example Wiki                                    ◫ ✕ 
 ┌┌ Help (? or Esc to close) ──────────────────────────────┐┐
+││                                                        ││
 ││  ── Global ──────────────────────────────────────────  ││
+││                                                        ││
 ││  Alt+← / Alt+b     Back                                ││
 ││  Alt+→ / Alt+f     Forward                             ││
 ││  q / ✕             Quit                                ││
@@ -22,8 +24,6 @@ expression: out
 ││  n                 Next search match                   ││
 ││  N                 Previous search match               ││
 ││  [                 Previous page                       ││
-││  ]                 Next page                           ││
-││  Backspace         Back                                ││
-││  Shift+←           Focus side nav                      ││
+││                                                        ││
 └└────────────────────────────────────────────────────────┘┘
-  HELP  · README.md · L1:C1 11% · 2026-09-28 · draft · 29w
+  HELP  · README.md · L1:C1 10% · 2026-09-28 · draft · 29w

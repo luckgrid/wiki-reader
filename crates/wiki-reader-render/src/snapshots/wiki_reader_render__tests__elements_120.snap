@@ -1,26 +1,33 @@
 ---
 source: crates/wiki-reader-render/src/lib.rs
-assertion_line: 818
+assertion_line: 858
 expression: text
 ---
-── frontmatter ▶ ───────────────────────────────────────────────────────────────────────────────────────────────────────
+── frontmatter ▸ ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
-# Element gallery
+Element gallery
+────────────────────────────────────────
 
 A paragraph with a long word like antidisestablishmentarianism and normal wrapping that should break at whitespace
 instead of mid-word when the pane is narrow.
 
-## Heading two
+Heading two
+────────────────────────────────────────
 
-### Heading three
+Heading three
 
-#### Heading four
 
-##### Heading five
+Heading four
 
-###### Heading six
 
-## Lists
+Heading five
+
+
+Heading six
+
+
+Lists
+────────────────────────────────────────
 
 • bullet one
 • bullet two
@@ -32,11 +39,13 @@ instead of mid-word when the pane is narrow.
 • [ ] unchecked task
 • [x] checked task
 
-## Inline
+Inline
+────────────────────────────────────────
 
-This has bold, italic, strike, `inline code`, and a working link plus a broken link.
+This has bold, italic, strike, inline code, and a working link plus a broken link.
 
-## Quote and alert
+Quote and alert
+────────────────────────────────────────
 
 │ A plain blockquote with enough text that it wraps on a narrow pane.
 
@@ -46,20 +55,20 @@ This has bold, italic, strike, `inline code`, and a working link plus a broken l
 │ [WARNING]
 │ Warning alert body.
 
-## Code
+Code
+────────────────────────────────────────
 
-```rust
+── rust ──
 │ fn main() {
 │     println!("hello");
 │ }
-```
 
-```python
+── python ──
 │ def greet(name):
 │     return f"hi {name}"
-```
 
-## Tables
+Tables
+────────────────────────────────────────
 
 ┌───────┬───────────────┬───────────────────────────────┐
 │ Short │ Medium column │ Long cell that needs wrapping │
@@ -77,22 +86,26 @@ This has bold, italic, strike, `inline code`, and a working link plus a broken l
 │ foxtrot │ golf  │ hotel   │ india │ juliet │
 └─────────┴───────┴─────────┴───────┴────────┘
 
-## Rule
+Rule
+────────────────────────────────────────
 
 ────────────────────────────────────────
 
-## Mermaid good
+Mermaid good
+────────────────────────────────────────
 
 ┌───────┐     ┌─────┐
 │ Start │────▸│ End │
 └───────┘     └─────┘
 
-## Mermaid bad
+Mermaid bad
+────────────────────────────────────────
 
 │ diagram (source; unsupported diagram type: 'this')
 this is not valid mermaid at all {{{
 
-## Mermaid wide
+Mermaid wide
+────────────────────────────────────────
 
 ┌────────────────────────┐   ┌────────────────────────┐   ┌──────────────────────────┐   ┌────────────────────────┐
 │ VeryLongNodeLabelAlpha │──▸│ VeryLongNodeLabelBravo │──▸│ VeryLongNodeLabelCharlie │──▸│ VeryLongNodeLabelDelta │

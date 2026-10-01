@@ -6,18 +6,18 @@ A terminal wiki reader for markdown collections. It browses like a documentation
 ```text
  Worked Example Wiki › Architecture › Design System › Token Projection     ◫ ✕
 ┌──────────────────────────┐┌┤ tokens × ├────────────────────────────────────┐
-│▌/ Search…                ││ ── frontmatter ▶ ──────────────────────────────│
+│▌/ Search…                ││ ── frontmatter ▸ ──────────────────────────────│
 │                          ││                                                │
-│  Worked Example Wiki     ││▌# Token Projection                             │
-│  ▾ Architecture          ││                                                │
-│     Architecture Overview││ The reusable adapter stays semantic-only;      │
-│     ▾ Design System      ││ see [ADR-0003](../decisions/0003.md).          │
-│        Design System     ││                                                │
-│▌       Token Projection  ││ ## Linked from                                 │
-│     ▸ Wfos               ││ • Worked Example Wiki                          │
-│  ▸ Decisions             ││ • Architecture Overview                        │
-│                          ││                                                │
-│                          ││                                                │
+│  Worked Example Wiki     ││▌Token Projection                               │
+│  ▾ Architecture          ││ ────────────────────────────────────────       │
+│     Architecture Overview││                                                │
+│     ▾ Design System      ││ The reusable adapter stays semantic-only;      │
+│        Design System     ││ see [ADR-0003](../decisions/0003.md).          │
+│▌       Token Projection  ││                                                │
+│     ▸ Wfos               ││ Linked from                                    │
+│  ▸ Decisions             ││ ────────────────────────────────────────       │
+│                          ││ • Worked Example Wiki                          │
+│                          ││ • Architecture Overview                        │
 └──────────────────────────┘└┤ ‹ Design System ├────────────┤ Workflow OS › ├┘
  VIEW  · architecture/design-system/tokens.md · L3:C1 9% · 2026-09-28 · draft
 ```
