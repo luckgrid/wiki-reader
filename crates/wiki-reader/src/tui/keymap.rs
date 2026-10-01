@@ -75,6 +75,8 @@ pub enum Matcher {
     PlainCode(KeyCode),
     /// Shift+code (no Ctrl/Alt).
     ShiftCode(KeyCode),
+    /// Cmd (SUPER) or Ctrl + code, without Shift/Alt (new-tab combos).
+    CmdOrCtrlCode(KeyCode),
     /// Shift **or** Ctrl + code (block / group jump).
     ShiftOrCtrlCode(KeyCode),
     /// Alt+Shift+code.
@@ -99,6 +101,7 @@ impl Matcher {
         let shift = key.modifiers.contains(KeyModifiers::SHIFT);
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let alt = key.modifiers.contains(KeyModifiers::ALT);
+        let super_key = key.modifiers.contains(KeyModifiers::SUPER);
         let plain = no_ctrl_alt(key);
         match self {
             Matcher::PlainChar(c) => plain && key.code == KeyCode::Char(c),
@@ -108,6 +111,9 @@ impl Matcher {
             }
             Matcher::PlainCode(code) => plain && key.code == code,
             Matcher::ShiftCode(code) => shift && plain && key.code == code,
+            Matcher::CmdOrCtrlCode(code) => {
+                (super_key || ctrl) && !shift && !alt && key.code == code
+            }
             Matcher::ShiftOrCtrlCode(code) => {
                 (shift || ctrl) && key.code == code && !(alt && shift)
             }
@@ -136,9 +142,11 @@ impl Matcher {
             | Matcher::AnyCode(code)
             | Matcher::ShiftOrCtrlCode(code)
             | Matcher::ShiftCode(code)
+            | Matcher::CmdOrCtrlCode(code)
             | Matcher::AltShiftCode(code) => {
                 let mods = match self {
                     Matcher::ShiftCode(_) | Matcher::ShiftOrCtrlCode(_) => KeyModifiers::SHIFT,
+                    Matcher::CmdOrCtrlCode(_) => KeyModifiers::CONTROL,
                     Matcher::AltShiftCode(_) => KeyModifiers::ALT | KeyModifiers::SHIFT,
                     _ => KeyModifiers::NONE,
                 };
@@ -376,6 +384,13 @@ pub static BINDINGS: &[Binding] = &[
         matcher: Some(Matcher::PlainTab),
     },
     Binding {
+        keys: "Cmd/Ctrl+→",
+        scope: BindingScope::Nav,
+        action: Some(Action::NewTab),
+        help: "Open page in a new tab",
+        matcher: Some(Matcher::CmdOrCtrlCode(KeyCode::Right)),
+    },
+    Binding {
         keys: "→",
         scope: BindingScope::Nav,
         action: Some(Action::NavExpand),
@@ -388,6 +403,13 @@ pub static BINDINGS: &[Binding] = &[
         action: Some(Action::NavCollapse),
         help: "Collapse / parent group",
         matcher: Some(Matcher::AnyCode(KeyCode::Left)),
+    },
+    Binding {
+        keys: "Cmd/Ctrl+Enter",
+        scope: BindingScope::Nav,
+        action: Some(Action::NewTab),
+        help: "Open page in a new tab",
+        matcher: Some(Matcher::CmdOrCtrlCode(KeyCode::Enter)),
     },
     Binding {
         keys: "Shift+Enter",
@@ -550,6 +572,13 @@ pub static BINDINGS: &[Binding] = &[
         action: Some(Action::ViewerTab),
         help: "Next focusable item",
         matcher: Some(Matcher::PlainTab),
+    },
+    Binding {
+        keys: "Cmd/Ctrl+Enter",
+        scope: BindingScope::Viewer,
+        action: Some(Action::NewTab),
+        help: "Open focused link in a new tab",
+        matcher: Some(Matcher::CmdOrCtrlCode(KeyCode::Enter)),
     },
     Binding {
         keys: "Enter",
@@ -1154,14 +1183,25 @@ mod tests {
         for focus in [FocusPane::Viewer, FocusPane::Nav] {
             let (plain_enter, _) = map(key(KeyCode::Enter), focus, InputMode::Normal, Chord::None);
             assert!(plain_enter.is_some(), "plain Enter focus={focus:?}");
+            let (ctrl_enter, _) = map(
+                key_mod(KeyCode::Enter, KeyModifiers::CONTROL),
+                focus,
+                InputMode::Normal,
+                Chord::None,
+            );
+            assert_eq!(
+                ctrl_enter,
+                Some(Action::NewTab),
+                "Ctrl+Enter opens a new tab focus={focus:?}"
+            );
+            let (alt_enter, _) = map(
+                key_mod(KeyCode::Enter, KeyModifiers::ALT),
+                focus,
+                InputMode::Normal,
+                Chord::None,
+            );
+            assert_eq!(alt_enter, None, "Alt+Enter focus={focus:?}");
             for mods in [KeyModifiers::CONTROL, KeyModifiers::ALT] {
-                let (enter, _) = map(
-                    key_mod(KeyCode::Enter, mods),
-                    focus,
-                    InputMode::Normal,
-                    Chord::None,
-                );
-                assert_eq!(enter, None, "Enter mods={mods:?} focus={focus:?}");
                 let (tab, _) = map(
                     key_mod(KeyCode::Tab, mods),
                     focus,
@@ -1171,6 +1211,45 @@ mod tests {
                 assert_eq!(tab, None, "Tab mods={mods:?} focus={focus:?}");
             }
         }
+    }
+
+    #[test]
+    fn keymap_cmd_or_ctrl_new_tab_precedes_plain_enter_and_any_right() {
+        let (ctrl_enter, _) = map(
+            key_mod(KeyCode::Enter, KeyModifiers::CONTROL),
+            FocusPane::Nav,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(ctrl_enter, Some(Action::NewTab));
+        let (cmd_enter, _) = map(
+            key_mod(KeyCode::Enter, KeyModifiers::SUPER),
+            FocusPane::Nav,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(cmd_enter, Some(Action::NewTab));
+        let (ctrl_right, _) = map(
+            key_mod(KeyCode::Right, KeyModifiers::CONTROL),
+            FocusPane::Nav,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(ctrl_right, Some(Action::NewTab));
+        let (plain_right, _) = map(
+            key(KeyCode::Right),
+            FocusPane::Nav,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(plain_right, Some(Action::NavExpand));
+        let (viewer_cmd, _) = map(
+            key_mod(KeyCode::Enter, KeyModifiers::SUPER),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+        );
+        assert_eq!(viewer_cmd, Some(Action::NewTab));
     }
 
     #[test]

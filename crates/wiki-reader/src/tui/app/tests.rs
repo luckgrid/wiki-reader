@@ -3289,6 +3289,143 @@ fn shift_enter_in_nav_opens_a_new_tab_and_enter_does_not() {
 }
 
 #[test]
+fn ctrl_click_nav_and_link_open_a_new_tab_plain_click_does_not() {
+    let mut app = App::new(&fixture()).unwrap();
+    app.update(Action::FocusNav);
+    app.navigator.set_nav_stop(NavStop::Search);
+    app.update(Action::NavStepDown);
+    app.update(Action::NavJumpDown);
+    app.update(Action::NavExpand);
+    let _ = draw_app(&mut app, 120, 30);
+    let nav_rect = app
+        .hit_map
+        .entries()
+        .iter()
+        .find_map(|(r, h)| match h {
+            Hit::NavItem(NodeId::Page(_)) => Some(*r),
+            _ => None,
+        })
+        .expect("a page row");
+    let before = app.navigator.tab_count();
+    let ctrl = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: nav_rect.x + 2,
+        row: nav_rect.y,
+        modifiers: ratatui::crossterm::event::KeyModifiers::CONTROL,
+    };
+    assert!(apply_mouse(&mut app, ctrl).is_none());
+    assert_eq!(app.navigator.tab_count(), before + 1);
+
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/design-system/README.md"),
+    }));
+    let _ = draw_app(&mut app, 120, 30);
+    let link_rect = app
+        .hit_map
+        .entries()
+        .iter()
+        .find_map(|(r, h)| match h {
+            Hit::Link(_) => Some(*r),
+            _ => None,
+        })
+        .expect("a link");
+    let before = app.navigator.tab_count();
+    let ctrl_link = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: link_rect.x,
+        row: link_rect.y,
+        modifiers: ratatui::crossterm::event::KeyModifiers::CONTROL,
+    };
+    assert!(apply_mouse(&mut app, ctrl_link).is_none());
+    assert_eq!(app.navigator.tab_count(), before + 1);
+
+    let plain = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: link_rect.x,
+        row: link_rect.y,
+        modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+    };
+    let after_plain = app.navigator.tab_count();
+    let _ = apply_mouse(&mut app, plain);
+    assert_eq!(
+        app.navigator.tab_count(),
+        after_plain,
+        "plain click must not open a tab"
+    );
+}
+
+#[test]
+fn cmd_ctrl_enter_and_right_in_nav_open_a_new_tab() {
+    use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let mut app = App::new(&fixture()).unwrap();
+    app.update(Action::FocusNav);
+    app.navigator.set_nav_stop(NavStop::Search);
+    app.update(Action::NavStepDown);
+    app.update(Action::NavJumpDown);
+    app.update(Action::NavExpand);
+    app.update(Action::NavStepDown);
+    for mods in [KeyModifiers::CONTROL, KeyModifiers::SUPER] {
+        let (mapped, _) = crate::tui::keymap::map_with_overrides(
+            KeyEvent::new(KeyCode::Enter, mods),
+            app.focus,
+            app.input_mode,
+            app.chord,
+            None,
+        );
+        assert_eq!(mapped, Some(Action::NewTab), "mods={mods:?}");
+    }
+    let (ctrl_right, _) = crate::tui::keymap::map_with_overrides(
+        KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL),
+        app.focus,
+        app.input_mode,
+        app.chord,
+        None,
+    );
+    assert_eq!(ctrl_right, Some(Action::NewTab));
+    let (plain_right, _) = crate::tui::keymap::map_with_overrides(
+        KeyEvent::from(KeyCode::Right),
+        app.focus,
+        app.input_mode,
+        app.chord,
+        None,
+    );
+    assert_eq!(plain_right, Some(Action::NavExpand));
+    let before = app.navigator.tab_count();
+    app.update(Action::NewTab);
+    assert_eq!(app.navigator.tab_count(), before + 1);
+}
+
+#[test]
+fn cmd_enter_on_focused_viewer_link_opens_a_new_tab() {
+    use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let mut app = App::new(&fixture()).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/design-system/README.md"),
+    }));
+    let _ = draw_app(&mut app, 120, 24);
+    let idx = app
+        .focus_list()
+        .iter()
+        .position(|it| it.kind == FocusTarget::Link)
+        .expect("a link");
+    app.update(Action::FocusViewer);
+    app.focused_item = Some(idx);
+    let (mapped, _) = crate::tui::keymap::map_with_overrides(
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::SUPER),
+        app.focus,
+        app.input_mode,
+        app.chord,
+        None,
+    );
+    assert_eq!(mapped, Some(Action::NewTab));
+    let before = app.navigator.tab_count();
+    app.update(Action::NewTab);
+    assert_eq!(app.navigator.tab_count(), before + 1);
+}
+
+#[test]
 fn frontmatter_label_colour_does_not_depend_on_the_cursor_line() {
     let mut app = App::new(&fixture()).unwrap();
     app.update(Action::FocusViewer);
