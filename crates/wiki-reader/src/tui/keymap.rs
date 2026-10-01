@@ -199,6 +199,13 @@ pub static BINDINGS: &[Binding] = &[
         matcher: Some(Matcher::AltCharOrCode('b', KeyCode::Left)),
     },
     Binding {
+        keys: "Backspace",
+        scope: BindingScope::Global,
+        action: Some(Action::Back),
+        help: "Back",
+        matcher: Some(Matcher::AnyCode(KeyCode::Backspace)),
+    },
+    Binding {
         keys: "Alt+→ / Alt+f",
         scope: BindingScope::Global,
         action: Some(Action::Forward),
@@ -311,13 +318,6 @@ pub static BINDINGS: &[Binding] = &[
         matcher: Some(Matcher::PlainChar(']')),
     },
     Binding {
-        keys: "Backspace",
-        scope: BindingScope::Global,
-        action: Some(Action::Back),
-        help: "Back",
-        matcher: Some(Matcher::AnyCode(KeyCode::Backspace)),
-    },
-    Binding {
         keys: "Shift+←",
         scope: BindingScope::Global,
         action: Some(Action::FocusNav),
@@ -384,8 +384,8 @@ pub static BINDINGS: &[Binding] = &[
     Binding {
         keys: "Ctrl+→",
         scope: BindingScope::Nav,
-        action: Some(Action::NewTab),
-        help: "Open page in a new tab",
+        action: Some(Action::NewTabFocusView),
+        help: "Open page in a new tab and focus view",
         matcher: Some(Matcher::CtrlCode(KeyCode::Right)),
     },
     Binding {
@@ -432,18 +432,18 @@ pub static BINDINGS: &[Binding] = &[
         matcher: Some(Matcher::AltShiftCode(KeyCode::Up)),
     },
     Binding {
-        keys: "Alt+Shift+↓",
-        scope: BindingScope::Viewer,
-        action: Some(Action::ViewerHeadingDown),
-        help: "Next heading",
-        matcher: Some(Matcher::AltShiftCode(KeyCode::Down)),
-    },
-    Binding {
         keys: "{",
         scope: BindingScope::Viewer,
         action: Some(Action::ViewerHeadingUp),
         help: "Previous heading",
         matcher: Some(Matcher::PlainChar('{')),
+    },
+    Binding {
+        keys: "Alt+Shift+↓",
+        scope: BindingScope::Viewer,
+        action: Some(Action::ViewerHeadingDown),
+        help: "Next heading",
+        matcher: Some(Matcher::AltShiftCode(KeyCode::Down)),
     },
     Binding {
         keys: "}",
@@ -840,6 +840,43 @@ pub fn effective_keys_label(
     binding.keys.to_string()
 }
 
+/// One help line: adjacent bindings that do the same thing share it, keys joined by `" / "`.
+#[derive(Debug, Clone)]
+pub struct HelpEntry {
+    pub scope: BindingScope,
+    pub keys: String,
+    pub action: Option<Action>,
+    pub help: &'static str,
+}
+
+/// [`BINDINGS`] as help lines: a binding folds into the previous line when scope, action
+/// and help text all match. Keep alternates adjacent in the table for this to apply.
+#[must_use]
+pub fn help_entries(overrides: &std::collections::BTreeMap<String, String>) -> Vec<HelpEntry> {
+    let mut out: Vec<HelpEntry> = Vec::new();
+    for b in BINDINGS {
+        let keys = effective_keys_label(b, overrides);
+        if let Some(prev) = out.last_mut()
+            && prev.scope == b.scope
+            && prev.help == b.help
+            && b.action.is_some()
+            && prev.action == b.action
+        {
+            if !prev.keys.split(" / ").any(|k| k == keys) {
+                prev.keys = format!("{} / {keys}", prev.keys);
+            }
+            continue;
+        }
+        out.push(HelpEntry {
+            scope: b.scope,
+            keys,
+            action: b.action.clone(),
+            help: b.help,
+        });
+    }
+    out
+}
+
 /// Global bindings (always, before pane-local). Esc does **not** quit.
 #[must_use]
 pub fn map_global(key: KeyEvent) -> Option<Action> {
@@ -1096,6 +1133,7 @@ mod tests {
             Action::CopyPagePath,
             Action::CopyLinkTarget,
             Action::NewTab,
+            Action::NewTabFocusView,
             Action::CloseTab,
             Action::NextTab,
             Action::PrevTab,
@@ -1224,7 +1262,12 @@ mod tests {
                 InputMode::Normal,
                 Chord::None,
             );
-            assert_eq!(ctrl, Some(Action::NewTab), "Ctrl+{code:?} focus={focus:?}");
+            let want = if code == KeyCode::Right {
+                Action::NewTabFocusView
+            } else {
+                Action::NewTab
+            };
+            assert_eq!(ctrl, Some(want), "Ctrl+{code:?} focus={focus:?}");
         }
         let (plain_right, _) = map(
             key(KeyCode::Right),
@@ -1389,7 +1432,7 @@ mod tests {
 /// [`BINDINGS`] (the table the `?` help overlay is built from).
 #[cfg(test)]
 mod docs_sync {
-    use super::{BINDINGS, BindingScope};
+    use super::{BindingScope, help_entries};
     use std::fmt::Write as _;
     use std::path::Path;
 
@@ -1402,7 +1445,7 @@ mod docs_sync {
             "Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same table the `?` help overlay shows. Edit the table there, then run `UPDATE_DOCS=1 cargo test -p wiki-reader keymap_docs`.\n",
         );
         let mut last: Option<BindingScope> = None;
-        for b in BINDINGS {
+        for b in help_entries(&std::collections::BTreeMap::new()) {
             if last != Some(b.scope) {
                 last = Some(b.scope);
                 let _ = write!(
@@ -1419,6 +1462,47 @@ mod docs_sync {
             let _ = writeln!(out, "| `{}`{icon} | {} |", b.keys, b.help);
         }
         out
+    }
+
+    #[test]
+    fn help_entries_merge_alternate_keys_into_one_row() {
+        let rows = help_entries(&std::collections::BTreeMap::new());
+        let keys_for = |scope: BindingScope, help: &str| {
+            rows.iter()
+                .find(|r| r.scope == scope && r.help == help)
+                .map(|r| r.keys.as_str())
+        };
+        let g = BindingScope::Global;
+        let n = BindingScope::Nav;
+        let v = BindingScope::Viewer;
+        assert_eq!(keys_for(g, "Back"), Some("Alt+← / Alt+b / Backspace"));
+        assert_eq!(keys_for(g, "Search"), Some("/ / Ctrl+k"));
+        assert_eq!(keys_for(n, "Previous nav row"), Some("↑ / Shift+Tab"));
+        assert_eq!(keys_for(n, "Next nav row"), Some("↓ / Tab"));
+        assert_eq!(
+            keys_for(n, "Open page in a new tab"),
+            Some("Ctrl+Enter / Shift+Enter")
+        );
+        assert_eq!(keys_for(v, "Previous heading"), Some("Alt+Shift+↑ / {"));
+        assert_eq!(keys_for(v, "Next heading"), Some("Alt+Shift+↓ / }"));
+        assert_eq!(keys_for(v, "Cursor up"), Some("k / ↑"));
+        assert_eq!(keys_for(v, "Page up"), Some("PgUp / Shift+Space"));
+        assert_eq!(keys_for(v, "Page down"), Some("Space / PgDn"));
+        assert_eq!(keys_for(v, "Bottom of page"), Some("End / G"));
+        // No two rows in a scope may share an action and help text.
+        for (i, a) in rows.iter().enumerate() {
+            for b in &rows[i + 1..] {
+                assert!(
+                    a.action.is_none()
+                        || a.scope != b.scope
+                        || a.action != b.action
+                        || a.help != b.help,
+                    "unmerged duplicate rows: {} / {}",
+                    a.keys,
+                    b.keys
+                );
+            }
+        }
     }
 
     #[test]

@@ -10,6 +10,7 @@ Element gallery
 A paragraph with a long word like antidisestablishmentarianism and normal wrapping that should break at whitespace
 instead of mid-word when the pane is narrow.
 
+
 Heading two
 ────────────────────────────────────────
 
@@ -25,6 +26,7 @@ Heading five
 
 Heading six
 
+
 Lists
 ────────────────────────────────────────
 
@@ -38,10 +40,12 @@ Lists
 • [ ] unchecked task
 • [x] checked task
 
+
 Inline
 ────────────────────────────────────────
 
 This has bold, italic, strike, inline code, and a working link plus a broken link.
+
 
 Quote and alert
 ────────────────────────────────────────
@@ -54,6 +58,7 @@ Quote and alert
 │ [WARNING]
 │ Warning alert body.
 
+
 Code
 ────────────────────────────────────────
 
@@ -65,6 +70,7 @@ Code
 ── python ──
 │ def greet(name):
 │     return f"hi {name}"
+
 
 Tables
 ────────────────────────────────────────
@@ -85,10 +91,12 @@ Tables
 │ foxtrot │ golf  │ hotel   │ india │ juliet │
 └─────────┴───────┴─────────┴───────┴────────┘
 
+
 Rule
 ────────────────────────────────────────
 
 ────────────────────────────────────────
+
 
 Mermaid good
 ────────────────────────────────────────
@@ -97,11 +105,13 @@ Mermaid good
 │ Start │────▸│ End │
 └───────┘     └─────┘
 
+
 Mermaid bad
 ────────────────────────────────────────
 
 │ diagram (source; unsupported diagram type: 'this')
 this is not valid mermaid at all {{{
+
 
 Mermaid wide
 ────────────────────────────────────────

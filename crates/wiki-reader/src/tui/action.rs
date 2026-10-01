@@ -140,6 +140,8 @@ pub enum Action {
     CopyLinkTarget,
     /// Duplicate current page into a new tab (`t`).
     NewTab,
+    /// Open the nav page in a new tab and move focus into its view (`Ctrl+→` in the nav).
+    NewTabFocusView,
     /// Activate next tab (`gt`).
     NextTab,
     /// Activate previous tab (`gT`).

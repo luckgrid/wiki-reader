@@ -832,8 +832,8 @@ mod tests {
         let text = doc.lines.join("\n");
         let rule = "─".repeat(40);
         assert!(
-            text.contains(&format!("H\n{rule}\n\npara\n\n• a\n• b\n\nNext\n{rule}")),
-            "expected blank gaps between blocks and tight list: {text:?}"
+            text.contains(&format!("H\n{rule}\n\npara\n\n• a\n• b\n\n\nNext\n{rule}")),
+            "expected blank gaps between blocks and tight list, two above an H2: {text:?}"
         );
     }
 

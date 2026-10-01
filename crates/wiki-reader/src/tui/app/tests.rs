@@ -3602,6 +3602,7 @@ fn ctrl_enter_and_ctrl_right_in_nav_open_a_new_tab() {
     app.update(Action::NavExpand);
     app.update(Action::NavStepDown);
     for code in [KeyCode::Enter, KeyCode::Right] {
+        app.update(Action::FocusNav);
         let (mapped, _) = crate::tui::keymap::map_with_overrides(
             KeyEvent::new(code, KeyModifiers::CONTROL),
             app.focus,
@@ -3609,11 +3610,18 @@ fn ctrl_enter_and_ctrl_right_in_nav_open_a_new_tab() {
             app.chord,
             None,
         );
-        assert_eq!(mapped, Some(Action::NewTab), "Ctrl+{code:?}");
+        let (want, want_focus) = if code == KeyCode::Right {
+            (Action::NewTabFocusView, FocusPane::Viewer)
+        } else {
+            (Action::NewTab, FocusPane::Nav)
+        };
+        assert_eq!(mapped, Some(want), "Ctrl+{code:?}");
         let before = app.navigator.tab_count();
         app.update(mapped.expect("mapped"));
         assert_eq!(app.navigator.tab_count(), before + 1, "Ctrl+{code:?}");
+        assert_eq!(app.focus, want_focus, "Ctrl+{code:?} focus");
     }
+    app.update(Action::FocusNav);
     // Cmd is not a new-tab modifier (ADR-0016): Cmd+Enter acts like Enter, no new tab.
     let (cmd_enter, _) = crate::tui::keymap::map_with_overrides(
         KeyEvent::new(KeyCode::Enter, KeyModifiers::SUPER),

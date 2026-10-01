@@ -608,6 +608,7 @@ impl App {
             Action::CopyPagePath => self.copy_page_path(),
             Action::CopyLinkTarget => self.copy_link_target(),
             Action::NewTab => self.open_new_tab(),
+            Action::NewTabFocusView => self.open_new_tab_focus_view(),
             Action::NextTab => self.cycle_tab(1),
             Action::PrevTab => self.cycle_tab(-1),
             Action::CloseTab => self.close_active_tab(),
@@ -634,6 +635,20 @@ impl App {
                     self.duplicate_current_tab();
                 }
             }
+        }
+    }
+
+    /// `Ctrl+→` in the nav: open the page in a new tab and hand focus to its View.
+    /// Anything else behaves like [`Self::open_new_tab`].
+    fn open_new_tab_focus_view(&mut self) {
+        if self.focus == FocusPane::Nav
+            && let NavStop::Node(NodeId::Page(key)) = self.navigator.nav().cursor.clone()
+        {
+            self.open_page_new_tab(key);
+            self.navigator.nav_focus_lost();
+            self.focus = FocusPane::Viewer;
+        } else {
+            self.open_new_tab();
         }
     }
 

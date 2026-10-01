@@ -82,6 +82,12 @@ impl Drop for TerminalGuard {
         if self.mouse {
             let _ = execute!(stdout(), DisableMouseCapture);
         }
+        // Drop mouse reports still queued, or the shell prints them as junk after we exit.
+        while event::poll(std::time::Duration::ZERO).unwrap_or(false) {
+            if event::read().is_err() {
+                break;
+            }
+        }
         ratatui::restore();
     }
 }
@@ -119,33 +125,53 @@ fn run_loop(
         // Poll fast mid-drag so a held pointer keeps scrolling the View.
         let idle = std::time::Duration::from_millis(if app.selecting { 40 } else { 250 });
         if event::poll(idle)? {
-            match event::read()? {
-                Event::Key(key) if key.kind == KeyEventKind::Press => {
-                    let (action, next_chord) = keymap::map_with_overrides(
-                        key,
-                        app.focus,
-                        app.input_mode,
-                        app.chord,
-                        Some(&app.key_overrides),
-                    );
-                    app.chord = next_chord;
-                    if let Some(Action::OpenInEditor) = action {
-                        suspend_run_editor(terminal, app, guard)?;
-                    } else if let Some(action) = action {
-                        app.update(action);
-                    }
+            // Apply everything already queued before redrawing: a wheel flick or mouse move
+            // sends dozens of events, and one full redraw per event lags behind the pointer.
+            for _ in 0..MAX_EVENTS_PER_FRAME {
+                handle_event(terminal, app, guard, &event::read()?)?;
+                if app.quit || !event::poll(std::time::Duration::ZERO)? {
+                    break;
                 }
-                Event::Mouse(mouse) => {
-                    if let Some(action) = apply_mouse(app, mouse) {
-                        app.update(action);
-                    }
-                }
-                _ => {}
             }
         } else if app.selecting {
             app.drag_autoscroll();
         }
     }
+}
+
+/// Cap on events applied between redraws, so a flood can't starve the screen.
+const MAX_EVENTS_PER_FRAME: usize = 256;
+
+fn handle_event(
+    terminal: &mut DefaultTerminal,
+    app: &mut App,
+    guard: &mut TerminalGuard,
+    ev: &Event,
+) -> io::Result<()> {
+    match ev {
+        Event::Key(key) if key.kind == KeyEventKind::Press => {
+            let (action, next_chord) = keymap::map_with_overrides(
+                *key,
+                app.focus,
+                app.input_mode,
+                app.chord,
+                Some(&app.key_overrides),
+            );
+            app.chord = next_chord;
+            if let Some(Action::OpenInEditor) = action {
+                suspend_run_editor(terminal, app, guard)?;
+            } else if let Some(action) = action {
+                app.update(action);
+            }
+        }
+        Event::Mouse(mouse) => {
+            if let Some(action) = apply_mouse(app, *mouse) {
+                app.update(action);
+            }
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 /// Leave alt-screen/raw/mouse, run `$EDITOR`, then re-enter without stacking
