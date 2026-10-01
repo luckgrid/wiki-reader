@@ -551,9 +551,22 @@ impl<'a> LayoutState<'a> {
                 let slug = unique_slug(&github_slug(&self.heading_text), &mut self.used_slugs);
                 self.headings.push((slug, rendered.saturating_add(1)));
                 self.commit_line(src);
-                if self.formatted && level == 1 {
-                    self.push_span("─".repeat(self.width.min(40)), StyleKind::Rule, src);
-                    self.commit_line(src);
+                if self.formatted {
+                    if level <= 2 {
+                        self.push_span("─".repeat(self.width.min(40)), StyleKind::Rule, src);
+                        self.commit_line(src);
+                    } else {
+                        // Two blanks: next block's ensure_block_gap no-ops, leaving
+                        // one more empty line than a normal block gap.
+                        self.styled.push(StyledLine {
+                            spans: Vec::new(),
+                            source_line: src,
+                        });
+                        self.styled.push(StyledLine {
+                            spans: Vec::new(),
+                            source_line: src,
+                        });
+                    }
                 }
                 self.heading_text.clear();
             }

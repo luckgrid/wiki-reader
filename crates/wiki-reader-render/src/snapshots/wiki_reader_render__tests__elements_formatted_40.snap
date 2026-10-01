@@ -14,16 +14,22 @@ whitespace instead of mid-word when the
 pane is narrow.
 
 Heading two
+────────────────────────────────────────
 
 Heading three
 
+
 Heading four
+
 
 Heading five
 
+
 Heading six
 
+
 Lists
+────────────────────────────────────────
 
 • bullet one
 • bullet two
@@ -36,12 +42,14 @@ Lists
 • [x] checked task
 
 Inline
+────────────────────────────────────────
 
 This has bold, italic, strike, inline
 code, and a working link plus a broken
 link.
 
 Quote and alert
+────────────────────────────────────────
 
 │ A plain blockquote with enough text
 │ that it wraps on a narrow pane.
@@ -53,6 +61,7 @@ Quote and alert
 │ Warning alert body.
 
 Code
+────────────────────────────────────────
 
 ── rust ──
 │ fn main() {
@@ -64,6 +73,7 @@ Code
 │     return f"hi {name}"
 
 Tables
+────────────────────────────────────────
 
 ┌───────┬──────────┬───────────────────┐
 │ Short │ Medium   │ Long cell that    │
@@ -82,22 +92,26 @@ wing cells unwrapped
 │ foxtrot | golf | hotel | india | juliet
 
 Rule
+────────────────────────────────────────
 
 ────────────────────────────────────────
 
 Mermaid good
+────────────────────────────────────────
 
 ┌───────┐     ┌─────┐
 │ Start │────▸│ End │
 └───────┘     └─────┘
 
 Mermaid bad
+────────────────────────────────────────
 
 │ diagram (source; unsupported diagram
 type: 'this')
 this is not valid mermaid at all {{{
 
 Mermaid wide
+────────────────────────────────────────
 
 │ diagram (source; diagram 54 cols >
 pane 40)
