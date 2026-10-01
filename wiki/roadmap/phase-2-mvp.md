@@ -28,7 +28,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 - 2026-09-30: markdown element rendering (Mermaid text tier garbled, truncated tables, mid-word wrapping, raw syntax markers) filed as P2-23; formatted-text view and eye toggle as P2-24a; image diagrams as P2-24b (may slip to Phase 3)
 - 2026-09-30: dogfood polish batch landed — P2-22 (#70), P2-20 (#71), P2-21 (#72), P2-24a (#73). P2-24b deferred to Phase 3. v0.1.0-alpha.2 gated on operator go-ahead after overlays.
 - 2026-09-30: **Phase 2 feature exit** — all P2 tasks except P2-24b done; status stays `active` through the dogfood clock (≈ 2026-10-13), then flip to `done`.
-- 2026-09-30: formatted-view heading hierarchy papercut — H2 rule + H3–H6 spacing (PR pending)
+- 2026-09-30: formatted-view heading hierarchy papercut — H2 rule + H3–H6 spacing (#75)
 
 ## Tasks
 
