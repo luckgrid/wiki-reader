@@ -3,7 +3,7 @@ id: WR-GUIDE-DEV
 title: Development
 summary: Toolchain, checks, crate boundaries, dependency policy, docs conventions, and task workflow.
 status: draft
-updated: 2026-09-29
+updated: 2026-09-30
 related: []
 ---
 
@@ -26,14 +26,7 @@ Supported path today — install the binary from git:
 cargo install --locked --git https://github.com/luckgrid/wiki-reader wiki-reader
 ```
 
-Tagged releases attach platform tarballs (macOS arm64 / x86_64, Linux x86_64) plus SHA256 checksums. Cut a tag only on a commit whose CI is already green on `main`; the release workflow builds and smokes `--version` but does not re-run the full test suite. The tag name must be `v` plus the workspace `Cargo.toml` version (e.g. `v0.1.0-alpha.1`). Verify then unpack:
-
-```bash
-shasum -a 256 -c wiki-reader-vX.Y.Z-<platform>.tar.gz.sha256
-tar xf wiki-reader-vX.Y.Z-<platform>.tar.gz
-```
-
-Binaries are unsigned and not notarized. Browser downloads on macOS may need `xattr -d com.apple.quarantine path/to/wiki-reader`. The Linux binary links the `ubuntu-latest` runner glibc.
+Tagged releases attach platform tarballs (macOS arm64 / x86_64, Linux x86_64) plus SHA256 checksums. To upgrade, replace or roll back an installed version, see [Releasing and upgrading](releasing.md), which also covers how maintainers cut, dry-run, verify and fix a release. The tag name must be `v` plus the workspace `Cargo.toml` version (for example `v0.1.0-alpha.2`).
 
 crates.io metadata is prepared on the publishable crates; do not `cargo publish` until that is an intentional follow-up. `wiki-reader-tools` stays `publish = false`.
 
@@ -67,7 +60,7 @@ Quickstart:
 
 ```bash
 cargo run -p wiki-reader -- fixtures/worked-example
-# q or Esc to quit
+# q to quit, ? for help
 ```
 
 Herdr keymap check (P1-G entry criterion for P1-08):
@@ -104,7 +97,7 @@ See [architecture overview](../architecture/overview.md) and [ADR-0006](../decis
 
 1. Open the current phase file under [roadmap](../roadmap/README.md) (Phase 2: [phase-2-mvp.md](../roadmap/phase-2-mvp.md)).
 2. Pick a `todo` row; set Status to `doing`; implement the smallest change that completes it.
-3. Run the three checks above.
+3. Run `./scripts/check.sh` (the same checks CI runs).
 4. Set Status to `done`; reference the ID in commit messages. Leave exit criteria visible.
 
 ## Related
