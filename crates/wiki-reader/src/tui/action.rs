@@ -40,6 +40,8 @@ pub enum Action {
     HelpEnd,
     /// Activate the selected help row (dispatch its action).
     HelpActivate,
+    /// Scroll the help list one row (mouse wheel).
+    HelpScroll(i32),
     /// Type a character into the search field.
     SearchChar(char),
     /// Backspace in search field.
@@ -112,6 +114,8 @@ pub enum Action {
     FocusFooter,
     /// Follow a link by id (mouse).
     FollowLinkId(u32),
+    /// Activate a block action (frontmatter toggle, copy) by id (mouse).
+    ActivateBlock(u32),
     /// Confirm opening a pending external URL.
     ConfirmOpen,
     /// Decline external URL prompt.

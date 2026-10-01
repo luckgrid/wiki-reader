@@ -292,6 +292,27 @@ mod tests {
         );
     }
 
+    #[test]
+    fn table_cell_wider_than_pane_wraps_inside_the_table() {
+        let src = "| Name | Note |\n| --- | --- |\n| beta | a long note that has to wrap inside its narrow column |\n";
+        let doc = render_src(src, 37);
+        let table_start = doc
+            .lines
+            .iter()
+            .position(|l| l.starts_with('┌'))
+            .expect("table top");
+        assert!(
+            doc.lines[..table_start].iter().all(|l| l.trim().is_empty()),
+            "no cell text above the table: {:?}",
+            doc.lines
+        );
+        let body: String = doc.lines[table_start..].join("\n");
+        for word in ["long", "note", "wrap", "inside", "narrow", "column"] {
+            assert!(body.contains(word), "{word:?} stays in the table: {body}");
+        }
+        assert!(doc.lines.iter().all(|l| l.width() <= 37), "{:?}", doc.lines);
+    }
+
     /// Each cell between `│` has a leading and trailing space.
     fn cells_padded_both_sides(line: &str) -> bool {
         let mut parts = line.split('│').filter(|p| !p.is_empty());
@@ -334,9 +355,14 @@ mod tests {
 
     #[test]
     fn table_full_width_cells_keep_trailing_space() {
-        // Wide content + narrow width → clipped cells must still pad both sides.
-        let src = "| abcdefghijklmnopqrstuvwxyz |\n| --- |\n| abcdefghijklmnopqrstuvwxyz |\n";
+        // A cell that exactly fills its column (16 = 20 - chrome) must still pad both sides.
+        let src = "| abcdefghijklmnop |\n| --- |\n| abcdefghijklmnop |\n";
         let doc = render_src(src, 20);
+        assert!(
+            !doc.lines.iter().any(|l| l.contains("table too wide")),
+            "word fits the pane, so no fallback: {:?}",
+            doc.lines
+        );
         for line in doc
             .lines
             .iter()

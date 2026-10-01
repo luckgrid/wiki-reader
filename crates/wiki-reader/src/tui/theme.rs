@@ -18,6 +18,14 @@ pub struct Theme {
     pub text: Color,
     /// Dim / secondary text.
     pub text_muted: Color,
+    /// Read-only text that should stay legible (current crumb, status bar).
+    pub text_secondary: Color,
+    /// Collapsible folder rows in the nav.
+    pub nav_folder: Color,
+    /// Selected button fill (prev/next footer, matches herdr's peach tab).
+    pub peach: Color,
+    /// Text on [`peach`](Self::peach).
+    pub on_peach: Color,
     /// Accent (current page, icons).
     pub accent: Color,
     /// Cursor line highlight.
@@ -57,6 +65,10 @@ impl Default for Theme {
             border_focus: Color::Cyan,
             text: Color::Reset,
             text_muted: Color::DarkGray,
+            text_secondary: Color::Rgb(160, 165, 175),
+            nav_folder: Color::Rgb(230, 190, 110),
+            peach: Color::Rgb(250, 179, 135),
+            on_peach: Color::Rgb(40, 42, 54),
             accent: Color::Cyan,
             // Stronger than near-black so the row reads on Reset surfaces (P3-07 owns presets).
             cursor_line: Color::Rgb(70, 75, 100),
@@ -105,6 +117,12 @@ impl Theme {
     #[must_use]
     pub fn muted(&self) -> Style {
         Style::default().fg(self.text_muted)
+    }
+
+    /// Secondary (read-only but legible) text.
+    #[must_use]
+    pub fn secondary(&self) -> Style {
+        Style::default().fg(self.text_secondary)
     }
 
     /// Accent text.
@@ -162,10 +180,28 @@ impl Theme {
                 let fg = self.alert[usize::from(id).min(self.alert.len() - 1)];
                 Style::default().fg(fg).add_modifier(Modifier::BOLD)
             }
-            StyleKind::Frontmatter => Style::default().fg(self.text_muted),
+            StyleKind::Frontmatter | StyleKind::FrontmatterPunct => {
+                Style::default().fg(self.text_muted)
+            }
+            StyleKind::FrontmatterValue => Style::default().fg(self.text_secondary),
             StyleKind::Rule => Style::default().fg(self.border),
-            StyleKind::ListMarker | StyleKind::TaskMarker => Style::default().fg(self.accent),
+            StyleKind::FrontmatterKey | StyleKind::ListMarker | StyleKind::TaskMarker => {
+                Style::default().fg(self.accent)
+            }
         }
+    }
+
+    /// Colour a frontmatter `status:` value by meaning.
+    #[must_use]
+    pub fn status_style(&self, status: &str) -> Style {
+        let fg = match status.to_ascii_lowercase().as_str() {
+            "accepted" | "active" | "done" | "stable" | "approved" | "published" => self.heading[2],
+            "draft" | "proposed" | "review" | "doing" | "wip" => self.heading[1],
+            "planned" | "todo" | "open" => self.heading[3],
+            "deferred" | "superseded" | "deprecated" | "rejected" | "archived" => self.text_muted,
+            _ => self.text,
+        };
+        Style::default().fg(fg)
     }
 
     /// Border for a pane; `focused` uses `border_focus`.

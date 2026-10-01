@@ -2,11 +2,11 @@
 source: crates/wiki-reader-core/src/nav/tree.rs
 expression: "tree.render_text(&expanded, None)"
 ---
-Readme
+Deep Root
 ▾ L1
-  Overview
+  Level One
   ▾ L2
-    Overview
+    Level Two
     ▾ L3
-      Overview
-      Leaf
+      Level Three
+      Deep Leaf

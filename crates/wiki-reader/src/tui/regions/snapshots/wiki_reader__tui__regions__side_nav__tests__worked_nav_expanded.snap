@@ -1,14 +1,14 @@
 ---
 source: crates/wiki-reader/src/tui/regions/side_nav.rs
-expression: "open.iter().map(|r| &r.label).collect::<Vec<_>>()"
+expression: "open.iter().map(|r|\nformat!(\"{}{}\", \"  \".repeat(r.depth), r.label)).collect::<Vec<_>>()"
 ---
 [
-    "Readme",
-    "▾ Architecture",
-    "  Overview",
-    "  ▾ Design System",
-    "    Overview",
-    "    Tokens",
+    "Worked Example Wiki",
+    "Architecture",
+    "  Architecture Overview",
+    "  Design System",
+    "    Design System",
+    "    Token Projection",
     "  Wfos",
-    "▸ Decisions",
+    "Decisions",
 ]

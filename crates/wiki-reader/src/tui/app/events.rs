@@ -177,6 +177,7 @@ pub(crate) fn apply_mouse(
                     }
                 }
                 Hit::Link(_)
+                | Hit::Block(_)
                 | Hit::ViewerLine(_)
                 | Hit::FocusViewer
                 | Hit::Prev
@@ -227,9 +228,14 @@ pub(crate) fn apply_mouse(
             None
         }
         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
+            // Popups own the wheel: it never falls through to the panes behind.
+            let up = matches!(mouse.kind, MouseEventKind::ScrollUp);
             if app.search.is_some() {
-                let up = matches!(mouse.kind, MouseEventKind::ScrollUp);
                 app.update(Action::SearchSelectDelta(if up { -1 } else { 1 }));
+                return None;
+            }
+            if app.help.is_some() {
+                app.update(Action::HelpScroll(if up { -1 } else { 1 }));
                 return None;
             }
             let over_nav = app.hit_map.entries().iter().any(|(r, h)| {
@@ -246,7 +252,6 @@ pub(crate) fn apply_mouse(
                             | Hit::NavDivider
                     )
             });
-            let up = matches!(mouse.kind, MouseEventKind::ScrollUp);
             if over_nav {
                 app.nav_scroll = if up {
                     app.nav_scroll.saturating_sub(1)

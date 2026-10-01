@@ -1,10 +1,11 @@
 ---
 source: crates/wiki-reader/src/tui/app/tests.rs
+assertion_line: 65
 expression: out
 ---
- Readme                                               ○ ◫ ✕ 
-┌Viewer────────────────────────────────────────────────────┐
-│▌── frontmatter ▶ ──                                      │
+ Worked Example Wiki                                  ○ ◫ ✕ 
+┌View──────────────────────────────────────────────────────┐
+│▌── frontmatter ▶ ───────────────────────                 │
 │                                                          │
 │ # Worked Example Wiki                                    │
 │                                                          │
@@ -24,5 +25,5 @@ expression: out
 │                                                          │
 │                                                          │
 │                                                          │
-└‹ —─────────────────────────────────────────Architecture ›┘
- VIEWER · README.md · L1 11% · 29w · 1m · 2026-09-28
+└───────────────────────────────┤ Architecture Overview › ├┘
+  VIEW  · README.md · L1 11% · 2026-09-28 · draft · 29w

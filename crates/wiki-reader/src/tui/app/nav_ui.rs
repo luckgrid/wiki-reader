@@ -91,8 +91,12 @@ impl App {
         match id {
             NodeId::Page(key) => {
                 self.navigator.set_nav_cursor(NodeId::Page(key.clone()));
-                let effects = self.navigator.go_to_page(key, self.view_state());
-                self.apply_effects(effects);
+                // Already showing this page: just hand focus over, keeping the
+                // View's cursor and scroll.
+                if self.navigator.tab().current().page != key {
+                    let effects = self.navigator.go_to_page(key, self.view_state());
+                    self.apply_effects(effects);
+                }
                 if self.focus != FocusPane::Viewer {
                     self.navigator.nav_focus_lost();
                     self.focus = FocusPane::Viewer;

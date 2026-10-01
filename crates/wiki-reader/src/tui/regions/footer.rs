@@ -1,6 +1,7 @@
-//! Viewer footer chrome: ‹ prev / next › on the viewer bottom border (P2-18).
+//! View footer chrome: outlined ‹ prev / next › buttons on the bottom border (P2-18).
 
 use ratatui::layout::{Alignment, Rect};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
 use crate::tui::hit::{Hit, HitMap};
@@ -47,13 +48,36 @@ fn ellipsis(s: &str, max: usize) -> String {
     out
 }
 
+/// Columns a button adds around its text: `┤ ` … ` ├`.
+const BUTTON_CHROME: usize = 4;
+
+/// One outlined button sitting on the border row: `┤ ‹ Name ├` in the pane's
+/// border colour; selected (Tab-focused) fills the inside peach.
+fn button(text: &str, selected: bool, border: Style, theme: &Theme) -> Line<'static> {
+    let inner = if selected {
+        Style::default().bg(theme.peach).fg(theme.on_peach)
+    } else {
+        border
+    };
+    Line::from(vec![
+        Span::styled("┤", border),
+        Span::styled(format!(" {text} "), inner),
+        Span::styled("├", border),
+    ])
+}
+
 /// Build left/right bottom titles, each capped to half the border (never overlap).
+///
+/// `pane_focused` is whether the View pane has focus; the button outline follows
+/// the pane border colour. A missing side yields an empty title, so the border
+/// runs unbroken.
 #[must_use]
 pub fn titles(
     area: Rect,
     prev_label: Option<&str>,
     next_label: Option<&str>,
     focused: Option<FocusTarget>,
+    pane_focused: bool,
     theme: &Theme,
     hits: &mut HitMap,
 ) -> FooterTitles {
@@ -62,54 +86,35 @@ pub fn titles(
     let inner_w = area.width.saturating_sub(2);
     let half = (inner_w / 2).max(1);
     let left_x = area.x.saturating_add(1);
-    let right_budget = usize::from(half);
-    let left_budget = usize::from(half);
+    let budget = usize::from(half).saturating_sub(BUTTON_CHROME);
+    let border = theme.border(pane_focused);
 
-    let focus_prev = focused == Some(FocusTarget::FooterPrev);
-    let focus_next = focused == Some(FocusTarget::FooterNext);
-
-    let (left_text, left_style, left_hit) = match prev_label {
-        Some(l) => {
-            let body = ellipsis(l, left_budget.saturating_sub(2)); // "‹ " + body
-            let text = format!("‹ {body}");
-            let style = if focus_prev {
-                theme.text().bg(theme.focus_item)
-            } else {
-                theme.accent()
-            };
-            (text, style, true)
-        }
-        None => ("‹ —".to_owned(), theme.muted(), false),
-    };
-    let left_w = col_width(&left_text).min(left_budget).max(1);
-    if left_hit {
+    let left = prev_label.map(|l| {
+        let text = format!("‹ {}", ellipsis(l, budget.saturating_sub(2)));
+        let w = col_width(&text) + BUTTON_CHROME;
         hits.push(
             Rect {
                 x: left_x,
                 y: border_y,
-                width: u16::try_from(left_w).unwrap_or(1).min(half).max(1),
+                width: u16::try_from(w).unwrap_or(1).min(half).max(1),
                 height: 1,
             },
             Hit::Prev,
         );
-    }
+        button(
+            &text,
+            focused == Some(FocusTarget::FooterPrev),
+            border,
+            theme,
+        )
+    });
 
-    let (right_text, right_style, right_hit) = match next_label {
-        Some(l) => {
-            let body = ellipsis(l, right_budget.saturating_sub(2)); // body + " ›"
-            let text = format!("{body} ›");
-            let style = if focus_next {
-                theme.text().bg(theme.focus_item)
-            } else {
-                theme.accent()
-            };
-            (text, style, true)
-        }
-        None => ("— ›".to_owned(), theme.muted(), false),
-    };
-    let right_w = col_width(&right_text).min(right_budget).max(1);
-    if right_hit {
-        let w = u16::try_from(right_w).unwrap_or(1).min(half).max(1);
+    let right = next_label.map(|l| {
+        let text = format!("{} ›", ellipsis(l, budget.saturating_sub(2)));
+        let w = u16::try_from(col_width(&text) + BUTTON_CHROME)
+            .unwrap_or(1)
+            .min(half)
+            .max(1);
         let x = area
             .x
             .saturating_add(area.width.saturating_sub(1).saturating_sub(w));
@@ -122,11 +127,17 @@ pub fn titles(
             },
             Hit::Next,
         );
-    }
+        button(
+            &text,
+            focused == Some(FocusTarget::FooterNext),
+            border,
+            theme,
+        )
+    });
 
     FooterTitles {
-        left: Line::from(Span::styled(left_text, left_style)).alignment(Alignment::Left),
-        right: Line::from(Span::styled(right_text, right_style)).alignment(Alignment::Right),
+        left: left.unwrap_or_default().alignment(Alignment::Left),
+        right: right.unwrap_or_default().alignment(Alignment::Right),
     }
 }
 
@@ -152,6 +163,7 @@ mod tests {
                 Some("A very long previous page title that would collide"),
                 Some("Another extremely long next page title here"),
                 None,
+                true,
                 &theme,
                 &mut hits,
             );

@@ -59,11 +59,10 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     } else {
         regions.viewer
     };
-    app.viewer_rows = viewer_area.height.max(1);
+    app.viewer_rows = layout::viewer_visible_rows(viewer_area.height).max(1);
 
-    let focus_item = app
-        .focused_item
-        .and_then(|i| app.focus_list().get(i).cloned());
+    let focus_items = app.focus_list();
+    let focus_item = app.focused_item.and_then(|i| focus_items.get(i).cloned());
     let (highlights, gutter) = match &app.doc {
         crate::tui::page_doc::PageDoc::Raw(d) => (Some(d.highlights.as_slice()), true),
         crate::tui::page_doc::PageDoc::Rendered(_) => (None, false),
@@ -98,6 +97,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         app.match_highlight,
         app.focus == FocusPane::Viewer,
         focus_item.as_ref(),
+        &focus_items,
         prev_label.as_deref(),
         next_label.as_deref(),
         footer_focus,
@@ -111,7 +111,6 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
             regions.side_nav,
             &nav.tree,
             &nav.expanded,
-            &page,
             &nav.cursor,
             app.nav_scroll,
             app.focus == FocusPane::Nav,
@@ -124,6 +123,12 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     let total = u32::try_from(app.doc.lines().len().max(1)).unwrap_or(1);
     let pct = ((app.scroll.saturating_add(1)) * 100) / total;
     let path = page.relative_path.display().to_string();
+    let page_status = app
+        .navigator
+        .index()
+        .pages
+        .get(&page)
+        .and_then(|p| p.parsed.frontmatter.status.clone());
     let focus_target = focused_status_message(app);
     let status_msg = if app.message.is_empty() {
         focus_target.as_str()
@@ -141,6 +146,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
             words: app.doc.word_count(),
             minutes: status::reading_minutes(app.doc.word_count()),
             updated: app.doc.updated(),
+            status: page_status.as_deref(),
             message: status_msg,
         },
         &theme,
@@ -455,20 +461,34 @@ fn draw_help_overlay(
         } else {
             theme.surface
         };
-        let mut spans = Vec::new();
-        if let Some(sec) = row.section {
-            spans.push(Span::styled(
-                format!("── {sec} "),
-                theme.muted().add_modifier(Modifier::BOLD),
-            ));
+        if row.heading {
+            // Full-width divider: `── Title ─────────`.
+            let used = 4 + Span::raw(row.keys.as_str()).width();
+            let fill = usize::from(inner.width).saturating_sub(used);
+            let line = Line::from(vec![
+                Span::styled("── ", theme.muted()),
+                Span::styled(
+                    row.keys.clone(),
+                    theme.accent().add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(format!(" {}", "─".repeat(fill)), theme.muted()),
+            ]);
+            frame.render_widget(Paragraph::new(line), row_rect);
+            continue;
         }
         let style = if selected {
             theme.text().bg(bg).add_modifier(Modifier::BOLD)
         } else {
             theme.text().bg(bg)
         };
-        spans.push(Span::styled(format!("{:<14}", row.keys), style));
-        spans.push(Span::styled(format!(" {}", row.help), theme.muted().bg(bg)));
+        let spans = vec![
+            Span::styled(format!("{:<14}", row.keys), style),
+            Span::styled(
+                format!("{:<4}", row.icon.unwrap_or("")),
+                theme.accent().bg(bg),
+            ),
+            Span::styled(row.help, theme.muted().bg(bg)),
+        ];
         frame.render_widget(Paragraph::new(Line::from(spans)), row_rect);
         if row.action.is_some() {
             hits.push(row_rect, Hit::HelpRow(abs));

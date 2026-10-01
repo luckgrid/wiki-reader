@@ -185,10 +185,18 @@ impl App {
         if on_line.len() == 1 {
             let raw = on_line[0].raw_target.clone();
             self.follow_link_target(&raw);
+            return;
+        }
+        // No link to follow: a block action (frontmatter toggle, copy) on this line.
+        if let Some(it) = items
+            .iter()
+            .find(|it| it.kind == FocusTarget::BlockAction && it.line == Some(line))
+        {
+            self.activate_block(&it.target);
         }
     }
 
-    fn activate_block(&mut self, target: &str) {
+    pub(crate) fn activate_block(&mut self, target: &str) {
         let Some(id_str) = target.strip_prefix("block:") else {
             return;
         };
