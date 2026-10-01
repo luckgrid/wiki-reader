@@ -217,8 +217,8 @@ fn draw_search_overlay(
     frame.render_widget(block, rect);
     hits.push(rect, Hit::FocusViewer);
 
-    // Blank row, query row, results, then footer tight against the border.
-    if inner.height < 5 || inner.width == 0 {
+    // Query row, results, then footer tight against the border.
+    if inner.height < 3 || inner.width == 0 {
         return;
     }
     let row_at = |dy: u16| Rect {
@@ -239,7 +239,7 @@ fn draw_search_overlay(
     }
     frame.render_widget(
         Paragraph::new(popup_row(query, inner.width, None)),
-        row_at(1),
+        row_at(0),
     );
 
     let n = overlay.result_len();
@@ -276,9 +276,9 @@ fn draw_search_overlay(
 
     let list_rect = Rect {
         x: inner.x,
-        y: inner.y.saturating_add(2),
+        y: inner.y.saturating_add(1),
         width: inner.width,
-        height: inner.height.saturating_sub(3),
+        height: inner.height.saturating_sub(2),
     };
     let visible = usize::from(list_rect.height);
     overlay.list_height = visible;

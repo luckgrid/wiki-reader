@@ -1302,6 +1302,48 @@ fn drag_select_code_drops_the_gutter() {
 }
 
 #[test]
+fn drag_select_backlink_drops_side_borders() {
+    use crate::tui::clipboard::RecordingClipboard;
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("src.md"),
+        "---\ntitle: Src Title\nsummary: A short summary line.\n---\n\n# Src\n\nSee [dst](dst.md).\n",
+    )
+    .unwrap();
+    std::fs::write(dir.path().join("dst.md"), "# Dst\n\nBody.\n").unwrap();
+    let mut app = App::new(dir.path()).unwrap();
+    let rec = RecordingClipboard::default();
+    let log = Arc::clone(&rec.copied);
+    app.clipboard = Box::new(rec);
+    app.update(Action::GoToPage(PageKey {
+        collection_id: app.navigator.tab().current().page.collection_id.clone(),
+        relative_path: PathBuf::from("dst.md"),
+    }));
+    let _ = draw_app(&mut app, 80, 40);
+    let title = row_of(&app, "Src Title");
+    let end = last_col(&app, title);
+    drag_select(&mut app, (title, 0), (title, end));
+    let copied = log.lock().unwrap().clone();
+    assert_eq!(copied.len(), 1, "{copied:?}");
+    assert!(
+        !copied[0].contains('│'),
+        "side borders stripped: {:?}",
+        copied[0]
+    );
+    assert_eq!(
+        copied[0].trim_end(),
+        copied[0].as_str(),
+        "no trailing pad spaces: {:?}",
+        copied[0]
+    );
+    assert!(
+        copied[0].contains("Src Title"),
+        "title kept: {:?}",
+        copied[0]
+    );
+}
+
+#[test]
 fn drag_select_in_raw_view_copies_source_text() {
     let (_d, mut app, log) = app_with_page(SELECT_MD);
     app.update(Action::ToggleViewMode);
@@ -1493,6 +1535,45 @@ fn left_at_column_zero_reveals_a_hidden_nav() {
 }
 
 #[test]
+fn inline_code_does_not_full_row_shade() {
+    let md = "- item with `alpha` here\n- next with `beta` too\n\n```\nfenced\n```\n";
+    let (_d, mut app, _) = app_with_page(md);
+    let terminal = draw_app(&mut app, 80, 30);
+    let buf = terminal.backend().buffer();
+    let code_bg = app.theme.code_bg;
+    let line = row_of(&app, "alpha");
+    let (x0, y) = cell_xy(&app, line, 0);
+    // List marker / plain text before the code span must not carry code_bg.
+    assert_ne!(
+        buf[(x0, y)].bg,
+        code_bg,
+        "list marker cell must not be full-row shaded"
+    );
+    // A cell after the closing backtick text on the same row.
+    let plain_after = app.doc.lines()[line as usize]
+        .find("here")
+        .expect("plain after code");
+    let (ax, ay) = cell_xy(&app, line, u16::try_from(plain_after).unwrap_or(0));
+    assert_ne!(
+        buf[(ax, ay)].bg,
+        code_bg,
+        "plain text after inline code must not be shaded"
+    );
+    // Fenced code still pads the row with code_bg.
+    let fenced = row_of(&app, "fenced");
+    let (fx, fy) = cell_xy(&app, fenced, 0);
+    let row_w = buf.area.width;
+    let mut found_pad = false;
+    for x in fx..row_w {
+        if buf[(x, fy)].symbol() == " " && buf[(x, fy)].bg == code_bg {
+            found_pad = true;
+            break;
+        }
+    }
+    assert!(found_pad, "fenced block still full-row shades");
+}
+
+#[test]
 fn linked_from_backlink_in_tab_cycle_and_activate() {
     let root = fixture();
     let mut app = App::new(&root).unwrap();
@@ -1523,8 +1604,76 @@ fn linked_from_backlink_in_tab_cycle_and_activate() {
         .position(|it| matches!(it.kind, FocusTarget::FooterPrev | FocusTarget::FooterNext))
         .expect("footer");
     assert!(bl_idx < footer_idx, "backlink before footer in Tab cycle");
-    // Enter on the backlink matches tree-select history shape (replace, one tab).
+    // Tab onto the backlink so the cursor lands on the title row (real path).
     app.update(Action::FocusViewer);
+    app.focused_item = None;
+    app.cursor_line = 0;
+    for _ in 0..items.len().saturating_add(2) {
+        app.update(Action::ViewerTab);
+        if app.focused_item == Some(bl_idx) {
+            break;
+        }
+    }
+    assert_eq!(app.focused_item, Some(bl_idx), "Tab reaches backlink");
+    let title_line = bl.segments[0].0;
+    assert_eq!(
+        app.cursor_line, title_line,
+        "cursor lands on title after Tab"
+    );
+    let terminal = draw_app(&mut app, 120, 40);
+    let buf = terminal.backend().buffer();
+    let sel_bg = app.theme.selection;
+    // Teal ▌ replaces the left │ at content col 0.
+    let (bx, title_y) = cell_xy(&app, title_line, 0);
+    assert!(
+        buf[(bx, title_y)].symbol().contains('▌'),
+        "teal ▌ on focused backlink title at ({bx},{title_y})"
+    );
+    assert_eq!(buf[(bx, title_y)].fg, app.theme.link, "▌ uses link teal");
+    for &(line, (c0, _)) in &bl.segments {
+        let (sx, sy) = cell_xy(&app, line, c0);
+        assert_eq!(
+            buf[(sx, sy)].bg,
+            sel_bg,
+            "selection bg on focused entry line {line} col {c0}"
+        );
+    }
+    // Wide view: selection must stop at the 100-col text cap, not fill the margin.
+    app.nav_visible = false;
+    let terminal = draw_app(&mut app, 160, 40);
+    let buf = terminal.backend().buffer();
+    let (past_x, past_y) = cell_xy(&app, title_line, 100);
+    assert!(
+        past_x < buf.area.width,
+        "col 100 must be on-screen in a 160-col view"
+    );
+    assert_ne!(
+        buf[(past_x, past_y)].bg,
+        sel_bg,
+        "selection must not spill past pane text width at ({past_x},{past_y})"
+    );
+    // Unfocused: title stays link teal, summary is normal text (not link-teal).
+    app.focused_item = None;
+    // Keep the entry on-screen but cursor off it (cursor_line would recolour the row).
+    app.cursor_line = title_line.saturating_sub(3);
+    app.scroll = title_line.saturating_sub(5);
+    let terminal = draw_app(&mut app, 120, 40);
+    let buf = terminal.backend().buffer();
+    let (tx, ty) = cell_xy(&app, title_line, bl.segments[0].1.0);
+    assert_eq!(
+        buf[(tx, ty)].fg,
+        app.theme.link,
+        "unfocused title is link teal"
+    );
+    if let Some(&(sum_line, (c0, _))) = bl.segments.get(1) {
+        let (sx, sy) = cell_xy(&app, sum_line, c0);
+        assert_eq!(
+            buf[(sx, sy)].fg,
+            app.theme.text,
+            "unfocused summary is text colour"
+        );
+    }
+    // Enter on the backlink matches tree-select history shape (replace, one tab).
     app.focused_item = Some(bl_idx);
     app.update(Action::ViewerActivate);
     assert_eq!(
@@ -1532,6 +1681,59 @@ fn linked_from_backlink_in_tab_cycle_and_activate() {
         PathBuf::from("architecture/design-system/tokens.md")
     );
     assert_eq!(app.navigator.tab_count(), 1);
+}
+
+#[test]
+fn focused_ordinary_link_keeps_focus_bg_on_cursor_row() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("README.md"),
+        "# T\n\nSee [here](other.md) please.\n",
+    )
+    .unwrap();
+    std::fs::write(dir.path().join("other.md"), "# Other\n").unwrap();
+    let mut app = App::new(dir.path()).unwrap();
+    let _ = draw_app(&mut app, 80, 24);
+    let link = app
+        .doc
+        .link_spans()
+        .iter()
+        .find(|s| s.raw_target.contains("other"))
+        .expect("body link")
+        .clone();
+    let items = app.focus_list();
+    let idx = items
+        .iter()
+        .position(|it| it.link_id == Some(link.id))
+        .expect("link in focus list");
+    app.update(Action::FocusViewer);
+    app.focused_item = None;
+    app.cursor_line = 0;
+    for _ in 0..items.len().saturating_add(2) {
+        app.update(Action::ViewerTab);
+        if app.focused_item == Some(idx) {
+            break;
+        }
+    }
+    assert_eq!(app.focused_item, Some(idx));
+    let link_line = link.segments[0].0;
+    assert_eq!(app.cursor_line, link_line, "cursor on focused link row");
+    let terminal = draw_app(&mut app, 80, 24);
+    let buf = terminal.backend().buffer();
+    let (x, y) = cell_xy(&app, link_line, link.segments[0].1.0);
+    assert_eq!(
+        buf[(x, y)].bg,
+        app.theme.selection,
+        "selection bg survives cursor row"
+    );
+    assert_eq!(buf[(x, y)].fg, app.theme.link, "focused link keeps teal fg");
+    // Teal ▌ in the marker column (one cell left of text_x).
+    let marker_x = app.viewer_geom.text_x.saturating_sub(1);
+    assert!(
+        buf[(marker_x, y)].symbol().contains('▌'),
+        "teal ▌ on focused ordinary link marker"
+    );
+    assert_eq!(buf[(marker_x, y)].fg, app.theme.link, "marker ▌ is teal");
 }
 
 #[test]
@@ -2906,7 +3108,9 @@ fn footer_border(root: &Path, page: &str, w: u16) -> (App, String) {
     }));
     let terminal = draw_app(&mut app, w, 24);
     let buf = terminal.backend().buffer();
+    // Bottom border (Linked from may also draw └ earlier in the View).
     let row = (0..buf.area.height)
+        .rev()
         .map(|y| {
             (0..buf.area.width)
                 .map(|x| buf[(x, y)].symbol())
@@ -2991,7 +3195,7 @@ fn status_bar_pill_and_page_status() {
     assert!(row.contains(" VIEW "), "{row}");
     assert!(row.contains("accepted"), "status after date: {row}");
     let col = u16::try_from(row[..row.find("accepted").unwrap()].chars().count()).unwrap();
-    assert_eq!(buf[(col, y)].fg, app.theme.heading[2], "accepted is green");
+    assert_eq!(buf[(col, y)].fg, app.theme.status_ok, "accepted is green");
     let px = u16::try_from(row[..row.find(" VIEW ").unwrap()].chars().count()).unwrap() + 1;
     assert_eq!(buf[(px, y)].bg, app.theme.peach, "pill background");
 }
@@ -3281,6 +3485,143 @@ fn shift_enter_in_nav_opens_a_new_tab_and_enter_does_not() {
         None,
     );
     assert_eq!(plain, Some(Action::NavActivate));
+    let before = app.navigator.tab_count();
+    app.update(Action::NewTab);
+    assert_eq!(app.navigator.tab_count(), before + 1);
+}
+
+#[test]
+fn ctrl_click_nav_and_link_open_a_new_tab_plain_click_does_not() {
+    let mut app = App::new(&fixture()).unwrap();
+    app.update(Action::FocusNav);
+    app.navigator.set_nav_stop(NavStop::Search);
+    app.update(Action::NavStepDown);
+    app.update(Action::NavJumpDown);
+    app.update(Action::NavExpand);
+    let _ = draw_app(&mut app, 120, 30);
+    let nav_rect = app
+        .hit_map
+        .entries()
+        .iter()
+        .find_map(|(r, h)| match h {
+            Hit::NavItem(NodeId::Page(_)) => Some(*r),
+            _ => None,
+        })
+        .expect("a page row");
+    let before = app.navigator.tab_count();
+    let ctrl = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: nav_rect.x + 2,
+        row: nav_rect.y,
+        modifiers: ratatui::crossterm::event::KeyModifiers::CONTROL,
+    };
+    assert!(apply_mouse(&mut app, ctrl).is_none());
+    assert_eq!(app.navigator.tab_count(), before + 1);
+
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/design-system/README.md"),
+    }));
+    let _ = draw_app(&mut app, 120, 30);
+    let link_rect = app
+        .hit_map
+        .entries()
+        .iter()
+        .find_map(|(r, h)| match h {
+            Hit::Link(_) => Some(*r),
+            _ => None,
+        })
+        .expect("a link");
+    let before = app.navigator.tab_count();
+    let ctrl_link = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: link_rect.x,
+        row: link_rect.y,
+        modifiers: ratatui::crossterm::event::KeyModifiers::CONTROL,
+    };
+    assert!(apply_mouse(&mut app, ctrl_link).is_none());
+    assert_eq!(app.navigator.tab_count(), before + 1);
+
+    let plain = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: link_rect.x,
+        row: link_rect.y,
+        modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+    };
+    let after_plain = app.navigator.tab_count();
+    let _ = apply_mouse(&mut app, plain);
+    assert_eq!(
+        app.navigator.tab_count(),
+        after_plain,
+        "plain click must not open a tab"
+    );
+}
+
+#[test]
+fn cmd_ctrl_enter_and_right_in_nav_open_a_new_tab() {
+    use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let mut app = App::new(&fixture()).unwrap();
+    app.update(Action::FocusNav);
+    app.navigator.set_nav_stop(NavStop::Search);
+    app.update(Action::NavStepDown);
+    app.update(Action::NavJumpDown);
+    app.update(Action::NavExpand);
+    app.update(Action::NavStepDown);
+    for mods in [KeyModifiers::CONTROL, KeyModifiers::SUPER] {
+        let (mapped, _) = crate::tui::keymap::map_with_overrides(
+            KeyEvent::new(KeyCode::Enter, mods),
+            app.focus,
+            app.input_mode,
+            app.chord,
+            None,
+        );
+        assert_eq!(mapped, Some(Action::NewTab), "mods={mods:?}");
+    }
+    let (ctrl_right, _) = crate::tui::keymap::map_with_overrides(
+        KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL),
+        app.focus,
+        app.input_mode,
+        app.chord,
+        None,
+    );
+    assert_eq!(ctrl_right, Some(Action::NewTab));
+    let (plain_right, _) = crate::tui::keymap::map_with_overrides(
+        KeyEvent::from(KeyCode::Right),
+        app.focus,
+        app.input_mode,
+        app.chord,
+        None,
+    );
+    assert_eq!(plain_right, Some(Action::NavExpand));
+    let before = app.navigator.tab_count();
+    app.update(Action::NewTab);
+    assert_eq!(app.navigator.tab_count(), before + 1);
+}
+
+#[test]
+fn cmd_enter_on_focused_viewer_link_opens_a_new_tab() {
+    use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let mut app = App::new(&fixture()).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/design-system/README.md"),
+    }));
+    let _ = draw_app(&mut app, 120, 24);
+    let idx = app
+        .focus_list()
+        .iter()
+        .position(|it| it.kind == FocusTarget::Link)
+        .expect("a link");
+    app.update(Action::FocusViewer);
+    app.focused_item = Some(idx);
+    let (mapped, _) = crate::tui::keymap::map_with_overrides(
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::SUPER),
+        app.focus,
+        app.input_mode,
+        app.chord,
+        None,
+    );
+    assert_eq!(mapped, Some(Action::NewTab));
     let before = app.navigator.tab_count();
     app.update(Action::NewTab);
     assert_eq!(app.navigator.tab_count(), before + 1);
@@ -3622,6 +3963,47 @@ fn search_content_rows_end_in_an_ellipsis_and_footer_hugs_border() {
     assert!(
         below.contains('└') && below.contains('┘'),
         "popup border must sit directly under the footer: {below}"
+    );
+}
+
+#[test]
+fn search_query_row_sits_directly_under_top_border() {
+    let mut app = App::new(&fixture()).unwrap();
+    app.update(Action::OpenSearch);
+    let rows = screen_rows(&mut app, 90, 24);
+    let top = rows
+        .iter()
+        .position(|r| r.contains('┌') && r.contains("Search"))
+        .expect("search popup top border");
+    let under = &rows[top + 1];
+    assert!(
+        under.contains('/') && (under.contains('█') || under.contains("type to search")),
+        "query row must sit under the top border: {under}"
+    );
+}
+
+#[test]
+fn narrow_nav_ellipsises_long_titles() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("wiki");
+    copy_dir(&fixture(), &root);
+    std::fs::write(
+        root.join("decisions/long-title.md"),
+        "---\ntitle: \"An extraordinarily long ADR title that must be clipped in a narrow nav\"\n---\n\n# Long\n\nBody.\n",
+    )
+    .unwrap();
+    let mut app = App::new(&root).unwrap();
+    app.nav_width = Some(22);
+    app.navigator
+        .set_group_expanded(NodeId::Group(PathBuf::from("decisions")), true);
+    let rows = screen_rows(&mut app, 80, 24);
+    let hit = rows
+        .iter()
+        .find(|r| r.contains('…') && (r.contains("extraordin") || r.contains("An extra")))
+        .unwrap_or_else(|| panic!("expected ellipsised nav title:\n{}", rows.join("\n")));
+    assert!(
+        !hit.contains("clipped in a narrow"),
+        "tail of title must be cut: {hit}"
     );
 }
 

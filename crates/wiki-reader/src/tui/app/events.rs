@@ -10,11 +10,14 @@ use ratatui::DefaultTerminal;
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::crossterm::event::{
-    self, DisableMouseCapture, EnableMouseCapture, Event, KeyEventKind, KeyModifiers, MouseButton,
-    MouseEventKind,
+    self, DisableMouseCapture, EnableMouseCapture, Event, KeyEventKind, KeyModifiers,
+    KeyboardEnhancementFlags, MouseButton, MouseEventKind, PopKeyboardEnhancementFlags,
+    PushKeyboardEnhancementFlags,
 };
 use ratatui::crossterm::execute;
-use ratatui::crossterm::terminal::{EnterAlternateScreen, enable_raw_mode};
+use ratatui::crossterm::terminal::{
+    EnterAlternateScreen, enable_raw_mode, supports_keyboard_enhancement,
+};
 
 use super::App;
 use super::draw::draw;
@@ -44,22 +47,38 @@ pub fn run(root: &Path, config: Option<&Path>) -> io::Result<()> {
 
     install_panic_hook();
     let mut terminal = ratatui::try_init()?;
-    // Armed after try_init: Drop always restores alt-screen/raw; mouse if enabled.
-    let mut guard = TerminalGuard { mouse: false };
+    // Armed after try_init: Drop always restores alt-screen/raw; mouse/keys if enabled.
+    let mut guard = TerminalGuard {
+        mouse: false,
+        keyboard_enhancement: false,
+    };
     execute!(stdout(), EnableMouseCapture)?;
     guard.mouse = true;
+    if supports_keyboard_enhancement().unwrap_or(false) {
+        // DISAMBIGUATE only — not REPORT_ALL_KEYS_AS_ESCAPE_CODES (typing stays normal).
+        execute!(
+            stdout(),
+            PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
+        )?;
+        guard.keyboard_enhancement = true;
+    }
     let result = run_loop(&mut terminal, &mut app, &mut guard);
     drop(guard);
     result
 }
 
-/// RAII restore for raw mode / alt screen / mouse capture.
+/// RAII restore for raw mode / alt screen / mouse capture / kitty keyboard flags.
 struct TerminalGuard {
     mouse: bool,
+    keyboard_enhancement: bool,
 }
 
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
+        if self.keyboard_enhancement {
+            let _ = execute!(stdout(), PopKeyboardEnhancementFlags);
+            self.keyboard_enhancement = false;
+        }
         if self.mouse {
             let _ = execute!(stdout(), DisableMouseCapture);
         }
@@ -70,6 +89,7 @@ impl Drop for TerminalGuard {
 fn install_panic_hook() {
     let prev = panic::take_hook();
     panic::set_hook(Box::new(move |info| {
+        let _ = execute!(stdout(), PopKeyboardEnhancementFlags);
         let _ = execute!(stdout(), DisableMouseCapture);
         ratatui::restore();
         prev(info);
@@ -135,6 +155,10 @@ fn suspend_run_editor(
     app: &mut App,
     guard: &mut TerminalGuard,
 ) -> io::Result<()> {
+    if guard.keyboard_enhancement {
+        let _ = execute!(stdout(), PopKeyboardEnhancementFlags);
+        guard.keyboard_enhancement = false;
+    }
     if guard.mouse {
         let _ = execute!(stdout(), DisableMouseCapture);
         guard.mouse = false;
@@ -144,6 +168,13 @@ fn suspend_run_editor(
     reenter_terminal(terminal)?;
     execute!(stdout(), EnableMouseCapture)?;
     guard.mouse = true;
+    if supports_keyboard_enhancement().unwrap_or(false) {
+        execute!(
+            stdout(),
+            PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
+        )?;
+        guard.keyboard_enhancement = true;
+    }
     Ok(())
 }
 
@@ -168,8 +199,11 @@ pub(crate) fn apply_mouse(
                 app.nav_dragging = true;
                 return None;
             }
-            // Shift+click opens in a new tab, like a browser (same as middle-click).
-            if mouse.modifiers.contains(KeyModifiers::SHIFT)
+            // Shift/Ctrl/Cmd+click opens in a new tab, like a browser (same as middle-click).
+            // Crossterm mouse never reports SUPER on macOS; Ctrl+click may be stolen as
+            // right-click by the host — documented, not fixable here.
+            let new_tab_mods = KeyModifiers::SHIFT | KeyModifiers::CONTROL | KeyModifiers::SUPER;
+            if mouse.modifiers.intersects(new_tab_mods)
                 && matches!(
                     hit,
                     Hit::NavItem(NodeId::Page(_))
@@ -177,6 +211,7 @@ pub(crate) fn apply_mouse(
                         | Hit::Link(_)
                         | Hit::Prev
                         | Hit::Next
+                        | Hit::SearchResult(_)
                 )
             {
                 app.middle_click_hit(hit);

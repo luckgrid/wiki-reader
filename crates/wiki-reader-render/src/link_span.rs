@@ -29,4 +29,6 @@ pub struct LinkSpan {
     /// Visible segments: line index in the current view (0-based rendered or
     /// source line for raw), display columns `[start, end)`.
     pub segments: Vec<(u32, (u16, u16))>,
+    /// Linked-from pane entry: title + summary share one hit/focus area.
+    pub backlink: bool,
 }

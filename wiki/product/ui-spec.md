@@ -26,10 +26,9 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 │     ▾ Design System      ││ The reusable adapter stays semantic-only;      │
 │        Design System     ││ see [ADR-0003](../decisions/0003.md).          │
 │▌       Token Projection  ││                                                │
-│     ▸ Wfos               ││ Linked from                                    │
-│  ▸ Decisions             ││ ────────────────────────────────────────       │
-│                          ││ • Worked Example Wiki                          │
-│                          ││ • Architecture Overview                        │
+│     ▸ Wfos               ││ ┌ Linked from ─────────────────────────────┐   │
+│  ▸ Decisions             ││ │ Worked Example Wiki                      │   │
+│                          ││ └──────────────────────────────────────────┘   │
 └──────────────────────────┘└┤ ‹ Design System ├────────────┤ Workflow OS › ├┘
  VIEW  · architecture/design-system/tokens.md · L3:C1 9% · 2026-09-28 · draft
 ```
@@ -59,7 +58,7 @@ A file tree **presented as a documentation site's side nav**. Construction rules
 - The root entry page (root `README.md`/`index.md`) is the first item.
 - Folders always show the **folder name**. Pages are labelled by the `nav.labels` option: **`title`** (the default: `nav_title` → `title` → first H1 → humanized filename), `filename` (humanized filename), or `title+filename` (title with a dim filename suffix). A folder's README and the root README always show their title (the root falls back to the collection name), never "Readme".
 - Every folder with a README is a **collapsible group** (the folder name) whose first item is the README, labelled with its title. A folder holding only a README is still a group with that one item.
-- Folder rows use the herdr tab peach (the same colour as the active tab, footer links, status pill and popup border) and nested rows indent three more columns per level, so a child starts one column right of its parent's label. The list always starts right under the search bar when it fits (it scrolls only to keep the current row visible). The selected row has a full-width background highlight and a `▌` marker; it follows the current page however you got there (a link, the footer, search, history). Ancestor groups auto-expand after every navigation.
+- Folder rows use the herdr tab peach (the same colour as the active tab, footer links, status pill and popup border) and nested rows indent three more columns per level, so a child starts one column right of its parent's label. The list always starts right under the search bar when it fits (it scrolls only to keep the current row visible). The selected row has a full-width background highlight and a `▌` marker; it follows the current page however you got there (a link, the footer, search, history). Ancestor groups auto-expand after every navigation. A row that does not fit the pane width ends in `…` (in `title+filename` mode the dim `(file)` suffix is dropped first).
 - The pane is **resizable**: drag the divider between the nav and the viewer (clamped to 16–50 columns; the width is saved with the session and ignored below 80 columns).
 
 **Search entry (top of the side nav).** The first row is `/ Search…` (`/` is the key that opens search, and it renders at text height in every font), drawn as a bar in both states; when it is the focused nav stop the bar and text turn the accent color. Selecting it, clicking it, or pressing the search hotkey anywhere opens the **search overlay panel** (below). It's a nav stop for Shift+↑/↓ (see keyboard).
@@ -69,7 +68,7 @@ Future: this search row becomes a proper **side nav header**, and a **side nav f
 ## Search overlay panel
 
 - Opens with `/` or `Ctrl-k` from anywhere, a click on the search row, or `Enter` on it.
-- Floats over the side nav and viewer, which both drop their active colours (gray borders, no highlighted tab) while it is open. A blank row under the title, then the input row, the results, and a footer row tight against the bottom border; two columns of padding left and right. A result row cut off at the right edge ends in `…`.
+- Floats over the side nav and viewer, which both drop their active colours (gray borders, no highlighted tab) while it is open. The input row sits directly under the title border, then the results, and a footer row tight against the bottom border; two columns of padding left and right. A result row cut off at the right edge ends in `…`.
 - The title carries the mode and the key hints: `Search [Files] (Tab: toggle mode  Esc: close)`. The input row is `/ █ type to search…` with the placeholder beside the cursor. The footer shows the counts (`N files`, or `N files, M matches`) and `↑/↓: navigate  Enter: open  Tab: toggle mode`.
 - A toggle (`Tab` inside the overlay) switches between **Files** (fuzzy title/path) and **Content** (full-text). Files is the default.
 - Results use a large centered pane (~80% × ~80%, up to ~100 × 50). The list scrolls; `Home`/`End`/`PgUp`/`PgDn` and the mouse wheel jump or step selection. The selected row's background spans the full width. Content rows start with the source line number (`[12]`, peach), then the bold title, the dim path and the snippet, with query matches underlined.
@@ -96,9 +95,9 @@ Rendered by default (the formatted view: no `#`, fences or backticks); `r` toggl
 
 After the last item, `Tab` wraps to the first. The focused item renders inverted, and the status bar shows its target or action (`→ decisions/0003.md#context`, `↗ https://…`, `? not found: foo.md`, `copy code`).
 
-**Links:** underlined; broken links in the error color with `?`; external links with `↗`. `Enter` or left-click follows. Middle-click or `t` opens in a new tab. External links ask `open https://… ? [y/N]` in the status bar, then use the system opener. Hovering (if the terminal reports motion) highlights the link and shows its target in the status bar.
+**Links:** underlined; broken links in the error color with `?`; external links with `↗`. `Enter` or left-click follows. Middle-click, Shift/Ctrl+click, or `t` opens in a new tab (Cmd/Ctrl+Enter on a focused link does too where the kitty protocol reports it). External links ask `open https://… ? [y/N]` in the status bar, then use the system opener. Hovering (if the terminal reports motion) highlights the link and shows its target in the status bar.
 
-**End of article:** "Linked from" list (backlinks), each a focusable link.
+**End of article:** "Linked from" pane (box-drawn with side borders: tag header, each entry's title and optional summary as one focusable hit; Tab focus paints selection background across the entry and replaces the left `│` with a teal ▌). Summary comes from frontmatter or the first body paragraph as plain text (no markdown markup).
 
 Future: a **sticky section header** at the top of the viewer showing the heading of the section in view.
 
@@ -169,8 +168,10 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 | `Shift+Tab` | Previous nav row |
 | `↓` | Next nav row |
 | `Tab` | Next nav row |
+| `Cmd/Ctrl+→` | Open page in a new tab |
 | `→` | Expand / open into view |
 | `←` | Collapse / parent group |
+| `Cmd/Ctrl+Enter` | Open page in a new tab |
 | `Shift+Enter` | Open page in a new tab |
 | `Enter` | Open page (stay in nav) / toggle group |
 
@@ -199,6 +200,7 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 | `G` | Bottom of page |
 | `Shift+Tab` | Previous focusable item |
 | `Tab` | Next focusable item |
+| `Cmd/Ctrl+Enter` | Open focused link in a new tab |
 | `Enter` | Activate focused item |
 | `f` | Focus footer prev/next |
 
@@ -228,7 +230,7 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 - **`Enter` in the viewer:** activates the focused item. With no item focused and exactly one link on the cursor line, it follows that link.
 - **Side nav `→` / `←`:** `→` expands a group; on an expanded group it steps to the first child; on a page row it opens the page and focuses the viewer. `←` collapses, or goes to the parent group from a child.
 - **Side nav `Enter` / click:** a page opens in place and the nav keeps focus; a group toggles; the search row opens the search overlay.
-- **New tabs:** `t`, middle-click or Shift+click opens the focused link or nav row in a new tab; `Shift+Enter` does the same on a nav row where the terminal reports it.
+- **New tabs:** `t`, middle-click, Shift+click or Ctrl+click opens the focused link or nav row in a new tab; `Shift+Enter`, Cmd/Ctrl+Enter and (in the nav) Cmd/Ctrl+→ do the same where the terminal reports them ([ADR-0015](../decisions/0015-new-tab-combos-kitty-keyboard.md)).
 - **Back / forward:** `Backspace` is primary. `Alt+b` / `Alt+f` are what macOS Ghostty sends for Option+←/→.
 - **Heading jump:** `{` / `}` is the fallback when `Alt+Shift+↑/↓` does not reach the TUI.
 
@@ -239,11 +241,11 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 - **K3:** Right-click is reserved by herdr's context menu and never reaches the app — unused by wiki-reader.
 - **K4:** Alt+↑/↓ and Alt+Shift+↑/↓ arrive correctly; heading jump works.
 - `Shift+Tab` arrives as `BackTab`; fine everywhere.
-- `Ctrl+Enter` / `Shift+Enter` can't be told apart from `Enter` without the kitty keyboard protocol, so `Shift+Enter` only opens a new tab on terminals that report it. `t`, middle-click and Shift+click always work (unless the terminal keeps Shift+click for its own text selection).
+- `Ctrl+Enter` / `Shift+Enter` / Cmd modifiers need the kitty keyboard protocol (`DISAMBIGUATE_ESCAPE_CODES`, [ADR-0015](../decisions/0015-new-tab-combos-kitty-keyboard.md)). Without it, `t`, middle-click and Shift+click still work (unless the terminal keeps Shift+click for its own text selection). Cmd+click never arrives via crossterm mouse; on some macOS hosts Ctrl+click is stolen as right-click.
 
 ## Mouse
 
-Click to focus a pane; click items, links, breadcrumbs, prev/next, header icons, the frontmatter toggle and search results; middle-click or Shift+click for a new tab; wheel scrolls the pane under the pointer, or the Help/Search popup when one is open.
+Click to focus a pane; click items, links, breadcrumbs, prev/next, header icons, the frontmatter toggle and search results; middle-click, Shift+click or Ctrl+click for a new tab; wheel scrolls the pane under the pointer, or the Help/Search popup when one is open.
 
 **Selecting text.** Press and drag in the View to select; both end cells are included and the selection is copied to the clipboard (OSC 52) on release. A plain click only places the cursor, and a link is followed on release if the pointer did not move, so a drag can start on link text. Dragging above or below the pane scrolls it, and keeps scrolling while the pointer is held still there. Any cursor movement clears the selection. What is copied is the text, not the layout: soft-wrapped rows of one paragraph rejoin into one line, code and quote gutters are dropped, table cells are tab-separated with empty cells kept and a wrapped cell rejoined into one (borders dropped), a copy over 75 KB is refused with a status message (OSC 52 payload limit), and in the raw view the source text is copied exactly. Hover works only where motion events arrive. Right-click is owned by herdr (see K3). Click, middle-click, and wheel verified inside herdr panes.
 

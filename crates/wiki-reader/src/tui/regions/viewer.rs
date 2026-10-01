@@ -2,7 +2,7 @@
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 
@@ -158,8 +158,12 @@ pub fn draw(
     let visible_h = usize::from(content.height);
     let scroll = usize::try_from(scroll).unwrap_or(0);
     let mut out_lines = Vec::with_capacity(visible_h);
+    // Block-action focus keeps yellow; ordinary/backlink links use selection bg.
     let focus_style = Style::default().bg(theme.focus_item).fg(theme.text);
+    let link_focus_bg = theme.selection;
     let focused_link = focused_item.and_then(|it| it.link_id);
+    let focused_backlink =
+        focused_link.is_some_and(|id| link_spans.iter().any(|s| s.id == id && s.backlink));
     let gutter_style = theme.muted();
     let cursor_bg = Style::default().bg(theme.cursor_line).fg(theme.text);
 
@@ -238,9 +242,32 @@ pub fn draw(
             }
         });
 
-        // Marker column: ▌ on the cursor row.
+        let on_focused_backlink = focused_backlink
+            && link_spans.iter().any(|s| {
+                s.backlink
+                    && Some(s.id) == focused_link
+                    && s.segments.iter().any(|&(seg_line, _)| seg_line == line_no)
+            });
+        let on_focused_ordinary_link = focused_link.is_some()
+            && !focused_backlink
+            && link_spans.iter().any(|s| {
+                !s.backlink
+                    && Some(s.id) == focused_link
+                    && s.segments.iter().any(|&(seg_line, _)| seg_line == line_no)
+            });
+
+        // Marker column: focused backlink paints teal ▌ over the left │ in-content;
+        // pad stays blank so we don't double up. Ordinary focused links get a teal ▌
+        // here. Cursor ▌ otherwise.
         let mut spans: Vec<Span<'static>> = Vec::new();
-        if on_cursor {
+        if on_focused_backlink {
+            spans.push(Span::raw(" "));
+        } else if on_focused_ordinary_link {
+            spans.push(Span::styled(
+                "▌",
+                Style::default().fg(theme.link).bg(link_focus_bg),
+            ));
+        } else if on_cursor {
             spans.push(Span::styled("▌", cursor_bg));
         } else {
             spans.push(Span::raw(" "));
@@ -290,6 +317,7 @@ pub fn draw(
                 focused_block_cols,
                 base,
                 focus_style,
+                link_focus_bg,
                 theme,
                 on_cursor,
             ));
@@ -304,21 +332,29 @@ pub fn draw(
                 focused_block_cols,
                 base,
                 focus_style,
+                link_focus_bg,
                 theme,
             ));
         }
-        if on_cursor {
-            // Pad highlight across the full inner width (marker + content).
+        if on_focused_backlink || on_cursor {
+            // Pad highlight to the text pane edge (not past the 100-col cap / right │).
             let used: usize = spans
                 .iter()
                 .map(|s| Span::raw(s.content.as_ref()).width())
                 .sum();
-            let pad = usize::from(inner_area.width).saturating_sub(used);
+            let target = if on_focused_backlink {
+                origin + text_width
+            } else {
+                usize::from(inner_area.width)
+            };
+            let pad = target.saturating_sub(used);
             if pad > 0 {
-                spans.push(Span::styled(
-                    " ".repeat(pad),
-                    Style::default().bg(theme.cursor_line),
-                ));
+                let bg = if on_focused_backlink {
+                    link_focus_bg
+                } else {
+                    theme.cursor_line
+                };
+                spans.push(Span::styled(" ".repeat(pad), Style::default().bg(bg)));
             }
         }
         let row_text = lines.get(src_idx).map_or("", String::as_str);
@@ -369,7 +405,7 @@ pub fn draw(
     geom
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn paint_styled_line(
     sl: &StyledLine,
     line_no: u32,
@@ -379,24 +415,29 @@ fn paint_styled_line(
     focused_block_cols: Option<(u16, u16)>,
     base: Style,
     focus_style: Style,
+    link_focus_bg: Color,
     theme: &Theme,
     on_cursor: bool,
 ) -> Vec<Span<'static>> {
-    let mut ranges: Vec<(u16, u16, Option<LinkClass>, bool)> = Vec::new();
+    let mut ranges: Vec<(u16, u16, Option<LinkClass>, bool, bool)> = Vec::new();
     for span in link_spans {
         for &(seg_line, cols) in &span.segments {
             if seg_line == line_no && cols.0 < cols.1 {
                 let is_focus = focused_link == Some(span.id);
-                ranges.push((cols.0, cols.1, Some(span.class), is_focus));
+                ranges.push((cols.0, cols.1, Some(span.class), is_focus, span.backlink));
             }
         }
     }
     if let Some((c0, c1)) = focused_block_cols
         && c0 < c1
     {
-        ranges.push((c0, c1, None, true));
+        ranges.push((c0, c1, None, true, false));
     }
     ranges.sort_by_key(|r| r.0);
+
+    let focused_bl = ranges
+        .iter()
+        .any(|&(_, _, _, is_focus, is_backlink)| is_focus && is_backlink);
 
     let style_at = |col: u16, kind: StyleKind| -> Style {
         let mut st = theme.style_kind(kind);
@@ -405,16 +446,29 @@ fn paint_styled_line(
             // making the cursor row visible.
             st = st.bg(theme.cursor_line);
         }
-        for &(c0, c1, class, is_focus) in &ranges {
+        for &(c0, c1, class, is_focus, is_backlink) in &ranges {
             if col >= c0 && col < c1 {
-                st = if is_focus {
-                    focus_style
+                st = if is_focus && is_backlink {
+                    // Selection bg; keep Link / BacklinkSummary fg.
+                    st.bg(link_focus_bg)
+                } else if is_focus {
+                    if let Some(class) = class {
+                        // Ordinary focused link: selection bg + teal (link class) fg.
+                        theme.link_class(class).bg(link_focus_bg)
+                    } else {
+                        // Block actions keep yellow focus_item.
+                        focus_style
+                    }
+                } else if is_backlink {
+                    // Title already teal via style_kind(Link); summary stays text.
+                    st
                 } else if let Some(class) = class {
                     theme.link_class(class)
                 } else {
                     st
                 };
-                if on_cursor {
+                // Focus bg must survive the cursor row (Tab lands on the title).
+                if on_cursor && !is_focus {
                     st = st.bg(theme.cursor_line);
                 }
                 break;
@@ -442,25 +496,44 @@ fn paint_styled_line(
                 break;
             }
             let w = crate::tui::text_col::char_width(ch);
-            let st = style_at(col, run.kind);
+            // Focused entry: teal ▌ replaces the left │.
+            let (paint_ch, st) = if focused_bl
+                && matches!(run.kind, StyleKind::BacklinkBorder)
+                && ch == '│'
+                && col == 0
+            {
+                ('▌', Style::default().fg(theme.link).bg(link_focus_bg))
+            } else if focused_bl && matches!(run.kind, StyleKind::BacklinkBorder) {
+                (ch, theme.style_kind(run.kind).bg(link_focus_bg))
+            } else {
+                (ch, style_at(col, run.kind))
+            };
             if buf.is_empty() {
                 style = st;
             } else if st != style {
                 flush(&mut buf, style, &mut spans);
                 style = st;
             }
-            buf.push(ch);
+            buf.push(paint_ch);
             col = col.saturating_add(w);
         }
     }
     flush(&mut buf, style, &mut spans);
 
-    // Full-row code/quote shading (glyphs alone leave a ragged right edge).
-    if !on_cursor {
+    // Full-row shade for fenced blocks / quotes only. InlineCode keeps code_bg
+    // on its own glyphs so adjacent list items do not paint as one solid band.
+    // Focused backlink rows pad to full width so selection reads as a block.
+    if focused_bl {
+        let pad = text_width.saturating_sub(usize::from(col));
+        if pad > 0 {
+            spans.push(Span::styled(
+                " ".repeat(pad),
+                Style::default().bg(link_focus_bg),
+            ));
+        }
+    } else if !on_cursor {
         let shade = sl.spans.iter().find_map(|s| match s.kind {
-            StyleKind::CodeBlock | StyleKind::CodeLang | StyleKind::InlineCode => {
-                Some(theme.code_bg)
-            }
+            StyleKind::CodeBlock | StyleKind::CodeLang => Some(theme.code_bg),
             StyleKind::Quote => Some(theme.quote_bar),
             _ => None,
         });
@@ -487,6 +560,7 @@ fn styled_line(
     focused_block_cols: Option<(u16, u16)>,
     base: Style,
     focus_style: Style,
+    link_focus_bg: Color,
     theme: &Theme,
 ) -> Vec<Span<'static>> {
     let mut ranges: Vec<(u16, u16, Option<LinkClass>, bool)> = Vec::new();
@@ -526,7 +600,11 @@ fn styled_line(
         for &(c0, c1, class, is_focus) in &ranges {
             if col >= c0 && col < c1 {
                 next_style = if is_focus {
-                    focus_style
+                    if let Some(class) = class {
+                        theme.link_class(class).bg(link_focus_bg)
+                    } else {
+                        focus_style
+                    }
                 } else if let Some(class) = class {
                     theme.link_class(class)
                 } else {

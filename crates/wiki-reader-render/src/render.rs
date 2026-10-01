@@ -58,6 +58,12 @@ pub enum StyleKind {
     FrontmatterValue,
     /// Frontmatter YAML punctuation (`:` and list dashes).
     FrontmatterPunct,
+    /// Linked-from pane box edges and dividers.
+    BacklinkBorder,
+    /// Linked-from pane tag label (`Linked from`).
+    BacklinkTag,
+    /// Linked-from entry summary text.
+    BacklinkSummary,
 }
 
 /// One styled run on a line.
@@ -488,6 +494,8 @@ impl<'a> LayoutState<'a> {
             Tag::Strong => self.style_stack.push(StyleKind::Strong),
             Tag::Strikethrough => self.style_stack.push(StyleKind::Strikethrough),
             Tag::Link { dest_url, .. } => {
+                // Marker before start_col so the link hit does not cover the bullet.
+                self.ensure_list_marker(src);
                 let col = u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(0);
                 let line = u32::try_from(self.styled.len()).unwrap_or(0);
                 self.in_link = Some(LinkBuild {
@@ -651,6 +659,7 @@ impl<'a> LayoutState<'a> {
                         raw_target: lb.raw,
                         class,
                         segments: lb.segments,
+                        backlink: false,
                     });
                     self.link_id = self.link_id.saturating_add(1);
                 }
@@ -729,19 +738,28 @@ impl<'a> LayoutState<'a> {
         } else {
             t.to_owned()
         };
+        // Colour emoji ignore terminal fg; substitute only a leading marker so
+        // mid-sentence use stays literal. U+2212 takes the text colour like `+`.
+        let at_start = self.list_marker_pending || self.cur.is_empty();
+        self.ensure_list_marker(src);
+        let text = if at_start {
+            leading_plus_minus(&text)
+        } else {
+            text
+        };
         if self.heading_level.is_some() {
             self.heading_text.push_str(&text);
         }
         if let Some(lb) = self.in_link.as_mut() {
             lb.text.push_str(&text);
         }
-        self.ensure_list_marker(src);
         if !text.is_empty() {
             self.push_wrapping(&text, src);
         }
     }
 
     fn inline_code(&mut self, t: &CowStr<'_>, src: u32) {
+        self.ensure_list_marker(src);
         let s = t.to_string();
         if let Some(lb) = self.in_link.as_mut() {
             lb.text.push_str(&s);
@@ -969,7 +987,8 @@ impl<'a> LayoutState<'a> {
         if take.is_empty() {
             return;
         }
-        let is_link = kind == StyleKind::Link && self.in_link.is_some();
+        let is_link =
+            self.in_link.is_some() && matches!(kind, StyleKind::Link | StyleKind::BacklinkSummary);
         let start = u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(0);
         self.cur.push(StyledSpan {
             text: take.to_owned(),
@@ -1032,8 +1051,9 @@ impl<'a> LayoutState<'a> {
         });
     }
 
-    /// Append a "Linked from" section (B1). One entry per source page, sorted by
-    /// path, excluding self. Omitted when empty. Raw mode never calls this.
+    /// Append a "Linked from" pane (B1). Box-drawn section: tag header, title
+    /// rows (links), optional summaries, dividers between entries. Omitted when
+    /// empty. Raw mode never calls this.
     fn append_backlinks(&mut self, page: &PageKey) {
         let mut sources: Vec<&PageKey> = self
             .index
@@ -1050,20 +1070,18 @@ impl<'a> LayoutState<'a> {
         }
         let src = self.styled.last().map_or(1, |l| l.source_line.max(1));
         self.finish_block();
-        self.commit_line(src); // blank gap
+        // Two blank rows above the pane.
+        self.commit_line(src);
+        self.commit_line(src);
         self.mark_block(src);
         let heading_line = u32::try_from(self.styled.len()).unwrap_or(0);
-        self.push_span("Linked from".into(), StyleKind::Heading(2), src);
-        self.commit_line(src);
-        // Match normal H1/H2 rules (dim Rule), not Heading colour. The list
-        // follows directly: no blank row under the rule.
-        self.push_span("─".repeat(self.width.min(40)), StyleKind::Rule, src);
-        self.commit_line(src);
+        self.push_pane_top_border(src, "Linked from");
         self.headings.push((
             unique_slug("linked-from", &mut self.used_slugs),
             heading_line.saturating_add(1),
         ));
-        for from in sources {
+        let last = sources.len().saturating_sub(1);
+        for (i, from) in sources.into_iter().enumerate() {
             let title = self.index.pages.get(from).map_or_else(
                 || {
                     from.relative_path.file_stem().map_or_else(
@@ -1073,71 +1091,182 @@ impl<'a> LayoutState<'a> {
                 },
                 |p| p.title.clone(),
             );
+            let summary = self.index.pages.get(from).and_then(|p| {
+                p.parsed
+                    .frontmatter
+                    .summary
+                    .clone()
+                    .filter(|s| !s.is_empty())
+                    .or_else(|| first_paragraph(&p.parsed.body))
+            });
             let target = format!(
                 "/{}",
                 from.relative_path.to_string_lossy().replace('\\', "/")
             );
-            self.push_backlink_entry(&title, &target, src);
+            self.push_backlink_entry(&title, summary.as_deref(), &target, src);
+            if i < last {
+                self.push_span(
+                    pane_h_border(self.width, '├', '┤'),
+                    StyleKind::BacklinkBorder,
+                    src,
+                );
+                self.commit_line(src);
+            }
         }
+        self.push_span(
+            pane_h_border(self.width, '└', '┘'),
+            StyleKind::BacklinkBorder,
+            src,
+        );
+        self.commit_line(src);
     }
 
-    /// Bullet + wrapped title with hanging indent; `LinkSpan` segments follow glyphs.
-    fn push_backlink_entry(&mut self, title: &str, target: &str, src: u32) {
-        const MAX_ROWS: usize = 3;
-        const BULLET: &str = "• ";
-        // Hang matches bullet display width ("• " → 2).
-        const HANG: &str = "  ";
-
-        self.push_span(BULLET.into(), StyleKind::Plain, src);
-        let col = u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(0);
+    /// Title (link) + optional 1–2 summary rows; `LinkSpan` covers title and summary.
+    /// Entry rows are `│ content │` so the pane has side borders; segments exclude the glyphs.
+    fn push_backlink_entry(&mut self, title: &str, summary: Option<&str>, target: &str, src: u32) {
         let line = u32::try_from(self.styled.len()).unwrap_or(0);
         self.in_link = Some(LinkBuild {
             raw: target.to_owned(),
             text: title.to_owned(),
             start_line: line,
-            start_col: col,
+            start_col: 0,
             segments: Vec::new(),
         });
 
-        let mut rest = title.to_owned();
-        for row in 0..MAX_ROWS {
-            if rest.is_empty() {
-                break;
-            }
-            if row > 0 {
-                self.push_span(HANG.into(), StyleKind::Plain, src);
-            }
-            let avail = self.width.saturating_sub(self.cur_width()).max(1);
-            let last = row + 1 == MAX_ROWS;
-            if last && rest.width() > avail {
-                let room = avail.saturating_sub(1).max(1);
-                let (take, _) = split_at_width(&rest, room);
-                if !take.is_empty() {
-                    self.push_span(take, StyleKind::Link, src);
+        // `│ ` + content + ` │` — need at least 4 columns for sides.
+        let side = 4usize;
+        let with_sides = self.width >= side;
+        let avail = if with_sides {
+            self.width.saturating_sub(side).max(1)
+        } else {
+            self.width.max(1)
+        };
+
+        self.push_backlink_row(title, StyleKind::Link, avail, src, true, with_sides);
+        if let Some(summary) = summary.filter(|s| !s.is_empty()) {
+            let mut rest = summary.to_owned();
+            for row in 0..2 {
+                if rest.is_empty() {
+                    break;
                 }
-                self.push_span("…".into(), StyleKind::Link, src);
-                rest.clear();
-            } else {
-                let (take, next) = split_at_width(&rest, avail);
-                self.push_span(take, StyleKind::Link, src);
-                rest = next;
-            }
-            if !rest.is_empty() {
-                self.commit_line(src);
+                let last = row + 1 == 2;
+                if last && rest.width() > avail {
+                    let room = avail.saturating_sub(1).max(1);
+                    let (take, _) = split_at_width(&rest, room);
+                    let mut piece = take;
+                    piece.push('…');
+                    self.push_backlink_row(
+                        &piece,
+                        StyleKind::BacklinkSummary,
+                        avail,
+                        src,
+                        false,
+                        with_sides,
+                    );
+                    rest.clear();
+                } else {
+                    let (take, next) = split_at_width(&rest, avail);
+                    self.push_backlink_row(
+                        &take,
+                        StyleKind::BacklinkSummary,
+                        avail,
+                        src,
+                        false,
+                        with_sides,
+                    );
+                    rest = next;
+                }
             }
         }
-        if let Some(lb) = self.in_link.take() {
+
+        if let Some(mut lb) = self.in_link.take() {
+            lb.segments.retain(|&(_, (a, b))| a < b);
             self.links.push(LinkSpan {
                 id: LinkId(self.link_id),
                 raw_target: lb.raw,
                 class: LinkClass::Internal,
                 segments: lb.segments,
+                backlink: true,
             });
             self.link_id = self.link_id.saturating_add(1);
         }
-        if !self.cur.is_empty() {
-            self.commit_line(src);
+    }
+
+    /// One entry row; with sides: `│ content… │`, padded to `avail` for a solid focus block.
+    fn push_backlink_row(
+        &mut self,
+        text: &str,
+        kind: StyleKind,
+        avail: usize,
+        src: u32,
+        ellipsis_ok: bool,
+        with_sides: bool,
+    ) {
+        if with_sides {
+            self.push_span("│ ".into(), StyleKind::BacklinkBorder, src);
         }
+        let text_w = text.width();
+        if ellipsis_ok && text_w > avail {
+            let room = avail.saturating_sub(1).max(1);
+            let (take, _) = split_at_width(text, room);
+            if !take.is_empty() {
+                self.push_span(take, kind, src);
+            }
+            self.push_span("…".into(), kind, src);
+            // Pad after … — split_at_width can undershoot `room` on a wide glyph.
+            let leading = if with_sides { 2 } else { 0 };
+            let used = self.cur_width().saturating_sub(leading);
+            if used < avail {
+                self.push_span(" ".repeat(avail.saturating_sub(used)), kind, src);
+            }
+        } else {
+            let (take, _) = split_at_width(text, avail);
+            self.push_span(take, kind, src);
+            let leading = if with_sides { 2 } else { 0 };
+            let used = self.cur_width().saturating_sub(leading);
+            if used < avail {
+                self.push_span(" ".repeat(avail.saturating_sub(used)), kind, src);
+            }
+        }
+        if with_sides {
+            self.push_span(" │".into(), StyleKind::BacklinkBorder, src);
+        }
+        self.commit_line(src);
+    }
+
+    /// Top border as Border + Tag + Border spans so the label can be themed.
+    fn push_pane_top_border(&mut self, src: u32, tag: &str) {
+        let width = self.width;
+        if width == 0 {
+            return;
+        }
+        if width == 1 {
+            self.push_span("┌".into(), StyleKind::BacklinkBorder, src);
+            self.commit_line(src);
+            return;
+        }
+        let prefix = format!("┌ {tag} ");
+        let suffix_w = 1; // ┐
+        if prefix.width() + suffix_w > width {
+            self.push_span(
+                pane_h_border(width, '┌', '┐'),
+                StyleKind::BacklinkBorder,
+                src,
+            );
+            self.commit_line(src);
+            return;
+        }
+        let fill = width
+            .saturating_sub(prefix.width())
+            .saturating_sub(suffix_w);
+        self.push_span("┌ ".into(), StyleKind::BacklinkBorder, src);
+        self.push_span(tag.to_owned(), StyleKind::BacklinkTag, src);
+        self.push_span(
+            format!(" {}┐", "─".repeat(fill)),
+            StyleKind::BacklinkBorder,
+            src,
+        );
+        self.commit_line(src);
     }
 
     fn push_empty(&mut self, src: u32) {
@@ -1557,6 +1686,84 @@ fn format_table_separator(widths: &[usize]) -> String {
 
 fn format_table_row_sep(widths: &[usize]) -> String {
     format_table_border(widths, '├', '┼', '┤')
+}
+
+/// Horizontal pane border: `left` + fill + `right`, clipped to `width` columns.
+fn pane_h_border(width: usize, left: char, right: char) -> String {
+    if width == 0 {
+        return String::new();
+    }
+    if width == 1 {
+        return left.to_string();
+    }
+    format!("{left}{}{right}", "─".repeat(width.saturating_sub(2)))
+}
+
+/// Leading ➕/➖ at item or paragraph start → ASCII `+` / U+2212 `−`.
+fn leading_plus_minus(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some('➕') => format!("+{}", chars.as_str()),
+        Some('➖') => format!("\u{2212}{}", chars.as_str()),
+        _ => text.to_owned(),
+    }
+}
+
+/// First body paragraph as plain text (no markup). Skips leading fences, tables,
+/// lists, and quotes/alerts via pulldown-cmark.
+fn first_paragraph(body: &str) -> Option<String> {
+    let options = Options::ENABLE_TABLES
+        | Options::ENABLE_TASKLISTS
+        | Options::ENABLE_STRIKETHROUGH
+        | Options::ENABLE_FOOTNOTES
+        | Options::ENABLE_GFM;
+    let mut nest = 0i32;
+    let mut in_para = false;
+    let mut out = String::new();
+
+    for ev in Parser::new_ext(body, options) {
+        match ev {
+            Event::Start(tag) => match tag {
+                Tag::Paragraph => {
+                    if nest == 0 {
+                        in_para = true;
+                    }
+                }
+                Tag::Heading { .. }
+                | Tag::CodeBlock(_)
+                | Tag::List(_)
+                | Tag::Table(_)
+                | Tag::BlockQuote(_)
+                | Tag::Item
+                | Tag::FootnoteDefinition(_) => {
+                    nest += 1;
+                }
+                _ => {}
+            },
+            Event::End(tag) => match tag {
+                TagEnd::Paragraph => {
+                    if in_para {
+                        break;
+                    }
+                }
+                TagEnd::Heading(_)
+                | TagEnd::CodeBlock
+                | TagEnd::List(_)
+                | TagEnd::Table
+                | TagEnd::BlockQuote(_)
+                | TagEnd::Item
+                | TagEnd::FootnoteDefinition => {
+                    nest -= 1;
+                }
+                _ => {}
+            },
+            Event::Text(t) | Event::Code(t) if in_para => out.push_str(&t),
+            Event::SoftBreak | Event::HardBreak if in_para => out.push(' '),
+            _ => {}
+        }
+    }
+    let s = out.trim().to_owned();
+    if s.is_empty() { None } else { Some(s) }
 }
 
 #[cfg(test)]
