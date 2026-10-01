@@ -47,6 +47,8 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 - 2026-10-01: dogfood round 5 (PR 3): narrow nav rows end in `…` (drop the `(file)` suffix first in title+filename); Search query sits under the top border with no blank row (P2-38, P2-39)
 - 2026-10-01: dogfood round 5 (PR 4): Cmd/Ctrl+Enter and Cmd/Ctrl+→ (nav) open a new tab via kitty `DISAMBIGUATE_ESCAPE_CODES`; Ctrl+click joins Shift+click ([ADR-0015](../decisions/0015-new-tab-combos-kitty-keyboard.md), P2-40). Ghostty QA: Cmd+Enter is full screen, Ctrl+Enter works, so the combos are Ctrl-only: `Ctrl+Enter` (nav and view) and `Ctrl+→` (nav) ([ADR-0016](../decisions/0016-ctrl-only-new-tab-combos.md)).
 - 2026-10-01: dogfood round 5 brief deltas: leading ➕/➖ → `+`/U+2212 only at item/paragraph start (P2-41); viewer asserts inline code is not full-row shaded (P2-42); Linked from whole-entry hit/focus with selection bg, teal ▌ replacing left `│`, side borders, plain first-paragraph summary (P2-43)
+- 2026-10-01: dogfood round 5 follow-ups: Tab focus on a Linked-from entry paints selection + teal ▌ with no reverse-video column cursor, and the Tab cursor column follows the focused item (P2-44); summaries are one line ending in `…` (P2-45); bold/inline styles inside quotes and alerts keep the quote bg (P2-46); table links are remapped onto laid-out cells, including after a soft wrap, so Tab walks them row by row (P2-47); table headers are bold text, not link-teal (P2-48); links in the too-narrow unwrapped table dump have no hit targets yet (P2-49)
+- 2026-10-01: dogfood round 5 follow-ups (2, from Ghostty QA): focused block actions (frontmatter, code titles, expand/copy) use the active-tab/footer colours, dark text on peach, instead of yellow with white text (P2-50); H3 and under have two blank rows above and one below, not the reverse (P2-51)
 
 ## Interim acceptance walk (2026-09-30)
 
@@ -146,6 +148,14 @@ Judged from tests, dogfood QA, and code — not a full interactive sweep of ever
 | P2-41 | Leading ➕/➖ at item/paragraph start only → `+` / U+2212; mid-sentence left alone | D1 | done | round 5 brief deltas |
 | P2-42 | Viewer test: inline code does not full-row shade adjacent list items | D1 | done | round 5 brief deltas |
 | P2-43 | Linked from: whole-entry LinkSpan (title+summary), side borders, BacklinkBorder/Tag/Summary styles, selection bg + teal ▌ (replaces left `│`) on Tab focus, plain first-paragraph summary fallback | B1 | done | round 5 brief deltas |
+| P2-44 | Linked from Tab focus: selection bg + teal ▌ only; the reverse-video column cursor is hidden on the focused entry, and Tab moves the cursor column to the focused item | B1 | done | round 5 follow-ups |
+| P2-45 | Linked from summary is one line ending in `…` (no orphan `.` or letter wraps) | B1 | done | round 5 follow-ups |
+| P2-46 | Strong/emphasis/link spans inside quotes and alerts keep the quote bg (no black hole behind bold text) | D1 | done | round 5 follow-ups |
+| P2-47 | Table links remapped onto laid-out cells, located in the cell text so links after a soft wrap land on their own glyphs; Tab no longer sticks on the top border | D1 | done | round 5 follow-ups |
+| P2-48 | Table headers are bold text colour, not link-teal | D1 | done | round 5 follow-ups |
+| P2-49 | Hit targets for links in the too-narrow unwrapped table dump (map cell offsets onto the `│ a \| b` rows) | D1 | deferred | very narrow panes only |
+| P2-50 | Focused block actions (frontmatter toggle, code block titles, expand table/diagram, copy code) paint peach bg + dark text like the active tab and footer links; `focus_item` token removed | U3 | done | round 5 follow-ups (2) |
+| P2-51 | H3–H6 spacing: two blank rows above, one below (was the reverse) | D1 | done | round 5 follow-ups (2) |
 | P2-R38 | Copy fixes: empty table cells kept, wrapped cells rejoined, OSC 52 cap on the encoded payload (75 KB of text), held drag keeps scrolling | CP | done | round 2 follow-ups (PR 2) |
 | P2-24b | Image diagrams and images | D1 | moved | slipped to Phase 3 as P3-12 (2026-09-30); needs ADR-0004 herdr/Kitty spike + deps |
 

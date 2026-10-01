@@ -1684,6 +1684,40 @@ fn linked_from_backlink_in_tab_cycle_and_activate() {
 }
 
 #[test]
+fn focused_block_action_uses_peach_bg_and_dark_text() {
+    // Frontmatter / code-title / expand / copy targets: the active tab and footer link
+    // colours (dark text on peach), not yellow with white text.
+    let md = "---\ntitle: T\n---\n\n# T\n\n```rust\nfn main() {}\n```\n";
+    let (_d, mut app, _) = app_with_page(md);
+    let _ = draw_app(&mut app, 80, 30);
+    let items = app.focus_list();
+    let idx = items
+        .iter()
+        .position(|it| it.kind == FocusTarget::BlockAction)
+        .expect("a block action");
+    let line = items[idx].line.expect("block action line");
+    let col = items[idx].cols.0;
+    app.update(Action::FocusViewer);
+    for on_cursor_row in [false, true] {
+        app.focused_item = Some(idx);
+        app.cursor_line = if on_cursor_row { line } else { 0 };
+        let terminal = draw_app(&mut app, 80, 30);
+        let buf = terminal.backend().buffer();
+        let (x, y) = cell_xy(&app, line, col);
+        assert_eq!(
+            buf[(x, y)].bg,
+            app.theme.peach,
+            "bg on_cursor_row={on_cursor_row}"
+        );
+        assert_eq!(
+            buf[(x, y)].fg,
+            app.theme.on_peach,
+            "fg on_cursor_row={on_cursor_row}"
+        );
+    }
+}
+
+#[test]
 fn focused_ordinary_link_keeps_focus_bg_on_cursor_row() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(
@@ -3652,6 +3686,126 @@ fn frontmatter_label_colour_does_not_depend_on_the_cursor_line() {
     app.update(Action::ViewerDown);
     let off_cursor = fg_of_label(&mut app);
     assert_eq!(on_cursor, off_cursor);
+}
+
+#[test]
+fn focused_backlink_hides_column_cursor() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/design-system/README.md"),
+    }));
+    let _ = draw_app(&mut app, 120, 24);
+    let bl = app
+        .doc
+        .link_spans()
+        .iter()
+        .find(|s| s.raw_target.ends_with("tokens.md") && s.raw_target.starts_with('/'))
+        .expect("tokens backlink")
+        .clone();
+    let items = app.focus_list();
+    let bl_idx = items
+        .iter()
+        .position(|it| it.link_id == Some(bl.id))
+        .expect("backlink in focus list");
+    app.update(Action::FocusViewer);
+    app.focused_item = Some(bl_idx);
+    app.cursor_line = bl.segments[0].0;
+    app.cursor_col = bl.segments[0].1.0;
+    let terminal = draw_app(&mut app, 120, 40);
+    let buf = terminal.backend().buffer();
+    let title_line = bl.segments[0].0;
+    let (bx, title_y) = cell_xy(&app, title_line, 0);
+    let (tx0, ty0) = cell_xy(&app, title_line, bl.segments[0].1.0);
+    assert!(
+        !buf[(bx, title_y)]
+            .modifier
+            .contains(ratatui::style::Modifier::REVERSED),
+        "▌ cell must not also be reverse-video"
+    );
+    assert!(
+        !buf[(tx0, ty0)]
+            .modifier
+            .contains(ratatui::style::Modifier::REVERSED),
+        "title glyphs must not show the column cursor"
+    );
+}
+
+#[test]
+fn strong_inside_quote_keeps_quote_bar_background() {
+    let md = "> [!NOTE]\n> Before **widget sidebar** after.\n";
+    let (_d, mut app, _) = app_with_page(md);
+    let terminal = draw_app(&mut app, 80, 20);
+    let buf = terminal.backend().buffer();
+    let line = row_of(&app, "widget sidebar");
+    let col = u16::try_from(
+        app.doc.lines()[line as usize]
+            .find("widget")
+            .expect("bold phrase"),
+    )
+    .unwrap_or(0);
+    let (x, y) = cell_xy(&app, line, col);
+    assert_eq!(
+        buf[(x, y)].bg,
+        app.theme.quote_bar,
+        "strong inside quote must keep quote_bar bg, not a black hole"
+    );
+}
+
+#[test]
+fn tab_cycles_table_links_onto_their_cells() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("README.md"),
+        "# T\n\n| Phase | Tasks |\n| --- | --- |\n| 1 | [a.md](a.md) |\n| 2 | [b.md](b.md) |\n",
+    )
+    .unwrap();
+    std::fs::write(dir.path().join("a.md"), "# A\n").unwrap();
+    std::fs::write(dir.path().join("b.md"), "# B\n").unwrap();
+    let mut app = App::new(dir.path()).unwrap();
+    let _ = draw_app(&mut app, 80, 24);
+    let a = app
+        .doc
+        .link_spans()
+        .iter()
+        .find(|s| s.raw_target.contains("a.md"))
+        .expect("a.md")
+        .clone();
+    let b = app
+        .doc
+        .link_spans()
+        .iter()
+        .find(|s| s.raw_target.contains("b.md"))
+        .expect("b.md")
+        .clone();
+    let items = app.focus_list();
+    let a_idx = items
+        .iter()
+        .position(|it| it.link_id == Some(a.id))
+        .expect("a in focus list");
+    let b_idx = items
+        .iter()
+        .position(|it| it.link_id == Some(b.id))
+        .expect("b in focus list");
+    app.update(Action::FocusViewer);
+    app.focused_item = None;
+    app.cursor_line = 0;
+    for _ in 0..items.len().saturating_add(2) {
+        app.update(Action::ViewerTab);
+        if app.focused_item == Some(a_idx) {
+            break;
+        }
+    }
+    assert_eq!(app.focused_item, Some(a_idx));
+    assert_eq!(app.cursor_line, a.segments[0].0, "cursor on a.md cell row");
+    app.update(Action::ViewerTab);
+    assert_eq!(app.focused_item, Some(b_idx));
+    assert_eq!(app.cursor_line, b.segments[0].0, "cursor on b.md cell row");
+    assert!(
+        b.segments[0].0 > a.segments[0].0,
+        "table links on distinct rows"
+    );
 }
 
 #[test]
