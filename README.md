@@ -47,18 +47,32 @@ Binaries are unsigned and not notarized. Browser downloads on macOS may be quara
 
 crates.io packaging metadata is prepared (`version` on path deps, repository/readme); the crates are not published yet.
 
+## Upgrade
+
+Check your version with `wiki-reader --version`. To upgrade, replace the old binary:
+
+```bash
+# cargo install: --force replaces the installed binary (add --tag vX.Y.Z-alpha.N to pin one)
+cargo install --locked --force --git https://github.com/luckgrid/wiki-reader wiki-reader
+
+# release tarball: verify and unpack as above, then copy over the old binary
+install -m 0755 wiki-reader-vX.Y.Z-<platform>/wiki-reader ~/.local/bin/wiki-reader
+```
+
+Quit any running instance first. Your config and saved sessions are kept. Rolling back, uninstalling, resetting sessions, and replacing a published release are covered in [Releasing and upgrading](wiki/guides/releasing.md).
+
 ## Quickstart
 
 ```bash
 cargo run -p wiki-reader -- fixtures/worked-example
-# q or Esc to quit
+# q to quit, ? for help
 ```
 
 Or after install:
 
 ```bash
 wiki-reader fixtures/worked-example
-# q or Esc to quit
+# q to quit, ? for help
 ```
 
 ## Checks
