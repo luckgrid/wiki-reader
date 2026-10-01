@@ -44,7 +44,7 @@ Terminal markdown tools display files but don't support wiki browsing: links are
 
 **Search**
 
-- As a reader, I want a search overlay I can open from anywhere (hotkey or the ⌕ row at the top of the side nav) so that I can jump to any page, and picking a result opens it in the current view.
+- As a reader, I want a search overlay I can open from anywhere (hotkey or the `/ Search…` row at the top of the side nav) so that I can jump to any page, and picking a result opens it in the current view.
 - As a reader, I want closing search to return me to exactly where my cursor was.
 
 **Viewing**
@@ -80,7 +80,7 @@ Terminal markdown tools display files but don't support wiki browsing: links are
 | H1 | Header | Root title + group breadcrumb trail (clickable; middle truncation keeps root and current); right icons `◫` toggle side nav and `✕` quit. |
 | F1 | Viewer footer | Sticky prev/next bar at the bottom of the viewer pane, viewer width; clickable; in the Tab cycle; `[`/`]`. |
 | F2 | Status bar | Full-width bottom bar: focused pane, path, line/%, words, reading time, updated, message area. |
-| S1 | Search overlay | `/`, `Ctrl+k`, clicking or `Enter` on the side nav ⌕ row opens it; Pages/Text toggle; results replace the view and highlight the match; `Esc` restores prior focus and cursor. |
+| S1 | Search overlay | `/`, `Ctrl+k`, clicking or `Enter` on the side nav search row opens it; Files/Content toggle; results replace the view and a Content result highlights the matched phrase; `Esc` restores prior focus and cursor. |
 | V1 | Rendered view | Headings, emphasis, lists, task lists, tables, code, blockquotes/alerts, links, rules, frontmatter box. |
 | V2 | Raw view | `r` toggles; highlighted markdown; same cursor line. |
 | V3 | Live reload | External edits refresh the side nav and page within 1 s, keeping the cursor. |
@@ -91,7 +91,7 @@ Terminal markdown tools display files but don't support wiki browsing: links are
 |----|-------------|---------------------|
 | P1 | Custom nav order | `SUMMARY.md`/`_sidebar.md` and `nav_order` respected ([content model](content-model.md)). |
 | B1 | Linked from | Backlinks listed at the end of the article, focusable. |
-| TB | Tabs (secondary) | `t`/middle-click opens a new tab; the tab bar appears only with ≥ 2 tabs; per-tab history. |
+| TB | Tabs (secondary) | `t`/middle-click opens a new tab; the current page's tab is always shown on the View's top border (outlined, like the footer buttons); per-tab history. |
 | BA | Block actions | Expand table, show frontmatter, expand diagram, copy code: all in the Tab cycle. |
 | D1 | Diagrams | Tiered Mermaid per [ADR-0004](../decisions/0004-diagram-rendering.md). |
 | R1 | Responsive | Side nav auto-hides below 80 cols; overlay via `◫`/`b`. |

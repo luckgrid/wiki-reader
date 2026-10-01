@@ -72,7 +72,7 @@ Future: this search row becomes a proper **side nav header**, and a **side nav f
 - Floats over the side nav and viewer, which both drop their active colours (gray borders, no highlighted tab) while it is open. A blank row under the title, then the input row, the results, a footer row and a blank row; two columns of padding left and right. A result row cut off at the right edge ends in `…`.
 - The title carries the mode and the key hints: `Search [Files] (Tab: toggle mode  Esc: close)`. The input row is `/ █ type to search…` with the placeholder beside the cursor. The footer shows the counts (`N files`, or `N files, M matches`) and `↑/↓: navigate  Enter: open  Tab: toggle mode`.
 - A toggle (`Tab` inside the overlay) switches between **Files** (fuzzy title/path) and **Content** (full-text). Files is the default.
-- Results use a larger centered pane (~80% × ~70%, up to ~100 cols). The list scrolls; `Home`/`End`/`PgUp`/`PgDn` and the mouse wheel jump or step selection. The selected row's background spans the full width. Content rows start with the source line number (`[12]`, peach), then the bold title, the dim path and the snippet, with query matches underlined.
+- Results use a large centered pane (~80% × ~80%, up to ~100 × 50). The list scrolls; `Home`/`End`/`PgUp`/`PgDn` and the mouse wheel jump or step selection. The selected row's background spans the full width. Content rows start with the source line number (`[12]`, peach), then the bold title, the dim path and the snippet, with query matches underlined.
 - `↑`/`↓` or mouse selects; `Enter` or click opens the result in the current view (replace + history), lands on the match: the page stays where it normally loads (it scrolls, centring the match, only when the match is off-screen), the searched phrase is highlighted in the active-tab peach and the cursor sits on its first letter (the default text colour as a block, the glyph inverted); `n`/`N` then cycle matches in the page.
 - `Esc` or a click outside closes it and restores the previous focus and cursor.
 - The last query and results are kept for the session.
@@ -108,7 +108,7 @@ Future: a **sticky section header** at the top of the viewer showing the heading
 
 ## Status bar (full width, 1 row)
 
-Like markdown-reader's: focused region as a highlighted pill (`NAV`/`VIEW`), relative path, cursor line:column (`L12:C5`) and scroll %, updated date and the page's frontmatter `status` (colored by value), word count, reading time, and a **message area** for link targets, notices ("not found"), confirmations, and search match `n/m`. Lower-priority items drop first when narrow.
+Like markdown-reader's: focused region as a highlighted pill (`NAV`/`VIEW`, or `SEARCH`/`HELP` while a popup is open; peach, like the tabs and footer links), relative path, cursor line:column (`L12:C5`) and scroll %, updated date and the page's frontmatter `status` (colored by value), word count, reading time, and a **message area** for link targets, notices ("not found"), confirmations, and search match `n/m`. Lower-priority items drop first when narrow.
 
 ## Focus & cursor model
 
