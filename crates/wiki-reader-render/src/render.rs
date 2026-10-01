@@ -1071,8 +1071,21 @@ impl<'a> LayoutState<'a> {
         self.commit_line(src); // blank gap
         self.mark_block(src);
         let heading_line = u32::try_from(self.styled.len()).unwrap_or(0);
-        self.push_span("## Linked from".into(), StyleKind::Heading(2), src);
+        let label = if self.formatted {
+            "Linked from".into()
+        } else {
+            "## Linked from".into()
+        };
+        self.push_span(label, StyleKind::Heading(2), src);
         self.commit_line(src);
+        if self.formatted {
+            self.push_span("─".repeat(self.width.min(40)), StyleKind::Heading(2), src);
+            self.commit_line(src);
+            self.styled.push(StyledLine {
+                spans: Vec::new(),
+                source_line: src,
+            });
+        }
         self.headings.push((
             unique_slug("linked-from", &mut self.used_slugs),
             heading_line.saturating_add(1),
