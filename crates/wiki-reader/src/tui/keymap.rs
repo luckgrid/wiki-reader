@@ -177,7 +177,6 @@ pub struct Binding {
 pub fn binding_icon(action: &Action) -> Option<&'static str> {
     match action {
         Action::ToggleNav => Some("◫"),
-        Action::ToggleFormattedView => Some("○ ◉"),
         Action::Quit => Some("✕"),
         _ => None,
     }
@@ -220,13 +219,6 @@ pub static BINDINGS: &[Binding] = &[
         action: Some(Action::ToggleViewMode),
         help: "Toggle raw / rendered",
         matcher: Some(Matcher::PlainChar('r')),
-    },
-    Binding {
-        keys: "v",
-        scope: BindingScope::Global,
-        action: Some(Action::ToggleFormattedView),
-        help: "Toggle syntax / formatted",
-        matcher: Some(Matcher::PlainChar('v')),
     },
     Binding {
         keys: "e",
@@ -396,6 +388,13 @@ pub static BINDINGS: &[Binding] = &[
         action: Some(Action::NavCollapse),
         help: "Collapse / parent group",
         matcher: Some(Matcher::AnyCode(KeyCode::Left)),
+    },
+    Binding {
+        keys: "Shift+Enter",
+        scope: BindingScope::Nav,
+        action: Some(Action::NewTab),
+        help: "Open page in a new tab",
+        matcher: Some(Matcher::ShiftCode(KeyCode::Enter)),
     },
     Binding {
         keys: "Enter",
@@ -793,9 +792,6 @@ fn action_by_name(name: &str) -> Option<Action> {
         "back" => Action::Back,
         "forward" => Action::Forward,
         "toggle_view" | "toggle-view" | "raw" => Action::ToggleViewMode,
-        "toggle_formatted_view" | "toggle-formatted-view" | "formatted" => {
-            Action::ToggleFormattedView
-        }
         _ => return None,
     })
 }
@@ -886,16 +882,6 @@ mod tests {
                 key(KeyCode::Char('b')),
                 FocusPane::Viewer,
                 Some(Action::ToggleNav),
-            ),
-            (
-                key(KeyCode::Char('v')),
-                FocusPane::Viewer,
-                Some(Action::ToggleFormattedView),
-            ),
-            (
-                key(KeyCode::Char('v')),
-                FocusPane::Nav,
-                Some(Action::ToggleFormattedView),
             ),
             (
                 key(KeyCode::Char('[')),
@@ -1079,7 +1065,6 @@ mod tests {
             Action::ViewerActivate,
             Action::FocusFooter,
             Action::ToggleViewMode,
-            Action::ToggleFormattedView,
             Action::OpenInEditor,
             Action::CopyPagePath,
             Action::CopyLinkTarget,

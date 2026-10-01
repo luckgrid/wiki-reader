@@ -24,9 +24,6 @@ pub struct SessionState {
     /// User-resized nav column width (P2-14); absent in older session files.
     #[serde(default)]
     pub nav_width: Option<u16>,
-    /// Formatted (marker-free) rendered view (ADR-0012 / P2-24a).
-    #[serde(default)]
-    pub formatted_view: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -151,7 +148,6 @@ pub fn load_from_path(path: &Path) -> Option<LoadedSession> {
                 focus: FocusPaneState::Viewer,
                 nav_visible: None,
                 nav_width: None,
-                formatted_view: false,
             },
             notice: Some("session restore failed; starting clean".into()),
         }),
@@ -198,7 +194,6 @@ impl SessionState {
         focus: FocusPaneState,
         nav_visible: Option<bool>,
         nav_width: Option<u16>,
-        formatted_view: bool,
     ) -> Self {
         let tabs = nav
             .tabs()
@@ -241,7 +236,6 @@ impl SessionState {
             focus,
             nav_visible,
             nav_width,
-            formatted_view,
         }
     }
 
@@ -349,8 +343,7 @@ mod tests {
 
         let state_root = tempdir().unwrap();
         let path = state_root.path().join("sess.toml");
-        let snap =
-            SessionState::from_navigator(&nav, FocusPaneState::Viewer, Some(true), Some(42), false);
+        let snap = SessionState::from_navigator(&nav, FocusPaneState::Viewer, Some(true), Some(42));
         save_to_path(&path, &snap).unwrap();
         let loaded = load_from_path(&path).unwrap();
         assert!(loaded.notice.is_none());
@@ -365,6 +358,30 @@ mod tests {
     }
 
     #[test]
+    fn removed_formatted_view_field_is_ignored() {
+        let wiki = tempdir().unwrap();
+        fs::write(wiki.path().join("README.md"), "# Hi\n").unwrap();
+        let provider = FsProvider::open(wiki.path()).unwrap();
+        let index = Index::build(&provider).unwrap();
+        let nav = Navigator::new(index, None).unwrap();
+        let state =
+            SessionState::from_navigator(&nav, FocusPaneState::Viewer, Some(true), Some(42));
+
+        let path = wiki.path().join("session.toml");
+        save_to_path(&path, &state).unwrap();
+        let old = fs::read_to_string(&path).unwrap().replacen(
+            "nav_width = 42\n",
+            "nav_width = 42\nformatted_view = true\n",
+            1,
+        );
+        fs::write(&path, old).unwrap();
+
+        let loaded = load_from_path(&path).unwrap();
+        assert!(loaded.notice.is_none());
+        assert_eq!(loaded.state, state);
+    }
+
+    #[test]
     fn removed_page_dropped_from_history() {
         let wiki = tempdir().unwrap();
         fs::write(wiki.path().join("README.md"), "# Hi\n").unwrap();
@@ -373,7 +390,7 @@ mod tests {
         let index = Index::build(&provider).unwrap();
         let nav = Navigator::new(index, None).unwrap();
 
-        let mut snap = SessionState::from_navigator(&nav, FocusPaneState::Nav, None, None, true);
+        let mut snap = SessionState::from_navigator(&nav, FocusPaneState::Nav, None, None);
         snap.tabs[0].history.push(LocationState {
             relative_path: PathBuf::from("gone.md"),
             anchor: None,

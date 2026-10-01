@@ -85,18 +85,20 @@ pub fn draw(
     styled: Option<&[StyledLine]>,
     link_spans: &[LinkSpan],
     highlights: Option<&[Vec<HlSpan>]>,
-    show_gutter: bool,
+    gutter: Option<&[Option<u32>]>,
     scroll: u32,
     cursor_line: u32,
     cursor_col: u16,
     selection: Option<Selection>,
-    match_highlight: Option<u32>,
+    match_spans: &[(u32, u16, u16)],
     focused: bool,
     focused_item: Option<&FocusItem>,
     focus_items: &[FocusItem],
     prev_label: Option<&str>,
     next_label: Option<&str>,
     footer_focus: Option<FocusTarget>,
+    tabs: &[wiki_reader_core::nav::Tab],
+    active_tab: usize,
     theme: &Theme,
     hits: &mut HitMap,
 ) -> ViewerGeom {
@@ -116,10 +118,12 @@ pub fn draw(
         hits,
     );
 
+    let tab_bar = crate::tui::regions::tabs::titles(area, tabs, active_tab, focused, theme, hits);
+
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(theme.border(focused))
-        .title("View")
+        .title(tab_bar)
         .title_bottom(footer.left)
         .title_bottom(footer.right);
     let bordered = block.inner(area);
@@ -141,6 +145,7 @@ pub fn draw(
         height: inner_area.height,
     };
 
+    let show_gutter = gutter.is_some();
     let gutter_w: u16 = if show_gutter { 6 } else { 0 };
     let geom = ViewerGeom {
         text_x: content.x.saturating_add(gutter_w),
@@ -156,7 +161,6 @@ pub fn draw(
     let focus_style = Style::default().bg(theme.focus_item).fg(theme.text);
     let focused_link = focused_item.and_then(|it| it.link_id);
     let gutter_style = theme.muted();
-    let match_style = Style::default().bg(theme.focus_item).fg(theme.text);
     let cursor_bg = Style::default().bg(theme.cursor_line).fg(theme.text);
 
     for row in 0..visible_h {
@@ -167,14 +171,7 @@ pub fn draw(
             .saturating_add(u16::try_from(row).unwrap_or(u16::MAX));
 
         let on_cursor = line_no == cursor_line;
-        let on_match = match_highlight == Some(line_no);
-        let base = if on_match {
-            match_style
-        } else if on_cursor {
-            cursor_bg
-        } else {
-            theme.text()
-        };
+        let base = if on_cursor { cursor_bg } else { theme.text() };
 
         hits.push(
             Rect {
@@ -241,19 +238,21 @@ pub fn draw(
             }
         });
 
-        // Marker column: ▌ on cursor (not on match-only highlight).
+        // Marker column: ▌ on the cursor row.
         let mut spans: Vec<Span<'static>> = Vec::new();
-        if on_cursor && !on_match {
+        if on_cursor {
             spans.push(Span::styled("▌", cursor_bg));
-        } else if on_match {
-            spans.push(Span::styled(" ", match_style));
         } else {
             spans.push(Span::raw(" "));
         }
 
-        if show_gutter {
-            let n = src_idx.saturating_add(1);
-            spans.push(Span::styled(format!("{n:4}│ "), gutter_style));
+        if let Some(numbers) = gutter {
+            // Soft-wrapped continuation rows carry no number.
+            let label = match numbers.get(src_idx).copied().flatten() {
+                Some(n) => format!("{n:4}│ "),
+                None => "    │ ".to_owned(),
+            };
+            spans.push(Span::styled(label, gutter_style));
         }
 
         if let Some(hl_lines) = highlights
@@ -270,10 +269,8 @@ pub fn draw(
                     continue;
                 }
                 let mut st = run.style;
-                if on_cursor && !on_match {
+                if on_cursor {
                     st = st.bg(theme.cursor_line);
-                } else if on_match {
-                    st = st.bg(theme.focus_item);
                 }
                 col += clipped.chars().count();
                 spans.push(Span::styled(clipped, st));
@@ -294,7 +291,7 @@ pub fn draw(
                 base,
                 focus_style,
                 theme,
-                on_cursor && !on_match,
+                on_cursor,
             ));
         } else {
             let raw = lines.get(src_idx).map_or("", String::as_str);
@@ -310,7 +307,7 @@ pub fn draw(
                 theme,
             ));
         }
-        if on_cursor || on_match {
+        if on_cursor {
             // Pad highlight across the full inner width (marker + content).
             let used: usize = spans
                 .iter()
@@ -318,15 +315,22 @@ pub fn draw(
                 .sum();
             let pad = usize::from(inner_area.width).saturating_sub(used);
             if pad > 0 {
-                let pad_style = if on_match {
-                    match_style
-                } else {
-                    Style::default().bg(theme.cursor_line)
-                };
-                spans.push(Span::styled(" ".repeat(pad), pad_style));
+                spans.push(Span::styled(
+                    " ".repeat(pad),
+                    Style::default().bg(theme.cursor_line),
+                ));
             }
         }
         let row_text = lines.get(src_idx).map_or("", String::as_str);
+        // The searched phrase: the active tab / footer link colours.
+        for &(_, c0, c1) in match_spans.iter().filter(|(line, _, _)| *line == line_no) {
+            spans = patch_cols(
+                spans,
+                origin + usize::from(c0),
+                (origin + usize::from(c1)).min(origin + text_width),
+                Style::default().bg(theme.peach).fg(theme.on_peach),
+            );
+        }
         if let Some(sel) = selection
             && let Some((c0, c1)) = sel.cols_on(line_no, text_col::line_width(row_text))
         {
@@ -352,6 +356,8 @@ pub fn draw(
                 spans,
                 origin + col,
                 origin + col + w,
+                // Invert the existing cell colours so the cursor remains visible
+                // without erasing a search or drag-selection background.
                 Style::default().add_modifier(Modifier::REVERSED),
             );
         }
@@ -395,12 +401,9 @@ fn paint_styled_line(
     let style_at = |col: u16, kind: StyleKind| -> Style {
         let mut st = theme.style_kind(kind);
         if on_cursor {
+            // Preserve semantic foregrounds (headings, YAML keys, alerts) while
+            // making the cursor row visible.
             st = st.bg(theme.cursor_line);
-        } else if !matches!(
-            kind,
-            StyleKind::CodeBlock | StyleKind::CodeLang | StyleKind::InlineCode | StyleKind::Quote
-        ) {
-            st = st.patch(base);
         }
         for &(c0, c1, class, is_focus) in &ranges {
             if col >= c0 && col < c1 {
@@ -438,9 +441,7 @@ fn paint_styled_line(
             if usize::from(col) >= text_width {
                 break;
             }
-            let w = u16::try_from(Span::raw(ch.to_string()).width())
-                .unwrap_or(1)
-                .max(1);
+            let w = crate::tui::text_col::char_width(ch);
             let st = style_at(col, run.kind);
             if buf.is_empty() {
                 style = st;
@@ -520,9 +521,7 @@ fn styled_line(
     };
 
     for ch in display.chars() {
-        let w = u16::try_from(Span::raw(ch.to_string()).width())
-            .unwrap_or(1)
-            .max(1);
+        let w = crate::tui::text_col::char_width(ch);
         let mut next_style = base;
         for &(c0, c1, class, is_focus) in &ranges {
             if col >= c0 && col < c1 {

@@ -21,10 +21,14 @@ use super::opener::{Opener, SystemOpener};
 use super::page_doc::PageDoc;
 use super::rendered_doc::RenderedViewerDoc;
 use super::search_ui::{SearchMode, SearchOverlay};
+use super::text_col;
 use super::theme::Theme;
 use super::viewer_doc::{RawDoc, ViewerDoc};
 use wiki_reader_core::nav::ViewMode;
 use wiki_reader_core::search;
+
+/// Columns the raw view's line-number gutter takes from the wrap width.
+const RAW_GUTTER_COLS: u16 = 6;
 
 mod draw;
 mod events;
@@ -135,6 +139,8 @@ pub struct App {
     pub(crate) search_match_idx: usize,
     /// Display line highlighted as the current search match.
     pub(crate) match_highlight: Option<u32>,
+    /// The phrase of the Content search that produced `search_matches`.
+    search_phrase: String,
     /// Expanded block-action ids for the current page (frontmatter / tables).
     pub(crate) expanded_blocks: HashSet<u32>,
     /// Page that `expanded_blocks` belongs to (clear only on page change).
@@ -143,8 +149,6 @@ pub struct App {
     pub(crate) clipboard: Box<dyn ClipboardWriter>,
     /// Diagram tier preference from config.
     diagram_mode: wiki_reader_core::config::DiagramMode,
-    /// Formatted (marker-free) rendered view (ADR-0012).
-    pub formatted_view: bool,
     /// When false, skip session load/save (tests).
     persist_session: bool,
     /// Last successful session save (debounce).
@@ -267,11 +271,11 @@ impl App {
             search_match_page: None,
             search_match_idx: 0,
             match_highlight: None,
+            search_phrase: String::new(),
             expanded_blocks: HashSet::new(),
             expanded_for_page: None,
             clipboard: Box::new(Osc52Clipboard),
             diagram_mode: config.diagrams,
-            formatted_view: false,
             persist_session,
             session_saved_at: None,
             session_dirty: false,
@@ -301,7 +305,6 @@ impl App {
                 app.nav_user_override = true;
             }
             app.nav_width = loaded.state.nav_width;
-            app.formatted_view = loaded.state.formatted_view;
         }
         let page = app.navigator.tab().current().page.clone();
         app.apply_effects(vec![
@@ -326,7 +329,6 @@ impl App {
             focus,
             Some(self.nav_visible),
             self.nav_width,
-            self.formatted_view,
         );
         if wiki_reader_core::session::save(self.provider.root(), &state).is_ok() {
             self.session_saved_at = Some(Instant::now());
@@ -401,7 +403,6 @@ impl App {
         RenderOpts {
             expanded: self.expanded_blocks.clone(),
             diagram_mode: self.diagram_mode,
-            formatted: self.formatted_view,
         }
     }
 
@@ -446,6 +447,7 @@ impl App {
                 | Action::ViewerHome
                 | Action::ViewerEnd
                 | Action::SetCursorLine(_)
+                | Action::SelectStart(..)
                 | Action::ViewerLeft
                 | Action::ViewerRight
                 | Action::GoToPage(_)
@@ -602,7 +604,6 @@ impl App {
                 self.message.clear();
             }
             Action::ToggleViewMode => self.toggle_view_mode(),
-            Action::ToggleFormattedView => self.toggle_formatted_view(),
             Action::OpenInEditor => self.open_in_editor(),
             Action::CopyPagePath => self.copy_page_path(),
             Action::CopyLinkTarget => self.copy_link_target(),
@@ -727,7 +728,6 @@ impl App {
             | Hit::NavGroupToggle(_)
             | Hit::NavSearchRow
             | Hit::NavToggle
-            | Hit::ViewToggle
             | Hit::Quit
             | Hit::Block(_)
             | Hit::ViewerLine(_)
@@ -966,6 +966,79 @@ impl App {
         self.search_match_page = None;
         self.search_match_idx = 0;
         self.match_highlight = None;
+        self.search_phrase.clear();
+    }
+
+    /// Display-column spans of the active Content-search phrase. A phrase may
+    /// cross soft-wrapped rows; virtual boundary spaces have no painted span.
+    pub(crate) fn match_spans(&self) -> Vec<(u32, u16, u16)> {
+        type MappedGlyph = (char, Option<(u32, u16, u16)>);
+
+        let Some(&source) = self.search_matches.get(self.search_match_idx) else {
+            return Vec::new();
+        };
+        if self.search_phrase.is_empty() {
+            return Vec::new();
+        }
+
+        // (case-folded glyph, display location); `None` is a virtual space
+        // between rendered rows, whose wrapping removes source whitespace.
+        let mut flat: Vec<MappedGlyph> = Vec::new();
+        for (line, row) in self.doc.lines().iter().enumerate() {
+            let line = u32::try_from(line).unwrap_or(u32::MAX);
+            if self.doc.source_cursor(line) != source {
+                continue;
+            }
+            if !flat.is_empty()
+                && !flat.last().is_some_and(|(ch, _)| ch.is_whitespace())
+                && !row.starts_with(char::is_whitespace)
+            {
+                flat.push((' ', None));
+            }
+            let mut col = 0u16;
+            for ch in row.chars() {
+                let folded: Vec<char> = ch.to_lowercase().collect();
+                if folded.len() != 1 {
+                    return Vec::new();
+                }
+                let width = text_col::char_width(ch);
+                flat.push((folded[0], Some((line, col, width))));
+                col = col.saturating_add(width);
+            }
+        }
+        let want: Vec<char> = self.search_phrase.to_lowercase().chars().collect();
+        if want.is_empty() || want.len() > flat.len() {
+            return Vec::new();
+        }
+        let Some(at) = (0..=flat.len() - want.len()).find(|&i| {
+            flat[i..i + want.len()]
+                .iter()
+                .map(|p| p.0)
+                .eq(want.iter().copied())
+        }) else {
+            return Vec::new();
+        };
+
+        let mut spans: Vec<(u32, u16, u16)> = Vec::new();
+        for &(_, pos) in &flat[at..at + want.len()] {
+            let Some((line, col, width)) = pos else {
+                continue;
+            };
+            if let Some((last_line, _, last_end)) = spans.last_mut()
+                && *last_line == line
+                && *last_end == col
+            {
+                *last_end = col.saturating_add(width);
+            } else {
+                spans.push((line, col, col.saturating_add(width)));
+            }
+        }
+        spans
+    }
+
+    /// First painted span of the active Content-search phrase.
+    pub(crate) fn match_span(&self) -> Option<(u32, u16, u16)> {
+        self.match_spans().into_iter().next()
     }
 
     /// Dedupe consecutive source hits that collapse to the same display line.
@@ -1002,9 +1075,19 @@ impl App {
             return;
         };
         let display = self.doc.display_cursor(src);
-        self.match_highlight = Some(display);
-        self.cursor_line = display;
-        self.scroll = display;
+        let first = self.match_span();
+        self.match_highlight = Some(first.map_or(display, |(line, _, _)| line));
+        self.cursor_line = first.map_or(display, |(line, _, _)| line);
+        self.cursor_col = first.map_or(0, |(_, c0, _)| c0);
+        // Keep the page where it is; scroll (centred) only if the match is off-screen.
+        let rows = u32::from(self.viewer_rows.max(1));
+        let target = self.cursor_line;
+        if target < self.scroll || target >= self.scroll.saturating_add(rows) {
+            let last = u32::try_from(self.doc.lines().len()).unwrap_or(u32::MAX);
+            self.scroll = target
+                .saturating_sub(rows / 2)
+                .min(last.saturating_sub(rows));
+        }
         self.ensure_cursor_visible();
         self.message = format!(
             "{}/{}",
@@ -1023,7 +1106,8 @@ impl App {
             .search_match_idx
             .min(self.search_matches.len().saturating_sub(1));
         if let Some(&src) = self.search_matches.get(self.search_match_idx) {
-            self.match_highlight = Some(self.doc.display_cursor(src));
+            let display = self.doc.display_cursor(src);
+            self.match_highlight = Some(self.match_span().map_or(display, |(line, _, _)| line));
         }
     }
 
@@ -1063,6 +1147,7 @@ impl App {
                     return;
                 };
                 let key = hit.page.clone();
+                let phrase = overlay.query.trim().to_owned();
                 let prefer = hit.line.saturating_sub(1);
                 let page_hits: Vec<u32> = overlay
                     .text_hits
@@ -1074,6 +1159,7 @@ impl App {
                 self.focus = FocusPane::Viewer;
                 let effects = self.navigator.go_to_page(key, self.view_state());
                 self.apply_effects(effects);
+                self.search_phrase = phrase;
                 self.store_search_matches(page_hits, prefer);
             }
         }
@@ -1089,18 +1175,6 @@ impl App {
         };
         self.navigator.set_view_mode(new_mode);
         self.reload_page_keeping_view(&key, source, source_scroll);
-    }
-
-    fn toggle_formatted_view(&mut self) {
-        self.formatted_view = !self.formatted_view;
-        self.note_session_change();
-        // Only re-layout when currently in rendered mode.
-        if matches!(self.navigator.tab().current().mode, ViewMode::Rendered) {
-            let key = self.navigator.tab().current().page.clone();
-            let source = self.doc.source_cursor(self.cursor_line);
-            let source_scroll = self.doc.source_cursor(self.scroll);
-            self.reload_page_keeping_view(&key, source, source_scroll);
-        }
     }
 
     /// Open the current page in `$VISUAL`/`$EDITOR` at the cursor's source line.
@@ -1340,13 +1414,16 @@ impl App {
                 let mode = self.navigator.tab().current().mode;
                 let width = self.layout_width.max(20);
                 self.doc = match mode {
-                    ViewMode::Raw => PageDoc::Raw(RawDoc::from_source_ctx(
-                        &src,
-                        page,
-                        Some(key),
-                        Some(index),
-                        Some(&self.provider),
-                    )),
+                    ViewMode::Raw => PageDoc::Raw(
+                        RawDoc::from_source_ctx(
+                            &src,
+                            page,
+                            Some(key),
+                            Some(index),
+                            Some(&self.provider),
+                        )
+                        .wrapped(width.saturating_sub(RAW_GUTTER_COLS)),
+                    ),
                     ViewMode::Rendered => {
                         let opts = self.render_opts();
                         PageDoc::Rendered(RenderedViewerDoc::build_with(
@@ -1379,12 +1456,31 @@ impl App {
             return;
         }
         self.layout_width = w;
-        if matches!(self.navigator.tab().current().mode, ViewMode::Rendered) {
-            let key = self.navigator.tab().current().page.clone();
-            let source = self.doc.source_cursor(self.cursor_line);
-            let source_scroll = self.doc.source_cursor(self.scroll);
+        // Both views lay out to the pane width (raw soft-wraps source lines).
+        let key = self.navigator.tab().current().page.clone();
+        let source = self.doc.source_cursor(self.cursor_line);
+        let source_scroll = self.doc.source_cursor(self.scroll);
+        // The selection is stored in display coordinates, so a re-wrap invalidates it.
+        self.selection = None;
+        self.selecting = false;
+        if let PageDoc::Raw(doc) = &mut self.doc {
+            // Re-wrap in place: no disk read, and the syntax colours stay.
+            doc.rewrap(w.saturating_sub(RAW_GUTTER_COLS));
+            self.restore_view_after_relayout(source, source_scroll);
+        } else {
             self.reload_page_keeping_view(&key, source, source_scroll);
         }
+    }
+
+    /// Put the cursor and scroll back on their source lines after the doc was re-laid out.
+    fn restore_view_after_relayout(&mut self, source_cursor: u32, source_scroll: u32) {
+        self.cursor_line = self.doc.display_cursor(source_cursor);
+        self.scroll = self.doc.display_cursor(source_scroll);
+        let max = u32::try_from(self.doc.lines().len().saturating_sub(1)).unwrap_or(0);
+        self.cursor_line = self.cursor_line.min(max);
+        self.scroll = self.scroll.min(max);
+        self.remap_search_matches();
+        self.ensure_cursor_visible();
     }
 
     fn reload_page_keeping_view(&mut self, key: &PageKey, source_cursor: u32, source_scroll: u32) {
@@ -1411,13 +1507,16 @@ impl App {
                 let mode = self.navigator.tab().current().mode;
                 let width = self.layout_width.max(20);
                 self.doc = match mode {
-                    ViewMode::Raw => PageDoc::Raw(RawDoc::from_source_ctx(
-                        &src,
-                        page,
-                        Some(key),
-                        Some(index),
-                        Some(&self.provider),
-                    )),
+                    ViewMode::Raw => PageDoc::Raw(
+                        RawDoc::from_source_ctx(
+                            &src,
+                            page,
+                            Some(key),
+                            Some(index),
+                            Some(&self.provider),
+                        )
+                        .wrapped(width.saturating_sub(RAW_GUTTER_COLS)),
+                    ),
                     ViewMode::Rendered => {
                         let opts = self.render_opts();
                         PageDoc::Rendered(RenderedViewerDoc::build_with(
@@ -1425,13 +1524,9 @@ impl App {
                         ))
                     }
                 };
-                self.cursor_line = self.doc.display_cursor(source_cursor);
-                self.scroll = self.doc.display_cursor(source_scroll);
-                let max = u32::try_from(self.doc.lines().len().saturating_sub(1)).unwrap_or(0);
-                self.cursor_line = self.cursor_line.min(max);
-                self.scroll = self.scroll.min(max);
-                self.remap_search_matches();
-                self.ensure_cursor_visible();
+                self.selection = None;
+                self.selecting = false;
+                self.restore_view_after_relayout(source_cursor, source_scroll);
                 if matches!(mode, ViewMode::Raw) {
                     self.spawn_highlight(src);
                 } else {

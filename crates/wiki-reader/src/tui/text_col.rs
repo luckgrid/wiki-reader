@@ -3,14 +3,12 @@
 //! Columns are terminal cells (wide glyphs take two), so every helper walks
 //! chars with their display width instead of indexing bytes.
 
-use ratatui::text::Span;
+use unicode_width::UnicodeWidthChar;
 
 /// Display width of one char (at least 1, so zero-width marks never stall a walk).
 #[must_use]
 pub fn char_width(ch: char) -> u16 {
-    u16::try_from(Span::raw(ch.to_string()).width())
-        .unwrap_or(1)
-        .max(1)
+    u16::try_from(ch.width().unwrap_or(1)).unwrap_or(1).max(1)
 }
 
 /// Display width of `s` in columns.

@@ -150,8 +150,6 @@ pub struct RenderOpts {
     pub expanded: std::collections::HashSet<u32>,
     /// Diagram render preference (ADR-0004).
     pub diagram_mode: wiki_reader_core::config::DiagramMode,
-    /// Drop markdown markers at push time (ADR-0012 formatted view).
-    pub formatted: bool,
 }
 
 impl Default for RenderOpts {
@@ -159,7 +157,6 @@ impl Default for RenderOpts {
         Self {
             expanded: std::collections::HashSet::new(),
             diagram_mode: wiki_reader_core::config::DiagramMode::Auto,
-            formatted: false,
         }
     }
 }
@@ -202,7 +199,6 @@ pub fn render_with(
     let mut state = LayoutState::new(w, body_line_offset, from, index);
     state.expanded.clone_from(&opts.expanded);
     state.diagram_mode = opts.diagram_mode;
-    state.formatted = opts.formatted;
 
     if parsed.frontmatter.kind.is_some()
         || !parsed.frontmatter.props.is_empty()
@@ -294,8 +290,6 @@ struct LayoutState<'a> {
     link_id: u32,
     expanded: std::collections::HashSet<u32>,
     diagram_mode: wiki_reader_core::config::DiagramMode,
-    /// Hide markdown markers (ADR-0012).
-    formatted: bool,
 }
 
 struct LinkBuild {
@@ -347,7 +341,6 @@ impl<'a> LayoutState<'a> {
             link_id: 0,
             expanded: std::collections::HashSet::new(),
             diagram_mode: wiki_reader_core::config::DiagramMode::Auto,
-            formatted: false,
         }
     }
 
@@ -411,14 +404,10 @@ impl<'a> LayoutState<'a> {
                 self.heading_level = Some(lv);
                 self.heading_text.clear();
                 self.style_stack.push(StyleKind::Heading(lv));
-                if self.formatted {
-                    // Extra top gap for H1/H2 so levels read without hashes.
-                    if lv <= 2 && !self.styled.is_empty() {
-                        self.ensure_block_gap(src);
-                    }
-                } else {
-                    let hashes = "#".repeat(usize::from(lv));
-                    self.push_span(format!("{hashes} "), StyleKind::Heading(lv), src);
+                // Rendered mode drops the `#` markers; extra top gap for H1/H2
+                // so levels read without hashes. Raw view shows the syntax.
+                if lv <= 2 && !self.styled.is_empty() {
+                    self.ensure_block_gap(src);
                 }
             }
             Tag::BlockQuote(kind) => {
@@ -454,16 +443,10 @@ impl<'a> LayoutState<'a> {
                     // Body accumulated; paint on TagEnd via text/source tier.
                     return;
                 }
-                let label = if self.formatted {
-                    if self.code_fence_lang.is_empty() {
-                        "── code ──".into()
-                    } else {
-                        format!("── {} ──", self.code_fence_lang)
-                    }
-                } else if self.code_fence_lang.is_empty() {
-                    "```".into()
+                let label = if self.code_fence_lang.is_empty() {
+                    "── code ──".into()
                 } else {
-                    format!("```{}", self.code_fence_lang)
+                    format!("── {} ──", self.code_fence_lang)
                 };
                 let line = u32::try_from(self.styled.len()).unwrap_or(0);
                 self.push_span(label, StyleKind::CodeLang, src);
@@ -557,22 +540,20 @@ impl<'a> LayoutState<'a> {
                 let slug = unique_slug(&github_slug(&self.heading_text), &mut self.used_slugs);
                 self.headings.push((slug, rendered.saturating_add(1)));
                 self.commit_line(src);
-                if self.formatted {
-                    if level <= 2 {
-                        self.push_span("─".repeat(self.width.min(40)), StyleKind::Rule, src);
-                        self.commit_line(src);
-                    } else {
-                        // Two blanks: next block's ensure_block_gap no-ops, leaving
-                        // one more empty line than a normal block gap.
-                        self.styled.push(StyledLine {
-                            spans: Vec::new(),
-                            source_line: src,
-                        });
-                        self.styled.push(StyledLine {
-                            spans: Vec::new(),
-                            source_line: src,
-                        });
-                    }
+                if level <= 2 {
+                    self.push_span("─".repeat(self.width.min(40)), StyleKind::Rule, src);
+                    self.commit_line(src);
+                } else {
+                    // Two blanks: next block's ensure_block_gap no-ops, leaving
+                    // one more empty line than a normal block gap.
+                    self.styled.push(StyledLine {
+                        spans: Vec::new(),
+                        source_line: src,
+                    });
+                    self.styled.push(StyledLine {
+                        spans: Vec::new(),
+                        source_line: src,
+                    });
                 }
                 self.heading_text.clear();
             }
@@ -619,11 +600,7 @@ impl<'a> LayoutState<'a> {
                     self.code_fence_lang.clear();
                     return;
                 }
-                // Closing fence maps to its own source line (range end), not the open.
-                if !self.formatted {
-                    self.push_span("```".into(), StyleKind::CodeBlock, close_src);
-                    self.commit_line(close_src);
-                }
+                // No closing fence line: the label above frames the block.
                 if let Some(action) = self
                     .block_actions
                     .iter_mut()
@@ -765,11 +742,7 @@ impl<'a> LayoutState<'a> {
     }
 
     fn inline_code(&mut self, t: &CowStr<'_>, src: u32) {
-        let s = if self.formatted {
-            t.to_string()
-        } else {
-            format!("`{t}`")
-        };
+        let s = t.to_string();
         if let Some(lb) = self.in_link.as_mut() {
             lb.text.push_str(&s);
         }
@@ -798,9 +771,9 @@ impl<'a> LayoutState<'a> {
         let id = content_block_id(BlockActionKind::ToggleFrontmatter, &fm_fp);
         let expanded = self.expanded.contains(&id);
         let line = u32::try_from(self.styled.len()).unwrap_or(0);
-        // Top and bottom rules share one width so the box reads as a unit.
-        let rule_w = self.width.clamp(1, 40);
-        let arrow = if expanded { '▼' } else { '▶' };
+        // Top and bottom rules share one width (the full pane) so the box reads as a unit.
+        let rule_w = self.width.max(1);
+        let arrow = if expanded { '▾' } else { '▸' };
         let label = format!("── frontmatter {arrow} ");
         let fill = rule_w.saturating_sub(label.width());
         self.push_span(
@@ -1080,22 +1053,12 @@ impl<'a> LayoutState<'a> {
         self.commit_line(src); // blank gap
         self.mark_block(src);
         let heading_line = u32::try_from(self.styled.len()).unwrap_or(0);
-        let label = if self.formatted {
-            "Linked from".into()
-        } else {
-            "## Linked from".into()
-        };
-        self.push_span(label, StyleKind::Heading(2), src);
+        self.push_span("Linked from".into(), StyleKind::Heading(2), src);
         self.commit_line(src);
-        if self.formatted {
-            // Match normal H1/H2 rules (dim Rule), not Heading colour.
-            self.push_span("─".repeat(self.width.min(40)), StyleKind::Rule, src);
-            self.commit_line(src);
-            self.styled.push(StyledLine {
-                spans: Vec::new(),
-                source_line: src,
-            });
-        }
+        // Match normal H1/H2 rules (dim Rule), not Heading colour. The list
+        // follows directly: no blank row under the rule.
+        self.push_span("─".repeat(self.width.min(40)), StyleKind::Rule, src);
+        self.commit_line(src);
         self.headings.push((
             unique_slug("linked-from", &mut self.used_slugs),
             heading_line.saturating_add(1),

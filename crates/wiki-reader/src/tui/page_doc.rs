@@ -41,7 +41,7 @@ impl PageDoc {
     #[must_use]
     pub fn source_cursor(&self, display: u32) -> u32 {
         match self {
-            Self::Raw(_) => display,
+            Self::Raw(d) => d.source_line_of_row(display),
             Self::Rendered(d) => d.source_line_for_rendered(display).saturating_sub(1),
         }
     }
@@ -50,7 +50,7 @@ impl PageDoc {
     #[must_use]
     pub fn display_cursor(&self, source: u32) -> u32 {
         match self {
-            Self::Raw(_) => source,
+            Self::Raw(d) => d.first_row_of(source),
             Self::Rendered(d) => d.rendered_for_source(source.saturating_add(1)),
         }
     }

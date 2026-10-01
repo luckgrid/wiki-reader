@@ -201,6 +201,13 @@ pub fn extract(doc: &PageDoc, sel: &Selection, wrap_width: u16) -> String {
         let mut joined = false;
         match prev {
             None => {}
+            // Raw view: rows of one source line were hard-wrapped, so they
+            // rejoin exactly (the wrap keeps the spaces).
+            Some((_, above_src, _)) if styled.is_none() && above_src == source => {
+                out.push_str(&piece);
+                prev = Some((text, source, prose));
+                continue;
+            }
             Some((above, above_src, above_prose))
                 if prose
                     && above_prose

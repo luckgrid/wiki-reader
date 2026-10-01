@@ -6,14 +6,13 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
-use crate::tui::focus::FocusPane;
 use crate::tui::layout;
 use crate::tui::theme::Theme;
 
 /// Status fields drawn into one line.
 pub struct StatusModel<'a> {
-    /// Focused pane.
-    pub focus: FocusPane,
+    /// Pill label: the focused pane (`NAV` / `VIEW`) or the open popup.
+    pub mode_label: &'a str,
     /// Relative path.
     pub path: &'a str,
     /// Cursor line (1-based display).
@@ -80,16 +79,14 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, model: &StatusModel<'_>, theme: &
     };
     let budget = w.saturating_sub(msg_len);
 
-    let mode_bg = match model.focus {
-        FocusPane::Nav => theme.heading[4],
-        FocusPane::Viewer => theme.accent,
-    };
+    // One pill colour for both panes: the label says which pane has focus.
+    let mode_bg = theme.peach;
     let text = theme.text();
     // High → low priority fields (drop from the end when narrowing). Date and
     // status outrank word count and reading time.
     let mut fields: Vec<Field> = vec![
         (
-            format!(" {} ", model.focus.label()),
+            format!(" {} ", model.mode_label),
             Style::default()
                 .bg(mode_bg)
                 .fg(theme.on_peach)
@@ -133,7 +130,7 @@ fn fields_width(fields: &[Field]) -> usize {
 }
 
 /// Clip a span list to `max` display columns.
-fn clip_spans(spans: Vec<Span<'static>>, max: usize) -> Vec<Span<'static>> {
+pub(crate) fn clip_spans(spans: Vec<Span<'static>>, max: usize) -> Vec<Span<'static>> {
     let mut used = 0;
     let mut out = Vec::new();
     for sp in spans {

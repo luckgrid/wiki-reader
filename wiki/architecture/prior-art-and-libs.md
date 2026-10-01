@@ -36,8 +36,8 @@ Tried as-is inside herdr. **Kept:** it's markdown-only, reads far better than su
 | Behaves like an editor: tree and viewer are separate panels with editor semantics | Designed for reading *and editing* repos | Reader-only; one navigation model ([ADR-0005](../decisions/0005-navigation-model.md)) |
 | Picking another file doesn't replace the file in the current tab; tabs are the primary way to hold pages | Tab-centric, IDE-style model | Replace-by-default + history; tabs opt-in (N2, T1) |
 | Links in documents can't be clicked or entered | Links rendered as styled text, no hit regions or focus | Link spans + hit map + Tab/Enter focus (L1–L4) |
-| Search opens results in new tabs; the tab picker is unintuitive | Search is a modal feeding the tab system | Search overlay opened from anywhere or the side nav ⌕ row; results replace the view (S1) |
-| Search isn't reachable by mouse | Key-only entry point | Clickable ⌕ row at the top of the side nav (S1) |
+| Search opens results in new tabs; the tab picker is unintuitive | Search is a modal feeding the tab system | Search overlay opened from anywhere or the side nav search row; results replace the view (S1) |
+| Search isn't reachable by mouse | Key-only entry point | Clickable `/ Search…` row at the top of the side nav (S1) |
 | No site-style orientation | Not a wiki goal for that tool | Breadcrumbs, prev/next, tree sync, Linked from (H1, F1, N4, B1) |
 
 **Still worth borrowing:** its rendering (tables, code, frontmatter box, wrapping), Mermaid pipeline, `.gitignore`-aware discovery, live reload, and theme approach. See [ADR-0002](../decisions/0002-build-vs-fork.md).
