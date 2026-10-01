@@ -198,11 +198,15 @@ fn find_parent_group(
 /// Same as its nav row, except a group's landing row (shown as `Overview` under
 /// its group) borrows the group's label so the footer says which section it is.
 fn find_display_label(items: &[NavItem], page: &PageKey, group: Option<&str>) -> Option<String> {
-    for item in items {
+    for (i, item) in items.iter().enumerate() {
         match item {
             NavItem::Page { key, label, .. } if key == page => {
+                // The landing row is always a group's first child with a landing
+                // filename; an ordinary page labelled "Overview" is not one.
+                let is_landing_row =
+                    i == 0 && label == LANDING_LABEL && is_landing(&key.relative_path);
                 return Some(match group {
-                    Some(g) if label == LANDING_LABEL => g.to_owned(),
+                    Some(g) if is_landing_row => g.to_owned(),
                     _ => label.clone(),
                 });
             }
@@ -1212,6 +1216,31 @@ mod tests {
             NavTree::build(&index)
                 .page_display_label(&missing)
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn display_label_keeps_ordinary_overview_page_in_group() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("README.md"), "# Root\n").unwrap();
+        std::fs::create_dir(dir.path().join("grp")).unwrap();
+        std::fs::write(dir.path().join("grp/README.md"), "# Group\n").unwrap();
+        std::fs::write(dir.path().join("grp/overview.md"), "# Details\n").unwrap();
+        let index = Index::build(&FsProvider::open(dir.path()).unwrap()).unwrap();
+        let tree = NavTree::build_with(&index, crate::config::LabelMode::Filename);
+        let key = |rel: &str| PageKey {
+            collection_id: index.collection_id.clone(),
+            relative_path: PathBuf::from(rel),
+        };
+        // The real landing row borrows the group label; a page that is merely
+        // named "overview" keeps its own label.
+        assert_eq!(
+            tree.page_display_label(&key("grp/README.md")).as_deref(),
+            Some("Grp")
+        );
+        assert_eq!(
+            tree.page_display_label(&key("grp/overview.md")).as_deref(),
+            Some("Overview")
         );
     }
 
