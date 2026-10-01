@@ -1,4 +1,4 @@
-//! Header region (H1): breadcrumb + ◈ / ◫ / ✕.
+//! Header region (H1): breadcrumb + ○/◉ (syntax/formatted) / ◫ / ✕.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -29,7 +29,7 @@ pub fn draw(
         return;
     }
 
-    // Trailer: " ◈ ◫ ✕" → 6 columns.
+    // Trailer: " ○ ◫ ✕" → 6 columns.
     let icon_w: u16 = 6;
     let trail_w = area.width.saturating_sub(icon_w);
     let trail = truncate_crumbs(crumbs, usize::from(trail_w));
@@ -64,7 +64,7 @@ pub fn draw(
         x = x.saturating_add(w);
     }
 
-    // Glyph columns within padded area (right-aligned): ◈ ◫ ✕
+    // Glyph columns within padded area (right-aligned): ○/◉ ◫ ✕
     let eye_x = area.x.saturating_add(area.width.saturating_sub(5));
     let toggle_x = area.x.saturating_add(area.width.saturating_sub(3));
     let quit_x = area.x.saturating_add(area.width.saturating_sub(1));

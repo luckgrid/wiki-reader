@@ -3,7 +3,7 @@ id: WR-RENDER
 title: Rendering
 summary: How markdown, raw source, code, tables, and diagrams are rendered, including herdr's graphics constraints.
 status: draft
-updated: 2026-09-28
+updated: 2026-09-30
 related: [overview, prior-art-and-libs]
 nav_order: 3
 ---
@@ -48,7 +48,11 @@ Both indexes are computed once per layout and stay valid across focus changes.
 
 ## Element coverage (P0)
 
-Headings (distinct per level), paragraphs with wrapping, bold/italic/strike/inline code, ordered/unordered/task lists (nested), blockquotes and GitHub-style alerts (`> [!NOTE]`, plus custom `goal`/`decision`/`risk`), fenced code with theme `StyleKind` spans (not syntect), tables (fit to width, wrap cells; too-wide tables fall back to an unwrapped dump with a note), links (styled, focusable), horizontal rules, and frontmatter as a collapsible metadata box.
+Headings (distinct per level), paragraphs with wrapping, bold/italic/strike/inline code, ordered/unordered/task lists (nested), blockquotes and GitHub-style alerts (`> [!NOTE]`, plus custom `goal`/`decision`/`risk`), fenced code with theme `StyleKind` spans (not syntect), tables (fit to width, wrap cells; too-wide tables fall back to an unwrapped dump with a note), links (styled, focusable), horizontal rules, and frontmatter as a collapsible properties block (every YAML key, aligned, with lists shown as lists). Top-level blocks are separated by one blank line; list items stay tight; quote and alert continuation rows keep their `│` bar.
+
+## Syntax and formatted views
+
+Rendered mode has two presentations ([ADR-0012](../decisions/0012-syntax-vs-formatted.md)). **Syntax** (the default) keeps markdown markers visible. **Formatted** drops them at layout time (`RenderOpts.formatted`): no `#`, `**`, backticks, fence lines, or link brackets and URLs; H1 and H2 get an underline rule, H3-H6 extra spacing, and code blocks a language label. Because markers are omitted as spans are pushed, link column geometry, the source map, and block actions stay correct in both. The header eye (`○`/`◉`) toggles it, and the choice is saved with the session.
 
 ## Raw view
 
@@ -60,9 +64,9 @@ Headings (distinct per level), paragraphs with wrapping, bold/italic/strike/inli
 
 Tiers, chosen per block:
 
-1. **Image** (deferred): mermaid source → SVG (`mermaid-rs-renderer`) → PNG (`resvg`) → terminal image (`ratatui-image`). Status: not wired yet; confirm Kitty detection under herdr first ([ADR-0004](../decisions/0004-diagram-rendering.md)).
-2. **Text** (shipped): `mermaid-text` renders Unicode box-drawing diagrams synchronously with a content-hash cache. Default everywhere, including inside herdr.
-3. **Source**: a highlighted code block with a footer giving the reason (`no graphics: sixel not forwarded by herdr`, `parse error: …`).
+1. **Image** (deferred to Phase 3, P3-12): mermaid source → SVG (`mermaid-rs-renderer`) → PNG (`resvg`) → terminal image (`ratatui-image`). Status: not wired yet; confirm Kitty detection under herdr first ([ADR-0004](../decisions/0004-diagram-rendering.md)).
+2. **Text** (shipped): `mermaid-text` renders Unicode box-drawing diagrams synchronously at the pane width, with a cache keyed on content, width and tier. If the result is still wider than the pane, the block falls back to the source tier with the reason shown (for example `diagram 70 cols > pane 60`). Default everywhere, including inside herdr.
+3. **Source**: the fenced source, wrapped to the pane width, with a header line giving the reason (`no graphics: sixel not forwarded by herdr`, `parse error: …`).
 
 ### herdr constraint
 
@@ -73,7 +77,7 @@ herdr parses pane output with its own VT layer and re-emits frames. Kitty graphi
 - `$TMUX` set → text tier (tmux passthrough is fragile).
 - Config override: `diagrams = "auto" | "image" | "text" | "source"`.
 
-Validate early ([roadmap](../roadmap/README.md) phase 2): check whether ratatui-image's protocol detection gives a correct answer inside a herdr pane, or whether it needs an explicit protocol pick from env hints.
+Validate before building the image tier ([roadmap](../roadmap/phase-3-alpha.md), P3-12): check whether ratatui-image's protocol detection gives a correct answer inside a herdr pane, or whether it needs an explicit protocol pick from env hints.
 
 ### Other images
 

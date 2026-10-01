@@ -497,3 +497,36 @@ mod tests {
         assert!(matches!(check(dir.path()), Err(Error::Io { .. })));
     }
 }
+
+/// The UI diagram is shown in two places; keep them byte-identical.
+#[cfg(test)]
+mod docs_sync {
+    use std::path::Path;
+
+    const START: &str = "<!-- ui-diagram:start -->";
+    const END: &str = "<!-- ui-diagram:end -->";
+
+    fn diagram(rel: &str) -> String {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
+        let doc = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {rel}: {e}"));
+        let start = doc
+            .find(START)
+            .unwrap_or_else(|| panic!("{rel}: missing {START}"));
+        let end = doc
+            .find(END)
+            .unwrap_or_else(|| panic!("{rel}: missing {END}"));
+        assert!(start < end, "{rel}: diagram markers out of order");
+        doc[start + START.len()..end].to_owned()
+    }
+
+    #[test]
+    fn readme_and_ui_spec_share_one_diagram() {
+        let readme = diagram("../../README.md");
+        let ui_spec = diagram("../../wiki/product/ui-spec.md");
+        assert!(readme.contains("```text"), "README diagram block is empty");
+        assert_eq!(
+            readme, ui_spec,
+            "README.md and wiki/product/ui-spec.md diagrams differ; edit both together"
+        );
+    }
+}

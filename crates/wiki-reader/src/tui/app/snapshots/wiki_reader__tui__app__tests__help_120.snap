@@ -9,7 +9,7 @@ expression: out
 │                       │q              Quit                                                   │                       │
 │▌● Readme              │b              Toggle side nav                                        │                       │
 │   ▸ Architecture      │r              Toggle raw / rendered                                  │                       │
-│   ▸ Decisions         │◈              Toggle syntax / formatted (eye)                        │                       │
+│   ▸ Decisions         │○ / ◉          Toggle syntax / formatted (header eye icon)            │                       │
 │                       │e              Open in editor                                         │turn via back when     │
 │                       │y              Copy page path                                         │                       │
 │                       │Y              Copy focused link target                               │                       │

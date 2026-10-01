@@ -14,31 +14,41 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 
 ## Layout
 
+<!-- ui-diagram:start -->
 ```text
-┌ Header (full width) ─────────────────────────────────────────────────────────┐
-│ Project Wiki › Architecture › Design System › Token Projection       ◫   ✕ │
-├ Side nav ────────────────────┬ Viewer ───────────────────────────────────────┤
-│ ⌕ Search…               /    │ # Token Projection                            │
-│ ● Project Wiki               │                                               │
-│ ▾ Architecture               │ The reusable adapter stays semantic-only; see │
-│     Architecture Overview    │ [ADR-0003](../decisions/0003.md) for why.     │
-│   ▾ Design System            │                                               │
-│       Design System          │▌cursor line                                   │
-│     ● Token Projection       │                                               │
-│     Workflow OS              │                                               │
-│ ▸ Decisions                  ├ Viewer footer (sticky) ───────────────────────┤
-│ ▸ Workstreams                │ ‹ Design System                  Adapters ›   │
-├──────────────────────────────┴───────────────────────────────────────────────┤
-│ Status bar (full width): VIEWER · path · L42 38% · words · min · link target │
-└──────────────────────────────────────────────────────────────────────────────┘
+ Worked Example Wiki › Architecture › Design System › Token Projection    ○ ◫ ✕
+┌Nav─────────────────────┐┌Viewer──────────────────────────────────────────────┐
+│                        ││ ── frontmatter ▶ ──                                │
+│ ⌕ Search…              ││                                                    │
+│                        ││▌# Token Projection                                 │
+│   Worked Example Wiki  ││                                                    │
+│   ▾ Architecture       ││ The reusable adapter stays semantic-only; see      │
+│     Overview           ││ [ADR-0003](../decisions/0003.md) for why.          │
+│     ▾ Design System    ││                                                    │
+│       Overview         ││ ## Linked from                                     │
+│▌●     Token Projection ││ • Worked Example Wiki                              │
+│     Workflow OS        ││ • Architecture Overview                            │
+│   ▸ Decisions          ││                                                    │
+└────────────────────────┘└‹ Design System────────────────────────Workflow OS ›┘
+ VIEWER · architecture/design-system/tokens.md · L5 9% · 13w · 1m · 2026-09-28
 ```
+<!-- ui-diagram:end -->
 
-Five regions: **Header**, **Side nav**, **Viewer** (with its own sticky **Viewer footer**), and **Status bar**. The tab bar appears above the viewer only when two or more tabs are open. A right-hand widget slot is reserved for Phase 4.
+The diagram shows nav labels with `nav.labels = "title"` for readability; the default is `filename` (see [Side nav](#side-nav-left)). `○`/`◉` is the syntax/formatted toggle, `◫` toggles the side nav, `✕` quits.
 
-## Header (full width, 1 row)
+Regions:
+
+- **Header:** one padded row with the breadcrumb on the left and the icon buttons on the right. On terminals 30 rows or taller it gets one blank row above and below.
+- **Side nav:** a bordered pane titled `Nav` holding the search row and the page tree. Its width defaults to 26 (30 at ≥ 120 columns) and can be dragged.
+- **Viewer:** a bordered pane titled `Viewer` with the cursor line, which is marked `▌`. Its **prev/next footer is drawn on the pane's bottom border** and stays visible while the article scrolls.
+- **Status bar:** one padded row under the panes, with the same tall-terminal gaps as the header.
+
+The tab bar appears at the top of the viewer pane only when two or more tabs are open. A right-hand widget slot is reserved for Phase 4.
+
+## Header (full width, 1 padded row)
 
 - **Left:** the root entry page's title, then the breadcrumb trail through side-nav groups to the current page. Example: `Project Wiki › Architecture › Design System › Token Projection`. Segments follow the **side nav hierarchy** (groups), not raw directories, so folded folders ([content model](content-model.md)) don't produce extra crumbs. Each segment is clickable and opens that group's landing page. The trail truncates from the middle with `…` when narrow, always keeping the root and current page.
-- **Right:** icon buttons. `◫` toggles the side nav, `✕` quits (saves session; same as `q`).
+- **Right:** icon buttons. `○`/`◉` switches the rendered view between **syntax** (markdown markers visible, `○`) and **formatted** (markers hidden, `◉`; [ADR-0012](../decisions/0012-syntax-vs-formatted.md)). `◫` toggles the side nav. `✕` quits (saves session; same as `q`).
 - Future: optional back/forward buttons (`‹ ›`). Back/forward are keyboard-only in v1.
 
 ## Side nav (left)
@@ -46,9 +56,10 @@ Five regions: **Header**, **Side nav**, **Viewer** (with its own sticky **Viewer
 A file tree **presented as a documentation site's side nav**. Construction rules are in [content model](content-model.md). In short:
 
 - The root entry page (root `README.md`/`index.md`) is the first item.
-- Items show **document titles** (`nav_title` → `title` → first H1 → humanized filename), not filenames. A config option toggles filenames, or shows the filename as dim alt text below the title.
-- A folder whose only page is its README is shown as a **single link**, not a collapsible. Folders with more content become **collapsible groups** with their README as the first item (the landing page).
-- The current page is marked `●` and highlighted. Its ancestor groups auto-expand after every navigation.
+- Items are labelled by the `nav.labels` option: **`filename`** (the default; humanized filename), `title` (`nav_title` → `title` → first H1 → humanized filename), or `title+filename` (title with a dim filename suffix).
+- A folder whose only page is its README is shown as a **single link**, not a collapsible. Folders with more content become **collapsible groups** with their README as the first item (the landing page), labelled `Overview` so the group name is not repeated.
+- The current page is marked `●`; the cursor row has a full-width background highlight and a `▌` marker. Ancestor groups auto-expand after every navigation.
+- The pane is **resizable**: drag the divider between the nav and the viewer (clamped to 16–50 columns; the width is saved with the session and ignored below 80 columns).
 
 **Search entry (top of the side nav).** The first row is `⌕ Search…`. Selecting it, clicking it, or pressing the search hotkey anywhere opens the **search overlay panel** (below). It's a nav stop for Shift+↑/↓ (see keyboard).
 
@@ -73,7 +84,7 @@ Future: this search row becomes a proper **side nav header**, and a **side nav f
 
 ## Viewer (center)
 
-Rendered by default; `r` toggles raw. Both views share the **cursor line** (see Cursor model), so toggling keeps you on the same source line. The text column is capped at ~100 cols; tables and code may use the full width.
+Rendered by default; `r` toggles raw, and the header eye switches the rendered view between syntax and formatted (default syntax). All views share the **cursor line** (see Cursor model), so toggling keeps you on the same source line. The text column is capped at ~100 cols; tables and code may use the full width.
 
 **Focusable items ("actions")** are what `Tab` cycles through, in document order:
 
@@ -89,9 +100,9 @@ After the last item, `Tab` wraps to the first. The focused item renders inverted
 
 Future: a **sticky section header** at the top of the viewer showing the heading of the section in view.
 
-## Viewer footer (sticky, 1 row, viewer width only)
+## Viewer footer (prev/next)
 
-`‹ Prev title` on the left, `Next title ›` on the right, following side nav order ([content model](content-model.md)). It stays pinned to the bottom of the viewer pane while the article scrolls. Both are clickable, reachable by `Tab`, and bound to `[` / `]`. A side with no prev/next is dim and skipped by `Tab`.
+`‹ Prev title` on the left and `Next title ›` on the right, following side nav order ([content model](content-model.md)). They are drawn on the **viewer pane's bottom border**, so they stay pinned while the article scrolls. Each label is truncated with `…` to its half of the border so long titles cannot collide. Both are clickable, reachable by `Tab` or `f`, and bound to `[` / `]`. A side with no prev/next is dim and skipped by `Tab`.
 
 ## Status bar (full width, 1 row)
 
@@ -113,48 +124,107 @@ Two focusable panes: **Side nav** and **Viewer**. The search overlay is modal wh
 
 ## Keyboard
 
-### Viewer
+The tables below are generated from the binding table that also drives the `?` help overlay, so they cannot drift from it. `Esc` closes overlays; it does not quit.
 
-| Key | Action |
-|-----|--------|
-| `↑` / `↓` (`k` / `j`) | Move cursor line |
-| `Shift+↑` / `Shift+↓` | Jump to previous / next **content block** (paragraph, list, code, table, quote, diagram). Headings are blocks, so this also lands on section starts. |
-| `Alt+Shift+↑` / `↓` · `{` / `}` | Jump to previous / next **heading** (section skip). `{`/`}` is the fallback when Alt+Shift does not reach the TUI. |
-| `PgUp` / `PgDn` · `Space` / `Shift+Space` | Page up / down |
-| `Home` / `End` (`gg` / `G`) | Top / bottom |
-| `Tab` / `Shift+Tab` | Next / previous focusable item (links, block actions, footer buttons) |
-| `Enter` | Activate focused item. With no item focused and exactly one link on the cursor line, follow it. |
-| `f` | Focus footer next (or prev on the last page) |
-| `t` · middle-click | Open focused link in a new tab |
-| `[` / `]` | Previous / next page |
-| `Backspace` (primary) · `Alt+←` / `Alt+→` · `Alt+b` / `Alt+f` | Back / forward. `Alt+b`/`Alt+f` are what macOS Ghostty sends for Option+←/→. |
-| `r` | Rendered / raw |
-| Header `○`/`◉` | Toggle syntax (markers) ↔ formatted (ADR-0012); default syntax |
-| `e` | Open in `$EDITOR` at cursor line |
-| `y` / `Y` | Copy page path / focused link target (OSC 52) |
-
-**Tab ↔ cursor interplay:** `Tab` focuses the first item *after* the cursor line, and the cursor line moves to that item. Moving the cursor with arrows clears item focus (and sticky footer focus). Activating a footer link keeps focus on that side after the page changes. This keeps one visible "where am I" at all times.
-
-### Side nav
-
-| Key | Action |
-|-----|--------|
-| `↑` / `↓` · `Tab` / `Shift+Tab` | Previous / next visible item (identical behavior) |
-| `Shift+↑` / `Shift+↓` | Jump between **group headers and the search row** |
-| `→` / `←` | Expand / collapse group. On an expanded group, `→` steps to the first child. On a page row, `→` opens it and focuses the viewer. On a child, `←` goes to its parent group. |
-| `Enter` · click | Page item: open (replace), stay in nav. Group header: toggle. Search row: open search overlay. |
-| `t` · middle-click | Open item in a new tab |
+<!-- keymap:start -->
+Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same table the `?` help overlay shows. Edit the table there, then run `UPDATE_DOCS=1 cargo test -p wiki-reader keymap_docs`.
 
 ### Global
 
 | Key | Action |
 |-----|--------|
-| `Shift+←` / `Shift+→` | Focus side nav / viewer |
-| `/` · `Ctrl+k` | Search overlay |
-| `b` · click `◫` | Toggle side nav |
-| `gt` / `gT` / `x` | Next / previous / close tab (when tabs exist) |
-| `?` | Help overlay |
-| `q` · click `✕` | Quit (saves session) |
+| `Alt+← / Alt+b` | Back |
+| `Alt+→ / Alt+f` | Forward |
+| `q` | Quit |
+| `b` | Toggle side nav |
+| `r` | Toggle raw / rendered |
+| `○ / ◉` | Toggle syntax / formatted (header eye icon) |
+| `e` | Open in editor |
+| `y` | Copy page path |
+| `Y` | Copy focused link target |
+| `t` | New tab |
+| `x` | Close tab |
+| `/` | Search |
+| `Ctrl+k` | Search |
+| `?` | Help |
+| `n` | Next search match |
+| `N` | Previous search match |
+| `[` | Previous page |
+| `]` | Next page |
+| `Backspace` | Back |
+| `Shift+←` | Focus side nav |
+| `Shift+→` | Focus viewer |
+| `F6` | Cycle pane focus |
+
+### Side nav
+
+| Key | Action |
+|-----|--------|
+| `Shift+↑ / Ctrl+↑` | Jump to previous group / search |
+| `Shift+↓ / Ctrl+↓` | Jump to next group |
+| `↑` | Previous nav row |
+| `Shift+Tab` | Previous nav row |
+| `↓` | Next nav row |
+| `Tab` | Next nav row |
+| `→` | Expand / open into viewer |
+| `←` | Collapse / parent group |
+| `Enter` | Open page (stay in nav) / toggle group |
+
+### Viewer
+
+| Key | Action |
+|-----|--------|
+| `Alt+Shift+↑` | Previous heading |
+| `Alt+Shift+↓` | Next heading |
+| `{` | Previous heading |
+| `}` | Next heading |
+| `Shift+↑ / Ctrl+↑` | Previous block |
+| `Shift+↓ / Ctrl+↓` | Next block |
+| `k` | Cursor up |
+| `↑` | Cursor up |
+| `j` | Cursor down |
+| `↓` | Cursor down |
+| `PgUp` | Page up |
+| `Shift+Space` | Page up |
+| `Space` | Page down |
+| `PgDn` | Page down |
+| `Home` | Top of page |
+| `End` | Bottom of page |
+| `G` | Bottom of page |
+| `Shift+Tab` | Previous focusable item |
+| `Tab` | Next focusable item |
+| `Enter` | Activate focused item |
+| `f` | Focus footer prev/next |
+
+### Chords
+
+| Key | Action |
+|-----|--------|
+| `gg` | Top of page |
+| `gt` | Next tab |
+| `gT` | Previous tab |
+
+### Search overlay
+
+| Key | Action |
+|-----|--------|
+| `Esc` | Close search |
+| `Enter` | Open selected result |
+| `Tab` | Toggle Files / Content |
+| `↑ / ↓` | Move selection |
+| `Home / End` | Jump to first / last result |
+| `PgUp / PgDn` | Page results |
+<!-- keymap:end -->
+
+### Notes
+
+- **Tab and cursor:** `Tab` focuses the first item *after* the cursor line, and the cursor line moves to that item. Moving the cursor with arrows clears item focus (and sticky footer focus). Activating a footer link keeps focus on that side after the page changes, so you can step through pages quickly. This keeps one visible "where am I" at all times.
+- **`Enter` in the viewer:** activates the focused item. With no item focused and exactly one link on the cursor line, it follows that link.
+- **Side nav `→` / `←`:** `→` expands a group; on an expanded group it steps to the first child; on a page row it opens the page and focuses the viewer. `←` collapses, or goes to the parent group from a child.
+- **Side nav `Enter` / click:** a page opens in place and the nav keeps focus; a group toggles; the search row opens the search overlay.
+- **New tabs:** `t` or middle-click opens the focused link or nav row in a new tab.
+- **Back / forward:** `Backspace` is primary. `Alt+b` / `Alt+f` are what macOS Ghostty sends for Option+←/→.
+- **Heading jump:** `{` / `}` is the fallback when `Alt+Shift+↑/↓` does not reach the TUI.
 
 ### Terminal key caveats (verified, Ghostty + herdr, macOS)
 
@@ -173,8 +243,8 @@ Click to focus a pane; click items, links, breadcrumbs, prev/next, header icons,
 
 | Width | Layout |
 |-------|--------|
-| ≥ 120 | Side nav 30 · Viewer flex |
-| 80–119 | Side nav 26 · Viewer flex |
+| ≥ 120 | Side nav 30 (draggable, 16–50) · Viewer flex |
+| 80–119 | Side nav 26 (draggable, 16–50) · Viewer flex |
 | < 80 | Side nav hidden; `◫`/`b` shows it as an overlay that closes after navigation |
 
 ## Future UI slots (designed for, not built)
@@ -189,4 +259,4 @@ Click to focus a pane; click items, links, breadcrumbs, prev/next, header icons,
 
 ## Theming
 
-Semantic tokens only: `surface`, `surface.muted`, `border`, `border.focus`, `text`, `text.muted`, `text.alt` (filename alt text), `accent`, `cursor.line`, `focus.item`, `link`, `link.broken`, `link.external`, `heading.1..6`, `code.bg`, `match`, `status.ok/warn/error`.
+Semantic tokens only (`tui/theme.rs`): `surface`, `surface_muted`, `border`, `border_focus`, `text`, `text_muted`, `accent`, `cursor_line`, `search_box`, `tab_active`, `tab_inactive`, `focus_item`, `link`, `link_broken`, `link_external`, `link_unsupported`, `code_bg`, `quote_bar`, `heading[1..6]`, `alert[…]`. The `theme` config key is stored but not wired yet; presets arrive with [Phase 3](../roadmap/phase-3-alpha.md).

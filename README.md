@@ -2,23 +2,27 @@
 
 A terminal wiki reader for markdown collections. It browses like a documentation site (side nav, breadcrumbs, working links, back/forward, prev/next), sized to live in a herdr pane next to your work.
 
+<!-- ui-diagram:start -->
 ```text
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ Project Wiki › Architecture › Design System › Token Projection          ◫  ✕ │
-├──────────────────────────────┬───────────────────────────────────────────────┤
-│ ⌕ Search…               /    │ # Token Projection                            │
-│ ● Project Wiki               │                                               │
-│ ▾ Architecture               │ The reusable adapter stays semantic-only; see │
-│     Architecture Overview    │ [ADR-0003](../decisions/0003.md) for why.     │
-│   ▾ Design System            │                                               │
-│       Design System          │▌                                              │
-│     ● Token Projection       │                                               │
-│     Workflow OS              ├───────────────────────────────────────────────┤
-│ ▸ Decisions                  │ ‹ Design System                  Adapters ›   │
-├──────────────────────────────┴───────────────────────────────────────────────┤
-│ VIEWER · architecture/design-system/tokens.md · L42 38% · 1,284 w · 6 min    │
-└──────────────────────────────────────────────────────────────────────────────┘
+ Worked Example Wiki › Architecture › Design System › Token Projection    ○ ◫ ✕
+┌Nav─────────────────────┐┌Viewer──────────────────────────────────────────────┐
+│                        ││ ── frontmatter ▶ ──                                │
+│ ⌕ Search…              ││                                                    │
+│                        ││▌# Token Projection                                 │
+│   Worked Example Wiki  ││                                                    │
+│   ▾ Architecture       ││ The reusable adapter stays semantic-only; see      │
+│     Overview           ││ [ADR-0003](../decisions/0003.md) for why.          │
+│     ▾ Design System    ││                                                    │
+│       Overview         ││ ## Linked from                                     │
+│▌●     Token Projection ││ • Worked Example Wiki                              │
+│     Workflow OS        ││ • Architecture Overview                            │
+│   ▸ Decisions          ││                                                    │
+└────────────────────────┘└‹ Design System────────────────────────Workflow OS ›┘
+ VIEWER · architecture/design-system/tokens.md · L5 9% · 13w · 1m · 2026-09-28
 ```
+<!-- ui-diagram:end -->
+
+Labels are shown with `nav.labels = "title"`; the default is `filename`. Press `?` in the app for every key.
 
 ## Why not an existing reader?
 
@@ -26,7 +30,7 @@ Existing terminal markdown tools behave like editors or file browsers: opening a
 
 ## Status
 
-Phase 1 is closed. Phase 2 dogfood clock started 2026-09-29 on a real collection. P3-08 install path and release binaries are shipped; later Phase 3 rows wait on dogfood notes. The reader shell, backlinks, heading jumps, and `$EDITOR` support are shipped. Start at [wiki/README.md](wiki/README.md) and see the [roadmap](wiki/roadmap/README.md) for the next tasks.
+Phase 1 (reader shell) is closed. Phase 2 (wiki navigation MVP) is feature-complete and in its dogfood window (clock started 2026-09-29, ending about 2026-10-13); Phase 3 alpha polish follows. Shipped: side nav with breadcrumbs, working links, back/forward and prev/next, backlinks, heading jumps, tabs, search (files and content), a help overlay (`?`), a syntax/formatted view toggle (`○`/`◉`), `$EDITOR` support, config, and session restore. Prereleases and binaries are on [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases). Start at [wiki/README.md](wiki/README.md) and see the [roadmap](wiki/roadmap/README.md) for the next tasks.
 
 ## Install
 

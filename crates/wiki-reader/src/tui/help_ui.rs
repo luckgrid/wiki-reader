@@ -37,13 +37,7 @@ impl HelpOverlay {
                 None
             } else {
                 last_scope = Some(b.scope);
-                Some(match b.scope {
-                    BindingScope::Global => "Global",
-                    BindingScope::Nav => "Side nav",
-                    BindingScope::Viewer => "Viewer",
-                    BindingScope::Chord => "Chords",
-                    BindingScope::Overlay => "Search overlay",
-                })
+                Some(b.scope.title())
             };
             rows.push(HelpRow {
                 section,
