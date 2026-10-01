@@ -54,17 +54,17 @@ crates.io packaging metadata is prepared (`version` on path deps, repository/rea
 
 ## Upgrade
 
-Check your version with `wiki-reader --version`. To upgrade, replace the old binary:
+Check your version with `wiki-reader --version` and `which wiki-reader`. Upgrade the **same way you installed** (mixing paths leaves two binaries; whichever is first on `PATH` wins).
 
 ```bash
-# cargo install: --force replaces the installed binary (add --tag vX.Y.Z-alpha.N to pin one)
+# cargo install → ~/.cargo/bin (--force replaces it; add --tag vX.Y.Z-alpha.N to pin one)
 cargo install --locked --force --git https://github.com/luckgrid/wiki-reader wiki-reader
 
-# release tarball: verify and unpack as above, then copy over the old binary
+# release tarball → usually ~/.local/bin (verify and unpack as above, then overwrite)
 install -m 0755 wiki-reader-vX.Y.Z-<platform>/wiki-reader ~/.local/bin/wiki-reader
 ```
 
-Quit any running instance first. Your config and saved sessions are kept. Rolling back, uninstalling, resetting sessions, and replacing a published release are covered in [Releasing and upgrading](wiki/guides/releasing.md).
+If `which wiki-reader` and the install target disagree, remove the extra copy or put the intended directory earlier on `PATH`. Quit any running instance first. Your config and saved sessions are kept. Rolling back, uninstalling, resetting sessions, and replacing a published release are covered in [Releasing and upgrading](wiki/guides/releasing.md).
 
 ## Quickstart
 

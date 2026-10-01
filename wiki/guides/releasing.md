@@ -17,9 +17,12 @@ Check what you have first:
 
 ```bash
 wiki-reader --version
+which wiki-reader
 ```
 
-Quit any running wiki-reader before replacing the binary, then use whichever way you installed it.
+Upgrade the **same way you installed**. `cargo install` writes `~/.cargo/bin/wiki-reader`; release tarballs are usually copied to `~/.local/bin/wiki-reader`. If both exist, the first match on `PATH` is the one you run — so a successful cargo upgrade can still leave `wiki-reader --version` on the old tarball binary. Prefer one install location; remove the other copy if you switch methods.
+
+Quit any running wiki-reader before replacing the binary.
 
 ### Installed with cargo
 
@@ -31,9 +34,11 @@ cargo install --locked --force --git https://github.com/luckgrid/wiki-reader wik
 cargo install --locked --force --git https://github.com/luckgrid/wiki-reader --tag v0.1.0-alpha.3 wiki-reader
 ```
 
-`--force` is what replaces the already-installed binary.
+`--force` is what replaces the already-installed binary in `~/.cargo/bin`. Confirm with `which wiki-reader` that you are not still hitting a copy elsewhere.
 
 ### Installed from a release tarball
+
+Prefer this path if that is how you installed: overwrite the same file `which wiki-reader` points at.
 
 1. Download the tarball and its `.sha256` for your platform from the release page (macOS arm64, macOS x86_64, or Linux x86_64).
 2. Verify and unpack:
