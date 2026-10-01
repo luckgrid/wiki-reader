@@ -290,12 +290,26 @@ struct LayoutState<'a> {
     /// (source line, cells) per header/body row.
     table_rows: Vec<(u32, Vec<String>)>,
     table_header_done: bool,
+    /// Links collected inside table cells; remapped to display cols in `flush_table`.
+    table_links: Vec<TableCellLink>,
     heading_level: Option<u8>,
     heading_text: String,
     used_slugs: HashMap<String, u32>,
     link_id: u32,
     expanded: std::collections::HashSet<u32>,
     diagram_mode: wiki_reader_core::config::DiagramMode,
+}
+
+/// A link whose display columns are only known after the table is laid out.
+struct TableCellLink {
+    /// Index into `table_rows` once the row is pushed; while building, `table_rows.len()`.
+    row: usize,
+    cell: usize,
+    /// Display-column range within the cell's plain text.
+    start: u16,
+    end: u16,
+    raw: String,
+    class: LinkClass,
 }
 
 struct LinkBuild {
@@ -341,6 +355,7 @@ impl<'a> LayoutState<'a> {
             table_row_src: 1,
             table_rows: Vec::new(),
             table_header_done: false,
+            table_links: Vec::new(),
             heading_level: None,
             heading_text: String::new(),
             used_slugs: HashMap::new(),
@@ -522,6 +537,7 @@ impl<'a> LayoutState<'a> {
                 self.mark_block(src);
                 self.in_table = true;
                 self.table_rows.clear();
+                self.table_links.clear();
                 self.table_header_done = false;
             }
             Tag::TableHead | Tag::TableRow => {
@@ -641,27 +657,37 @@ impl<'a> LayoutState<'a> {
             TagEnd::Link => {
                 let _ = self.style_stack.pop();
                 if let Some(mut lb) = self.in_link.take() {
-                    // Finalize current-line segment without duplicating per-word rects.
                     let end_col =
                         u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(0);
-                    let line = u32::try_from(self.styled.len()).unwrap_or(0);
-                    coalesce_link_segment(&mut lb.segments, line, lb.start_col, end_col);
                     let class = match resolve(&lb.raw, self.from, self.index).target {
                         Target::External(_) => LinkClass::External,
                         Target::Unsupported(_) => LinkClass::Unsupported,
                         Target::Unresolved(_) => LinkClass::Broken,
                         _ => LinkClass::Internal,
                     };
-                    // Drop empty / inverted segments
-                    lb.segments.retain(|&(_, (a, b))| a < b);
-                    self.links.push(LinkSpan {
-                        id: LinkId(self.link_id),
-                        raw_target: lb.raw,
-                        class,
-                        segments: lb.segments,
-                        backlink: false,
-                    });
-                    self.link_id = self.link_id.saturating_add(1);
+                    if self.in_table {
+                        // Cell text isn't on a display line yet; map in flush_table.
+                        self.table_links.push(TableCellLink {
+                            row: self.table_rows.len(),
+                            cell: self.table_row.len(),
+                            start: lb.start_col,
+                            end: end_col,
+                            raw: lb.raw,
+                            class,
+                        });
+                    } else {
+                        let line = u32::try_from(self.styled.len()).unwrap_or(0);
+                        coalesce_link_segment(&mut lb.segments, line, lb.start_col, end_col);
+                        lb.segments.retain(|&(_, (a, b))| a < b);
+                        self.links.push(LinkSpan {
+                            id: LinkId(self.link_id),
+                            raw_target: lb.raw,
+                            class,
+                            segments: lb.segments,
+                            backlink: false,
+                        });
+                        self.link_id = self.link_id.saturating_add(1);
+                    }
                 }
             }
             TagEnd::Table => {
@@ -994,7 +1020,8 @@ impl<'a> LayoutState<'a> {
             text: take.to_owned(),
             kind,
         });
-        if is_link {
+        // Table cell links are remapped in flush_table; don't record display lines here.
+        if is_link && !self.in_table {
             let end = u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(start);
             let line = u32::try_from(self.styled.len()).unwrap_or(0);
             if start < end
@@ -1121,7 +1148,7 @@ impl<'a> LayoutState<'a> {
         self.commit_line(src);
     }
 
-    /// Title (link) + optional 1–2 summary rows; `LinkSpan` covers title and summary.
+    /// Title (link) + optional one-line summary; `LinkSpan` covers title and summary.
     /// Entry rows are `│ content │` so the pane has side borders; segments exclude the glyphs.
     fn push_backlink_entry(&mut self, title: &str, summary: Option<&str>, target: &str, src: u32) {
         let line = u32::try_from(self.styled.len()).unwrap_or(0);
@@ -1144,39 +1171,24 @@ impl<'a> LayoutState<'a> {
 
         self.push_backlink_row(title, StyleKind::Link, avail, src, true, with_sides);
         if let Some(summary) = summary.filter(|s| !s.is_empty()) {
-            let mut rest = summary.to_owned();
-            for row in 0..2 {
-                if rest.is_empty() {
-                    break;
-                }
-                let last = row + 1 == 2;
-                if last && rest.width() > avail {
-                    let room = avail.saturating_sub(1).max(1);
-                    let (take, _) = split_at_width(&rest, room);
-                    let mut piece = take;
-                    piece.push('…');
-                    self.push_backlink_row(
-                        &piece,
-                        StyleKind::BacklinkSummary,
-                        avail,
-                        src,
-                        false,
-                        with_sides,
-                    );
-                    rest.clear();
-                } else {
-                    let (take, next) = split_at_width(&rest, avail);
-                    self.push_backlink_row(
-                        &take,
-                        StyleKind::BacklinkSummary,
-                        avail,
-                        src,
-                        false,
-                        with_sides,
-                    );
-                    rest = next;
-                }
-            }
+            // One line only — pad/ellipsis so a trailing period never orphans.
+            let piece = if summary.width() > avail {
+                let room = avail.saturating_sub(1).max(1);
+                let (take, _) = split_at_width(summary, room);
+                let mut s = take;
+                s.push('…');
+                s
+            } else {
+                summary.to_owned()
+            };
+            self.push_backlink_row(
+                &piece,
+                StyleKind::BacklinkSummary,
+                avail,
+                src,
+                false,
+                with_sides,
+            );
         }
 
         if let Some(mut lb) = self.in_link.take() {
@@ -1287,9 +1299,11 @@ impl<'a> LayoutState<'a> {
 
     fn flush_table(&mut self) {
         if self.table_rows.is_empty() {
+            self.table_links.clear();
             return;
         }
         let mut rows = std::mem::take(&mut self.table_rows);
+        let pending = std::mem::take(&mut self.table_links);
         let cols = rows
             .iter()
             .map(|(_, cells)| cells.len())
@@ -1322,6 +1336,7 @@ impl<'a> LayoutState<'a> {
                 self.push_raw_line(format!("│ {}", row.join(" | ")), StyleKind::Table, *row_src);
             }
             self.table_header_done = false;
+            // ponytail: no hit targets in the unwrapped dump; upgrade: map cell offsets.
             return;
         };
         let header_count = usize::from(self.table_header_done);
@@ -1333,8 +1348,43 @@ impl<'a> LayoutState<'a> {
             } else {
                 StyleKind::Table
             };
-            for line in format_table_row_wrapped(row, &widths) {
-                self.push_raw_line(line, kind, *row_src);
+            let lines = format_table_row_wrapped(row, &widths);
+            let first_line = u32::try_from(self.styled.len()).unwrap_or(0);
+            for line in &lines {
+                self.push_raw_line(line.clone(), kind, *row_src);
+            }
+            // Remap cell-relative links onto the laid-out display columns.
+            for link in pending.iter().filter(|l| l.row == i) {
+                let segs = table_link_segments(row, &widths, link.cell, link.start, link.end);
+                let mut segments: Vec<(u32, (u16, u16))> = segs
+                    .into_iter()
+                    .map(|(r, c0, c1)| (first_line.saturating_add(r), (c0, c1)))
+                    .filter(|&(_, (a, b))| a < b)
+                    .collect();
+                if segments.is_empty() {
+                    continue;
+                }
+                // Merge adjacent runs on the same line.
+                segments.sort_by_key(|s| (s.0, s.1.0));
+                let mut merged: Vec<(u32, (u16, u16))> = Vec::new();
+                for seg in segments {
+                    if let Some(last) = merged.last_mut()
+                        && last.0 == seg.0
+                        && last.1.1 >= seg.1.0
+                    {
+                        last.1.1 = last.1.1.max(seg.1.1);
+                    } else {
+                        merged.push(seg);
+                    }
+                }
+                self.links.push(LinkSpan {
+                    id: LinkId(self.link_id),
+                    raw_target: link.raw.clone(),
+                    class: link.class,
+                    segments: merged,
+                    backlink: false,
+                });
+                self.link_id = self.link_id.saturating_add(1);
             }
             if i + 1 == header_count {
                 let mut sep_src = row_src.saturating_add(1);
@@ -1656,6 +1706,54 @@ fn format_table_row_wrapped(row: &[String], widths: &[usize]) -> Vec<String> {
         out_lines.push(out);
     }
     out_lines
+}
+
+/// Map a cell-relative `[start, end)` display-col range onto laid-out table lines.
+/// Each display line is `│` + per cell ` {part}{pad} │`.
+fn table_link_segments(
+    row: &[String],
+    widths: &[usize],
+    cell: usize,
+    start: u16,
+    end: u16,
+) -> Vec<(u32, u16, u16)> {
+    if start >= end || cell >= row.len() || cell >= widths.len() {
+        return Vec::new();
+    }
+    let cell_text = &row[cell];
+    let w = widths[cell];
+    let parts = wrap_cell(cell_text, w);
+    // Leading │ + each prior cell's (1 + width + 2) chrome.
+    let mut cell_origin = 1u16;
+    for &pw in widths.iter().take(cell) {
+        cell_origin = cell_origin.saturating_add(
+            1u16.saturating_add(u16::try_from(pw).unwrap_or(u16::MAX))
+                .saturating_add(2),
+        );
+    }
+    // Content starts one space after the cell's left edge.
+    let content_origin = cell_origin.saturating_add(1);
+
+    let mut out = Vec::new();
+    let mut consumed = 0u16;
+    for (r, part) in parts.iter().enumerate() {
+        let part_w = u16::try_from(part.width()).unwrap_or(u16::MAX);
+        let part_start = consumed;
+        let part_end = consumed.saturating_add(part_w);
+        let a = start.max(part_start);
+        let b = end.min(part_end);
+        if a < b {
+            let local0 = a.saturating_sub(part_start);
+            let local1 = b.saturating_sub(part_start);
+            out.push((
+                u32::try_from(r).unwrap_or(0),
+                content_origin.saturating_add(local0),
+                content_origin.saturating_add(local1),
+            ));
+        }
+        consumed = part_end;
+    }
+    out
 }
 
 fn format_table_border(widths: &[usize], left: char, mid: char, right: char) -> String {

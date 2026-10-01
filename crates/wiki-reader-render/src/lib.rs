@@ -1045,6 +1045,106 @@ mod tests {
     }
 
     #[test]
+    fn linked_from_summary_is_one_ellipsised_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let long = "A ".repeat(80) + "period at the end.";
+        std::fs::write(
+            root.join("src.md"),
+            format!("---\ntitle: Src\nsummary: {long}\n---\n\n# Src\n\nSee [dst](dst.md).\n"),
+        )
+        .unwrap();
+        std::fs::write(root.join("dst.md"), "# Dst\n\nBody.\n").unwrap();
+        let provider = FsProvider::open(root).unwrap();
+        let index = wiki_reader_core::Index::build(&provider).unwrap();
+        let key = PageKey {
+            collection_id: index.collection_id.clone(),
+            relative_path: std::path::PathBuf::from("dst.md"),
+        };
+        let src = provider.read(&key).unwrap();
+        let page = index.pages.get(&key);
+        let doc = render(&src, page, &key, &index, 40);
+        let section = doc
+            .lines
+            .iter()
+            .position(|l| l.contains("Linked from"))
+            .expect("pane");
+        let bl = doc.links.iter().find(|s| s.backlink).expect("backlink");
+        // Title + exactly one summary display line.
+        assert_eq!(
+            bl.segments.len(),
+            2,
+            "title + one summary: {:?}",
+            bl.segments
+        );
+        let sum_line = bl.segments[1].0 as usize;
+        assert_eq!(sum_line, section + 2, "summary hugs title");
+        assert!(
+            doc.lines[sum_line].contains('…'),
+            "long summary ellipsises: {:?}",
+            doc.lines[sum_line]
+        );
+        // No second summary row before the divider / next entry / bottom.
+        let after = &doc.lines[sum_line + 1];
+        assert!(
+            after.contains('─') || after.starts_with('└') || after.contains('│'),
+            "no wrapped summary continuation: {after:?}"
+        );
+    }
+
+    #[test]
+    fn table_links_map_onto_body_cells_not_the_top_border() {
+        let src =
+            "# T\n\n| Phase | Tasks |\n| --- | --- |\n| 1 | [a.md](a.md) |\n| 2 | [b.md](b.md) |\n";
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::write(root.join("t.md"), src).unwrap();
+        std::fs::write(root.join("a.md"), "# A\n").unwrap();
+        std::fs::write(root.join("b.md"), "# B\n").unwrap();
+        let provider = FsProvider::open(root).unwrap();
+        let index = wiki_reader_core::Index::build(&provider).unwrap();
+        let key = PageKey {
+            collection_id: index.collection_id.clone(),
+            relative_path: std::path::PathBuf::from("t.md"),
+        };
+        let page_src = provider.read(&key).unwrap();
+        let page = index.pages.get(&key);
+        let doc = render(&page_src, page, &key, &index, 60);
+        let top = doc
+            .lines
+            .iter()
+            .position(|l| l.starts_with('┌'))
+            .expect("table top");
+        let a = doc
+            .links
+            .iter()
+            .find(|s| s.raw_target.contains("a.md"))
+            .expect("a.md link");
+        let b = doc
+            .links
+            .iter()
+            .find(|s| s.raw_target.contains("b.md"))
+            .expect("b.md link");
+        assert!(
+            a.segments[0].0 > u32::try_from(top).unwrap_or(u32::MAX),
+            "a.md must not sit on the top border (got line {}, top {top})",
+            a.segments[0].0
+        );
+        assert!(
+            b.segments[0].0 > a.segments[0].0,
+            "b.md below a.md: {:?} vs {:?}",
+            b.segments,
+            a.segments
+        );
+        let a_line = &doc.lines[a.segments[0].0 as usize];
+        assert!(
+            a_line.contains("a.md") || a_line.contains('a'),
+            "segment lands on the cell text: {a_line:?} segs={:?}",
+            a.segments
+        );
+    }
+
+    #[test]
     fn linked_from_ellipsis_pads_wide_title_to_right_border() {
         // CJK glyphs are width 2; cutting mid-glyph undershoots `room` so without
         // pad-after-… the closing │ would shift left.

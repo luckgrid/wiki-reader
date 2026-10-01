@@ -97,7 +97,7 @@ After the last item, `Tab` wraps to the first. The focused item renders inverted
 
 **Links:** underlined; broken links in the error color with `?`; external links with `↗`. `Enter` or left-click follows. Middle-click, Shift/Ctrl+click, or `t` opens in a new tab (Cmd/Ctrl+Enter on a focused link does too where the kitty protocol reports it). External links ask `open https://… ? [y/N]` in the status bar, then use the system opener. Hovering (if the terminal reports motion) highlights the link and shows its target in the status bar.
 
-**End of article:** "Linked from" pane (box-drawn with side borders: tag header, each entry's title and optional summary as one focusable hit; Tab focus paints selection background across the entry and replaces the left `│` with a teal ▌). Summary comes from frontmatter or the first body paragraph as plain text (no markdown markup).
+**End of article:** "Linked from" pane (box-drawn with side borders: tag header, each entry's title and optional one-line summary as one focusable hit; Tab focus paints selection background across the entry and replaces the left `│` with a teal ▌). Summary comes from frontmatter or the first body paragraph as plain text (no markdown markup), truncated with `…` when it would wrap.
 
 Future: a **sticky section header** at the top of the viewer showing the heading of the section in view.
 

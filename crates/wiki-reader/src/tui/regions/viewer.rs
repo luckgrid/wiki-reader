@@ -377,7 +377,7 @@ pub fn draw(
                 Style::default().bg(theme.selection),
             );
         }
-        if on_cursor && focused {
+        if on_cursor && focused && !on_focused_backlink {
             let col = usize::from(text_col::clamp_col(row_text, cursor_col));
             let w = row_text
                 .chars()
@@ -438,9 +438,23 @@ fn paint_styled_line(
     let focused_bl = ranges
         .iter()
         .any(|&(_, _, _, is_focus, is_backlink)| is_focus && is_backlink);
+    let line_is_quote = sl
+        .spans
+        .iter()
+        .any(|s| matches!(s.kind, StyleKind::Quote | StyleKind::Alert(_)));
 
     let style_at = |col: u16, kind: StyleKind| -> Style {
         let mut st = theme.style_kind(kind);
+        // Strong/Emphasis/Link inside a quote must keep the quote bar bg —
+        // otherwise bold holes look like a black selection block.
+        if line_is_quote
+            && !matches!(
+                kind,
+                StyleKind::CodeBlock | StyleKind::InlineCode | StyleKind::CodeLang
+            )
+        {
+            st = st.bg(theme.quote_bar);
+        }
         if on_cursor {
             // Preserve semantic foregrounds (headings, YAML keys, alerts) while
             // making the cursor row visible.

@@ -284,6 +284,7 @@ impl App {
         };
         if let Some(line) = it.doc_line() {
             self.cursor_line = line;
+            self.cursor_col = it.cols.0;
             self.ensure_cursor_visible();
         }
         // Focused-item target is derived at draw time (not stored in `message`).

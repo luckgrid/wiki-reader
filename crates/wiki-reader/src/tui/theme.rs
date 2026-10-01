@@ -164,9 +164,10 @@ impl Theme {
         use wiki_reader_render::StyleKind;
         match kind {
             StyleKind::Plain | StyleKind::Table | StyleKind::BacklinkSummary => self.text(),
-            StyleKind::TableHeader => Style::default()
-                .fg(self.accent)
-                .add_modifier(Modifier::BOLD),
+            // Bold text — TableHeader uses text (not accent/cyan) so it doesn't read as a link.
+            StyleKind::TableHeader | StyleKind::Strong => {
+                Style::default().fg(self.text).add_modifier(Modifier::BOLD)
+            }
             StyleKind::Heading(level) => {
                 let idx = usize::from(level.saturating_sub(1).min(5));
                 Style::default()
@@ -176,7 +177,6 @@ impl Theme {
             StyleKind::Emphasis => Style::default()
                 .fg(self.text)
                 .add_modifier(Modifier::ITALIC),
-            StyleKind::Strong => Style::default().fg(self.text).add_modifier(Modifier::BOLD),
             StyleKind::Strikethrough => Style::default()
                 .fg(self.text_muted)
                 .add_modifier(Modifier::CROSSED_OUT),
@@ -262,7 +262,7 @@ mod tests {
         let quote = t.style_kind(StyleKind::Quote);
         assert_eq!(quote.bg, Some(t.quote_bar));
         let header = t.style_kind(StyleKind::TableHeader);
-        assert_eq!(header.fg, Some(t.accent));
+        assert_eq!(header.fg, Some(t.text), "header must not look like a link");
         assert!(header.add_modifier.contains(Modifier::BOLD));
     }
 }
