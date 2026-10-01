@@ -1145,6 +1145,55 @@ mod tests {
     }
 
     #[test]
+    fn table_link_after_a_wrap_break_maps_onto_its_own_text() {
+        // `wrap_cell` drops the space at each break, so a link after the break must
+        // be located in the source text, not by summing part widths.
+        let src = "# T\n\n| Phase | Tasks |\n| --- | --- |\n| 1 | alpha beta gamma [delta.md](delta.md) |\n";
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::write(root.join("t.md"), src).unwrap();
+        std::fs::write(root.join("delta.md"), "# D\n").unwrap();
+        let provider = FsProvider::open(root).unwrap();
+        let index = wiki_reader_core::Index::build(&provider).unwrap();
+        let key = PageKey {
+            collection_id: index.collection_id.clone(),
+            relative_path: std::path::PathBuf::from("t.md"),
+        };
+        let page_src = provider.read(&key).unwrap();
+        let page = index.pages.get(&key);
+        for &width in &[28u16, 30, 36] {
+            let doc = render(&page_src, page, &key, &index, width);
+            let span = doc
+                .links
+                .iter()
+                .find(|s| s.raw_target.contains("delta.md"))
+                .unwrap_or_else(|| panic!("delta link at width {width}"));
+            assert_eq!(span.segments.len(), 1, "width {width}: {:?}", span.segments);
+            let (row_idx, (c0, c1)) = span.segments[0];
+            let row_idx = usize::try_from(row_idx).unwrap_or(usize::MAX);
+            // Every glyph on a table row is one column wide here, so chars == columns.
+            let text: String = doc.lines[row_idx]
+                .chars()
+                .skip(usize::from(c0))
+                .take(usize::from(c1 - c0))
+                .collect();
+            assert_eq!(
+                text, "delta.md",
+                "width {width}: segment must cover the link text; row={:?}",
+                doc.lines[row_idx]
+            );
+            if width == 28 {
+                let first = doc
+                    .lines
+                    .iter()
+                    .position(|l| l.contains("alpha"))
+                    .expect("first cell line");
+                assert_ne!(first, row_idx, "width 28 must wrap the link onto a new row");
+            }
+        }
+    }
+
+    #[test]
     fn linked_from_ellipsis_pads_wide_title_to_right_border() {
         // CJK glyphs are width 2; cutting mid-glyph undershoots `room` so without
         // pad-after-… the closing │ would shift left.

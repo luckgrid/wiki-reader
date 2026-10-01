@@ -1735,11 +1735,22 @@ fn table_link_segments(
     let content_origin = cell_origin.saturating_add(1);
 
     let mut out = Vec::new();
-    let mut consumed = 0u16;
+    // `wrap_cell` trims the whitespace at each soft break, so a part's column in the
+    // cell text is found in the source, not by summing the widths of earlier parts.
+    let mut byte = 0usize;
     for (r, part) in parts.iter().enumerate() {
+        let rest = cell_text.get(byte..).unwrap_or("");
+        let skip = if rest.starts_with(part.as_str()) {
+            0
+        } else {
+            rest.len() - rest.trim_start().len()
+        };
+        let start_byte = byte + skip;
+        byte = start_byte + part.len();
         let part_w = u16::try_from(part.width()).unwrap_or(u16::MAX);
-        let part_start = consumed;
-        let part_end = consumed.saturating_add(part_w);
+        let before = cell_text.get(..start_byte).unwrap_or(cell_text);
+        let part_start = u16::try_from(before.width()).unwrap_or(u16::MAX);
+        let part_end = part_start.saturating_add(part_w);
         let a = start.max(part_start);
         let b = end.min(part_end);
         if a < b {
@@ -1751,7 +1762,6 @@ fn table_link_segments(
                 content_origin.saturating_add(local1),
             ));
         }
-        consumed = part_end;
     }
     out
 }
