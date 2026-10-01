@@ -3,7 +3,7 @@ id: WR-UI
 title: UI spec
 summary: Layout, side nav, header/footers, focus and cursor model, keyboard and mouse behavior for the wiki-reader reader.
 status: draft
-updated: 2026-09-30
+updated: 2026-10-01
 related: [spec, content-model]
 nav_order: 4
 ---
@@ -33,6 +33,16 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
  VIEW  · architecture/design-system/tokens.md · L3:C1 9% · 2026-09-28 · draft
 ```
 <!-- ui-diagram:end -->
+
+The same layout in the running app, on this wiki:
+
+![wiki-reader browsing its own wiki: side nav, rendered page, tab, Linked from pane](../assets/wiki-reader.png)
+
+Help (`?`) and search (`/`) open as popups over it, with both panes grayed behind:
+
+![Help overlay listing every key, grouped by Global, Side nav, View and Chords](../assets/wiki-reader-help.png)
+
+![Search overlay in Files mode with ranked results](../assets/wiki-reader-search.png)
 
 Nav rows show page titles by default and folders show the folder name (see [Side nav](#side-nav-left)). `◫` toggles the side nav (`b`), `✕` quits (`q`).
 
@@ -79,7 +89,7 @@ Future: this search row becomes a proper **side nav header**, and a **side nav f
 ## Help overlay panel
 
 - Opens with `?` from Normal mode. Generated from the binding table in `keymap.rs` (same source as the live map).
-- Sections: Global, Side nav, View, Chords, Search overlay. Each section is a full-width divider row with every binding on its own row. A header icon that also triggers an action is joined to its key with ` / ` like any alternate key (`b / ◫`, `q / ✕`). The panel is tall and thin (up to 58 columns wide, nearly full height), peach-bordered like the search popup, with the same side padding, a blank row at the top and bottom, a blank row above each group divider and none below, a full-width selected row, and both panes behind it grayed. Key labels show config overrides when set.
+- Sections: Global, Side nav, View, Chords, Search overlay. Each section is a full-width divider row. Keys that do the same thing share one row, joined with ` / ` (`↑ / Shift+Tab`); alternates sit next to each other in the table so they merge. A header icon that also triggers an action is joined to its key with ` / ` like any alternate key (`b / ◫`, `q / ✕`). The panel is tall and thin (up to 58 columns wide, nearly full height), peach-bordered like the search popup, with the same side padding, a blank row at the top and bottom, a blank row above each group divider and none below, a full-width selected row, and both panes behind it grayed. Key labels show config overrides when set.
 - `↑`/`↓` / `PgUp`/`PgDn` / `g`/`G` and the mouse wheel scroll; `Enter` or a click on a row closes help and runs that action (display-only rows are not clickable).
 - `Esc` or `?` closes without an action. Click outside dismisses.
 
@@ -136,7 +146,7 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 
 | Key | Action |
 |-----|--------|
-| `Alt+← / Alt+b` | Back |
+| `Alt+← / Alt+b / Backspace` | Back |
 | `Alt+→ / Alt+f` | Forward |
 | `q` ✕ | Quit |
 | `b` ◫ | Toggle side nav |
@@ -146,14 +156,12 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 | `Y` | Copy focused link target |
 | `t` | New tab |
 | `x` | Close tab |
-| `/` | Search |
-| `Ctrl+k` | Search |
+| `/ / Ctrl+k` | Search |
 | `?` | Help |
 | `n` | Next search match |
 | `N` | Previous search match |
 | `[` | Previous page |
 | `]` | Next page |
-| `Backspace` | Back |
 | `Shift+←` | Focus side nav |
 | `Shift+→` | Focus view |
 | `F6` | Cycle pane focus |
@@ -164,40 +172,30 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 |-----|--------|
 | `Shift+↑ / Ctrl+↑` | Jump to previous group / search |
 | `Shift+↓ / Ctrl+↓` | Jump to next group |
-| `↑` | Previous nav row |
-| `Shift+Tab` | Previous nav row |
-| `↓` | Next nav row |
-| `Tab` | Next nav row |
-| `Ctrl+→` | Open page in a new tab |
+| `↑ / Shift+Tab` | Previous nav row |
+| `↓ / Tab` | Next nav row |
+| `Ctrl+→` | Open page in a new tab and focus view |
 | `→` | Expand / open into view |
 | `←` | Collapse / parent group |
-| `Ctrl+Enter` | Open page in a new tab |
-| `Shift+Enter` | Open page in a new tab |
+| `Ctrl+Enter / Shift+Enter` | Open page in a new tab |
 | `Enter` | Open page (stay in nav) / toggle group |
 
 ### View
 
 | Key | Action |
 |-----|--------|
-| `Alt+Shift+↑` | Previous heading |
-| `Alt+Shift+↓` | Next heading |
-| `{` | Previous heading |
-| `}` | Next heading |
+| `Alt+Shift+↑ / {` | Previous heading |
+| `Alt+Shift+↓ / }` | Next heading |
 | `Shift+↑ / Ctrl+↑` | Previous block |
 | `Shift+↓ / Ctrl+↓` | Next block |
-| `k` | Cursor up |
-| `↑` | Cursor up |
-| `j` | Cursor down |
-| `↓` | Cursor down |
+| `k / ↑` | Cursor up |
+| `j / ↓` | Cursor down |
 | `←` | Cursor left (at column 0: focus side nav) |
 | `→` | Cursor right |
-| `PgUp` | Page up |
-| `Shift+Space` | Page up |
-| `Space` | Page down |
-| `PgDn` | Page down |
+| `PgUp / Shift+Space` | Page up |
+| `Space / PgDn` | Page down |
 | `Home` | Top of page |
-| `End` | Bottom of page |
-| `G` | Bottom of page |
+| `End / G` | Bottom of page |
 | `Shift+Tab` | Previous focusable item |
 | `Tab` | Next focusable item |
 | `Ctrl+Enter` | Open focused link in a new tab |
@@ -230,7 +228,7 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 - **`Enter` in the viewer:** activates the focused item. With no item focused and exactly one link on the cursor line, it follows that link.
 - **Side nav `→` / `←`:** `→` expands a group; on an expanded group it steps to the first child; on a page row it opens the page and focuses the viewer. `←` collapses, or goes to the parent group from a child.
 - **Side nav `Enter` / click:** a page opens in place and the nav keeps focus; a group toggles; the search row opens the search overlay.
-- **New tabs:** `t`, middle-click, Shift+click or Ctrl+click opens the focused link or nav row in a new tab; `Shift+Enter`, `Ctrl+Enter` and (in the nav) `Ctrl+→` do the same where the terminal reports them ([ADR-0015](../decisions/0015-new-tab-combos-kitty-keyboard.md), [ADR-0016](../decisions/0016-ctrl-only-new-tab-combos.md)).
+- **New tabs:** `t`, middle-click, Shift+click or Ctrl+click opens the focused link or nav row in a new tab; `Shift+Enter` and `Ctrl+Enter` do the same where the terminal reports them, and in the nav `Ctrl+→` also moves focus into the new tab's view ([ADR-0015](../decisions/0015-new-tab-combos-kitty-keyboard.md), [ADR-0016](../decisions/0016-ctrl-only-new-tab-combos.md)).
 - **Back / forward:** `Backspace` is primary. `Alt+b` / `Alt+f` are what macOS Ghostty sends for Option+←/→.
 - **Heading jump:** `{` / `}` is the fallback when `Alt+Shift+↑/↓` does not reach the TUI.
 

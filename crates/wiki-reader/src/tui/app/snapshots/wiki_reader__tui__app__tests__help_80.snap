@@ -1,29 +1,28 @@
 ---
 source: crates/wiki-reader/src/tui/app/tests.rs
-assertion_line: 2761
 expression: out
 ---
  Worked Example Wiki                                                        ◫ ✕ 
 ┌──────────┌ Help (? or Esc to close) ──────────────────────────────┐──────────┐
 │▌/ Search…│                                                        │──────────│
 │          │  ── Global ──────────────────────────────────────────  │          │
-│▌ Worked E│  Alt+← / Alt+b     Back                                │          │
-│  ▸ Archit│  Alt+→ / Alt+f     Forward                             │          │
-│  ▸ Decisi│  q / ✕             Quit                                │          │
-│          │  b / ◫             Toggle side nav                     │fault     │
-│          │  r                 Toggle raw / rendered               │          │
-│          │  e                 Open in editor                      │          │
-│          │  y                 Copy page path                      │ken       │
-│          │  Y                 Copy focused link target            │tory      │
-│          │  t                 New tab                             │          │
-│          │  x                 Close tab                           │          │
-│          │  /                 Search                              │          │
-│          │  Ctrl+k            Search                              │          │
-│          │  ?                 Help                                │          │
-│          │  n                 Next search match                   │          │
-│          │  N                 Previous search match               │          │
-│          │  [                 Previous page                       │          │
-│          │  ]                 Next page                           │          │
+│▌ Worked E│  Alt+← / Alt+b / Backspace  Back                       │          │
+│  ▸ Archit│  Alt+→ / Alt+f              Forward                    │          │
+│  ▸ Decisi│  q / ✕                      Quit                       │          │
+│          │  b / ◫                      Toggle side nav            │fault     │
+│          │  r                          Toggle raw / rendered      │          │
+│          │  e                          Open in editor             │          │
+│          │  y                          Copy page path             │ken       │
+│          │  Y                          Copy focused link target   │tory      │
+│          │  t                          New tab                    │          │
+│          │  x                          Close tab                  │          │
+│          │  / / Ctrl+k                 Search                     │          │
+│          │  ?                          Help                       │          │
+│          │  n                          Next search match          │          │
+│          │  N                          Previous search match      │          │
+│          │  [                          Previous page              │          │
+│          │  ]                          Next page                  │          │
+│          │  Shift+←                    Focus side nav             │          │
 │          │                                                        │          │
 └──────────└────────────────────────────────────────────────────────┘vervi… › ├┘
   HELP  · README.md · L1:C1 9% · 2026-09-28 · draft · 29w · 1m

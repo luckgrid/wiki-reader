@@ -3,7 +3,7 @@ id: WR-RENDER
 title: Rendering
 summary: How markdown, raw source, code, tables, and diagrams are rendered, including herdr's graphics constraints.
 status: draft
-updated: 2026-09-30
+updated: 2026-10-01
 related: [overview, prior-art-and-libs]
 nav_order: 3
 ---
@@ -52,7 +52,7 @@ Headings (distinct per level), paragraphs with wrapping, bold/italic/strike/inli
 
 ## Rendered is formatted; raw shows the syntax
 
-Rendered mode drops markdown markers at layout time, as spans are pushed: no `#` on headings (H1/H2 get an underline rule, H3-H6 extra spacing), no fence lines (a `── lang ──` label instead), no backticks on inline code, and "Linked from" is a box-drawn pane (tag header, title links, optional summaries, dividers). Because markers are omitted as spans are pushed, link column geometry, the source map and block actions stay correct. The raw view (`r`) is where the markdown syntax is shown. There is no toggle between presentations ([ADR-0014](../decisions/0014-remove-formatted-view-toggle.md), which supersedes [ADR-0012](../decisions/0012-syntax-vs-formatted.md)).
+Rendered mode drops markdown markers at layout time, as spans are pushed: no `#` on headings (H1/H2 get an underline rule, H2–H6 get two blank rows above and one below; H1 teal, H2–H4 peach, H5/H6 gray), no fence lines (a `── lang ──` label instead), no backticks on inline code, and "Linked from" is a box-drawn pane (tag header, title links, optional summaries, dividers). Because markers are omitted as spans are pushed, link column geometry, the source map and block actions stay correct. The raw view (`r`) is where the markdown syntax is shown. There is no toggle between presentations ([ADR-0014](../decisions/0014-remove-formatted-view-toggle.md), which supersedes [ADR-0012](../decisions/0012-syntax-vs-formatted.md)).
 
 ## Raw view
 
@@ -82,7 +82,7 @@ Validate before building the image tier ([roadmap](../roadmap/phase-3-alpha.md),
 
 ### Other images
 
-`![alt](./local.png)` uses the same tiers: Kitty image → a `[image: alt]` placeholder with the path. Remote images are never fetched.
+`![alt](./local.png)` uses the same tiers: Kitty image → a `[image: alt]` placeholder with the path. Per [ADR-0017](../decisions/0017-static-local-images-only.md), images are static (PNG, JPEG, WebP, first GIF frame, SVG via `resvg`), must resolve inside the collection root, are size-capped, and remote or `file:` images are never fetched or read; they show the placeholder.
 
 ## Performance budgets
 

@@ -18,7 +18,7 @@ related: [0015-new-tab-combos-kitty-keyboard, 0007-input-focus-model]
 ## Decision
 
 - The matcher is Ctrl only (`Matcher::CtrlCode`). Cmd (SUPER) is not special: if a terminal ever delivers it, it behaves like the plain key.
-- Bindings: `Ctrl+Enter` in the nav and in the view (opens the focused link), and `Ctrl+→` in the nav, all `NewTab` (see the macOS caveat below). They match before plain `Enter` and `→`.
+- Bindings: `Ctrl+Enter` in the nav and in the view (opens the focused link), and `Ctrl+→` in the nav. The Enter combos are `NewTab`; `Ctrl+→` is `NewTabFocusView` (same, then focus moves into the View, like plain `→`). See the macOS caveat below. They match before plain `Enter` and `→`.
 - Mouse: Shift+click and Ctrl+click open a new tab (SUPER is no longer in the mask).
 - Keep `DISAMBIGUATE_ESCAPE_CODES`, `t`, middle-click, Shift+click and `Shift+Enter` from ADR-0015.
 

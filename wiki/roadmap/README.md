@@ -8,8 +8,8 @@ Phased plan from completed Phase 0 through the MVP, alpha polish and beta. Each 
 |-------|--------|------|-------|
 | Phase 0 | done | Try what exists | Findings shaped [ADR-0005](../decisions/0005-navigation-model.md) and [ADR-0006](../decisions/0006-reader-first.md) |
 | Phase 1 | done | Reader shell (~1–2 weeks) | [phase-1-reader-shell.md](phase-1-reader-shell.md) |
-| Phase 2 | active | Wiki navigation MVP (~2 weeks) | [phase-2-mvp.md](phase-2-mvp.md) |
-| Phase 3 | planned | Alpha polish | [phase-3-alpha.md](phase-3-alpha.md) |
+| Phase 2 | feature complete; dogfood hold to ≈ 2026-10-13 | Wiki navigation MVP (~2 weeks) | [phase-2-mvp.md](phase-2-mvp.md) |
+| Phase 3 | active | Alpha polish | [phase-3-alpha.md](phase-3-alpha.md) |
 | Phase 4 | planned | Beta: widget sidebar and agent surface | [phase-4-beta.md](phase-4-beta.md) |
 
 ## Phase 0 (done)

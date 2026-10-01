@@ -1,7 +1,7 @@
 //! Help overlay state (P2-20).
 
 use crate::tui::action::Action;
-use crate::tui::keymap::{BINDINGS, BindingScope, binding_icon, effective_keys_label};
+use crate::tui::keymap::{BindingScope, binding_icon, help_entries};
 
 /// One row in the help list: a group heading or a binding.
 #[derive(Debug, Clone)]
@@ -56,12 +56,12 @@ pub struct HelpOverlay {
 }
 
 impl HelpOverlay {
-    /// Build rows from [`BINDINGS`], applying key overrides to labels.
+    /// Build rows from [`help_entries`] (alternate keys merged), applying key overrides to labels.
     #[must_use]
     pub fn new(overrides: &std::collections::BTreeMap<String, String>) -> Self {
         let mut rows = Vec::new();
         let mut last_scope: Option<BindingScope> = None;
-        for b in BINDINGS {
+        for b in help_entries(overrides) {
             if last_scope != Some(b.scope) {
                 if last_scope.is_some() {
                     rows.extend((0..GAP_ABOVE_DIVIDER).map(|_| HelpRow::spacer()));
@@ -80,10 +80,10 @@ impl HelpOverlay {
             rows.push(HelpRow {
                 heading: false,
                 spacer: false,
-                keys: effective_keys_label(b, overrides),
+                keys: b.keys,
                 icon: b.action.as_ref().and_then(binding_icon),
                 help: b.help,
-                action: b.action.clone(),
+                action: b.action,
             });
         }
         let selected = rows.iter().position(HelpRow::selectable).unwrap_or(0);

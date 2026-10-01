@@ -12,6 +12,8 @@ nav_order: 2
 
 Time box: ≈ 2 weeks.
 
+**Status (2026-10-01): feature complete, dogfood hold.** [Phase 3](phase-3-alpha.md) is active. Phase 2 now accepts only fixes for things the dogfood clock turns up (a small PR with a test or snapshot and a dated line below) until the ≈ 2026-10-13 verdict.
+
 ## Exit criteria
 
 All P0/P1 acceptance criteria in [product spec](../product/spec.md) pass; two weeks without opening a GUI markdown app for these collections.
@@ -50,6 +52,8 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 - 2026-10-01: dogfood round 5 follow-ups: Tab focus on a Linked-from entry paints selection + teal ▌ with no reverse-video column cursor, and the Tab cursor column follows the focused item (P2-44); summaries are one line ending in `…` (P2-45); bold/inline styles inside quotes and alerts keep the quote bg (P2-46); table links are remapped onto laid-out cells, including after a soft wrap, so Tab walks them row by row (P2-47); table headers are bold text, not link-teal (P2-48); links in the too-narrow unwrapped table dump have no hit targets yet (P2-49)
 - 2026-10-01: dogfood round 5 follow-ups (2, from Ghostty QA): focused block actions (frontmatter, code titles, expand/copy) use the active-tab/footer colours, dark text on peach, instead of yellow with white text (P2-50); H3 and under have two blank rows above and one below, not the reverse (P2-51)
 - 2026-10-01: dogfood round 5 merged to main (#92, #93, #94; the stacked #88–#91 were closed as superseded by #92); v0.1.0-alpha.4 cut; clock continues on alpha.4
+- 2026-10-01: dogfood round 6: help window merges alternate keys onto one row and nav `Ctrl+→` opens the new tab and focuses its View (P2-52); mouse-wheel flicks no longer back up the event queue (P2-53); H3/H4 take H2's peach and H2 gets two blank rows above (P2-54). Not reproduced on demand: the runaway scroll, which the user saw once and which the fix targets by design (one redraw per batch, not per event)
+- 2026-10-01: **Phase 2 feature complete; Phase 3 activated.** Nothing in scope is left: P2-24b (image diagrams) is P3-12 and P2-49 stays deferred. The adoption clock keeps running in the background and the formal exit verdict is still ≈ 2026-10-13; until then Phase 2 takes dogfood fixes only, and new features go to Phase 3
 
 ## Interim acceptance walk (2026-09-30)
 
@@ -81,7 +85,7 @@ Judged from tests, dogfood QA, and code — not a full interactive sweep of ever
 | B1 | pass | Linked from; formatted heading fixed #75 |
 | TB | pass | tabs secondary |
 | BA | pass | block actions in Tab cycle |
-| D1 | partial | text Mermaid tier pass; **image tier → P3-12** (exit-allowed slip) |
+| D1 | partial | text Mermaid tier pass; **image tier → P3-12a…d** (exit-allowed slip) |
 | R1 | pass | responsive nav |
 | E1 | pass | `$EDITOR` |
 | C1 | partial | keys/opener/excludes/nav.labels ship; **theme key still inert → P3-07/11** |
@@ -157,8 +161,11 @@ Judged from tests, dogfood QA, and code — not a full interactive sweep of ever
 | P2-49 | Hit targets for links in the too-narrow unwrapped table dump (map cell offsets onto the `│ a \| b` rows) | D1 | deferred | very narrow panes only |
 | P2-50 | Focused block actions (frontmatter toggle, code block titles, expand table/diagram, copy code) paint peach bg + dark text like the active tab and footer links; `focus_item` token removed | U3 | done | round 5 follow-ups (2) |
 | P2-51 | H3–H6 spacing: two blank rows above, one below (was the reverse) | D1 | done | round 5 follow-ups (2) |
+| P2-52 | Help overlay merges keys that do the same thing into one row joined with ` / ` (`↑ / Shift+Tab`, `k / ↑`, `/ / Ctrl+k`, `Ctrl+Enter / Shift+Enter`), driven by `help_entries()` so the generated keymap table matches; nav `Ctrl+→` opens the page in a new tab **and focuses the View** (`Action::NewTabFocusView`), `Ctrl+Enter` / `Shift+Enter` keep focus in the nav | TB / U3 | done | round 6 |
+| P2-53 | Event loop applies every queued event (cap 256) before one redraw, and discards unread input when the terminal is restored; a wheel flick no longer lags behind the pointer or leaks mouse reports into the shell | K1 | done | round 6; found when the wheel kept scrolling after the user stopped |
+| P2-54 | Heading colour and spacing: H3 and H4 share H2's peach (H5/H6 stay gray); H2 gets two blank rows above like H3–H6 (H1 unchanged) | D1 / U3 | done | round 6; supersedes the H3–H5 gray in P2-36 and widens P2-51 to H2–H6 |
 | P2-R38 | Copy fixes: empty table cells kept, wrapped cells rejoined, OSC 52 cap on the encoded payload (75 KB of text), held drag keeps scrolling | CP | done | round 2 follow-ups (PR 2) |
-| P2-24b | Image diagrams and images | D1 | moved | slipped to Phase 3 as P3-12 (2026-09-30); needs ADR-0004 herdr/Kitty spike + deps |
+| P2-24b | Image diagrams and images | D1 | moved | slipped to Phase 3 as P3-12 (2026-09-30), now split into P3-12a…d; images follow [ADR-0017](../decisions/0017-static-local-images-only.md) |
 
 ## P2-23 scope
 

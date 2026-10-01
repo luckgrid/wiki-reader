@@ -420,10 +420,10 @@ impl<'a> LayoutState<'a> {
             Tag::Heading { level, .. } => {
                 let lv = heading_u8(level);
                 self.ensure_block_gap(src);
-                // H3 and under: one more blank above than below (the gap below is the
-                // normal single block gap), so a small heading groups with its body.
+                // H2 and under: one more blank above than below (the gap below is the
+                // normal single block gap), so a heading groups with its body.
                 let n = self.styled.len();
-                if lv >= 3
+                if lv >= 2
                     && n >= 2
                     && self.last_line_blank()
                     && !self.styled[n - 2].spans.is_empty()

@@ -22,6 +22,14 @@ A terminal wiki reader for markdown collections. It browses like a documentation
 ```
 <!-- ui-diagram:end -->
 
+![wiki-reader browsing its own wiki: side nav, rendered page, tab, Linked from pane](assets/wiki-reader.png)
+
+Help (`?`) and search (`/`) are popups over the same layout:
+
+![Help overlay listing every key, grouped by Global, Side nav, View and Chords](assets/wiki-reader-help.png)
+
+![Search overlay in Files mode with ranked results](assets/wiki-reader-search.png)
+
 Nav rows show page titles by default (`nav.labels = "filename"` switches to filenames); folders always show the folder name. Press `?` in the app for every key.
 
 ## Why not an existing reader?

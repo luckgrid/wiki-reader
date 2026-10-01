@@ -94,8 +94,8 @@ impl Default for Theme {
             heading: [
                 Color::Cyan,               // H1 = accent
                 Color::Rgb(246, 201, 159), // H2 = peach
-                Color::Rgb(205, 208, 215), // H3
-                Color::Rgb(185, 190, 198), // H4
+                Color::Rgb(246, 201, 159), // H3 = peach, same as H2
+                Color::Rgb(246, 201, 159), // H4 = peach, same as H2
                 Color::Rgb(165, 170, 180), // H5
                 Color::Rgb(140, 145, 155), // H6 muted
             ],

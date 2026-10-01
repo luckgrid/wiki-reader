@@ -3,7 +3,7 @@ id: WR-ARCH
 title: Architecture
 summary: Crate layout, the navigation core, hit-testing, and runtime model for wiki-reader.
 status: draft
-updated: 2026-09-30
+updated: 2026-10-01
 related: [rendering, context-engine, integrations]
 nav_order: 1
 ---
@@ -100,7 +100,7 @@ For links, the renderer emits `LinkSpan { id, target, line, col_range }` per wra
 
 ## Runtime model
 
-- Synchronous crossterm `event::poll` loop on the UI thread (no tokio; [ADR-0011](../decisions/0011-renderer-source.md)).
+- Synchronous crossterm `event::poll` loop on the UI thread (no tokio; [ADR-0011](../decisions/0011-renderer-source.md)). Each wake applies every queued event (capped at 256) before a single redraw, so wheel and mouse-move floods don't back up behind full redraws; unread input is drained when the terminal is restored.
 - Background workers on std threads with `mpsc` channels: index rebuild, syntect highlight for raw view. The `notify` debouncer runs on its own thread and posts into the same poll loop.
 - State lives in one `App`; rendering is a pure function of state (+ caches) that also produces the `HitMap`.
 

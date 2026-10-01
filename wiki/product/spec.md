@@ -3,7 +3,7 @@ id: WR-SPEC
 title: Product spec
 summary: User stories, prioritized requirements with acceptance criteria, and success measures for the wiki-reader reader.
 status: draft
-updated: 2026-09-28
+updated: 2026-10-01
 related: [vision, content-model, ui-spec]
 nav_order: 2
 ---
@@ -91,7 +91,7 @@ Terminal markdown tools display files but don't support wiki browsing: links are
 |----|-------------|---------------------|
 | P1 | Custom nav order | `SUMMARY.md`/`_sidebar.md` and `nav_order` respected ([content model](content-model.md)). |
 | B1 | Linked from | Backlinks listed at the end of the article, focusable. |
-| TB | Tabs (secondary) | `t`/middle-click/Shift+click/Ctrl+click, `Shift+Enter`, `Ctrl+Enter` and (in the nav) `Ctrl+→` open a new tab when the terminal reports them; the current page's tab is always shown on the View's top border (outlined, like the footer buttons); per-tab history. |
+| TB | Tabs (secondary) | `t`/middle-click/Shift+click/Ctrl+click, `Shift+Enter` and `Ctrl+Enter` open a new tab when the terminal reports them (in the nav, `Ctrl+→` also focuses the new tab's view); the current page's tab is always shown on the View's top border (outlined, like the footer buttons); per-tab history. |
 | BA | Block actions | Expand table, show frontmatter, expand diagram, copy code: all in the Tab cycle. |
 | D1 | Diagrams | Tiered Mermaid per [ADR-0004](../decisions/0004-diagram-rendering.md). |
 | R1 | Responsive | Side nav auto-hides below 80 cols; overlay via `◫`/`b`. |
