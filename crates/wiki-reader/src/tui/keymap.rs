@@ -384,13 +384,6 @@ pub static BINDINGS: &[Binding] = &[
         matcher: Some(Matcher::PlainTab),
     },
     Binding {
-        keys: "Cmd/Ctrl+→",
-        scope: BindingScope::Nav,
-        action: Some(Action::NewTab),
-        help: "Open page in a new tab",
-        matcher: Some(Matcher::CmdOrCtrlCode(KeyCode::Right)),
-    },
-    Binding {
         keys: "→",
         scope: BindingScope::Nav,
         action: Some(Action::NavExpand),
@@ -1214,7 +1207,7 @@ mod tests {
     }
 
     #[test]
-    fn keymap_cmd_or_ctrl_new_tab_precedes_plain_enter_and_any_right() {
+    fn keymap_cmd_or_ctrl_enter_precedes_plain_enter() {
         let (ctrl_enter, _) = map(
             key_mod(KeyCode::Enter, KeyModifiers::CONTROL),
             FocusPane::Nav,
@@ -1229,13 +1222,14 @@ mod tests {
             Chord::None,
         );
         assert_eq!(cmd_enter, Some(Action::NewTab));
+        // Cmd/Ctrl+→ was dropped (ADR-0016); modifiers still hit NavExpand via AnyCode.
         let (ctrl_right, _) = map(
             key_mod(KeyCode::Right, KeyModifiers::CONTROL),
             FocusPane::Nav,
             InputMode::Normal,
             Chord::None,
         );
-        assert_eq!(ctrl_right, Some(Action::NewTab));
+        assert_eq!(ctrl_right, Some(Action::NavExpand));
         let (plain_right, _) = map(
             key(KeyCode::Right),
             FocusPane::Nav,

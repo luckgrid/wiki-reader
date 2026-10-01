@@ -168,7 +168,6 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 | `Shift+Tab` | Previous nav row |
 | `↓` | Next nav row |
 | `Tab` | Next nav row |
-| `Cmd/Ctrl+→` | Open page in a new tab |
 | `→` | Expand / open into view |
 | `←` | Collapse / parent group |
 | `Cmd/Ctrl+Enter` | Open page in a new tab |
@@ -230,7 +229,7 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 - **`Enter` in the viewer:** activates the focused item. With no item focused and exactly one link on the cursor line, it follows that link.
 - **Side nav `→` / `←`:** `→` expands a group; on an expanded group it steps to the first child; on a page row it opens the page and focuses the viewer. `←` collapses, or goes to the parent group from a child.
 - **Side nav `Enter` / click:** a page opens in place and the nav keeps focus; a group toggles; the search row opens the search overlay.
-- **New tabs:** `t`, middle-click, Shift+click or Ctrl+click opens the focused link or nav row in a new tab; `Shift+Enter`, Cmd/Ctrl+Enter and (in the nav) Cmd/Ctrl+→ do the same where the terminal reports them ([ADR-0015](../decisions/0015-new-tab-combos-kitty-keyboard.md)).
+- **New tabs:** `t`, middle-click, Shift+click or Ctrl+click opens the focused link or nav row in a new tab; `Shift+Enter` and Cmd/Ctrl+Enter do the same where the terminal reports them ([ADR-0015](../decisions/0015-new-tab-combos-kitty-keyboard.md), [ADR-0016](../decisions/0016-drop-cmd-right-new-tab.md)).
 - **Back / forward:** `Backspace` is primary. `Alt+b` / `Alt+f` are what macOS Ghostty sends for Option+←/→.
 - **Heading jump:** `{` / `}` is the fallback when `Alt+Shift+↑/↓` does not reach the TUI.
 

@@ -3558,7 +3558,7 @@ fn ctrl_click_nav_and_link_open_a_new_tab_plain_click_does_not() {
 }
 
 #[test]
-fn cmd_ctrl_enter_and_right_in_nav_open_a_new_tab() {
+fn cmd_ctrl_enter_in_nav_opens_a_new_tab() {
     use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     let mut app = App::new(&fixture()).unwrap();
     app.update(Action::FocusNav);
@@ -3577,6 +3577,7 @@ fn cmd_ctrl_enter_and_right_in_nav_open_a_new_tab() {
         );
         assert_eq!(mapped, Some(Action::NewTab), "mods={mods:?}");
     }
+    // Cmd/Ctrl+→ is not a new-tab binding (ADR-0016).
     let (ctrl_right, _) = crate::tui::keymap::map_with_overrides(
         KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL),
         app.focus,
@@ -3584,15 +3585,7 @@ fn cmd_ctrl_enter_and_right_in_nav_open_a_new_tab() {
         app.chord,
         None,
     );
-    assert_eq!(ctrl_right, Some(Action::NewTab));
-    let (plain_right, _) = crate::tui::keymap::map_with_overrides(
-        KeyEvent::from(KeyCode::Right),
-        app.focus,
-        app.input_mode,
-        app.chord,
-        None,
-    );
-    assert_eq!(plain_right, Some(Action::NavExpand));
+    assert_eq!(ctrl_right, Some(Action::NavExpand));
     let before = app.navigator.tab_count();
     app.update(Action::NewTab);
     assert_eq!(app.navigator.tab_count(), before + 1);
