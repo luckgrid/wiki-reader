@@ -34,6 +34,16 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 ```
 <!-- ui-diagram:end -->
 
+The same layout in the running app, on this wiki:
+
+![wiki-reader browsing its own wiki: side nav, rendered page, tab, Linked from pane](../assets/wiki-reader.png)
+
+Help (`?`) and search (`/`) open as popups over it, with both panes grayed behind:
+
+![Help overlay listing every key, grouped by Global, Side nav, View and Chords](../assets/wiki-reader-help.png)
+
+![Search overlay in Files mode with ranked results](../assets/wiki-reader-search.png)
+
 Nav rows show page titles by default and folders show the folder name (see [Side nav](#side-nav-left)). `◫` toggles the side nav (`b`), `✕` quits (`q`).
 
 Regions:
