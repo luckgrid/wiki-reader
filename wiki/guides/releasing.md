@@ -3,13 +3,13 @@ id: WR-GUIDE-RELEASING
 title: Releasing and upgrading
 summary: How users upgrade or replace an installed wiki-reader, and how maintainers cut, dry-run, verify and replace a release.
 status: draft
-updated: 2026-09-30
+updated: 2026-10-01
 related: [development]
 ---
 
 # Releasing and upgrading
 
-Two audiences: people who install wiki-reader and want a newer (or older) version, and maintainers who publish releases. Releases are built by [`.github/workflows/release.yml`](../../.github/workflows/release.yml) from `v*` tags and published under [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases). Versions containing `-` (for example `v0.1.0-alpha.2`) are marked as prereleases automatically.
+Two audiences: people who install wiki-reader and want a newer (or older) version, and maintainers who publish releases. Releases are built by [`.github/workflows/release.yml`](../../.github/workflows/release.yml) from `v*` tags and published under [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases). Versions containing `-` (for example `v0.1.0-alpha.3`) are marked as prereleases automatically.
 
 ## Upgrade or replace an installed version
 
@@ -28,7 +28,7 @@ Quit any running wiki-reader before replacing the binary, then use whichever way
 cargo install --locked --force --git https://github.com/luckgrid/wiki-reader wiki-reader
 
 # A specific release (also how you roll back)
-cargo install --locked --force --git https://github.com/luckgrid/wiki-reader --tag v0.1.0-alpha.2 wiki-reader
+cargo install --locked --force --git https://github.com/luckgrid/wiki-reader --tag v0.1.0-alpha.3 wiki-reader
 ```
 
 `--force` is what replaces the already-installed binary.
