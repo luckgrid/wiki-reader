@@ -29,7 +29,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 - 2026-09-30: dogfood polish batch landed — P2-22 (#70), P2-20 (#71), P2-21 (#72), P2-24a (#73). P2-24b deferred to Phase 3. v0.1.0-alpha.2 gated on operator go-ahead after overlays.
 - 2026-09-30: **Phase 2 feature exit** — all P2 tasks except P2-24b done; status stays `active` through the dogfood clock (≈ 2026-10-13), then flip to `done`.
 - 2026-09-30: formatted-view heading hierarchy papercut — H2 rule + H3–H6 spacing (#75)
-- 2026-09-30: dogfood QA after polish batch — P2-22/20/24a pass; herdr keys (`?`/`f`/PageUp/Down/Home/End) pass; headings pass with caveat: heading→list adjacency still reads flat (spacing/rule cues weak or lost against the list)
+- 2026-09-30: dogfood QA after polish batch — P2-22/20/24a pass; herdr keys (`?`/`f`/PageUp/Down/Home/End) pass; headings pass; heading→list cue follow-up in #75 (colour-matched H1–H3 rules)
 
 ## Tasks
 

@@ -866,4 +866,72 @@ mod tests {
             "render took {elapsed:?}, expected < 20ms (release)"
         );
     }
+
+    #[test]
+    fn formatted_heading_list_keeps_coloured_rule() {
+        let index = wiki_reader_core::Index {
+            collection_id: "t".into(),
+            pages: HashMap::default(),
+            edges: vec![],
+            by_from: HashMap::default(),
+            by_to: HashMap::default(),
+            by_id: HashMap::default(),
+            by_path: HashMap::default(),
+            diagnostics: vec![],
+        };
+        let key = empty_key();
+        for (src, level, rule_min) in [
+            ("## Lists\n\n- a\n- b\n", 2u8, 40usize),
+            ("### Section\n- a\n", 3u8, 24usize),
+        ] {
+            let doc = render_with(
+                src,
+                None,
+                &key,
+                &index,
+                40,
+                &RenderOpts {
+                    formatted: true,
+                    ..RenderOpts::default()
+                },
+            );
+            let text = doc.lines.join("\n");
+            assert!(
+                text.contains('─') && text.contains('•'),
+                "expected rule then list: {text:?}"
+            );
+            let rule_line = doc
+                .styled
+                .iter()
+                .find(|l| l.spans.iter().any(|s| s.text.contains('─')))
+                .expect("rule line");
+            assert!(
+                rule_line
+                    .spans
+                    .iter()
+                    .any(|s| s.kind == StyleKind::Heading(level)),
+                "rule should use Heading({level}), got {:?}",
+                rule_line.spans
+            );
+            let rule_len = rule_line
+                .spans
+                .iter()
+                .filter(|s| s.text.contains('─'))
+                .map(|s| s.text.chars().count())
+                .sum::<usize>();
+            assert_eq!(rule_len, rule_min.min(40));
+            // Blank between rule and first bullet.
+            let rule_idx = doc
+                .styled
+                .iter()
+                .position(|l| l.spans.iter().any(|s| s.text.contains('─')))
+                .unwrap();
+            assert!(
+                doc.styled
+                    .get(rule_idx + 1)
+                    .is_some_and(|l| l.spans.is_empty()),
+                "blank after rule before list"
+            );
+        }
+    }
 }
