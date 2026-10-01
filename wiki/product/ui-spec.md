@@ -69,7 +69,7 @@ Future: this search row becomes a proper **side nav header**, and a **side nav f
 ## Search overlay panel
 
 - Opens with `/` or `Ctrl-k` from anywhere, a click on the search row, or `Enter` on it.
-- Floats over the side nav and viewer, which both drop their active colours (gray borders, no highlighted tab) while it is open. A blank row under the title, then the input row, the results, a footer row and a blank row; two columns of padding left and right. A result row cut off at the right edge ends in `…`.
+- Floats over the side nav and viewer, which both drop their active colours (gray borders, no highlighted tab) while it is open. A blank row under the title, then the input row, the results, and a footer row tight against the bottom border; two columns of padding left and right. A result row cut off at the right edge ends in `…`.
 - The title carries the mode and the key hints: `Search [Files] (Tab: toggle mode  Esc: close)`. The input row is `/ █ type to search…` with the placeholder beside the cursor. The footer shows the counts (`N files`, or `N files, M matches`) and `↑/↓: navigate  Enter: open  Tab: toggle mode`.
 - A toggle (`Tab` inside the overlay) switches between **Files** (fuzzy title/path) and **Content** (full-text). Files is the default.
 - Results use a large centered pane (~80% × ~80%, up to ~100 × 50). The list scrolls; `Home`/`End`/`PgUp`/`PgDn` and the mouse wheel jump or step selection. The selected row's background spans the full width. Content rows start with the source line number (`[12]`, peach), then the bold title, the dim path and the snippet, with query matches underlined.

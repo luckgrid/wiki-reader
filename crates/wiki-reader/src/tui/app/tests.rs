@@ -3596,7 +3596,7 @@ fn content_search_result_past_the_first_screen_scrolls_to_centre_it() {
 }
 
 #[test]
-fn search_content_rows_end_in_an_ellipsis_and_the_footer_has_room_below() {
+fn search_content_rows_end_in_an_ellipsis_and_footer_hugs_border() {
     let mut app = App::new(&fixture()).unwrap();
     app.update(Action::OpenSearch);
     for c in "ar".chars() {
@@ -3620,10 +3620,8 @@ fn search_content_rows_end_in_an_ellipsis_and_the_footer_has_room_below() {
         .unwrap();
     let below = &rows[footer + 1];
     assert!(
-        below.contains('└')
-            || below.chars().filter(|c| !matches!(c, ' ' | '│')).count() == 0
-            || below.contains('┘'),
-        "blank row (or the border) right under the footer: {below}"
+        below.contains('└') && below.contains('┘'),
+        "popup border must sit directly under the footer: {below}"
     );
 }
 

@@ -211,7 +211,7 @@ fn draw_search_overlay(
     frame.render_widget(block, rect);
     hits.push(rect, Hit::FocusViewer);
 
-    // Blank row, query row, results, footer, blank row.
+    // Blank row, query row, results, then footer tight against the border.
     if inner.height < 5 || inner.width == 0 {
         return;
     }
@@ -237,8 +237,8 @@ fn draw_search_overlay(
     );
 
     let n = overlay.result_len();
-    // Blank row below the footer, mirroring the one above the input.
-    let footer_y = inner.height - 2;
+    // Keep the metadata/hints footer tight against the bottom border.
+    let footer_y = inner.height - 1;
     let count = if overlay.query.is_empty() {
         "type to search".to_owned()
     } else {
@@ -272,7 +272,7 @@ fn draw_search_overlay(
         x: inner.x,
         y: inner.y.saturating_add(2),
         width: inner.width,
-        height: inner.height.saturating_sub(4),
+        height: inner.height.saturating_sub(3),
     };
     let visible = usize::from(list_rect.height);
     overlay.list_height = visible;
