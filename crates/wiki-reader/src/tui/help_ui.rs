@@ -41,9 +41,9 @@ impl HelpRow {
 
 /// Blank rows above each group divider (the first group has the window's own
 /// top padding instead).
-const GAP_ABOVE_DIVIDER: usize = 2;
+const GAP_ABOVE_DIVIDER: usize = 1;
 /// Blank rows between a divider and its first binding.
-const GAP_BELOW_DIVIDER: usize = 1;
+const GAP_BELOW_DIVIDER: usize = 0;
 
 /// Open help overlay.
 #[derive(Debug, Clone)]

@@ -19,11 +19,23 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     let regions = layout::split(area, app.nav_visible, app.nav_width);
     let text_width = layout::viewer_text_width(regions.viewer);
     app.ensure_layout_width(text_width);
-    app.nav_viewport = regions
-        .side_nav
-        .height
-        .saturating_sub(layout::NAV_CHROME_ROWS)
-        .max(1);
+    // Only a drawn nav has a real viewport. While it is hidden the last value
+    // stays, so footer navigation can't scroll the list against a 1-row pane.
+    if regions.side_nav.width > 0 {
+        let viewport = regions
+            .side_nav
+            .height
+            .saturating_sub(layout::NAV_CHROME_ROWS)
+            .max(1);
+        let resized = app.nav_viewport != viewport;
+        app.nav_viewport = viewport;
+        if resized {
+            // A taller or shorter pane (resize): keep the cursor row on screen.
+            app.ensure_nav_cursor_visible();
+        }
+        // A list that fits always starts right under the search bar.
+        app.clamp_nav_scroll();
+    }
     let theme = app.theme;
     let page = app.navigator.tab().current().page.clone();
     let crumbs = app.navigator.nav().tree.breadcrumb(&page);
@@ -71,7 +83,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         app.cursor_line,
         app.effective_col(),
         app.selection,
-        app.match_highlight,
+        app.match_span(),
         app.focus == FocusPane::Viewer && !overlay_open,
         focus_item.as_ref(),
         &focus_items,
@@ -198,8 +210,8 @@ fn draw_search_overlay(
     frame.render_widget(block, rect);
     hits.push(rect, Hit::FocusViewer);
 
-    // Blank row, query row, results, footer.
-    if inner.height < 4 || inner.width == 0 {
+    // Blank row, query row, results, footer, blank row.
+    if inner.height < 5 || inner.width == 0 {
         return;
     }
     let row_at = |dy: u16| Rect {
@@ -224,7 +236,8 @@ fn draw_search_overlay(
     );
 
     let n = overlay.result_len();
-    let footer_y = inner.height - 1;
+    // Blank row below the footer, mirroring the one above the input.
+    let footer_y = inner.height - 2;
     let count = if overlay.query.is_empty() {
         "type to search".to_owned()
     } else {
@@ -258,7 +271,7 @@ fn draw_search_overlay(
         x: inner.x,
         y: inner.y.saturating_add(2),
         width: inner.width,
-        height: inner.height.saturating_sub(3),
+        height: inner.height.saturating_sub(4),
     };
     let visible = usize::from(list_rect.height);
     overlay.list_height = visible;

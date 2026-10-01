@@ -2,7 +2,7 @@
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 
@@ -90,7 +90,7 @@ pub fn draw(
     cursor_line: u32,
     cursor_col: u16,
     selection: Option<Selection>,
-    match_highlight: Option<u32>,
+    match_span: Option<(u32, u16, u16)>,
     focused: bool,
     focused_item: Option<&FocusItem>,
     focus_items: &[FocusItem],
@@ -161,7 +161,6 @@ pub fn draw(
     let focus_style = Style::default().bg(theme.focus_item).fg(theme.text);
     let focused_link = focused_item.and_then(|it| it.link_id);
     let gutter_style = theme.muted();
-    let match_style = Style::default().bg(theme.focus_item).fg(theme.text);
     let cursor_bg = Style::default().bg(theme.cursor_line).fg(theme.text);
 
     for row in 0..visible_h {
@@ -172,14 +171,7 @@ pub fn draw(
             .saturating_add(u16::try_from(row).unwrap_or(u16::MAX));
 
         let on_cursor = line_no == cursor_line;
-        let on_match = match_highlight == Some(line_no);
-        let base = if on_match {
-            match_style
-        } else if on_cursor {
-            cursor_bg
-        } else {
-            theme.text()
-        };
+        let base = if on_cursor { cursor_bg } else { theme.text() };
 
         hits.push(
             Rect {
@@ -246,12 +238,10 @@ pub fn draw(
             }
         });
 
-        // Marker column: ▌ on cursor (not on match-only highlight).
+        // Marker column: ▌ on the cursor row.
         let mut spans: Vec<Span<'static>> = Vec::new();
-        if on_cursor && !on_match {
+        if on_cursor {
             spans.push(Span::styled("▌", cursor_bg));
-        } else if on_match {
-            spans.push(Span::styled(" ", match_style));
         } else {
             spans.push(Span::raw(" "));
         }
@@ -279,10 +269,8 @@ pub fn draw(
                     continue;
                 }
                 let mut st = run.style;
-                if on_cursor && !on_match {
+                if on_cursor {
                     st = st.bg(theme.cursor_line);
-                } else if on_match {
-                    st = st.bg(theme.focus_item);
                 }
                 col += clipped.chars().count();
                 spans.push(Span::styled(clipped, st));
@@ -303,7 +291,7 @@ pub fn draw(
                 base,
                 focus_style,
                 theme,
-                on_cursor && !on_match,
+                on_cursor,
             ));
         } else {
             let raw = lines.get(src_idx).map_or("", String::as_str);
@@ -319,7 +307,7 @@ pub fn draw(
                 theme,
             ));
         }
-        if on_cursor || on_match {
+        if on_cursor {
             // Pad highlight across the full inner width (marker + content).
             let used: usize = spans
                 .iter()
@@ -327,15 +315,24 @@ pub fn draw(
                 .sum();
             let pad = usize::from(inner_area.width).saturating_sub(used);
             if pad > 0 {
-                let pad_style = if on_match {
-                    match_style
-                } else {
-                    Style::default().bg(theme.cursor_line)
-                };
-                spans.push(Span::styled(" ".repeat(pad), pad_style));
+                spans.push(Span::styled(
+                    " ".repeat(pad),
+                    Style::default().bg(theme.cursor_line),
+                ));
             }
         }
         let row_text = lines.get(src_idx).map_or("", String::as_str);
+        // The searched phrase: the active tab / footer link colours.
+        if let Some((l, c0, c1)) = match_span
+            && l == line_no
+        {
+            spans = patch_cols(
+                spans,
+                origin + usize::from(c0),
+                (origin + usize::from(c1)).min(origin + text_width),
+                Style::default().bg(theme.peach).fg(theme.on_peach),
+            );
+        }
         if let Some(sel) = selection
             && let Some((c0, c1)) = sel.cols_on(line_no, text_col::line_width(row_text))
         {
@@ -361,7 +358,12 @@ pub fn draw(
                 spans,
                 origin + col,
                 origin + col + w,
-                Style::default().add_modifier(Modifier::REVERSED),
+                // Default text colour as the block, the glyph inverted: reads on a
+                // peach phrase and on the cursor line alike.
+                Style::default()
+                    .fg(Color::Reset)
+                    .bg(Color::Reset)
+                    .add_modifier(Modifier::REVERSED),
             );
         }
         out_lines.push(Line::from(spans));

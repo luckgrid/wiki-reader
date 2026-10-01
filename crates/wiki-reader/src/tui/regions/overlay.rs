@@ -34,7 +34,19 @@ pub fn popup_accent(theme: &Theme) -> Style {
 pub fn popup_row(spans: Vec<Span<'static>>, inner_w: u16, bg: Option<Color>) -> Line<'static> {
     let paint = |style: Style| bg.map_or(style, |c| style.bg(c));
     let content_max = usize::from(inner_w.saturating_sub(POPUP_PAD * 2));
-    let clipped = clip_spans(spans, content_max);
+    let total: usize = spans
+        .iter()
+        .map(|s| usize::from(crate::tui::text_col::line_width(&s.content)))
+        .sum();
+    // A cut-off row ends in `…` instead of stopping dead at the border.
+    let clipped = if total > content_max && content_max > 1 {
+        let tail_style = spans.last().map_or_else(Style::default, |s| s.style);
+        let mut cut = clip_spans(spans, content_max - 1);
+        cut.push(Span::styled("…", tail_style));
+        cut
+    } else {
+        clip_spans(spans, content_max)
+    };
     let used: usize = clipped
         .iter()
         .map(|s| usize::from(crate::tui::text_col::line_width(&s.content)))

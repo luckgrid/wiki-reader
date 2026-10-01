@@ -1328,14 +1328,21 @@ fn selection_and_cursor_cell_are_painted() {
         let (x, y) = cell_xy(&app, first, 0);
         let bg = |c: u16| buf[(x + c, y)].bg;
         assert_ne!(bg(1), sel_bg, "raw={raw}: before the selection");
-        for c in 2..=4 {
+        for c in 2..=3 {
             assert_eq!(bg(c), sel_bg, "raw={raw}: col {c} selected");
         }
         assert_ne!(bg(5), sel_bg, "raw={raw}: after the selection");
-        // The cursor (at the drag head) is reversed while the View is focused.
+        // The cursor (at the drag head, col 4) is the default text colour as a
+        // block with the glyph inverted, while the View is focused.
+        let cursor = &buf[(x + 4, y)];
         assert!(
-            buf[(x + 4, y)].modifier.contains(Modifier::REVERSED),
+            cursor.modifier.contains(Modifier::REVERSED),
             "raw={raw}: cursor cell"
+        );
+        assert_eq!(
+            (cursor.fg, cursor.bg),
+            (ratatui::style::Color::Reset, ratatui::style::Color::Reset),
+            "raw={raw}: cursor uses the default colours, reversed"
         );
         app.update(Action::FocusNav);
         let terminal = draw_app(&mut app, 60, 40);
@@ -3413,4 +3420,184 @@ fn raw_view_wraps_long_lines_and_numbers_only_the_first_row() {
     // Cursor mapping: a display row maps back to its source line and forward again.
     assert_eq!(app.doc.source_cursor(last), 2);
     assert_eq!(app.doc.display_cursor(2), first);
+}
+
+#[test]
+fn reopened_nav_starts_right_under_the_search_bar() {
+    let mut app = App::new(&fixture()).unwrap();
+    let _ = draw_app(&mut app, 120, 30);
+    app.update(Action::ToggleNav);
+    let _ = draw_app(&mut app, 120, 30);
+    // Footer links while the nav is hidden used to scroll the current page to
+    // the top of a 1-row nav viewport.
+    for _ in 0..4 {
+        app.update(Action::NextPage);
+        let _ = draw_app(&mut app, 120, 30);
+    }
+    app.update(Action::ToggleNav);
+    let rows = screen_rows(&mut app, 120, 30);
+    assert_eq!(app.nav_scroll, 0, "a list that fits is not scrolled");
+    assert!(
+        rows[4].contains("Worked Example Wiki"),
+        "first tree row under the search bar: {:?}",
+        &rows[1..6]
+    );
+}
+
+#[test]
+fn reopened_nav_still_keeps_the_current_row_visible_when_the_list_is_long() {
+    let mut app = App::new(&fixture()).unwrap();
+    let _ = draw_app(&mut app, 120, 30);
+    app.update(Action::ToggleNav);
+    let _ = draw_app(&mut app, 120, 30);
+    for _ in 0..6 {
+        app.update(Action::NextPage);
+    }
+    app.update(Action::ToggleNav);
+    // A short terminal: the nav viewport is smaller than the list.
+    let _ = draw_app(&mut app, 120, 9);
+    let rows = app.nav_rows();
+    let current = NodeId::Page(app.navigator.tab().current().page.clone());
+    let idx = rows
+        .iter()
+        .position(|r| r.id == current)
+        .expect("current row");
+    let (start, vh) = (usize::from(app.nav_scroll), usize::from(app.nav_viewport));
+    assert!(
+        vh < rows.len(),
+        "viewport {vh} should be shorter than {} rows",
+        rows.len()
+    );
+    assert!(
+        (start..start + vh).contains(&idx),
+        "row {idx} outside [{start}, {})",
+        start + vh
+    );
+}
+
+fn content_search_activate(app: &mut App, query: &str) {
+    app.update(Action::OpenSearch);
+    for c in query.chars() {
+        app.update(Action::SearchChar(c));
+    }
+    app.update(Action::SearchToggleMode);
+    app.update(Action::SearchActivate);
+}
+
+#[test]
+fn content_search_result_keeps_the_page_in_place_and_marks_the_phrase() {
+    use ratatui::style::{Color, Modifier};
+    let mut app = App::new(&fixture()).unwrap();
+    let _ = draw_app(&mut app, 100, 30);
+    content_search_activate(&mut app, "arc");
+    assert_eq!(
+        app.scroll, 0,
+        "loads like a normal page, not pinned to the match"
+    );
+    let (line, c0, c1) = app.match_span().expect("phrase found on the match row");
+    assert_eq!(app.cursor_line, line);
+    assert_eq!(app.cursor_col, c0, "cursor on the phrase start");
+    assert_eq!(c1 - c0, 3);
+    let terminal = draw_app(&mut app, 100, 30);
+    let buf = terminal.backend().buffer();
+    let theme = app.theme;
+    let (x, y) = cell_xy(&app, line, c0);
+    // Cursor: default colours, reversed (also over the phrase).
+    let cursor = &buf[(x, y)];
+    assert!(cursor.modifier.contains(Modifier::REVERSED));
+    assert_eq!((cursor.fg, cursor.bg), (Color::Reset, Color::Reset));
+    // Rest of the phrase: the tab / footer-link colours, readable.
+    for dx in 1..(c1 - c0) {
+        let cell = &buf[(x + dx, y)];
+        assert_eq!(
+            (cell.bg, cell.fg),
+            (theme.peach, theme.on_peach),
+            "phrase cell +{dx}"
+        );
+    }
+    // The rest of the row is just the cursor line, not a yellow slab.
+    assert_eq!(buf[(x + (c1 - c0) + 1, y)].bg, theme.cursor_line);
+}
+
+#[test]
+fn content_search_result_past_the_first_screen_scrolls_to_centre_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let md = format!(
+        "# Long\n\n{}the zebra crossing\n\n{}",
+        "filler line\n\n".repeat(120),
+        "trailing line\n\n".repeat(60)
+    );
+    std::fs::write(dir.path().join("README.md"), md).unwrap();
+    let mut app = App::new(dir.path()).unwrap();
+    let _ = draw_app(&mut app, 100, 24);
+    content_search_activate(&mut app, "zebra");
+    let rows = u32::from(app.viewer_rows);
+    assert!(
+        app.cursor_line > rows,
+        "match is well past the first screen"
+    );
+    assert_eq!(app.scroll, app.cursor_line - rows / 2, "centred");
+    assert!(app.match_span().is_some());
+}
+
+#[test]
+fn search_content_rows_end_in_an_ellipsis_and_the_footer_has_room_below() {
+    let mut app = App::new(&fixture()).unwrap();
+    app.update(Action::OpenSearch);
+    for c in "ar".chars() {
+        app.update(Action::SearchChar(c));
+    }
+    app.update(Action::SearchToggleMode);
+    let rows = screen_rows(&mut app, 90, 24);
+    let cut = rows
+        .iter()
+        .find(|r| r.contains('[') && r.contains(" – ") && r.contains('…'))
+        .unwrap_or_else(|| panic!("no truncated content row:\n{}", rows.join("\n")));
+    let tail: Vec<char> = cut.chars().collect();
+    let dots = tail.iter().rposition(|&c| c == '…').unwrap();
+    assert!(
+        tail[dots + 1..].iter().all(|&c| c == ' ' || c == '│'),
+        "ellipsis is the last text on the row: {cut}"
+    );
+    let footer = rows
+        .iter()
+        .position(|r| r.contains("Tab: toggle mode") && r.contains("matches"))
+        .unwrap();
+    let below = &rows[footer + 1];
+    assert!(
+        below.contains('└')
+            || below.chars().filter(|c| !matches!(c, ' ' | '│')).count() == 0
+            || below.contains('┘'),
+        "blank row (or the border) right under the footer: {below}"
+    );
+}
+
+#[test]
+fn help_dividers_have_one_row_above_and_none_below() {
+    let app = App::new(&fixture()).unwrap();
+    let help = crate::tui::help_ui::HelpOverlay::new(&app.key_overrides);
+    let heads: Vec<usize> = help
+        .rows
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| r.heading)
+        .map(|(i, _)| i)
+        .collect();
+    assert!(heads.len() >= 3);
+    assert_eq!(
+        heads[0], 0,
+        "no spacer above the first divider (window padding covers it)"
+    );
+    for &h in &heads[1..] {
+        assert!(
+            help.rows[h - 1].spacer && !help.rows[h - 2].spacer,
+            "one blank row above row {h}"
+        );
+    }
+    for &h in &heads {
+        assert!(
+            help.rows[h + 1].selectable(),
+            "binding rows start right under the divider"
+        );
+    }
 }

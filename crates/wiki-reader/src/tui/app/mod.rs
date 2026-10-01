@@ -21,6 +21,7 @@ use super::opener::{Opener, SystemOpener};
 use super::page_doc::PageDoc;
 use super::rendered_doc::RenderedViewerDoc;
 use super::search_ui::{SearchMode, SearchOverlay};
+use super::text_col;
 use super::theme::Theme;
 use super::viewer_doc::{RawDoc, ViewerDoc};
 use wiki_reader_core::nav::ViewMode;
@@ -138,6 +139,8 @@ pub struct App {
     pub(crate) search_match_idx: usize,
     /// Display line highlighted as the current search match.
     pub(crate) match_highlight: Option<u32>,
+    /// The phrase of the Content search that produced `search_matches`.
+    search_phrase: String,
     /// Expanded block-action ids for the current page (frontmatter / tables).
     pub(crate) expanded_blocks: HashSet<u32>,
     /// Page that `expanded_blocks` belongs to (clear only on page change).
@@ -268,6 +271,7 @@ impl App {
             search_match_page: None,
             search_match_idx: 0,
             match_highlight: None,
+            search_phrase: String::new(),
             expanded_blocks: HashSet::new(),
             expanded_for_page: None,
             clipboard: Box::new(Osc52Clipboard),
@@ -961,6 +965,29 @@ impl App {
         self.search_match_page = None;
         self.search_match_idx = 0;
         self.match_highlight = None;
+        self.search_phrase.clear();
+    }
+
+    /// Display columns `(line, start, end)` of the searched phrase on the current
+    /// match row, if the row still contains it.
+    pub(crate) fn match_span(&self) -> Option<(u32, u16, u16)> {
+        let line = self.match_highlight?;
+        if self.search_phrase.is_empty() {
+            return None;
+        }
+        let row = self.doc.lines().get(usize::try_from(line).ok()?)?;
+        let want: Vec<char> = self.search_phrase.to_lowercase().chars().collect();
+        let chars: Vec<char> = row.chars().collect();
+        let lower: Vec<char> = row.to_lowercase().chars().collect();
+        // Case folding can change a row's length; only trust equal-length rows.
+        if want.is_empty() || lower.len() != chars.len() || want.len() > chars.len() {
+            return None;
+        }
+        let at = (0..=chars.len() - want.len()).find(|&i| lower[i..i + want.len()] == want[..])?;
+        let before: String = chars[..at].iter().collect();
+        let hit: String = chars[at..at + want.len()].iter().collect();
+        let c0 = text_col::line_width(&before);
+        Some((line, c0, c0.saturating_add(text_col::line_width(&hit))))
     }
 
     /// Dedupe consecutive source hits that collapse to the same display line.
@@ -999,7 +1026,15 @@ impl App {
         let display = self.doc.display_cursor(src);
         self.match_highlight = Some(display);
         self.cursor_line = display;
-        self.scroll = display;
+        self.cursor_col = self.match_span().map_or(0, |(_, c0, _)| c0);
+        // Keep the page where it is; scroll (centred) only if the match is off-screen.
+        let rows = u32::from(self.viewer_rows.max(1));
+        if display < self.scroll || display >= self.scroll.saturating_add(rows) {
+            let last = u32::try_from(self.doc.lines().len()).unwrap_or(u32::MAX);
+            self.scroll = display
+                .saturating_sub(rows / 2)
+                .min(last.saturating_sub(rows));
+        }
         self.ensure_cursor_visible();
         self.message = format!(
             "{}/{}",
@@ -1058,6 +1093,7 @@ impl App {
                     return;
                 };
                 let key = hit.page.clone();
+                let phrase = overlay.query.clone();
                 let prefer = hit.line.saturating_sub(1);
                 let page_hits: Vec<u32> = overlay
                     .text_hits
@@ -1069,6 +1105,7 @@ impl App {
                 self.focus = FocusPane::Viewer;
                 let effects = self.navigator.go_to_page(key, self.view_state());
                 self.apply_effects(effects);
+                self.search_phrase = phrase;
                 self.store_search_matches(page_hits, prefer);
             }
         }

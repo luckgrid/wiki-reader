@@ -1,19 +1,18 @@
 ---
 source: crates/wiki-reader/src/tui/app/tests.rs
-assertion_line: 2754
+assertion_line: 2761
 expression: out
 ---
  Worked Example Wiki                                                                                                ◫ ✕ 
 ┌────────────────────────────┐┌┌ Help (? or Esc to close) ──────────────────────────────┐──────────────────────────────┐
 │▌/ Search…                  │││                                                        │──────────────────────────────│
 │                            │││  ── Global ──────────────────────────────────────────  │                              │
-│▌ Worked Example Wiki       │││                                                        │                              │
-│  ▸ Architecture            │││  Alt+← / Alt+b     Back                                │                              │
-│  ▸ Decisions               │││  Alt+→ / Alt+f     Forward                             │                              │
-│                            │││  q / ✕             Quit                                │ root.                        │
-│                            │││  b / ◫             Toggle side nav                     │                              │
-│                            │││  r                 Toggle raw / rendered               │then return via back when     │
-│                            │││  e                 Open in editor                      │                              │
+│▌ Worked Example Wiki       │││  Alt+← / Alt+b     Back                                │                              │
+│  ▸ Architecture            │││  Alt+→ / Alt+f     Forward                             │                              │
+│  ▸ Decisions               │││  q / ✕             Quit                                │                              │
+│                            │││  b / ◫             Toggle side nav                     │ root.                        │
+│                            │││  r                 Toggle raw / rendered               │                              │
+│                            │││  e                 Open in editor                      │then return via back when     │
 │                            │││  y                 Copy page path                      │                              │
 │                            │││  Y                 Copy focused link target            │                              │
 │                            │││  t                 New tab                             │                              │
@@ -24,6 +23,7 @@ expression: out
 │                            │││  n                 Next search match                   │                              │
 │                            │││  N                 Previous search match               │                              │
 │                            │││  [                 Previous page                       │                              │
+│                            │││  ]                 Next page                           │                              │
 │                            │││                                                        │                              │
 └────────────────────────────┘└└────────────────────────────────────────────────────────┘───┤ Architecture Overview › ├┘
   HELP  · README.md · L1:C1 11% · 2026-09-28 · draft · 29w · 1m

@@ -39,6 +39,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 - 2026-09-30: dogfood round 2 (PR 1): nav shows folder names and titles with no `Overview`/`●` ([ADR-0013](../decisions/0013-nav-labels-folder-names-and-titles.md)); nav highlight follows every navigation; search bar readable; frontmatter toggle works on first load (`▼` when open, YAML colored); outlined prev/next buttons; status pill + page status; `v` toggles formatted view; Help dividers/icons; wheel scrolls popups; header/status gaps removed. Column cursor and drag-select are PR 2 (below)
 - 2026-09-30: dogfood round 2 (PR 2): `←`/`→` move a sticky column cursor in the View (`L12:C5` in the status bar; `←` at column 0 focuses the nav); mouse drag selects text and copies it via OSC 52 (wrapped rows rejoined, gutters/borders dropped, tables tab-separated)
 - 2026-09-30: dogfood round 3 (PR 3, from live-terminal notes + herdr/markdown-reader screenshots): tabs become outlined buttons on the View's top border (P2-25); `Nav`/`View` title tags dropped and yellow/peach re-sampled from herdr (P2-26); the eye toggle is removed and Rendered is the formatted view (P2-27, ADR-0014); Search and Help popups restyled after markdown-reader (P2-28); Shift+click / Shift+Enter open a new tab (P2-29); raw view soft-wraps (P2-30); nav indent and `/` search icon (P2-31); frontmatter rules full width and colour fixed (P2-32). Found while testing: a table cell wider than the pane leaked above the table (P2-R37)
+- 2026-10-01: dogfood round 4 (PR 3): reopened nav no longer starts mid-list (P2-R39); content-search results land in place with the phrase highlighted, `…` on cut-off result rows and bottom padding in Search, tighter Help dividers (P2-33)
 
 ## Interim acceptance walk (2026-09-30)
 
@@ -126,6 +127,8 @@ Judged from tests, dogfood QA, and code — not a full interactive sweep of ever
 | P2-31 | Nav nested rows indent one more column (3 per level); search bar icon becomes a text-height `/` | U3 | done | round 3 |
 | P2-32 | Frontmatter box rules span the full pane width; text colour no longer depends on the cursor line | D1 | done | round 3 |
 | P2-R37 | Table cell wider than the pane no longer spills out above the table | D1 | done | `push_span` wrapped cell text at pane width |
+| P2-R39 | Reopened nav starts mid-list: footer navigation while the nav was hidden scrolled the list against a 1-row viewport | N4 | done | round 4; the viewport only updates while the nav is drawn, and a list that fits always starts under the search bar |
+| P2-33 | Search landing and popup polish: a content result keeps the page in place (centred only if off-screen), the phrase is highlighted in peach with the cursor inverted on it; cut-off rows end in `…`; bottom breathing room; Help dividers one row above, none below | U3 | done | round 4 |
 | P2-R38 | Copy fixes: empty table cells kept, wrapped cells rejoined, OSC 52 cap on the encoded payload (75 KB of text), held drag keeps scrolling | CP | done | round 2 follow-ups (PR 2) |
 | P2-24b | Image diagrams and images | D1 | moved | slipped to Phase 3 as P3-12 (2026-09-30); needs ADR-0004 herdr/Kitty spike + deps |
 
