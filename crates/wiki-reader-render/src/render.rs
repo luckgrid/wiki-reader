@@ -917,6 +917,12 @@ impl<'a> LayoutState<'a> {
             return;
         }
         self.cur_src = src;
+        if self.in_table {
+            // Cell text is wrapped to its column by `flush_table`; wrapping here
+            // would hoist the overflow out of the table as a paragraph line.
+            self.push_span_piece(&text, kind, src);
+            return;
+        }
         let mut rest = text;
         while !rest.is_empty() {
             let avail = self.width.saturating_sub(self.cur_width());
