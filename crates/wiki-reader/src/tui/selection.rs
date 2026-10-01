@@ -120,15 +120,38 @@ fn row_piece(text: &str, sl: Option<&StyledLine>, c0: u16, c1: u16) -> Option<St
     let Some(sl) = sl else {
         return Some(slice_cols(text, c0, c1));
     };
-    if has_kind(sl, |k| matches!(k, StyleKind::Rule | StyleKind::Pane)) {
+    // Pure chrome rows (rules, Linked-from horizontals / tag header) are not content.
+    if has_kind(sl, |k| matches!(k, StyleKind::Rule)) {
         return None;
     }
-    // Quote / code rows start with a two-column "│ " gutter that isn't content.
+    if sl
+        .spans
+        .iter()
+        .all(|s| matches!(s.kind, StyleKind::BacklinkBorder | StyleKind::BacklinkTag))
+    {
+        return None;
+    }
+    // Quote / code / backlink entry rows start with a two-column "│ " gutter.
     let gutter = sl.spans.first().is_some_and(|s| {
-        s.text == "│ " && matches!(s.kind, StyleKind::Quote | StyleKind::CodeBlock)
+        s.text == "│ "
+            && matches!(
+                s.kind,
+                StyleKind::Quote | StyleKind::CodeBlock | StyleKind::BacklinkBorder
+            )
     });
     let c0 = if gutter { c0.max(2) } else { c0 };
-    Some(slice_cols(text, c0, c1.max(c0)))
+    // Backlink entries also end with " │".
+    let trail = sl
+        .spans
+        .last()
+        .is_some_and(|s| s.text == " │" && matches!(s.kind, StyleKind::BacklinkBorder));
+    let c1 = if trail {
+        let end = line_width(text).saturating_sub(2);
+        c1.min(end).max(c0)
+    } else {
+        c1.max(c0)
+    };
+    Some(slice_cols(text, c0, c1))
 }
 
 /// Plain flowing text (not a table, code, rule or frontmatter box).
@@ -141,7 +164,8 @@ fn is_prose(sl: &StyledLine) -> bool {
                 | StyleKind::CodeBlock
                 | StyleKind::CodeLang
                 | StyleKind::Rule
-                | StyleKind::Pane
+                | StyleKind::BacklinkBorder
+                | StyleKind::BacklinkTag
                 | StyleKind::Frontmatter
                 | StyleKind::FrontmatterKey
                 | StyleKind::FrontmatterValue

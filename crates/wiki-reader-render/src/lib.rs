@@ -93,9 +93,12 @@ mod tests {
 
     #[test]
     fn list_item_starting_with_inline_code_gets_marker_first() {
-        for (src, marker_prefix) in [
-            ("- `code` only\n- `more` item\n", "• "),
-            ("1. `first` item\n2. `second` item\n", "1. "),
+        for (src, markers) in [
+            ("- `code` only\n- `more` item\n", ["• ", "• "].as_slice()),
+            (
+                "1. `first` item\n2. `second` item\n",
+                ["1. ", "2. "].as_slice(),
+            ),
         ] {
             let doc = render_src(src, 40);
             let items: Vec<_> = doc
@@ -108,17 +111,16 @@ mod tests {
                 "expected ≥2 code items in {src:?}, got {:?}",
                 doc.lines
             );
-            for line in &items {
+            for (line, want) in items.iter().zip(markers.iter()) {
                 assert_eq!(
                     line.spans[0].kind,
                     StyleKind::ListMarker,
                     "marker must lead: {:?}",
                     line.spans
                 );
-                assert!(
-                    line.spans[0].text.starts_with(marker_prefix)
-                        || line.spans[0].text.contains('.'),
-                    "unexpected marker {:?} for {src:?}",
+                assert_eq!(
+                    line.spans[0].text, *want,
+                    "exact marker for {src:?}: {:?}",
                     line.spans[0].text
                 );
             }
@@ -147,13 +149,20 @@ mod tests {
     }
 
     #[test]
-    fn plus_minus_emoji_render_as_ascii() {
-        let src = "- ➕ good\n- ➖ bad\n";
+    fn plus_minus_emoji_at_item_start() {
+        let src = "- ➕ good\n- ➖ bad\n- keep ➕ mid\n";
         let doc = render_src(src, 40);
         let plain = doc.lines.join("\n");
         assert!(plain.contains("+ good"), "{plain}");
-        assert!(plain.contains("- bad"), "{plain}");
-        assert!(!plain.contains('➕') && !plain.contains('➖'), "{plain}");
+        assert!(
+            plain.contains("\u{2212} bad"),
+            "U+2212 minus expected: {plain}"
+        );
+        assert!(
+            plain.contains("keep ➕ mid"),
+            "mid-sentence emoji left alone: {plain}"
+        );
+        assert!(!plain.contains('➖'), "{plain}");
     }
 
     #[test]
@@ -574,11 +583,42 @@ mod tests {
             .find(|s| s.raw_target == "/architecture/design-system/tokens.md")
             .expect("root-relative tokens backlink span");
         assert_eq!(bl.class, LinkClass::Internal);
-        // Backlink segments land after the pane header line.
+        assert!(bl.backlink, "backlink flag set");
+        // Backlink segments land after the pane header line and cover summary.
         let bl_line = bl.segments[0].0 as usize;
         assert!(
             bl_line > section,
             "backlink after header ({bl_line} > {section})"
+        );
+        assert!(
+            bl.segments.len() >= 2,
+            "title + summary segments: {:?}",
+            bl.segments
+        );
+        let header = &doc.styled[section];
+        assert!(
+            header
+                .spans
+                .iter()
+                .any(|s| matches!(s.kind, StyleKind::BacklinkTag)),
+            "tag style on header: {:?}",
+            header.spans
+        );
+        assert!(
+            header
+                .spans
+                .iter()
+                .any(|s| matches!(s.kind, StyleKind::BacklinkBorder)),
+            "border style on header: {:?}",
+            header.spans
+        );
+        assert!(
+            doc.styled.iter().any(|l| {
+                l.spans
+                    .iter()
+                    .any(|s| matches!(s.kind, StyleKind::BacklinkSummary))
+            }),
+            "summary style present"
         );
         assert!(
             doc.lines
@@ -644,21 +684,22 @@ mod tests {
                 .find(|s| s.raw_target == "/src0.md")
                 .unwrap_or_else(|| panic!("backlink at width {width}"));
             assert!(!bl.segments.is_empty(), "width {width}: expected segments");
-            // Title is a single ellipsised row; every link glyph sits inside a segment.
+            assert!(bl.backlink);
+            // Title is a single ellipsised row; summary rows may follow.
             for &(line, (start, end)) in &bl.segments {
                 let row = &doc.styled[line as usize];
                 let row_text: String = row.spans.iter().map(|s| s.text.as_str()).collect();
                 assert!(
                     row_text.width() <= usize::from(width),
-                    "title overflow at {width}: {row_text:?}"
+                    "overflow at {width}: {row_text:?}"
                 );
                 let mut col = 0u16;
                 for sp in &row.spans {
                     let w = u16::try_from(sp.text.width()).unwrap_or(0);
-                    if matches!(sp.kind, StyleKind::Link) {
+                    if matches!(sp.kind, StyleKind::Link | StyleKind::BacklinkSummary) {
                         assert!(
                             col >= start && col + w <= end,
-                            "width {width} line {line}: link {:?} cols {col}..{} outside segment {start}..{end}; row={row_text:?}",
+                            "width {width} line {line}: {:?} cols {col}..{} outside segment {start}..{end}; row={row_text:?}",
                             sp.text,
                             col + w
                         );
@@ -666,9 +707,20 @@ mod tests {
                     col = col.saturating_add(w);
                 }
             }
+            let title_segs: Vec<_> = bl
+                .segments
+                .iter()
+                .filter(|&&(line, _)| {
+                    doc.styled[line as usize]
+                        .spans
+                        .iter()
+                        .any(|s| matches!(s.kind, StyleKind::Link))
+                })
+                .collect();
             if width == 30 {
-                assert!(
-                    bl.segments.len() == 1,
+                assert_eq!(
+                    title_segs.len(),
+                    1,
                     "title is one ellipsised row, segs={:?}",
                     bl.segments
                 );
@@ -844,6 +896,75 @@ mod tests {
     }
 
     #[test]
+    fn linked_from_falls_back_to_first_paragraph() {
+        let cases: &[(&str, &str)] = &[
+            (
+                "# Src\n\nFirst paragraph of the source page used as summary.\n\nMore.\n\nSee [dst](dst.md).\n",
+                "First paragraph of the source page used as summary.",
+            ),
+            (
+                "# Src\n\n```\nfence first\n```\n\nAfter the fence.\n\nSee [dst](dst.md).\n",
+                "After the fence.",
+            ),
+            (
+                "# Src\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\nAfter the table.\n\nSee [dst](dst.md).\n",
+                "After the table.",
+            ),
+            (
+                "# Src\n\n- list first\n\nAfter the list.\n\nSee [dst](dst.md).\n",
+                "After the list.",
+            ),
+            (
+                "# Src\n\n> [!NOTE]\n> alert body\n\nAfter the alert.\n\nSee [dst](dst.md).\n",
+                "After the alert.",
+            ),
+            (
+                "# Src\n\nSee [label](other.md) and `code` here.\n\nSee [dst](dst.md).\n",
+                "See label and code here.",
+            ),
+        ];
+        for (src_body, want) in cases {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            std::fs::write(root.join("src.md"), src_body).unwrap();
+            std::fs::write(root.join("dst.md"), "# Dst\n\nBody.\n").unwrap();
+            let provider = FsProvider::open(root).unwrap();
+            let index = wiki_reader_core::Index::build(&provider).unwrap();
+            let key = PageKey {
+                collection_id: index.collection_id.clone(),
+                relative_path: std::path::PathBuf::from("dst.md"),
+            };
+            let src = provider.read(&key).unwrap();
+            let page = index.pages.get(&key);
+            let doc = render(&src, page, &key, &index, 80);
+            let joined = doc.lines.join("\n");
+            assert!(
+                joined.contains(want),
+                "expected {want:?} in summary for {src_body:?}: {joined:?}"
+            );
+            assert!(
+                !joined.contains('`'),
+                "no backticks in fallback for {src_body:?}: {joined:?}"
+            );
+            assert!(
+                !joined.contains("]("),
+                "no link markup in fallback for {src_body:?}: {joined:?}"
+            );
+            let bl = doc
+                .links
+                .iter()
+                .find(|s| s.raw_target == "/src.md")
+                .expect("backlink");
+            assert!(bl.backlink);
+            assert!(
+                bl.segments.len() >= 2,
+                "title + summary segments: {:?}",
+                bl.segments
+            );
+        }
+    }
+
+    #[test]
     fn linked_from_gap_is_two_blanks() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/worked-example");
         let provider = FsProvider::open(&root).unwrap();
@@ -890,8 +1011,8 @@ mod tests {
             header
                 .spans
                 .iter()
-                .any(|s| s.text.contains('┌') && matches!(s.kind, StyleKind::Pane)),
-            "Pane chrome on header: {:?}",
+                .any(|s| s.text.contains('┌') && matches!(s.kind, StyleKind::BacklinkBorder)),
+            "Border chrome on header: {:?}",
             header.spans
         );
         // First entry title is the next row (link), then optional summary, no blank.
@@ -902,6 +1023,20 @@ mod tests {
                 .any(|s| matches!(s.kind, StyleKind::Link)),
             "title hugs the header: {:?}",
             doc.lines
+        );
+        assert!(
+            doc.styled[section + 1].spans.first().is_some_and(|s| {
+                s.text == "│ " && matches!(s.kind, StyleKind::BacklinkBorder)
+            }),
+            "entry has left side border: {:?}",
+            doc.styled[section + 1].spans
+        );
+        assert!(
+            doc.styled[section + 1].spans.last().is_some_and(|s| {
+                s.text == " │" && matches!(s.kind, StyleKind::BacklinkBorder)
+            }),
+            "entry has right side border: {:?}",
+            doc.styled[section + 1].spans
         );
         assert!(
             doc.lines.last().is_some_and(|l| l.starts_with('└')),

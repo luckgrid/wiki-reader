@@ -504,6 +504,7 @@ fn link_spans_from_md(
                 raw_target: md.target.clone(),
                 class,
                 segments: vec![(md.source_line.saturating_sub(1), cols)],
+                backlink: false,
             }
         })
         .collect()

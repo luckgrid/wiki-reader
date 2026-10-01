@@ -46,6 +46,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 - 2026-10-01: dogfood round 5 (PR 2): Linked from is a box-drawn pane with a tag header, teal title links, optional summaries and dividers (P2-37)
 - 2026-10-01: dogfood round 5 (PR 3): narrow nav rows end in `…` (drop the `(file)` suffix first in title+filename); Search query sits under the top border with no blank row (P2-38, P2-39)
 - 2026-10-01: dogfood round 5 (PR 4): Cmd/Ctrl+Enter and Cmd/Ctrl+→ (nav) open a new tab via kitty `DISAMBIGUATE_ESCAPE_CODES`; Ctrl+click joins Shift+click ([ADR-0015](../decisions/0015-new-tab-combos-kitty-keyboard.md), P2-40)
+- 2026-10-01: dogfood round 5 brief deltas: leading ➕/➖ → `+`/U+2212 only at item/paragraph start (P2-41); viewer asserts inline code is not full-row shaded (P2-42); Linked from whole-entry hit/focus with selection bg, teal ▌ replacing left `│`, side borders, plain first-paragraph summary (P2-43)
 
 ## Interim acceptance walk (2026-09-30)
 
@@ -136,12 +137,15 @@ Judged from tests, dogfood QA, and code — not a full interactive sweep of ever
 | P2-R39 | Reopened nav starts mid-list: footer navigation while the nav was hidden scrolled the list against a 1-row viewport | N4 | done | round 4; the viewport only updates while the nav is drawn, and a list that fits always starts under the search bar |
 | P2-33 | Search landing and popup polish: a content result keeps the page in place (centred only if off-screen), the phrase is highlighted in peach with the cursor inverted on it; cut-off rows end in `…`; bottom breathing room; Help dividers one row above, none below | U3 | done | round 4 |
 | P2-34 | List items that start with inline code or a link emit the marker first; inline code no longer full-row shades adjacent items into one band | D1 | done | round 5 PR 1 |
-| P2-35 | Consequence ➕/➖ emoji render as ASCII `+`/`-` so they take the text colour | D1 | done | round 5 PR 1 |
+| P2-35 | Consequence ➕/➖ emoji at item/paragraph start render as `+` / U+2212 `−` so they take the text colour | D1 | done | round 5 PR 1; mid-sentence emoji left alone (P2-41) |
 | P2-36 | Heading ramp: H1 accent/teal, H2 peach, H3–H5 light gray; internal links teal; status pills use dedicated tokens | U3 | done | round 5 PR 1 |
 | P2-37 | Linked from is a box-drawn pane: tag header, title links, optional summaries, dividers between entries | B1 | done | round 5 PR 2 |
 | P2-38 | Narrow nav rows end in `…`; in `title+filename` the dim `(file)` suffix is dropped before the title is ellipsised | U3 | done | round 5 PR 3 |
 | P2-39 | Search overlay: query row sits directly under the top border (no blank row) | U3 | done | round 5 PR 3 |
 | P2-40 | New-tab combos: Cmd/Ctrl+Enter, Cmd/Ctrl+→ (nav), Ctrl+click; kitty DISAMBIGUATE flags ([ADR-0015](../decisions/0015-new-tab-combos-kitty-keyboard.md)) | TB | done | round 5 PR 4 |
+| P2-41 | Leading ➕/➖ at item/paragraph start only → `+` / U+2212; mid-sentence left alone | D1 | done | round 5 brief deltas |
+| P2-42 | Viewer test: inline code does not full-row shade adjacent list items | D1 | done | round 5 brief deltas |
+| P2-43 | Linked from: whole-entry LinkSpan (title+summary), side borders, BacklinkBorder/Tag/Summary styles, selection bg + teal ▌ (replaces left `│`) on Tab focus, plain first-paragraph summary fallback | B1 | done | round 5 brief deltas |
 | P2-R38 | Copy fixes: empty table cells kept, wrapped cells rejoined, OSC 52 cap on the encoded payload (75 KB of text), held drag keeps scrolling | CP | done | round 2 follow-ups (PR 2) |
 | P2-24b | Image diagrams and images | D1 | moved | slipped to Phase 3 as P3-12 (2026-09-30); needs ADR-0004 herdr/Kitty spike + deps |
 

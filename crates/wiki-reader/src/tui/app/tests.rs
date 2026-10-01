@@ -1302,6 +1302,42 @@ fn drag_select_code_drops_the_gutter() {
 }
 
 #[test]
+fn drag_select_backlink_drops_side_borders() {
+    use crate::tui::clipboard::RecordingClipboard;
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("src.md"),
+        "---\ntitle: Src Title\nsummary: A short summary line.\n---\n\n# Src\n\nSee [dst](dst.md).\n",
+    )
+    .unwrap();
+    std::fs::write(dir.path().join("dst.md"), "# Dst\n\nBody.\n").unwrap();
+    let mut app = App::new(dir.path()).unwrap();
+    let rec = RecordingClipboard::default();
+    let log = Arc::clone(&rec.copied);
+    app.clipboard = Box::new(rec);
+    app.update(Action::GoToPage(PageKey {
+        collection_id: app.navigator.tab().current().page.collection_id.clone(),
+        relative_path: PathBuf::from("dst.md"),
+    }));
+    let _ = draw_app(&mut app, 80, 40);
+    let title = row_of(&app, "Src Title");
+    let end = last_col(&app, title);
+    drag_select(&mut app, (title, 0), (title, end));
+    let copied = log.lock().unwrap().clone();
+    assert_eq!(copied.len(), 1, "{copied:?}");
+    assert!(
+        !copied[0].contains('│'),
+        "side borders stripped: {:?}",
+        copied[0]
+    );
+    assert!(
+        copied[0].contains("Src Title"),
+        "title kept: {:?}",
+        copied[0]
+    );
+}
+
+#[test]
 fn drag_select_in_raw_view_copies_source_text() {
     let (_d, mut app, log) = app_with_page(SELECT_MD);
     app.update(Action::ToggleViewMode);
@@ -1493,6 +1529,45 @@ fn left_at_column_zero_reveals_a_hidden_nav() {
 }
 
 #[test]
+fn inline_code_does_not_full_row_shade() {
+    let md = "- item with `alpha` here\n- next with `beta` too\n\n```\nfenced\n```\n";
+    let (_d, mut app, _) = app_with_page(md);
+    let terminal = draw_app(&mut app, 80, 30);
+    let buf = terminal.backend().buffer();
+    let code_bg = app.theme.code_bg;
+    let line = row_of(&app, "alpha");
+    let (x0, y) = cell_xy(&app, line, 0);
+    // List marker / plain text before the code span must not carry code_bg.
+    assert_ne!(
+        buf[(x0, y)].bg,
+        code_bg,
+        "list marker cell must not be full-row shaded"
+    );
+    // A cell after the closing backtick text on the same row.
+    let plain_after = app.doc.lines()[line as usize]
+        .find("here")
+        .expect("plain after code");
+    let (ax, ay) = cell_xy(&app, line, u16::try_from(plain_after).unwrap_or(0));
+    assert_ne!(
+        buf[(ax, ay)].bg,
+        code_bg,
+        "plain text after inline code must not be shaded"
+    );
+    // Fenced code still pads the row with code_bg.
+    let fenced = row_of(&app, "fenced");
+    let (fx, fy) = cell_xy(&app, fenced, 0);
+    let row_w = buf.area.width;
+    let mut found_pad = false;
+    for x in fx..row_w {
+        if buf[(x, fy)].symbol() == " " && buf[(x, fy)].bg == code_bg {
+            found_pad = true;
+            break;
+        }
+    }
+    assert!(found_pad, "fenced block still full-row shades");
+}
+
+#[test]
 fn linked_from_backlink_in_tab_cycle_and_activate() {
     let root = fixture();
     let mut app = App::new(&root).unwrap();
@@ -1523,8 +1598,62 @@ fn linked_from_backlink_in_tab_cycle_and_activate() {
         .position(|it| matches!(it.kind, FocusTarget::FooterPrev | FocusTarget::FooterNext))
         .expect("footer");
     assert!(bl_idx < footer_idx, "backlink before footer in Tab cycle");
-    // Enter on the backlink matches tree-select history shape (replace, one tab).
+    // Tab onto the backlink so the cursor lands on the title row (real path).
     app.update(Action::FocusViewer);
+    app.focused_item = None;
+    app.cursor_line = 0;
+    for _ in 0..items.len().saturating_add(2) {
+        app.update(Action::ViewerTab);
+        if app.focused_item == Some(bl_idx) {
+            break;
+        }
+    }
+    assert_eq!(app.focused_item, Some(bl_idx), "Tab reaches backlink");
+    let title_line = bl.segments[0].0;
+    assert_eq!(
+        app.cursor_line, title_line,
+        "cursor lands on title after Tab"
+    );
+    let terminal = draw_app(&mut app, 120, 40);
+    let buf = terminal.backend().buffer();
+    let sel_bg = app.theme.selection;
+    // Teal ▌ replaces the left │ at content col 0.
+    let (bx, title_y) = cell_xy(&app, title_line, 0);
+    assert!(
+        buf[(bx, title_y)].symbol().contains('▌'),
+        "teal ▌ on focused backlink title at ({bx},{title_y})"
+    );
+    assert_eq!(buf[(bx, title_y)].fg, app.theme.link, "▌ uses link teal");
+    for &(line, (c0, _)) in &bl.segments {
+        let (sx, sy) = cell_xy(&app, line, c0);
+        assert_eq!(
+            buf[(sx, sy)].bg,
+            sel_bg,
+            "selection bg on focused entry line {line} col {c0}"
+        );
+    }
+    // Unfocused: title stays link teal, summary is normal text (not link-teal).
+    app.focused_item = None;
+    // Keep the entry on-screen but cursor off it (cursor_line would recolour the row).
+    app.cursor_line = title_line.saturating_sub(3);
+    app.scroll = title_line.saturating_sub(5);
+    let terminal = draw_app(&mut app, 120, 40);
+    let buf = terminal.backend().buffer();
+    let (tx, ty) = cell_xy(&app, title_line, bl.segments[0].1.0);
+    assert_eq!(
+        buf[(tx, ty)].fg,
+        app.theme.link,
+        "unfocused title is link teal"
+    );
+    if let Some(&(sum_line, (c0, _))) = bl.segments.get(1) {
+        let (sx, sy) = cell_xy(&app, sum_line, c0);
+        assert_eq!(
+            buf[(sx, sy)].fg,
+            app.theme.text,
+            "unfocused summary is text colour"
+        );
+    }
+    // Enter on the backlink matches tree-select history shape (replace, one tab).
     app.focused_item = Some(bl_idx);
     app.update(Action::ViewerActivate);
     assert_eq!(
@@ -1532,6 +1661,45 @@ fn linked_from_backlink_in_tab_cycle_and_activate() {
         PathBuf::from("architecture/design-system/tokens.md")
     );
     assert_eq!(app.navigator.tab_count(), 1);
+}
+
+#[test]
+fn focused_ordinary_link_keeps_focus_bg_on_cursor_row() {
+    let md = "# T\n\nSee [here](missing.md) please.\n";
+    let (_d, mut app, _) = app_with_page(md);
+    let _ = draw_app(&mut app, 80, 24);
+    let link = app
+        .doc
+        .link_spans()
+        .iter()
+        .find(|s| s.raw_target.contains("missing"))
+        .expect("body link")
+        .clone();
+    let items = app.focus_list();
+    let idx = items
+        .iter()
+        .position(|it| it.link_id == Some(link.id))
+        .expect("link in focus list");
+    app.update(Action::FocusViewer);
+    app.focused_item = None;
+    app.cursor_line = 0;
+    for _ in 0..items.len().saturating_add(2) {
+        app.update(Action::ViewerTab);
+        if app.focused_item == Some(idx) {
+            break;
+        }
+    }
+    assert_eq!(app.focused_item, Some(idx));
+    let link_line = link.segments[0].0;
+    assert_eq!(app.cursor_line, link_line, "cursor on focused link row");
+    let terminal = draw_app(&mut app, 80, 24);
+    let buf = terminal.backend().buffer();
+    let (x, y) = cell_xy(&app, link_line, link.segments[0].1.0);
+    assert_eq!(
+        buf[(x, y)].bg,
+        app.theme.focus_item,
+        "focus_item bg survives cursor row"
+    );
 }
 
 #[test]

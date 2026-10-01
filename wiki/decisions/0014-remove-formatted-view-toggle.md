@@ -29,7 +29,3 @@ related: [0012-syntax-vs-formatted, 0011-renderer-source]
 - ➕ Link, block and source-map geometry no longer depends on a mode.
 - ➖ Heading level without `#` relies on colour and spacing; code blocks rely on a label instead of fences.
 - ➖ There is no rendered view that keeps markers. Anyone who wants them uses `r`.
-
-## Follow-ups
-
-- 2026-10-01: "Linked from" is now a box-drawn pane (tag header, title links, optional summaries, dividers) rather than a Heading(2) + rule + bullet list; see dogfood round 5 / P2-37.

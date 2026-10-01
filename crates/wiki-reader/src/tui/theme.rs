@@ -97,10 +97,10 @@ impl Default for Theme {
             heading: [
                 Color::Cyan,               // H1 = accent
                 Color::Rgb(246, 201, 159), // H2 = peach
-                Color::Rgb(160, 165, 175), // H3 = text_secondary
-                Color::Rgb(160, 165, 175), // H4
-                Color::Rgb(160, 165, 175), // H5
-                Color::Rgb(180, 180, 180), // H6
+                Color::Rgb(205, 208, 215), // H3
+                Color::Rgb(185, 190, 198), // H4
+                Color::Rgb(165, 170, 180), // H5
+                Color::Rgb(140, 145, 155), // H6 muted
             ],
             alert: [
                 Color::DarkGray,           // 0 unused
@@ -163,7 +163,7 @@ impl Theme {
     pub fn style_kind(&self, kind: wiki_reader_render::StyleKind) -> Style {
         use wiki_reader_render::StyleKind;
         match kind {
-            StyleKind::Plain | StyleKind::Table => self.text(),
+            StyleKind::Plain | StyleKind::Table | StyleKind::BacklinkSummary => self.text(),
             StyleKind::TableHeader => Style::default()
                 .fg(self.accent)
                 .add_modifier(Modifier::BOLD),
@@ -198,8 +198,10 @@ impl Theme {
             StyleKind::Frontmatter | StyleKind::FrontmatterPunct => {
                 Style::default().fg(self.text_muted)
             }
-            StyleKind::FrontmatterValue => Style::default().fg(self.text_secondary),
-            StyleKind::Rule | StyleKind::Pane => Style::default().fg(self.border),
+            StyleKind::FrontmatterValue | StyleKind::BacklinkTag => {
+                Style::default().fg(self.text_secondary)
+            }
+            StyleKind::Rule | StyleKind::BacklinkBorder => Style::default().fg(self.border),
             StyleKind::FrontmatterKey | StyleKind::ListMarker | StyleKind::TaskMarker => {
                 Style::default().fg(self.accent)
             }
