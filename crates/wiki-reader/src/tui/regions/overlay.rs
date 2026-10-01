@@ -11,7 +11,7 @@ use crate::tui::theme::Theme;
 /// Columns of blank padding inside a popup, left and right.
 pub const POPUP_PAD: u16 = 2;
 
-/// Gold-bordered popup frame with `title` on the top border.
+/// Peach-bordered popup frame with `title` on the top border.
 #[must_use]
 pub fn popup_block(title: Line<'static>, theme: &Theme) -> Block<'static> {
     Block::default()
@@ -20,7 +20,7 @@ pub fn popup_block(title: Line<'static>, theme: &Theme) -> Block<'static> {
         .title(title)
 }
 
-/// Gold bold style for popup titles and accents.
+/// Peach bold style for popup titles and accents.
 #[must_use]
 pub fn popup_accent(theme: &Theme) -> Style {
     Style::default()
@@ -51,8 +51,9 @@ pub fn popup_row(spans: Vec<Span<'static>>, inner_w: u16, bg: Option<Color>) -> 
         .iter()
         .map(|s| usize::from(crate::tui::text_col::line_width(&s.content)))
         .sum();
-    let pad = " ".repeat(usize::from(POPUP_PAD));
-    let fill = usize::from(inner_w).saturating_sub(usize::from(POPUP_PAD) + used);
+    let left_pad = usize::from(POPUP_PAD.min(inner_w));
+    let pad = " ".repeat(left_pad);
+    let fill = usize::from(inner_w).saturating_sub(left_pad + used);
     let mut out = vec![Span::styled(pad, paint(Style::default()))];
     out.extend(
         clipped
@@ -100,4 +101,22 @@ pub fn ensure_visible(selected: usize, scroll: usize, visible: usize) -> usize {
 pub fn clamp_scroll(scroll: usize, visible: usize, len: usize) -> usize {
     let max = len.saturating_sub(visible.max(1));
     scroll.min(max)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn popup_rows_never_exceed_tiny_widths() {
+        for width in 0..=5 {
+            let row = popup_row(vec![Span::raw("漢abcdef")], width, Some(Color::Blue));
+            assert_eq!(row.width(), usize::from(width));
+            assert!(
+                row.spans
+                    .iter()
+                    .all(|span| span.style.bg == Some(Color::Blue))
+            );
+        }
+    }
 }

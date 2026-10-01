@@ -321,7 +321,8 @@ impl RawDoc {
         usize::try_from(row)
             .ok()
             .and_then(|i| self.rows.get(i))
-            .map_or(row, |r| r.0)
+            .or_else(|| self.rows.last())
+            .map_or(0, |r| r.0)
     }
 
     /// First 0-based display row of a 0-based source line.
@@ -330,8 +331,9 @@ impl RawDoc {
         usize::try_from(source)
             .ok()
             .and_then(|i| self.first_row.get(i))
+            .or_else(|| self.first_row.last())
             .copied()
-            .unwrap_or(source)
+            .unwrap_or(0)
     }
 
     /// Raw target for a link id.
@@ -632,6 +634,22 @@ more words here
         assert!(doc.block_starts().len() >= 3);
         assert!(doc.word_count() > 0);
         assert_eq!(doc.anchor_line("h2"), Some(doc.src_headings[1].1));
+    }
+
+    #[test]
+    fn raw_wrap_mapping_handles_wide_tabs_empty_and_out_of_range() {
+        let doc = RawDoc::from_source("ab漢c\tde\nshort", None).wrapped(4);
+        assert_eq!(doc.lines[..doc.first_row[1] as usize].concat(), "ab漢c\tde");
+        assert!(doc.lines.iter().all(|line| text_col::line_width(line) <= 4));
+        assert_eq!(doc.source_line_of_row(0), 0);
+        assert_eq!(doc.source_line_of_row(u32::MAX), 1);
+        assert_eq!(doc.first_row_of(0), 0);
+        assert_eq!(doc.first_row_of(u32::MAX), doc.first_row[1]);
+
+        let empty = RawDoc::from_source("", None).wrapped(4);
+        assert!(empty.lines.is_empty());
+        assert_eq!(empty.source_line_of_row(u32::MAX), 0);
+        assert_eq!(empty.first_row_of(u32::MAX), 0);
     }
 
     #[test]

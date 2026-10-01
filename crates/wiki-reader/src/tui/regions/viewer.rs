@@ -2,7 +2,7 @@
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 
@@ -90,7 +90,7 @@ pub fn draw(
     cursor_line: u32,
     cursor_col: u16,
     selection: Option<Selection>,
-    match_span: Option<(u32, u16, u16)>,
+    match_spans: &[(u32, u16, u16)],
     focused: bool,
     focused_item: Option<&FocusItem>,
     focus_items: &[FocusItem],
@@ -323,9 +323,7 @@ pub fn draw(
         }
         let row_text = lines.get(src_idx).map_or("", String::as_str);
         // The searched phrase: the active tab / footer link colours.
-        if let Some((l, c0, c1)) = match_span
-            && l == line_no
-        {
+        for &(_, c0, c1) in match_spans.iter().filter(|(line, _, _)| *line == line_no) {
             spans = patch_cols(
                 spans,
                 origin + usize::from(c0),
@@ -358,12 +356,9 @@ pub fn draw(
                 spans,
                 origin + col,
                 origin + col + w,
-                // Default text colour as the block, the glyph inverted: reads on a
-                // peach phrase and on the cursor line alike.
-                Style::default()
-                    .fg(Color::Reset)
-                    .bg(Color::Reset)
-                    .add_modifier(Modifier::REVERSED),
+                // Invert the existing cell colours so the cursor remains visible
+                // without erasing a search or drag-selection background.
+                Style::default().add_modifier(Modifier::REVERSED),
             );
         }
         out_lines.push(Line::from(spans));
@@ -405,19 +400,10 @@ fn paint_styled_line(
 
     let style_at = |col: u16, kind: StyleKind| -> Style {
         let mut st = theme.style_kind(kind);
-        let flat = !matches!(
-            kind,
-            StyleKind::CodeBlock | StyleKind::CodeLang | StyleKind::InlineCode | StyleKind::Quote
-        );
         if on_cursor {
+            // Preserve semantic foregrounds (headings, YAML keys, alerts) while
+            // making the cursor row visible.
             st = st.bg(theme.cursor_line);
-            // Same text colour on and off the cursor line (the frontmatter label
-            // used to read gray until the cursor left it).
-            if flat {
-                st = st.fg(theme.text);
-            }
-        } else if flat {
-            st = st.patch(base);
         }
         for &(c0, c1, class, is_focus) in &ranges {
             if col >= c0 && col < c1 {

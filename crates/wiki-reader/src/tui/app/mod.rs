@@ -968,26 +968,76 @@ impl App {
         self.search_phrase.clear();
     }
 
-    /// Display columns `(line, start, end)` of the searched phrase on the current
-    /// match row, if the row still contains it.
-    pub(crate) fn match_span(&self) -> Option<(u32, u16, u16)> {
-        let line = self.match_highlight?;
+    /// Display-column spans of the active Content-search phrase. A phrase may
+    /// cross soft-wrapped rows; virtual boundary spaces have no painted span.
+    pub(crate) fn match_spans(&self) -> Vec<(u32, u16, u16)> {
+        type MappedGlyph = (char, Option<(u32, u16, u16)>);
+
+        let Some(&source) = self.search_matches.get(self.search_match_idx) else {
+            return Vec::new();
+        };
         if self.search_phrase.is_empty() {
-            return None;
+            return Vec::new();
         }
-        let row = self.doc.lines().get(usize::try_from(line).ok()?)?;
+
+        // (case-folded glyph, display location); `None` is a virtual space
+        // between rendered rows, whose wrapping removes source whitespace.
+        let mut flat: Vec<MappedGlyph> = Vec::new();
+        for (line, row) in self.doc.lines().iter().enumerate() {
+            let line = u32::try_from(line).unwrap_or(u32::MAX);
+            if self.doc.source_cursor(line) != source {
+                continue;
+            }
+            if !flat.is_empty()
+                && !flat.last().is_some_and(|(ch, _)| ch.is_whitespace())
+                && !row.starts_with(char::is_whitespace)
+            {
+                flat.push((' ', None));
+            }
+            let mut col = 0u16;
+            for ch in row.chars() {
+                let folded: Vec<char> = ch.to_lowercase().collect();
+                if folded.len() != 1 {
+                    return Vec::new();
+                }
+                let width = text_col::char_width(ch);
+                flat.push((folded[0], Some((line, col, width))));
+                col = col.saturating_add(width);
+            }
+        }
         let want: Vec<char> = self.search_phrase.to_lowercase().chars().collect();
-        let chars: Vec<char> = row.chars().collect();
-        let lower: Vec<char> = row.to_lowercase().chars().collect();
-        // Case folding can change a row's length; only trust equal-length rows.
-        if want.is_empty() || lower.len() != chars.len() || want.len() > chars.len() {
-            return None;
+        if want.is_empty() || want.len() > flat.len() {
+            return Vec::new();
         }
-        let at = (0..=chars.len() - want.len()).find(|&i| lower[i..i + want.len()] == want[..])?;
-        let before: String = chars[..at].iter().collect();
-        let hit: String = chars[at..at + want.len()].iter().collect();
-        let c0 = text_col::line_width(&before);
-        Some((line, c0, c0.saturating_add(text_col::line_width(&hit))))
+        let Some(at) = (0..=flat.len() - want.len()).find(|&i| {
+            flat[i..i + want.len()]
+                .iter()
+                .map(|p| p.0)
+                .eq(want.iter().copied())
+        }) else {
+            return Vec::new();
+        };
+
+        let mut spans: Vec<(u32, u16, u16)> = Vec::new();
+        for &(_, pos) in &flat[at..at + want.len()] {
+            let Some((line, col, width)) = pos else {
+                continue;
+            };
+            if let Some((last_line, _, last_end)) = spans.last_mut()
+                && *last_line == line
+                && *last_end == col
+            {
+                *last_end = col.saturating_add(width);
+            } else {
+                spans.push((line, col, col.saturating_add(width)));
+            }
+        }
+        spans
+    }
+
+    /// First painted span of the active Content-search phrase.
+    pub(crate) fn match_span(&self) -> Option<(u32, u16, u16)> {
+        self.match_spans().into_iter().next()
     }
 
     /// Dedupe consecutive source hits that collapse to the same display line.
@@ -1024,14 +1074,16 @@ impl App {
             return;
         };
         let display = self.doc.display_cursor(src);
-        self.match_highlight = Some(display);
-        self.cursor_line = display;
-        self.cursor_col = self.match_span().map_or(0, |(_, c0, _)| c0);
+        let first = self.match_span();
+        self.match_highlight = Some(first.map_or(display, |(line, _, _)| line));
+        self.cursor_line = first.map_or(display, |(line, _, _)| line);
+        self.cursor_col = first.map_or(0, |(_, c0, _)| c0);
         // Keep the page where it is; scroll (centred) only if the match is off-screen.
         let rows = u32::from(self.viewer_rows.max(1));
-        if display < self.scroll || display >= self.scroll.saturating_add(rows) {
+        let target = self.cursor_line;
+        if target < self.scroll || target >= self.scroll.saturating_add(rows) {
             let last = u32::try_from(self.doc.lines().len()).unwrap_or(u32::MAX);
-            self.scroll = display
+            self.scroll = target
                 .saturating_sub(rows / 2)
                 .min(last.saturating_sub(rows));
         }
@@ -1053,7 +1105,8 @@ impl App {
             .search_match_idx
             .min(self.search_matches.len().saturating_sub(1));
         if let Some(&src) = self.search_matches.get(self.search_match_idx) {
-            self.match_highlight = Some(self.doc.display_cursor(src));
+            let display = self.doc.display_cursor(src);
+            self.match_highlight = Some(self.match_span().map_or(display, |(line, _, _)| line));
         }
     }
 

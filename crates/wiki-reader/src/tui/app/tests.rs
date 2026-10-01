@@ -1332,17 +1332,16 @@ fn selection_and_cursor_cell_are_painted() {
             assert_eq!(bg(c), sel_bg, "raw={raw}: col {c} selected");
         }
         assert_ne!(bg(5), sel_bg, "raw={raw}: after the selection");
-        // The cursor (at the drag head, col 4) is the default text colour as a
-        // block with the glyph inverted, while the View is focused.
+        // The cursor (at the drag head, col 4) inverts the selected cell
+        // without discarding the selection background.
         let cursor = &buf[(x + 4, y)];
         assert!(
             cursor.modifier.contains(Modifier::REVERSED),
             "raw={raw}: cursor cell"
         );
         assert_eq!(
-            (cursor.fg, cursor.bg),
-            (ratatui::style::Color::Reset, ratatui::style::Color::Reset),
-            "raw={raw}: cursor uses the default colours, reversed"
+            cursor.bg, sel_bg,
+            "raw={raw}: cursor preserves the selection background"
         );
         app.update(Action::FocusNav);
         let terminal = draw_app(&mut app, 60, 40);
@@ -1920,26 +1919,33 @@ fn search_matches_survive_toggle_and_resize() {
     assert_eq!(app.search_match_idx, idx);
     assert_eq!(
         app.match_highlight,
-        Some(app.doc.display_cursor(before)),
-        "highlight remapped to display after toggle"
+        Some(
+            app.match_span()
+                .map_or_else(|| app.doc.display_cursor(before), |(line, _, _)| line)
+        ),
+        "highlight remapped to the painted phrase after toggle"
     );
     app.update(Action::SearchNextMatch);
     let after_n = app.search_matches[app.search_match_idx];
     assert_eq!(
         app.match_highlight,
-        Some(app.doc.display_cursor(after_n)),
-        "n lands on remapped display line"
+        Some(
+            app.match_span()
+                .map_or_else(|| app.doc.display_cursor(after_n), |(line, _, _)| line)
+        ),
+        "n lands on the remapped phrase"
     );
 
     // Resize re-layout keeps source matches.
     app.layout_width = 0;
     app.ensure_layout_width(40);
     assert_eq!(app.search_matches, sources);
+    let source = app.search_matches[app.search_match_idx];
     assert_eq!(
         app.match_highlight,
         Some(
-            app.doc
-                .display_cursor(app.search_matches[app.search_match_idx])
+            app.match_span()
+                .map_or_else(|| app.doc.display_cursor(source), |(line, _, _)| line)
         )
     );
 }
@@ -2455,6 +2461,25 @@ fn tab_bar_hit_by_coordinate() {
     );
     app.update(Action::SwitchTab(0));
     assert_eq!(app.navigator.active(), 0);
+}
+
+#[test]
+fn narrow_tab_bar_keeps_the_active_tab_visible() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    for _ in 0..7 {
+        app.update(Action::NewTab);
+    }
+    let active = app.navigator.active();
+    assert!(active > 0);
+    let _ = draw_app(&mut app, 60, 24);
+    assert!(
+        app.hit_map
+            .entries()
+            .iter()
+            .any(|(_, h)| *h == Hit::Tab(active)),
+        "active tab {active} must not be displaced by earlier tabs"
+    );
 }
 
 #[test]
@@ -3287,6 +3312,20 @@ fn frontmatter_label_colour_does_not_depend_on_the_cursor_line() {
 }
 
 #[test]
+fn rendered_semantic_colours_survive_cursor_highlighting() {
+    let (_d, mut app, _log) = app_with_page("# First\n\n## Second\n");
+    app.update(Action::FocusViewer);
+    let terminal = draw_app(&mut app, 80, 20);
+    let buf = terminal.backend().buffer();
+    let first = row_of(&app, "First");
+    let second = row_of(&app, "Second");
+    let (x1, y1) = cell_xy(&app, first, 0);
+    let (x2, y2) = cell_xy(&app, second, 0);
+    assert_eq!(buf[(x1, y1)].fg, app.theme.heading[0]);
+    assert_eq!(buf[(x2, y2)].fg, app.theme.heading[1]);
+}
+
+#[test]
 fn popups_gray_out_the_panes_behind_them() {
     let mut app = App::new(&fixture()).unwrap();
     let theme = app.theme;
@@ -3486,7 +3525,7 @@ fn content_search_activate(app: &mut App, query: &str) {
 
 #[test]
 fn content_search_result_keeps_the_page_in_place_and_marks_the_phrase() {
-    use ratatui::style::{Color, Modifier};
+    use ratatui::style::Modifier;
     let mut app = App::new(&fixture()).unwrap();
     let _ = draw_app(&mut app, 100, 30);
     content_search_activate(&mut app, "arc");
@@ -3502,10 +3541,10 @@ fn content_search_result_keeps_the_page_in_place_and_marks_the_phrase() {
     let buf = terminal.backend().buffer();
     let theme = app.theme;
     let (x, y) = cell_xy(&app, line, c0);
-    // Cursor: default colours, reversed (also over the phrase).
+    // Cursor: the phrase colours remain present and are reversed.
     let cursor = &buf[(x, y)];
     assert!(cursor.modifier.contains(Modifier::REVERSED));
-    assert_eq!((cursor.fg, cursor.bg), (Color::Reset, Color::Reset));
+    assert_eq!((cursor.bg, cursor.fg), (theme.peach, theme.on_peach));
     // Rest of the phrase: the tab / footer-link colours, readable.
     for dx in 1..(c1 - c0) {
         let cell = &buf[(x + dx, y)];
@@ -3517,6 +3556,22 @@ fn content_search_result_keeps_the_page_in_place_and_marks_the_phrase() {
     }
     // The rest of the row is just the cursor line, not a yellow slab.
     assert_eq!(buf[(x + (c1 - c0) + 1, y)].bg, theme.cursor_line);
+}
+
+#[test]
+fn content_search_phrase_paints_across_wrapped_rows() {
+    let (_dir, mut app, _log) = app_with_page("# T\n\nabcdefghijklmnop alpha\n");
+    app.ensure_layout_width(20);
+    app.search_phrase = "abcdefghijklmnop alpha".into();
+    app.search_matches = vec![2];
+    app.search_match_idx = 0;
+    app.focus_current_search_match();
+
+    let spans = app.match_spans();
+    assert_eq!(spans.len(), 2, "phrase should continue onto the next row");
+    assert_ne!(spans[0].0, spans[1].0);
+    assert_eq!(app.cursor_line, spans[0].0);
+    assert_eq!(app.cursor_col, spans[0].1);
 }
 
 #[test]

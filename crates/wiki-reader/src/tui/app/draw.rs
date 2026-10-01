@@ -71,6 +71,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         FocusTarget::FooterPrev | FocusTarget::FooterNext => Some(it.kind),
         FocusTarget::Link | FocusTarget::BlockAction => None,
     });
+    let match_spans = app.match_spans();
     app.viewer_geom = viewer::draw(
         frame,
         viewer_area,
@@ -83,7 +84,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         app.cursor_line,
         app.effective_col(),
         app.selection,
-        app.match_span(),
+        &match_spans,
         app.focus == FocusPane::Viewer && !overlay_open,
         focus_item.as_ref(),
         &focus_items,

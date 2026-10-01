@@ -358,6 +358,30 @@ mod tests {
     }
 
     #[test]
+    fn removed_formatted_view_field_is_ignored() {
+        let wiki = tempdir().unwrap();
+        fs::write(wiki.path().join("README.md"), "# Hi\n").unwrap();
+        let provider = FsProvider::open(wiki.path()).unwrap();
+        let index = Index::build(&provider).unwrap();
+        let nav = Navigator::new(index, None).unwrap();
+        let state =
+            SessionState::from_navigator(&nav, FocusPaneState::Viewer, Some(true), Some(42));
+
+        let path = wiki.path().join("session.toml");
+        save_to_path(&path, &state).unwrap();
+        let old = fs::read_to_string(&path).unwrap().replacen(
+            "nav_width = 42\n",
+            "nav_width = 42\nformatted_view = true\n",
+            1,
+        );
+        fs::write(&path, old).unwrap();
+
+        let loaded = load_from_path(&path).unwrap();
+        assert!(loaded.notice.is_none());
+        assert_eq!(loaded.state, state);
+    }
+
+    #[test]
     fn removed_page_dropped_from_history() {
         let wiki = tempdir().unwrap();
         fs::write(wiki.path().join("README.md"), "# Hi\n").unwrap();

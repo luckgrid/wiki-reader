@@ -41,21 +41,45 @@ pub fn titles(
     let inner_w = usize::from(area.width.saturating_sub(2)).saturating_sub(2);
     let border = theme.border(pane_focused);
     let fill = Style::default().bg(theme.peach).fg(theme.on_peach);
-    let mut x = area.x.saturating_add(2);
+    let labels: Vec<_> = tabs
+        .iter()
+        .map(|tab| ellipsis(&stem(tab), MAX_LABEL))
+        .collect();
+    let widths: Vec<_> = labels
+        .iter()
+        .map(|label| col_width(&format!(" {label} × ")))
+        .collect();
+
+    // Reserve the active cell first, then fill remaining room in tab order.
+    // Without the reservation, enough earlier tabs could hide the active one.
+    let mut shown = vec![false; tabs.len()];
     let mut used = 0usize;
-    let mut cells: Vec<Span<'static>> = Vec::new();
-    for (i, tab) in tabs.iter().enumerate() {
-        let label = ellipsis(&stem(tab), MAX_LABEL);
-        let text = format!(" {label} × ");
-        let w = col_width(&text);
-        let sep = usize::from(!cells.is_empty());
-        if used + sep + w > inner_w {
+    if let Some(&w) = widths.get(active)
+        && w <= inner_w
+    {
+        shown[active] = true;
+        used = w;
+    }
+    for (i, &w) in widths.iter().enumerate() {
+        if shown[i] {
             continue;
         }
+        let sep = usize::from(used > 0);
+        if used + sep + w <= inner_w {
+            shown[i] = true;
+            used += sep + w;
+        }
+    }
+
+    let mut x = area.x.saturating_add(2);
+    let mut cells: Vec<Span<'static>> = Vec::new();
+    for (i, label) in labels.into_iter().enumerate().filter(|(i, _)| shown[*i]) {
+        let text = format!(" {label} × ");
+        let w = widths[i];
         let Ok(w16) = u16::try_from(w) else {
             continue;
         };
-        if sep == 1 {
+        if !cells.is_empty() {
             cells.push(Span::styled("│", border));
             x = x.saturating_add(1);
         }
@@ -84,7 +108,6 @@ pub fn titles(
         let selected = i == active && pane_focused;
         cells.push(Span::styled(text, if selected { fill } else { border }));
         x = x.saturating_add(w16);
-        used += sep + w;
     }
     if cells.is_empty() {
         return Line::default();

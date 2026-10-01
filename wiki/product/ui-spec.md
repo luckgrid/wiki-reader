@@ -80,7 +80,7 @@ Future: this search row becomes a proper **side nav header**, and a **side nav f
 ## Help overlay panel
 
 - Opens with `?` from Normal mode. Generated from the binding table in `keymap.rs` (same source as the live map).
-- Sections: Global, Side nav, View, Chords, Search overlay. Each section is a full-width divider row with every binding on its own row. A header icon that also triggers an action is joined to its key with ` / ` like any alternate key (`b / ◫`, `q / ✕`). The panel is tall and thin (up to 58 columns wide, nearly full height), gold-bordered like the search popup, with the same side padding, a blank row at the top and bottom, a blank row above each group divider and none below, a full-width selected row, and both panes behind it grayed. Key labels show config overrides when set.
+- Sections: Global, Side nav, View, Chords, Search overlay. Each section is a full-width divider row with every binding on its own row. A header icon that also triggers an action is joined to its key with ` / ` like any alternate key (`b / ◫`, `q / ✕`). The panel is tall and thin (up to 58 columns wide, nearly full height), peach-bordered like the search popup, with the same side padding, a blank row at the top and bottom, a blank row above each group divider and none below, a full-width selected row, and both panes behind it grayed. Key labels show config overrides when set.
 - `↑`/`↓` / `PgUp`/`PgDn` / `g`/`G` and the mouse wheel scroll; `Enter` or a click on a row closes help and runs that action (display-only rows are not clickable).
 - `Esc` or `?` closes without an action. Click outside dismisses.
 
