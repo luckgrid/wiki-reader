@@ -75,8 +75,9 @@ pub enum Matcher {
     PlainCode(KeyCode),
     /// Shift+code (no Ctrl/Alt).
     ShiftCode(KeyCode),
-    /// Cmd (SUPER) or Ctrl + code, without Shift/Alt (new-tab combos).
-    CmdOrCtrlCode(KeyCode),
+    /// Ctrl + code, without Shift/Alt (new-tab combos). Cmd is not used: terminals and
+    /// macOS keep it (Ghostty maps Cmd+Enter to full screen).
+    CtrlCode(KeyCode),
     /// Shift **or** Ctrl + code (block / group jump).
     ShiftOrCtrlCode(KeyCode),
     /// Alt+Shift+code.
@@ -101,7 +102,6 @@ impl Matcher {
         let shift = key.modifiers.contains(KeyModifiers::SHIFT);
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let alt = key.modifiers.contains(KeyModifiers::ALT);
-        let super_key = key.modifiers.contains(KeyModifiers::SUPER);
         let plain = no_ctrl_alt(key);
         match self {
             Matcher::PlainChar(c) => plain && key.code == KeyCode::Char(c),
@@ -111,9 +111,7 @@ impl Matcher {
             }
             Matcher::PlainCode(code) => plain && key.code == code,
             Matcher::ShiftCode(code) => shift && plain && key.code == code,
-            Matcher::CmdOrCtrlCode(code) => {
-                (super_key || ctrl) && !shift && !alt && key.code == code
-            }
+            Matcher::CtrlCode(code) => ctrl && !shift && !alt && key.code == code,
             Matcher::ShiftOrCtrlCode(code) => {
                 (shift || ctrl) && key.code == code && !(alt && shift)
             }
@@ -142,11 +140,11 @@ impl Matcher {
             | Matcher::AnyCode(code)
             | Matcher::ShiftOrCtrlCode(code)
             | Matcher::ShiftCode(code)
-            | Matcher::CmdOrCtrlCode(code)
+            | Matcher::CtrlCode(code)
             | Matcher::AltShiftCode(code) => {
                 let mods = match self {
                     Matcher::ShiftCode(_) | Matcher::ShiftOrCtrlCode(_) => KeyModifiers::SHIFT,
-                    Matcher::CmdOrCtrlCode(_) => KeyModifiers::CONTROL,
+                    Matcher::CtrlCode(_) => KeyModifiers::CONTROL,
                     Matcher::AltShiftCode(_) => KeyModifiers::ALT | KeyModifiers::SHIFT,
                     _ => KeyModifiers::NONE,
                 };
@@ -384,11 +382,11 @@ pub static BINDINGS: &[Binding] = &[
         matcher: Some(Matcher::PlainTab),
     },
     Binding {
-        keys: "Cmd/Ctrl+→",
+        keys: "Ctrl+→",
         scope: BindingScope::Nav,
         action: Some(Action::NewTab),
         help: "Open page in a new tab",
-        matcher: Some(Matcher::CmdOrCtrlCode(KeyCode::Right)),
+        matcher: Some(Matcher::CtrlCode(KeyCode::Right)),
     },
     Binding {
         keys: "→",
@@ -405,11 +403,11 @@ pub static BINDINGS: &[Binding] = &[
         matcher: Some(Matcher::AnyCode(KeyCode::Left)),
     },
     Binding {
-        keys: "Cmd/Ctrl+Enter",
+        keys: "Ctrl+Enter",
         scope: BindingScope::Nav,
         action: Some(Action::NewTab),
         help: "Open page in a new tab",
-        matcher: Some(Matcher::CmdOrCtrlCode(KeyCode::Enter)),
+        matcher: Some(Matcher::CtrlCode(KeyCode::Enter)),
     },
     Binding {
         keys: "Shift+Enter",
@@ -574,11 +572,11 @@ pub static BINDINGS: &[Binding] = &[
         matcher: Some(Matcher::PlainTab),
     },
     Binding {
-        keys: "Cmd/Ctrl+Enter",
+        keys: "Ctrl+Enter",
         scope: BindingScope::Viewer,
         action: Some(Action::NewTab),
         help: "Open focused link in a new tab",
-        matcher: Some(Matcher::CmdOrCtrlCode(KeyCode::Enter)),
+        matcher: Some(Matcher::CtrlCode(KeyCode::Enter)),
     },
     Binding {
         keys: "Enter",
@@ -1214,28 +1212,20 @@ mod tests {
     }
 
     #[test]
-    fn keymap_cmd_or_ctrl_new_tab_precedes_plain_enter_and_any_right() {
-        let (ctrl_enter, _) = map(
-            key_mod(KeyCode::Enter, KeyModifiers::CONTROL),
-            FocusPane::Nav,
-            InputMode::Normal,
-            Chord::None,
-        );
-        assert_eq!(ctrl_enter, Some(Action::NewTab));
-        let (cmd_enter, _) = map(
-            key_mod(KeyCode::Enter, KeyModifiers::SUPER),
-            FocusPane::Nav,
-            InputMode::Normal,
-            Chord::None,
-        );
-        assert_eq!(cmd_enter, Some(Action::NewTab));
-        let (ctrl_right, _) = map(
-            key_mod(KeyCode::Right, KeyModifiers::CONTROL),
-            FocusPane::Nav,
-            InputMode::Normal,
-            Chord::None,
-        );
-        assert_eq!(ctrl_right, Some(Action::NewTab));
+    fn keymap_ctrl_new_tab_precedes_plain_enter_and_any_right() {
+        for (code, focus) in [
+            (KeyCode::Enter, FocusPane::Nav),
+            (KeyCode::Right, FocusPane::Nav),
+            (KeyCode::Enter, FocusPane::Viewer),
+        ] {
+            let (ctrl, _) = map(
+                key_mod(code, KeyModifiers::CONTROL),
+                focus,
+                InputMode::Normal,
+                Chord::None,
+            );
+            assert_eq!(ctrl, Some(Action::NewTab), "Ctrl+{code:?} focus={focus:?}");
+        }
         let (plain_right, _) = map(
             key(KeyCode::Right),
             FocusPane::Nav,
@@ -1243,13 +1233,25 @@ mod tests {
             Chord::None,
         );
         assert_eq!(plain_right, Some(Action::NavExpand));
-        let (viewer_cmd, _) = map(
-            key_mod(KeyCode::Enter, KeyModifiers::SUPER),
-            FocusPane::Viewer,
+        // Cmd is not a new-tab modifier (ADR-0016): it behaves like the plain key.
+        for focus in [FocusPane::Nav, FocusPane::Viewer] {
+            let (plain, _) = map(key(KeyCode::Enter), focus, InputMode::Normal, Chord::None);
+            let (cmd, _) = map(
+                key_mod(KeyCode::Enter, KeyModifiers::SUPER),
+                focus,
+                InputMode::Normal,
+                Chord::None,
+            );
+            assert_eq!(cmd, plain, "Cmd+Enter == Enter focus={focus:?}");
+            assert_ne!(cmd, Some(Action::NewTab));
+        }
+        let (cmd_right, _) = map(
+            key_mod(KeyCode::Right, KeyModifiers::SUPER),
+            FocusPane::Nav,
             InputMode::Normal,
             Chord::None,
         );
-        assert_eq!(viewer_cmd, Some(Action::NewTab));
+        assert_eq!(cmd_right, Some(Action::NavExpand));
     }
 
     #[test]

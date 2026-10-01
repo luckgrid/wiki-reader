@@ -95,7 +95,7 @@ Rendered by default (the formatted view: no `#`, fences or backticks); `r` toggl
 
 After the last item, `Tab` wraps to the first. The focused item renders inverted, and the status bar shows its target or action (`→ decisions/0003.md#context`, `↗ https://…`, `? not found: foo.md`, `copy code`).
 
-**Links:** underlined; broken links in the error color with `?`; external links with `↗`. `Enter` or left-click follows. Middle-click, Shift/Ctrl+click, or `t` opens in a new tab (Cmd/Ctrl+Enter on a focused link does too where the kitty protocol reports it). External links ask `open https://… ? [y/N]` in the status bar, then use the system opener. Hovering (if the terminal reports motion) highlights the link and shows its target in the status bar.
+**Links:** underlined; broken links in the error color with `?`; external links with `↗`. `Enter` or left-click follows. Middle-click, Shift/Ctrl+click, or `t` opens in a new tab (`Ctrl+Enter` on a focused link does too where the kitty protocol reports it). External links ask `open https://… ? [y/N]` in the status bar, then use the system opener. Hovering (if the terminal reports motion) highlights the link and shows its target in the status bar.
 
 **End of article:** "Linked from" pane (box-drawn with side borders: tag header, each entry's title and optional summary as one focusable hit; Tab focus paints selection background across the entry and replaces the left `│` with a teal ▌). Summary comes from frontmatter or the first body paragraph as plain text (no markdown markup).
 
@@ -168,10 +168,10 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 | `Shift+Tab` | Previous nav row |
 | `↓` | Next nav row |
 | `Tab` | Next nav row |
-| `Cmd/Ctrl+→` | Open page in a new tab |
+| `Ctrl+→` | Open page in a new tab |
 | `→` | Expand / open into view |
 | `←` | Collapse / parent group |
-| `Cmd/Ctrl+Enter` | Open page in a new tab |
+| `Ctrl+Enter` | Open page in a new tab |
 | `Shift+Enter` | Open page in a new tab |
 | `Enter` | Open page (stay in nav) / toggle group |
 
@@ -200,7 +200,7 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 | `G` | Bottom of page |
 | `Shift+Tab` | Previous focusable item |
 | `Tab` | Next focusable item |
-| `Cmd/Ctrl+Enter` | Open focused link in a new tab |
+| `Ctrl+Enter` | Open focused link in a new tab |
 | `Enter` | Activate focused item |
 | `f` | Focus footer prev/next |
 
@@ -230,7 +230,7 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 - **`Enter` in the viewer:** activates the focused item. With no item focused and exactly one link on the cursor line, it follows that link.
 - **Side nav `→` / `←`:** `→` expands a group; on an expanded group it steps to the first child; on a page row it opens the page and focuses the viewer. `←` collapses, or goes to the parent group from a child.
 - **Side nav `Enter` / click:** a page opens in place and the nav keeps focus; a group toggles; the search row opens the search overlay.
-- **New tabs:** `t`, middle-click, Shift+click or Ctrl+click opens the focused link or nav row in a new tab; `Shift+Enter`, Cmd/Ctrl+Enter and (in the nav) Cmd/Ctrl+→ do the same where the terminal reports them ([ADR-0015](../decisions/0015-new-tab-combos-kitty-keyboard.md)).
+- **New tabs:** `t`, middle-click, Shift+click or Ctrl+click opens the focused link or nav row in a new tab; `Shift+Enter`, `Ctrl+Enter` and (in the nav) `Ctrl+→` do the same where the terminal reports them ([ADR-0015](../decisions/0015-new-tab-combos-kitty-keyboard.md), [ADR-0016](../decisions/0016-ctrl-only-new-tab-combos.md)).
 - **Back / forward:** `Backspace` is primary. `Alt+b` / `Alt+f` are what macOS Ghostty sends for Option+←/→.
 - **Heading jump:** `{` / `}` is the fallback when `Alt+Shift+↑/↓` does not reach the TUI.
 
@@ -241,7 +241,7 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 - **K3:** Right-click is reserved by herdr's context menu and never reaches the app — unused by wiki-reader.
 - **K4:** Alt+↑/↓ and Alt+Shift+↑/↓ arrive correctly; heading jump works.
 - `Shift+Tab` arrives as `BackTab`; fine everywhere.
-- `Ctrl+Enter` / `Shift+Enter` / Cmd modifiers need the kitty keyboard protocol (`DISAMBIGUATE_ESCAPE_CODES`, [ADR-0015](../decisions/0015-new-tab-combos-kitty-keyboard.md)). Without it, `t`, middle-click and Shift+click still work (unless the terminal keeps Shift+click for its own text selection). Cmd+click never arrives via crossterm mouse; on some macOS hosts Ctrl+click is stolen as right-click.
+- `Ctrl+Enter` / `Ctrl+→` / `Shift+Enter` need the kitty keyboard protocol (`DISAMBIGUATE_ESCAPE_CODES`, [ADR-0015](../decisions/0015-new-tab-combos-kitty-keyboard.md)). Without it, `t`, middle-click and Shift+click still work (unless the terminal keeps Shift+click for its own text selection). Cmd is not used: it never arrives on mouse events, and macOS terminals keep Cmd+Enter (Ghostty makes it full screen). On some macOS hosts Ctrl+click is stolen as right-click. `Ctrl+→` is macOS's default "Move right a space" shortcut, so on macOS it never reaches the app unless that shortcut is disabled (System Settings → Keyboard → Keyboard Shortcuts → Mission Control); use `Ctrl+Enter` there.
 
 ## Mouse
 
