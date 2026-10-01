@@ -206,6 +206,31 @@ impl RawDoc {
         self
     }
 
+    /// Re-wrap in place to `width`, keeping links and syntax highlights.
+    pub fn rewrap(&mut self, width: u16) {
+        self.relayout(width);
+    }
+
+    /// Display column within its source line where a 0-based display row starts.
+    #[must_use]
+    pub fn row_col_offset(&self, row: u32) -> u16 {
+        let Some(&(src, start)) = usize::try_from(row)
+            .ok()
+            .and_then(|i| self.rows.get(i))
+            .or_else(|| self.rows.last())
+        else {
+            return 0;
+        };
+        let line = usize::try_from(src)
+            .ok()
+            .and_then(|i| self.src_lines.get(i));
+        line.map_or(0, |l| {
+            l.chars()
+                .take(start)
+                .fold(0u16, |w, ch| w.saturating_add(text_col::char_width(ch)))
+        })
+    }
+
     fn relayout(&mut self, width: u16) {
         self.lines.clear();
         self.rows.clear();
@@ -501,8 +526,7 @@ fn display_col_at(line: &str, byte_offset: usize) -> u16 {
         if i >= byte_offset {
             break;
         }
-        let w = u16::try_from(ratatui::text::Span::raw(ch.to_string()).width()).unwrap_or(1);
-        col = col.saturating_add(w.max(1));
+        col = col.saturating_add(text_col::char_width(ch));
         i += ch.len_utf8();
     }
     col

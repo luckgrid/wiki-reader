@@ -3654,3 +3654,69 @@ fn help_dividers_have_one_row_above_and_none_below() {
         );
     }
 }
+
+#[test]
+fn help_overlay_opens_on_a_tiny_terminal_without_panicking() {
+    let mut app = App::new(&fixture()).unwrap();
+    app.update(Action::OpenHelp);
+    for (w, h) in [(20u16, 10u16), (8, 6), (3, 3)] {
+        let _ = draw_app(&mut app, w, h);
+    }
+}
+
+#[test]
+fn content_search_phrase_ignores_trailing_space_in_the_query() {
+    let mut app = App::new(&fixture()).unwrap();
+    let _ = draw_app(&mut app, 100, 30);
+    content_search_activate(&mut app, "arc ");
+    assert!(
+        app.match_span().is_some(),
+        "the phrase is trimmed like the search itself"
+    );
+}
+
+#[test]
+fn clicking_in_the_view_clears_the_content_search_highlight() {
+    let mut app = App::new(&fixture()).unwrap();
+    let _ = draw_app(&mut app, 100, 30);
+    content_search_activate(&mut app, "arc");
+    assert!(!app.search_matches.is_empty());
+    app.update(Action::SelectStart(0, 0));
+    assert!(app.search_matches.is_empty());
+}
+
+#[test]
+fn rewrapping_drops_the_selection_and_raw_keeps_its_highlights() {
+    use crate::tui::page_doc::PageDoc;
+    let para = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon";
+    let (_d, mut app, _log) = app_with_page(&format!("# T\n\n{para}\n"));
+    app.update(Action::ToggleViewMode);
+    let _ = screen_rows(&mut app, 80, 24);
+    if let PageDoc::Raw(d) = &mut app.doc {
+        d.set_highlights(vec![
+            vec![crate::tui::highlight::HlSpan {
+                style: ratatui::style::Style::default(),
+                text: "# T".into(),
+            }],
+            vec![],
+            vec![],
+        ]);
+    }
+    app.update(Action::SelectStart(2, 3));
+    assert!(app.selection.is_some());
+    let _ = screen_rows(&mut app, 60, 24);
+    assert!(app.selection.is_none(), "display coordinates went stale");
+    let PageDoc::Raw(d) = &app.doc else {
+        panic!("raw doc expected")
+    };
+    assert!(!d.highlights.is_empty(), "syntax colours survive a resize");
+}
+
+#[test]
+fn raw_status_column_counts_from_the_start_of_the_source_line() {
+    use crate::tui::viewer_doc::RawDoc;
+    let doc = RawDoc::from_source(&"x".repeat(30), None).wrapped(10);
+    assert_eq!(doc.row_col_offset(0), 0);
+    assert_eq!(doc.row_col_offset(1), 10);
+    assert_eq!(doc.row_col_offset(2), 20);
+}

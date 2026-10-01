@@ -145,7 +145,13 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
                 PageDoc::Rendered(_) => app.cursor_line,
             }
             .saturating_add(1),
-            col: app.effective_col().saturating_add(1),
+            col: match &app.doc {
+                PageDoc::Raw(d) => d
+                    .row_col_offset(app.cursor_line)
+                    .saturating_add(app.effective_col()),
+                PageDoc::Rendered(_) => app.effective_col(),
+            }
+            .saturating_add(1),
             pct,
             words: app.doc.word_count(),
             minutes: status::reading_minutes(app.doc.word_count()),
@@ -483,7 +489,8 @@ fn draw_help_overlay(
         .map(|r| Span::raw(key_label(r)).width())
         .max()
         .unwrap_or(8)
-        .clamp(8, content_w / 2);
+        .max(8)
+        .min(content_w / 2);
 
     for row_i in 0..visible {
         let abs = help.scroll + row_i;

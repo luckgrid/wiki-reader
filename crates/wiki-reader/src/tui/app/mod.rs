@@ -447,6 +447,7 @@ impl App {
                 | Action::ViewerHome
                 | Action::ViewerEnd
                 | Action::SetCursorLine(_)
+                | Action::SelectStart(..)
                 | Action::ViewerLeft
                 | Action::ViewerRight
                 | Action::GoToPage(_)
@@ -1146,7 +1147,7 @@ impl App {
                     return;
                 };
                 let key = hit.page.clone();
-                let phrase = overlay.query.clone();
+                let phrase = overlay.query.trim().to_owned();
                 let prefer = hit.line.saturating_sub(1);
                 let page_hits: Vec<u32> = overlay
                     .text_hits
@@ -1459,7 +1460,27 @@ impl App {
         let key = self.navigator.tab().current().page.clone();
         let source = self.doc.source_cursor(self.cursor_line);
         let source_scroll = self.doc.source_cursor(self.scroll);
-        self.reload_page_keeping_view(&key, source, source_scroll);
+        // The selection is stored in display coordinates, so a re-wrap invalidates it.
+        self.selection = None;
+        self.selecting = false;
+        if let PageDoc::Raw(doc) = &mut self.doc {
+            // Re-wrap in place: no disk read, and the syntax colours stay.
+            doc.rewrap(w.saturating_sub(RAW_GUTTER_COLS));
+            self.restore_view_after_relayout(source, source_scroll);
+        } else {
+            self.reload_page_keeping_view(&key, source, source_scroll);
+        }
+    }
+
+    /// Put the cursor and scroll back on their source lines after the doc was re-laid out.
+    fn restore_view_after_relayout(&mut self, source_cursor: u32, source_scroll: u32) {
+        self.cursor_line = self.doc.display_cursor(source_cursor);
+        self.scroll = self.doc.display_cursor(source_scroll);
+        let max = u32::try_from(self.doc.lines().len().saturating_sub(1)).unwrap_or(0);
+        self.cursor_line = self.cursor_line.min(max);
+        self.scroll = self.scroll.min(max);
+        self.remap_search_matches();
+        self.ensure_cursor_visible();
     }
 
     fn reload_page_keeping_view(&mut self, key: &PageKey, source_cursor: u32, source_scroll: u32) {
@@ -1503,13 +1524,9 @@ impl App {
                         ))
                     }
                 };
-                self.cursor_line = self.doc.display_cursor(source_cursor);
-                self.scroll = self.doc.display_cursor(source_scroll);
-                let max = u32::try_from(self.doc.lines().len().saturating_sub(1)).unwrap_or(0);
-                self.cursor_line = self.cursor_line.min(max);
-                self.scroll = self.scroll.min(max);
-                self.remap_search_matches();
-                self.ensure_cursor_visible();
+                self.selection = None;
+                self.selecting = false;
+                self.restore_view_after_relayout(source_cursor, source_scroll);
                 if matches!(mode, ViewMode::Raw) {
                     self.spawn_highlight(src);
                 } else {

@@ -3,7 +3,7 @@ id: WR-ROADMAP-P2
 title: Phase 2 — Wiki navigation MVP
 summary: Custom nav order, backlinks, tabs, diagrams, config, and session restore.
 status: active
-updated: 2026-09-30
+updated: 2026-10-01
 related: [phase-1-reader-shell, phase-3-alpha]
 nav_order: 2
 ---
@@ -40,6 +40,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 - 2026-09-30: dogfood round 2 (PR 2): `←`/`→` move a sticky column cursor in the View (`L12:C5` in the status bar; `←` at column 0 focuses the nav); mouse drag selects text and copies it via OSC 52 (wrapped rows rejoined, gutters/borders dropped, tables tab-separated)
 - 2026-09-30: dogfood round 3 (PR 3, from live-terminal notes + herdr/markdown-reader screenshots): tabs become outlined buttons on the View's top border (P2-25); `Nav`/`View` title tags dropped and yellow/peach re-sampled from herdr (P2-26); the eye toggle is removed and Rendered is the formatted view (P2-27, ADR-0014); Search and Help popups restyled after markdown-reader (P2-28); Shift+click / Shift+Enter open a new tab (P2-29); raw view soft-wraps (P2-30); nav indent and `/` search icon (P2-31); frontmatter rules full width and colour fixed (P2-32). Found while testing: a table cell wider than the pane leaked above the table (P2-R37)
 - 2026-10-01: dogfood round 4 (PR 3): reopened nav no longer starts mid-list (P2-R39); content-search results land in place with the phrase highlighted, `…` on cut-off result rows and bottom padding in Search, tighter Help dividers (P2-33)
+- 2026-10-01: final review before alpha.3: manual pass in a real terminal found no visual bugs in rounds 2–4 (tabs, popups, content-search landing, raw wrap, hide/show nav, drag-select and paste). A code review then fixed: Help on a terminal under 22 columns panicked; a trailing space in a Content query lost the phrase highlight; clicking in the View left the search highlight; a resize or reload kept a stale selection; a raw-view resize re-read the file and dropped the syntax colours (now re-wraps in place); the raw status bar column restarted on each wrapped row
 
 ## Interim acceptance walk (2026-09-30)
 

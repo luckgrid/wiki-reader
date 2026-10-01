@@ -23,6 +23,7 @@ ratatui = { workspace = true }
 shell-words = { workspace = true }
 signal-hook = { workspace = true }
 syntect = { workspace = true }
+unicode-width = { workspace = true }
 wiki-reader-core = { workspace = true }
 wiki-reader-render = { workspace = true }
 

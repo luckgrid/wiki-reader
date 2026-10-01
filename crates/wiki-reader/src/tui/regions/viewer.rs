@@ -441,9 +441,7 @@ fn paint_styled_line(
             if usize::from(col) >= text_width {
                 break;
             }
-            let w = u16::try_from(Span::raw(ch.to_string()).width())
-                .unwrap_or(1)
-                .max(1);
+            let w = crate::tui::text_col::char_width(ch);
             let st = style_at(col, run.kind);
             if buf.is_empty() {
                 style = st;
@@ -523,9 +521,7 @@ fn styled_line(
     };
 
     for ch in display.chars() {
-        let w = u16::try_from(Span::raw(ch.to_string()).width())
-            .unwrap_or(1)
-            .max(1);
+        let w = crate::tui::text_col::char_width(ch);
         let mut next_style = base;
         for &(c0, c1, class, is_focus) in &ranges {
             if col >= c0 && col < c1 {

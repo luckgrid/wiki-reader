@@ -2265,6 +2265,7 @@ dependencies = [
  "signal-hook",
  "syntect",
  "tempfile",
+ "unicode-width",
  "wiki-reader-core",
  "wiki-reader-render",
 ]
