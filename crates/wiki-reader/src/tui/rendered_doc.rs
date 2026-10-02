@@ -69,6 +69,12 @@ impl RenderedViewerDoc {
             .map(|s| s.raw_target.as_str())
     }
 
+    /// Rows reserved for images (empty without a graphics protocol).
+    #[must_use]
+    pub fn image_slots(&self) -> &[wiki_reader_render::ImageSlot] {
+        &self.inner.image_slots
+    }
+
     #[must_use]
     pub fn block_actions(&self) -> &[wiki_reader_render::BlockAction] {
         &self.inner.block_actions

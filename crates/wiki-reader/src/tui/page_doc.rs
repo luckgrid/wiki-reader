@@ -13,6 +13,15 @@ pub enum PageDoc {
 }
 
 impl PageDoc {
+    /// Rows reserved for images; the raw view has none.
+    #[must_use]
+    pub fn image_slots(&self) -> &[wiki_reader_render::ImageSlot] {
+        match self {
+            Self::Raw(_) => &[],
+            Self::Rendered(d) => d.image_slots(),
+        }
+    }
+
     #[must_use]
     pub fn word_count(&self) -> u32 {
         match self {

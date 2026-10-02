@@ -160,7 +160,13 @@ impl Theme {
     pub fn style_kind(&self, kind: wiki_reader_render::StyleKind) -> Style {
         use wiki_reader_render::StyleKind;
         match kind {
-            StyleKind::Plain | StyleKind::Table | StyleKind::BacklinkSummary => self.text(),
+            StyleKind::Plain
+            | StyleKind::Table
+            | StyleKind::BacklinkSummary
+            | StyleKind::ImageSlot => self.text(),
+            StyleKind::ImagePlaceholder => Style::default()
+                .fg(self.text_muted)
+                .add_modifier(Modifier::ITALIC),
             // Bold text — TableHeader uses text (not accent/cyan) so it doesn't read as a link.
             StyleKind::TableHeader | StyleKind::Strong => {
                 Style::default().fg(self.text).add_modifier(Modifier::BOLD)

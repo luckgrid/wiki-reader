@@ -23,6 +23,7 @@ use super::App;
 use super::draw::draw;
 use crate::tui::action::Action;
 use crate::tui::hit::{Hit, HitMap};
+use crate::tui::images;
 use crate::tui::keymap;
 use wiki_reader_core::nav::{NavStop, NodeId};
 
@@ -52,6 +53,13 @@ pub fn run(root: &Path, config: Option<&Path>) -> io::Result<()> {
         mouse: false,
         keyboard_enhancement: false,
     };
+    // The graphics probe reads stdin, so it runs before mouse capture, the keyboard-enhancement
+    // query and the first event read (ADR-0004).
+    if app.graphics_allowed()
+        && let Some(picker) = images::detect_picker(&images::GraphicsEnv::from_process())
+    {
+        app.enable_graphics(picker);
+    }
     execute!(stdout(), EnableMouseCapture)?;
     guard.mouse = true;
     if supports_keyboard_enhancement().unwrap_or(false) {
@@ -121,9 +129,15 @@ fn run_loop(
             return Ok(());
         }
         app.poll_watcher();
+        app.images.poll();
         app.flush_session(false);
-        // Poll fast mid-drag so a held pointer keeps scrolling the View.
-        let idle = std::time::Duration::from_millis(if app.selecting { 40 } else { 250 });
+        // Poll fast mid-drag so a held pointer keeps scrolling the View, and while a picture is
+        // still decoding so it appears promptly.
+        let idle = std::time::Duration::from_millis(if app.selecting || app.images.has_pending() {
+            40
+        } else {
+            250
+        });
         if event::poll(idle)? {
             // Apply everything already queued before redrawing: a wheel flick or mouse move
             // sends dozens of events, and one full redraw per event lags behind the pointer.

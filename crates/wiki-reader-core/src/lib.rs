@@ -5,6 +5,7 @@
 
 pub mod config;
 pub mod error;
+pub mod images;
 pub mod index;
 pub mod nav;
 pub mod parse;

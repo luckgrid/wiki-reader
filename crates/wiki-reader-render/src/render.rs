@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::fmt::Write as _;
+use std::path::PathBuf;
 
 use pulldown_cmark::{
     BlockQuoteKind, CodeBlockKind, CowStr, Event, HeadingLevel, Options, Parser, Tag, TagEnd,
@@ -13,6 +14,7 @@ use wiki_reader_core::nav::{Target, resolve};
 use wiki_reader_core::parse::{self, github_slug};
 use wiki_reader_core::provider::PageKey;
 
+use crate::images::{ImagePlan, ImageSlot, placeholder_text, plan_image};
 use crate::{LinkClass, LinkId, LinkSpan};
 
 /// Semantic style for a span (TUI maps to theme colours).
@@ -64,6 +66,10 @@ pub enum StyleKind {
     BacklinkTag,
     /// Linked-from entry summary text.
     BacklinkSummary,
+    /// Blank row reserved for an image the TUI draws over it.
+    ImageSlot,
+    /// `[image: alt] path — reason` shown instead of a picture.
+    ImagePlaceholder,
 }
 
 /// One styled run on a line.
@@ -108,6 +114,8 @@ pub struct RenderedDoc {
     pub source_map: Vec<u32>,
     /// Heading slug → 1-based **rendered** line.
     pub headings: Vec<(String, u32)>,
+    /// Rows reserved for images, document order. Empty unless `RenderOpts::cell_px` is set.
+    pub image_slots: Vec<ImageSlot>,
     pub word_count: u32,
     pub updated: String,
 }
@@ -156,6 +164,12 @@ pub struct RenderOpts {
     pub expanded: std::collections::HashSet<u32>,
     /// Diagram render preference (ADR-0004).
     pub diagram_mode: wiki_reader_core::config::DiagramMode,
+    /// Collection root. Local images resolve (and must stay) under it (ADR-0017); with `None`
+    /// every image renders as a text placeholder.
+    pub image_root: Option<PathBuf>,
+    /// Terminal cell size in pixels. `Some` only when a graphics protocol is usable: block images
+    /// then reserve rows ([`RenderedDoc::image_slots`]); `None` keeps the text placeholder.
+    pub cell_px: Option<(u16, u16)>,
 }
 
 impl Default for RenderOpts {
@@ -163,6 +177,8 @@ impl Default for RenderOpts {
         Self {
             expanded: std::collections::HashSet::new(),
             diagram_mode: wiki_reader_core::config::DiagramMode::Auto,
+            image_root: None,
+            cell_px: None,
         }
     }
 }
@@ -205,6 +221,8 @@ pub fn render_with(
     let mut state = LayoutState::new(w, body_line_offset, from, index);
     state.expanded.clone_from(&opts.expanded);
     state.diagram_mode = opts.diagram_mode;
+    state.image_root.clone_from(&opts.image_root);
+    state.cell_px = opts.cell_px;
 
     if parsed.frontmatter.kind.is_some()
         || !parsed.frontmatter.props.is_empty()
@@ -222,14 +240,29 @@ pub fn render_with(
         | Options::ENABLE_FOOTNOTES
         | Options::ENABLE_GFM;
     let line_starts = line_start_offsets(&body);
-    for (event, range) in Parser::new_ext(&body, options).into_offset_iter() {
+    // Collected so a paragraph holding only an image can look ahead and become an image block.
+    let events: Vec<_> = Parser::new_ext(&body, options).into_offset_iter().collect();
+    let mut i = 0;
+    while i < events.len() {
+        let (event, range) = &events[i];
         let src = offset_to_line(&line_starts, body_line_offset, range.start);
         let src_end = offset_to_line(
             &line_starts,
             body_line_offset,
             range.end.saturating_sub(1).max(range.start),
         );
-        state.handle(event, src, src_end);
+        if let Some(block) = state.image_only_paragraph(&events, i) {
+            state.image_block(&block.dest, &block.alt, src);
+            i = block.next;
+            continue;
+        }
+        if let Some(image) = image_at(&events, i) {
+            state.inline_image(&image.alt, src);
+            i = image.end + 1;
+            continue;
+        }
+        state.handle(event.clone(), src, src_end);
+        i += 1;
     }
     state.finish_block();
     state.append_backlinks(from);
@@ -249,9 +282,49 @@ pub fn render_with(
         block_starts: state.block_starts,
         source_map,
         headings: state.headings,
+        image_slots: state.image_slots,
         word_count,
         updated,
     }
+}
+
+/// An image's destination and alt text, and the index of its `End(Image)` event.
+struct ImageSpan {
+    dest: String,
+    alt: String,
+    end: usize,
+}
+
+/// `Start(Image)` at `events[i]` with its alt text (plain text of the children).
+fn image_at(events: &[(Event<'_>, std::ops::Range<usize>)], i: usize) -> Option<ImageSpan> {
+    let Event::Start(Tag::Image { dest_url, .. }) = &events.get(i)?.0 else {
+        return None;
+    };
+    let mut alt = String::new();
+    let mut j = i + 1;
+    loop {
+        match &events.get(j)?.0 {
+            Event::End(TagEnd::Image) => break,
+            Event::Text(t) | Event::Code(t) => alt.push_str(t),
+            Event::SoftBreak | Event::HardBreak => alt.push(' '),
+            Event::Start(Tag::Image { .. }) => return None,
+            _ => {}
+        }
+        j += 1;
+    }
+    Some(ImageSpan {
+        dest: dest_url.to_string(),
+        alt,
+        end: j,
+    })
+}
+
+/// A paragraph whose only content is one image.
+struct ImageParagraph {
+    dest: String,
+    alt: String,
+    /// Index of the first event after the paragraph.
+    next: usize,
 }
 
 #[allow(clippy::struct_excessive_bools)] // layout FSM flags
@@ -298,6 +371,9 @@ struct LayoutState<'a> {
     link_id: u32,
     expanded: std::collections::HashSet<u32>,
     diagram_mode: wiki_reader_core::config::DiagramMode,
+    image_root: Option<PathBuf>,
+    cell_px: Option<(u16, u16)>,
+    image_slots: Vec<ImageSlot>,
 }
 
 /// A link whose display columns are only known after the table is laid out.
@@ -362,6 +438,108 @@ impl<'a> LayoutState<'a> {
             link_id: 0,
             expanded: std::collections::HashSet::new(),
             diagram_mode: wiki_reader_core::config::DiagramMode::Auto,
+            image_root: None,
+            cell_px: None,
+            image_slots: Vec::new(),
+        }
+    }
+
+    /// `Start(Paragraph) Start(Image) … End(Image) End(Paragraph)` at `events[i]`, outside
+    /// quotes, lists and tables (slots are not indented).
+    fn image_only_paragraph(
+        &self,
+        events: &[(Event<'_>, std::ops::Range<usize>)],
+        i: usize,
+    ) -> Option<ImageParagraph> {
+        if !matches!(events[i].0, Event::Start(Tag::Paragraph))
+            || self.in_quote
+            || self.in_table
+            || !self.list_stack.is_empty()
+        {
+            return None;
+        }
+        let image = image_at(events, i + 1)?;
+        matches!(events.get(image.end + 1)?.0, Event::End(TagEnd::Paragraph)).then(|| {
+            ImageParagraph {
+                dest: image.dest,
+                alt: image.alt,
+                next: image.end + 2,
+            }
+        })
+    }
+
+    /// An image inside running text, a list, a quote or a table: only block-level images are
+    /// drawn, so this stays a terse `[image: alt]`.
+    fn inline_image(&mut self, alt: &str, src: u32) {
+        self.ensure_list_marker(src);
+        let alt = alt.trim();
+        let text = if alt.is_empty() {
+            "[image]".to_owned()
+        } else {
+            format!("[image: {alt}]")
+        };
+        // Inside a link the text must stay link-styled so the link keeps its click target.
+        let kind = if self.in_link.is_some() {
+            StyleKind::Link
+        } else {
+            StyleKind::ImagePlaceholder
+        };
+        self.push_span(text, kind, src);
+    }
+
+    /// Reserve rows for a local image, or show the text placeholder (ADR-0017).
+    fn image_block(&mut self, dest: &str, alt: &str, src: u32) {
+        self.ensure_block_gap(src);
+        self.mark_block(src);
+        self.cur_src = src;
+        let max_cols = u16::try_from(self.width).unwrap_or(u16::MAX);
+        let plan = plan_image(
+            self.image_root.as_deref(),
+            &self.from.relative_path,
+            dest,
+            self.cell_px,
+            max_cols,
+        );
+        match plan {
+            ImagePlan::Slot {
+                path,
+                stamp,
+                cols,
+                rows,
+            } => {
+                let line = u32::try_from(self.styled.len()).unwrap_or(0);
+                for _ in 0..rows {
+                    self.styled.push(StyledLine {
+                        spans: vec![StyledSpan {
+                            text: String::new(),
+                            kind: StyleKind::ImageSlot,
+                        }],
+                        source_line: src,
+                    });
+                }
+                // A real gap row: slot rows are blank, so the next block would otherwise
+                // see a blank line and skip its own gap, leaving text against the picture.
+                self.styled.push(StyledLine {
+                    spans: Vec::new(),
+                    source_line: src,
+                });
+                self.image_slots.push(ImageSlot {
+                    line,
+                    rows,
+                    cols,
+                    path,
+                    alt: alt.to_owned(),
+                    stamp,
+                });
+            }
+            ImagePlan::Placeholder(reason) => {
+                self.push_span(
+                    placeholder_text(alt, dest, &reason),
+                    StyleKind::ImagePlaceholder,
+                    src,
+                );
+                self.finish_block();
+            }
         }
     }
 
@@ -535,16 +713,6 @@ impl<'a> LayoutState<'a> {
                 });
                 self.style_stack.push(StyleKind::Link);
             }
-            Tag::Image {
-                dest_url, title, ..
-            } => {
-                let alt = if title.is_empty() {
-                    format!("[{dest_url}]")
-                } else {
-                    format!("[{title}]")
-                };
-                self.push_span(alt, StyleKind::Link, src);
-            }
             Tag::Table(_) => {
                 self.ensure_block_gap(src);
                 self.mark_block(src);
@@ -560,6 +728,7 @@ impl<'a> LayoutState<'a> {
             Tag::TableCell => {
                 self.style_stack.push(StyleKind::Table);
             }
+            // Images never get here: `image_at` consumes them whole before events are handled.
             _ => {}
         }
     }
