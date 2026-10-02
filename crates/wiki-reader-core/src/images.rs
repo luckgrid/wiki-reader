@@ -65,12 +65,12 @@ pub struct LocalImage {
     pub modified_nanos: u64,
 }
 
-/// Formats ADR-0017 allows (SVG joins with the rasteriser in P3-12c).
+/// Formats ADR-0017 allows (SVG via `resvg` with no external refs).
 fn supported_extension(path: &Path) -> bool {
     path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
         matches!(
             e.to_ascii_lowercase().as_str(),
-            "png" | "jpg" | "jpeg" | "gif" | "webp"
+            "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg"
         )
     })
 }
@@ -305,10 +305,8 @@ mod tests {
             resolve(&fx, "page.md", "img/notes.txt"),
             Err(ImageReject::UnsupportedFormat)
         );
-        assert_eq!(
-            resolve(&fx, "page.md", "img/diagram.svg"),
-            Err(ImageReject::UnsupportedFormat)
-        );
+        fs::write(fx.root.join("img/diagram.svg"), b"<svg/>").expect("svg");
+        assert!(resolve(&fx, "page.md", "img/diagram.svg").is_ok());
         fs::create_dir_all(fx.root.join("dir.png")).expect("dir named like an image");
         assert_eq!(
             resolve(&fx, "page.md", "dir.png"),

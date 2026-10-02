@@ -5,9 +5,9 @@ expression: out
 Image fixtures
 ────────────────────────────────────────
 
-Manual and snapshot inputs for P3-12b. The cases that must not render a picture
-are intentional: remote URLs, .. escapes and missing files all show the text
-placeholder.
+Manual and snapshot inputs for P3-12b/c. The cases that must not render a
+picture are intentional: remote URLs, .. escapes and missing files all show the
+text placeholder.
 
 
 Local images
@@ -80,6 +80,11 @@ cropping:
 
 
 
+A local SVG (rasterised with resvg, no external refs):
+
+
+
+
 Text after the last image.
 
 
@@ -100,7 +105,7 @@ A missing file:
 
 An unsupported format:
 
-[image: Vector] img/diagram.svg — unsupported image format
+[image: Notes] img/notes.txt — unsupported image format
 
 
 Inline
@@ -115,3 +120,4 @@ slot line=13 20x4 small.png
 slot line=20 80x10 wide.png
 slot line=33 80x10 photo.jpg
 slot line=47 16x30 tall.png
+slot line=80 10x2 diagram.svg

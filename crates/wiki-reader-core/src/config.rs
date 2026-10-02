@@ -23,7 +23,7 @@ pub enum LabelMode {
     TitleFilename,
 }
 
-/// Diagram render preference (D1; stored for later wiring).
+/// Diagram render preference (ADR-0004 / P3-12).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DiagramMode {

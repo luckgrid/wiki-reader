@@ -2,11 +2,32 @@
 //! (ADR-0017). The renderer stays terminal-free; it only decides *where* and *how tall*.
 
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use wiki_reader_core::images::{ImageReject, MAX_IMAGE_PIXELS, resolve_local_image};
 
+use crate::mermaid_raster::{self, RasterError};
+
 /// Tallest slot, in display rows. Keeps one image from filling several screens.
 pub const MAX_SLOT_ROWS: u16 = 30;
+
+/// Where the picture bytes come from for an [`ImageSlot`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SlotSource {
+    /// Canonical local file already validated against ADR-0017.
+    File {
+        path: PathBuf,
+        /// File size and modified nanoseconds (freshness stamp).
+        stamp: (u64, u64),
+    },
+    /// In-process Mermaid raster (content hash + background colour for the cache key).
+    Mermaid {
+        hash: u64,
+        bg: (u8, u8, u8),
+        /// Fence body; used by the decode worker to (re)rasterise.
+        source: String,
+    },
+}
 
 /// Rows reserved for an image. The first row is [`ImageSlot::line`].
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -17,24 +38,88 @@ pub struct ImageSlot {
     pub rows: u16,
     /// Reserved columns (≤ the layout width).
     pub cols: u16,
-    /// Canonical file, already validated against ADR-0017.
-    pub path: PathBuf,
+    /// File or Mermaid source for this slot.
+    pub source: SlotSource,
     /// Alt text, for the placeholder shown while loading or when decoding fails.
     pub alt: String,
-    /// File size and modified nanoseconds, so an edited file is not served from a stale cache.
-    pub stamp: (u64, u64),
+}
+
+/// Why a Mermaid fence stays on the text tier after a measure (or permanent failure).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DiagramTextReason {
+    /// Natural size is known but does not fit the pane at a legible scale.
+    TooWide,
+    /// Parse / SVG layout failed; message is shown in the tier header.
+    Failed(String),
+}
+
+/// Natural size known after an off-thread Mermaid measure, or a forced text tier.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DiagramSize {
+    /// Natural SVG pixel size (width legibility is decided at layout time).
+    Natural { px_w: u32, px_h: u32 },
+    /// Prefer the text (or source) tier for this content/background.
+    Text(DiagramTextReason),
+}
+
+/// Shared `(content_hash, bg) → size` map filled by the image worker.
+type DiagramSizeKey = (u64, (u8, u8, u8));
+
+#[derive(Debug, Default)]
+pub struct DiagramSizeCache {
+    inner: Mutex<std::collections::HashMap<DiagramSizeKey, DiagramSize>>,
+}
+
+impl DiagramSizeCache {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[must_use]
+    pub fn get(&self, hash: u64, bg: (u8, u8, u8)) -> Option<DiagramSize> {
+        self.inner.lock().ok()?.get(&(hash, bg)).cloned()
+    }
+
+    pub fn insert(&self, hash: u64, bg: (u8, u8, u8), size: DiagramSize) {
+        if let Ok(mut map) = self.inner.lock() {
+            map.insert((hash, bg), size);
+        }
+    }
+}
+
+/// Mermaid fence the renderer wants sized off-thread (cache miss while image tier is selected).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiagramRequest {
+    pub hash: u64,
+    pub source: String,
+    pub width: u16,
+    pub bg: (u8, u8, u8),
+    pub cell_px: (u16, u16),
 }
 
 /// What a block-level image becomes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ImagePlan {
     Slot {
-        path: PathBuf,
-        stamp: (u64, u64),
+        source: SlotSource,
         cols: u16,
         rows: u16,
     },
     Placeholder(ImageReject),
+}
+
+/// Fit scale for `px_w × px_h` into `max_cols` × [`MAX_SLOT_ROWS`] at `cell_px`. Never upscales.
+#[must_use]
+pub fn fit_scale(px_w: u32, px_h: u32, cell_px: (u16, u16), max_cols: u16) -> f64 {
+    let cell_w = f64::from(cell_px.0.max(1));
+    let cell_h = f64::from(cell_px.1.max(1));
+    let w = f64::from(px_w.max(1));
+    let h = f64::from(px_h.max(1));
+    let max_cols = max_cols.max(1);
+    (f64::from(max_cols) * cell_w / w)
+        .min(f64::from(MAX_SLOT_ROWS) * cell_h / h)
+        .min(1.0)
 }
 
 /// Columns × rows for an image of `px_w × px_h` pixels: natural size, shrunk to fit
@@ -47,14 +132,18 @@ pub fn slot_geometry(px_w: u32, px_h: u32, cell_px: (u16, u16), max_cols: u16) -
     let w = f64::from(px_w.max(1));
     let h = f64::from(px_h.max(1));
     let max_cols = max_cols.max(1);
-    let scale = (f64::from(max_cols) * cell_w / w)
-        .min(f64::from(MAX_SLOT_ROWS) * cell_h / h)
-        .min(1.0);
+    let scale = fit_scale(px_w, px_h, cell_px, max_cols);
     let cols = (w * scale / cell_w).ceil().clamp(1.0, f64::from(max_cols));
     let rows = (h * scale / cell_h)
         .ceil()
         .clamp(1.0, f64::from(MAX_SLOT_ROWS));
     (cols as u16, rows as u16)
+}
+
+fn is_svg(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("svg"))
 }
 
 /// Decide how a block-level image `dest` renders from the page at `page_rel`.
@@ -77,17 +166,33 @@ pub(crate) fn plan_image(
     let Some(cell_px) = cell_px else {
         return ImagePlan::Placeholder(ImageReject::NoGraphics);
     };
-    // Header only: the pixel cap is enforced before any decode.
-    let Ok((px_w, px_h)) = image::image_dimensions(&local.path) else {
-        return ImagePlan::Placeholder(ImageReject::Unreadable);
+    let (px_w, px_h) = if is_svg(&local.path) {
+        let Ok(bytes) = std::fs::read(&local.path) else {
+            return ImagePlan::Placeholder(ImageReject::Unreadable);
+        };
+        match mermaid_raster::svg_natural_size(&bytes) {
+            Ok(size) => size,
+            Err(RasterError::TooManyPixels) => {
+                return ImagePlan::Placeholder(ImageReject::TooManyPixels);
+            }
+            Err(_) => return ImagePlan::Placeholder(ImageReject::Unreadable),
+        }
+    } else {
+        // Header only: the pixel cap is enforced before any decode.
+        let Ok((px_w, px_h)) = image::image_dimensions(&local.path) else {
+            return ImagePlan::Placeholder(ImageReject::Unreadable);
+        };
+        if u64::from(px_w) * u64::from(px_h) > MAX_IMAGE_PIXELS {
+            return ImagePlan::Placeholder(ImageReject::TooManyPixels);
+        }
+        (px_w, px_h)
     };
-    if u64::from(px_w) * u64::from(px_h) > MAX_IMAGE_PIXELS {
-        return ImagePlan::Placeholder(ImageReject::TooManyPixels);
-    }
     let (cols, rows) = slot_geometry(px_w, px_h, cell_px, max_cols);
     ImagePlan::Slot {
-        path: local.path,
-        stamp: (local.bytes, local.modified_nanos),
+        source: SlotSource::File {
+            path: local.path,
+            stamp: (local.bytes, local.modified_nanos),
+        },
         cols,
         rows,
     }
@@ -102,6 +207,12 @@ pub(crate) fn placeholder_text(alt: &str, dest: &str, reason: &ImageReject) -> S
         format!("[image: {alt}]")
     };
     format!("{label} {dest} — {reason}")
+}
+
+/// Shared empty cache for unit tests that do not care about Mermaid sizing.
+#[must_use]
+pub fn empty_diagram_size_cache() -> Arc<DiagramSizeCache> {
+    Arc::new(DiagramSizeCache::new())
 }
 
 #[cfg(test)]
@@ -159,5 +270,34 @@ mod tests {
             plan_image(None, Path::new("p.md"), "a.png", Some((8, 17)), 80),
             ImagePlan::Placeholder(ImageReject::NoRoot)
         );
+    }
+
+    #[test]
+    fn size_cache_key_is_hash_and_bg() {
+        let cache = DiagramSizeCache::new();
+        cache.insert(
+            1,
+            (30, 32, 36),
+            DiagramSize::Natural {
+                px_w: 100,
+                px_h: 50,
+            },
+        );
+        assert_eq!(
+            cache.get(1, (30, 32, 36)),
+            Some(DiagramSize::Natural {
+                px_w: 100,
+                px_h: 50
+            })
+        );
+        // Width is not part of the key: the same natural size serves every pane width.
+        assert_eq!(
+            cache.get(1, (30, 32, 36)),
+            Some(DiagramSize::Natural {
+                px_w: 100,
+                px_h: 50
+            })
+        );
+        assert_eq!(cache.get(1, (0, 0, 0)), None, "bg is part of the key");
     }
 }

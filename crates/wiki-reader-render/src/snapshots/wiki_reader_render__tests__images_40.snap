@@ -5,11 +5,11 @@ expression: out
 Image fixtures
 ────────────────────────────────────────
 
-Manual and snapshot inputs for P3-12b.
-The cases that must not render a
-picture are intentional: remote URLs, ..
- escapes and missing files all show the
-text placeholder.
+Manual and snapshot inputs for
+P3-12b/c. The cases that must not
+ render a picture are intentional:
+remote URLs, .. escapes and missing
+files all show the text placeholder.
 
 
 Local images
@@ -75,6 +75,12 @@ scroll cropping:
 
 
 
+A local SVG (rasterised with resvg, no
+external refs):
+
+
+
+
 Text after the last image.
 
 
@@ -99,7 +105,7 @@ not found
 
 An unsupported format:
 
-[image: Vector] img/diagram.svg —
+[image: Notes] img/notes.txt —
 unsupported image format
 
 
@@ -116,3 +122,4 @@ slot line=16 20x4 small.png
 slot line=24 40x5 wide.png
 slot line=32 40x5 photo.jpg
 slot line=42 16x30 tall.png
+slot line=76 10x2 diagram.svg

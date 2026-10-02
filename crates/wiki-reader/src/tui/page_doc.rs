@@ -22,6 +22,15 @@ impl PageDoc {
         }
     }
 
+    /// Mermaid size-measure requests from the latest render.
+    #[must_use]
+    pub fn diagram_requests(&self) -> &[wiki_reader_render::DiagramRequest] {
+        match self {
+            Self::Raw(_) => &[],
+            Self::Rendered(d) => d.diagram_requests(),
+        }
+    }
+
     #[must_use]
     pub fn word_count(&self) -> u32 {
         match self {

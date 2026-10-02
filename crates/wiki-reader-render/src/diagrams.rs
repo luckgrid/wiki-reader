@@ -1,4 +1,4 @@
-//! Mermaid diagram tiers (ADR-0004). Text tier via `mermaid-text`; image deferred.
+//! Mermaid diagram tiers (ADR-0004). Text via `mermaid-text`; image via slots + size cache.
 
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -12,17 +12,21 @@ use wiki_reader_core::config::DiagramMode;
 pub struct DiagramEnv {
     pub tmux: bool,
     pub herdr: bool,
+    /// Confirmed graphics protocol from the TUI probe — never inferred from env vars alone.
     pub kitty_graphics: bool,
 }
 
 impl DiagramEnv {
-    /// Read common env vars once at startup.
+    /// Read tmux / herdr env vars.
+    ///
+    /// `kitty_graphics` is always `false` here: graphics capability comes only from the
+    /// TUI startup probe (set by the caller on a copy of this env, or via `RenderOpts::graphics`).
     #[must_use]
     pub fn from_process() -> Self {
         Self {
             tmux: std::env::var_os("TMUX").is_some(),
             herdr: std::env::var_os("HERDR_ENV").as_deref() == Some(std::ffi::OsStr::new("1")),
-            // Image path not wired yet; never claim Kitty unless probe exists later.
+            // Probe result only — never guess from TERM / HERDR_ENV.
             kitty_graphics: false,
         }
     }
@@ -39,8 +43,15 @@ pub enum DiagramTier {
 /// Pick a tier per ADR-0004.
 #[must_use]
 pub fn select_tier(mode: DiagramMode, env: &DiagramEnv) -> DiagramTier {
+    // tmux never gets the image tier, even for an explicit `diagrams = "image"` request.
+    if env.tmux {
+        return match mode {
+            DiagramMode::Source => DiagramTier::Source,
+            _ => DiagramTier::Text,
+        };
+    }
     match mode {
-        DiagramMode::Image => {
+        DiagramMode::Image | DiagramMode::Auto => {
             if env.kitty_graphics {
                 DiagramTier::Image
             } else {
@@ -49,21 +60,6 @@ pub fn select_tier(mode: DiagramMode, env: &DiagramEnv) -> DiagramTier {
         }
         DiagramMode::Text => DiagramTier::Text,
         DiagramMode::Source => DiagramTier::Source,
-        DiagramMode::Auto => {
-            if env.tmux {
-                DiagramTier::Text
-            } else if env.herdr {
-                if env.kitty_graphics {
-                    DiagramTier::Image
-                } else {
-                    DiagramTier::Text
-                }
-            } else if env.kitty_graphics {
-                DiagramTier::Image
-            } else {
-                DiagramTier::Text
-            }
-        }
     }
 }
 
@@ -74,18 +70,20 @@ pub fn is_mermaid_lang(lang: &str) -> bool {
     lang.eq_ignore_ascii_case("mermaid") || lang.eq_ignore_ascii_case("mmd")
 }
 
-/// Text-tier render clamped to `width`; on failure returns the reason for a source fallback.
-pub fn render_text_tier(src: &str, width: u16) -> Result<String, String> {
-    mermaid_text::render_with_width(src, Some(usize::from(width.max(1)))).map_err(|e| e.to_string())
-}
-
-fn content_hash(src: &str) -> u64 {
+/// Stable content fingerprint for size/slot cache keys.
+#[must_use]
+pub fn content_hash(src: &str) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     src.hash(&mut h);
     h.finish()
 }
 
-// ponytail: process-local sync cache; off-thread/shared cache when image tier lands
+/// Text-tier render clamped to `width`; on failure returns the reason for a source fallback.
+pub fn render_text_tier(src: &str, width: u16) -> Result<String, String> {
+    mermaid_text::render_with_width(src, Some(usize::from(width.max(1)))).map_err(|e| e.to_string())
+}
+
+// ponytail: process-local sync cache for text/source lines; image size lives in DiagramSizeCache
 #[allow(clippy::type_complexity)]
 type DiagramCacheKey = (u64, u16, u8);
 type DiagramCache = HashMap<DiagramCacheKey, Vec<String>>;
@@ -164,12 +162,35 @@ fn max_line_width(lines: &[String]) -> usize {
     lines.iter().map(|l| l.width()).max().unwrap_or(0)
 }
 
-/// Lines to paint for a mermaid fence under `tier` (never image yet).
+fn text_tier_header_lines(reason: &str, width: u16) -> Vec<String> {
+    let pane = usize::from(width.max(1));
+    let mut header = format!("│ diagram (text; {reason})");
+    let mut lines = Vec::new();
+    while !header.is_empty() {
+        if header.width() <= pane {
+            lines.push(std::mem::take(&mut header));
+            break;
+        }
+        let (take, next) = split_fallback_line(&header, pane);
+        lines.push(take);
+        header = next;
+    }
+    lines
+}
+
+/// Lines to paint for a mermaid fence under `tier`.
 ///
 /// `width` is part of the cache key. Text tier uses `render_with_width`; if any
 /// row is still wider than the pane, falls back to the fenced source with reason.
+/// Image tier is handled by slots in the renderer; calling this with [`DiagramTier::Image`]
+/// falls through to text (safety net).
 #[must_use]
 pub fn diagram_lines(src: &str, tier: DiagramTier, width: u16) -> (Vec<String>, Option<String>) {
+    let tier = if tier == DiagramTier::Image {
+        DiagramTier::Text
+    } else {
+        tier
+    };
     let tier_key = match tier {
         DiagramTier::Image => 0u8,
         DiagramTier::Text => 1,
@@ -185,10 +206,7 @@ pub fn diagram_lines(src: &str, tier: DiagramTier, width: u16) -> (Vec<String>, 
     }
 
     let (lines, reason) = match tier {
-        DiagramTier::Image => (
-            source_fallback_lines(src, "image tier not wired", width),
-            Some("image tier unavailable".into()),
-        ),
+        DiagramTier::Image => unreachable!("mapped to Text above"),
         DiagramTier::Text => match render_text_tier(src, width) {
             Ok(out) => {
                 let rendered: Vec<String> = out.lines().map(str::to_owned).collect();
@@ -213,6 +231,27 @@ pub fn diagram_lines(src: &str, tier: DiagramTier, width: u16) -> (Vec<String>, 
         cache.insert(key, lines.clone());
     }
     (lines, reason)
+}
+
+/// Text-tier lines with an optional visible reason header (image→text fallback).
+#[must_use]
+pub fn diagram_lines_with_reason(
+    src: &str,
+    tier: DiagramTier,
+    width: u16,
+    reason: Option<&str>,
+) -> (Vec<String>, Option<String>) {
+    let (mut lines, fallback_reason) = diagram_lines(src, tier, width);
+    if let Some(reason) = reason
+        && tier == DiagramTier::Text
+        && fallback_reason.is_none()
+        && !lines.first().is_some_and(|l| l.starts_with("│ diagram ("))
+    {
+        let mut headed = text_tier_header_lines(reason, width);
+        headed.append(&mut lines);
+        return (headed, Some(reason.to_owned()));
+    }
+    (lines, fallback_reason)
 }
 
 #[cfg(test)]
@@ -259,6 +298,34 @@ mod tests {
             ..DiagramEnv::default()
         };
         assert_eq!(select_tier(DiagramMode::Auto, &env), DiagramTier::Image);
+        // tmux → text even for explicit image mode (ADR-0004).
+        let tmux = DiagramEnv {
+            tmux: true,
+            kitty_graphics: true,
+            ..DiagramEnv::default()
+        };
+        assert_eq!(select_tier(DiagramMode::Image, &tmux), DiagramTier::Text);
+        assert_eq!(select_tier(DiagramMode::Auto, &tmux), DiagramTier::Text);
+        assert_eq!(select_tier(DiagramMode::Source, &tmux), DiagramTier::Source);
+        // herdr without confirmed Kitty stays text.
+        let herdr_no_kitty = DiagramEnv {
+            herdr: true,
+            kitty_graphics: false,
+            ..DiagramEnv::default()
+        };
+        assert_eq!(
+            select_tier(DiagramMode::Auto, &herdr_no_kitty),
+            DiagramTier::Text
+        );
+        let herdr_kitty = DiagramEnv {
+            herdr: true,
+            kitty_graphics: true,
+            ..DiagramEnv::default()
+        };
+        assert_eq!(
+            select_tier(DiagramMode::Auto, &herdr_kitty),
+            DiagramTier::Image
+        );
     }
 
     #[test]
@@ -308,6 +375,18 @@ mod tests {
                 .iter()
                 .any(|l| l.contains("diagram") && l.contains("source")),
             "expected source fallback header: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn text_reason_header_is_visible() {
+        let src = "graph LR; A --> B";
+        let (lines, reason) =
+            diagram_lines_with_reason(src, DiagramTier::Text, 80, Some("no graphics protocol"));
+        assert_eq!(reason.as_deref(), Some("no graphics protocol"));
+        assert!(
+            lines[0].contains("diagram (text; no graphics protocol)"),
+            "{lines:?}"
         );
     }
 }

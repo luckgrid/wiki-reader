@@ -3,7 +3,7 @@ id: WR-ROADMAP-P3
 title: Phase 3 — Alpha polish
 summary: Diagrams and images first, then themes, sticky headers, nav chrome, and early herdr niceties.
 status: active
-updated: 2026-10-01
+updated: 2026-10-02
 related: [phase-2-mvp, phase-4-beta]
 nav_order: 3
 ---
@@ -17,8 +17,8 @@ Phase 1 is closed and Phase 2 is feature complete (dogfood hold until ≈ 2026-1
 1. **P3-12 Images and diagrams** — split into four steps, each its own PR:
    1. **P3-12a Spike** — does `ratatui-image` detect the right protocol in Ghostty and inside a herdr pane (`HERDR_ENV=1`, `terminal.kitty_graphics`)? Its startup query must run before our raw-mode/kitty-keyboard setup, and herdr may not answer it. Output: an accepted [ADR-0004](../decisions/0004-diagram-rendering.md) with the detection rule.
    2. **P3-12b Image slots and local images** — the renderer reserves N rows for an image, the TUI draws into them, and the text placeholder is the fallback. Policy is [ADR-0017](../decisions/0017-static-local-images-only.md): static, inside the collection, never fetched. This step builds the hard parts (scroll clipping, clearing under the Help/Search popups and on tab/page switch) with the simplest content.
-   3. **P3-12c Mermaid image tier** — `mermaid-rs-renderer` → `resvg` → PNG into the same slots, off the UI thread, cached by content/width/background; embedded font so output is deterministic; falls back to the text tier.
-   4. **P3-12d `diagrams` config and tier selection** — `auto | image | text | source`, tmux → text, never Sixel under herdr.
+   3. **P3-12c Mermaid image tier** — `mermaid-rs-renderer` → `resvg` → PNG into the same slots, off the UI thread, cached by content/background (width is a layout-time legibility check); embedded font so output is deterministic; falls back to the text tier.
+   4. **P3-12d `diagrams` config and tier selection** — `auto | image | text | source`, tmux → text, never Sixel under herdr. Landed with P3-12c in the same PR.
 2. **P3-07 Themes / P3-11 Layout config** — wire the stored `theme` config key to the semantic token table in `theme.rs`; ship dark/light presets plus a herdr-matching preset; add nav placement (left/right) and related layout options. (R35 already warns when the key is set but inert.)
 3. **P3-01 / P3-02 / P3-04** — sticky section header, side nav header/footer regions, optional ‹ › header buttons.
 4. **P3-05 / P3-03** — link hover preview; nav label options (R35 already draws a dim `(filename)` suffix for `title+filename`; full “alt text below” remains here).
@@ -34,11 +34,11 @@ Detail each row into spikes/acceptance only when it is next up. Dogfood bites re
 | P3-06 | Help overlay with clickable keys | | done | done via P2-20 (#71) |
 | P3-07 | Themes | | todo | wire stored theme key; include a herdr-matching preset; fix fixed-RGB colours that look wrong on light terminals |
 | P3-11 | Layout and theme config | C1 | todo | nav placement (left/right) and other layout options; owns config keys (nav width stays in session for P2-14); feature request from 2026-09-30 dogfood. The formatted view was removed ([ADR-0014](../decisions/0014-remove-formatted-view-toggle.md)), so it owns no view-mode key |
-| P3-12 | Image diagrams and images (D1) | D1 | doing | was P2-24b; umbrella for P3-12a…d |
+| P3-12 | Image diagrams and images (D1) | D1 | done | was P2-24b; umbrella for P3-12a…d; closed with P3-12d (landed with 12c) |
 | P3-12a | Spike: protocol detection in Ghostty and herdr; accept ADR-0004 | D1 | done | [P3-S1](spikes/p3-s1-image-protocol.md): Kitty works direct/Herdr; iTerm2 must be forced from env; unknown terminals are not probed; crop/clear/swap pass; Mermaid mixed-go (12 valid blocks/6 common types pass, wide graphs fall back); ADR-0004 accepted |
-| P3-12b | Image slots + local images (static, in-collection, never fetched) | D1 | done | [ADR-0017](../decisions/0017-static-local-images-only.md); implemented: core path policy and caps, `ImageSlot` rows, `ImageManager` decode worker, startup probe, draw pass with top/bottom crop, `[image: alt]` fallback, `fixtures/images`. SVG moves to P3-12c with `resvg`. Manual check 2026-10-02 (`cargo run -p wiki-reader` at the repo root): pictures display in Ghostty, in a herdr pane and in iTerm2; Terminal.app and tmux show the `no graphics protocol` placeholder, as designed. Scroll-crop and popup behaviour were not itemised in the report; hardening: visible-only queue, LRU cache, failure cache |
-| P3-12c | Mermaid image tier | D1 | todo | `mermaid-rs-renderer` → `resvg` → PNG; off-thread (large wiki graph reached ~0.86 s), cached, embedded font; reject illegibly scaled wide results to text; do not infer Kitty from `HERDR_ENV` alone; recheck ~8.8 MiB spike-binary delta |
-| P3-12d | `diagrams` config + tier selection | D1 / C1 | todo | `auto \| image \| text \| source`; tmux → text; never Sixel under herdr |
+| P3-12b | Image slots + local images (static, in-collection, never fetched) | D1 | done | [ADR-0017](../decisions/0017-static-local-images-only.md); implemented: core path policy and caps, `ImageSlot` rows, `ImageManager` decode worker, startup probe, draw pass with top/bottom crop, `[image: alt]` fallback, `fixtures/images`. SVG moved to P3-12c with `resvg`. Manual check 2026-10-02 (`cargo run -p wiki-reader` at the repo root): pictures display in Ghostty, in a herdr pane and in iTerm2; Terminal.app and tmux show the `no graphics protocol` placeholder, as designed. Scroll-crop and popup behaviour were not itemised in the report; hardening: visible-only queue, LRU cache, failure cache |
+| P3-12c | Mermaid image tier | D1 | done | `mermaid-rs-renderer` → `resvg` → slots; off-thread size cache `(hash, bg)` + re-layout (preserves selection); SVG-only measure, raster on decode; Decode before Measure; embedded Noto Sans; legibility gate ≥ 0.55 → text with reason; SVG local images; release binary **+~6.7 MiB** (9.7 → 16.4 MiB, measured 2026-10-02 vs P3-12b). Manual check 2026-10-02 (`cargo run -p wiki-reader fixtures/mermaid`): Ghostty launches and shows the collection; tmux stays on the text tier (ASCII diagram, no image slots); automated coverage for text→image swap, Help overlay, selection-survives-relayout, TooWide/Failed reasons, Decode-before-Measure. herdr/iTerm2/Terminal.app probe behaviour unchanged from P3-12b matrix |
+| P3-12d | `diagrams` config + tier selection | D1 / C1 | done | landed with P3-12c: `auto \| image \| text \| source`; tmux → text even for `image`; `text`/`source` skip probe; herdr Kitty-only (never Sixel); fallback reasons in tier headers |
 | P3-01 | Sticky viewer section header | U1 | todo | |
 | P3-02 | Side nav header/footer sub-regions | U2 | todo | |
 | P3-04 | Optional header ‹ › buttons | U4 | todo | |

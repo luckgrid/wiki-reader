@@ -3,14 +3,25 @@
 mod diagrams;
 mod images;
 mod link_span;
+mod mermaid_raster;
 mod render;
 
-pub use diagrams::{DiagramEnv, DiagramTier, diagram_lines, is_mermaid_lang, select_tier};
-pub use images::{ImageSlot, MAX_SLOT_ROWS, slot_geometry};
+pub use diagrams::{
+    DiagramEnv, DiagramTier, content_hash, diagram_lines, diagram_lines_with_reason,
+    is_mermaid_lang, select_tier,
+};
+pub use images::{
+    DiagramRequest, DiagramSize, DiagramSizeCache, DiagramTextReason, ImageSlot, MAX_SLOT_ROWS,
+    SlotSource, empty_diagram_size_cache, fit_scale, slot_geometry,
+};
 pub use link_span::{LinkClass, LinkId, LinkSpan};
+pub use mermaid_raster::{
+    MIN_LEGIBLE_SCALE, RasterError, RasterImage, is_legible, mermaid_to_svg, rasterise_svg,
+    render_mermaid, render_mermaid_for_pane, svg_natural_size,
+};
 pub use render::{
-    BlockAction, BlockActionKind, RenderOpts, RenderedDoc, StyleKind, StyledLine, StyledSpan,
-    render, render_with,
+    BlockAction, BlockActionKind, DEFAULT_DIAGRAM_BG, RenderOpts, RenderedDoc, StyleKind,
+    StyledLine, StyledSpan, render, render_with,
 };
 
 #[cfg(test)]
@@ -18,6 +29,7 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::path::Path;
+    use std::sync::Arc;
     use unicode_width::UnicodeWidthStr;
     use wiki_reader_core::provider::{CollectionProvider, FsProvider, PageKey};
 
@@ -1334,9 +1346,23 @@ mod tests {
         let names: Vec<_> = doc
             .image_slots
             .iter()
-            .map(|s| s.path.file_name().unwrap().to_string_lossy().into_owned())
+            .map(|s| match &s.source {
+                SlotSource::File { path, .. } => {
+                    path.file_name().unwrap().to_string_lossy().into_owned()
+                }
+                SlotSource::Mermaid { hash, .. } => format!("mermaid:{hash:x}"),
+            })
             .collect();
-        assert_eq!(names, ["small.png", "wide.png", "photo.jpg", "tall.png"]);
+        assert_eq!(
+            names,
+            [
+                "small.png",
+                "wide.png",
+                "photo.jpg",
+                "tall.png",
+                "diagram.svg"
+            ]
+        );
         let small = &doc.image_slots[0];
         assert_eq!((small.cols, small.rows), (20, 4));
         // 1600×400 px shrinks to 80 columns (640 px): 640×160 px ⇒ 10 rows.
@@ -1362,8 +1388,8 @@ mod tests {
             .iter()
             .position(|l| l == "Text after the last image.")
             .expect("text after");
-        let tall = &doc.image_slots[3];
-        assert_eq!(after, tall.line as usize + usize::from(tall.rows) + 1);
+        let last = doc.image_slots.last().expect("svg slot");
+        assert_eq!(after, last.line as usize + usize::from(last.rows) + 1);
     }
 
     #[test]
@@ -1387,7 +1413,7 @@ mod tests {
             "[image: Remote] https://example.com/logo.png — URL images are never fetched",
             "[image: Escape] ../../README.md.png — outside the collection",
             "[image: Missing] img/nope.png — file not found",
-            "[image: Vector] img/diagram.svg — unsupported image format",
+            "[image: Notes] img/notes.txt — unsupported image format",
         ] {
             assert!(text.contains(expected), "missing {expected:?} in\n{text}");
         }
@@ -1398,7 +1424,7 @@ mod tests {
         let doc = render_images_fixture(Some((8, 17)), 80);
         assert_eq!(
             doc.image_slots.len(),
-            4,
+            5,
             "only block-level images get slots"
         );
         let text = doc.lines.join("\n");
@@ -1424,7 +1450,12 @@ mod tests {
                     slot.line,
                     slot.cols,
                     slot.rows,
-                    slot.path.file_name().unwrap().to_string_lossy()
+                    match &slot.source {
+                        SlotSource::File { path, .. } => {
+                            path.file_name().unwrap().to_string_lossy().into_owned()
+                        }
+                        SlotSource::Mermaid { hash, .. } => format!("mermaid:{hash:x}"),
+                    }
                 );
             }
             insta::assert_snapshot!(format!("images_{w}"), out);
@@ -1469,6 +1500,262 @@ mod tests {
                 .any(|l| l.starts_with("│ not-a-valid") || *l == "│ not-a-valid-diagram-xyzzy"),
             "must not paint fence body before fallback: {plain}"
         );
+    }
+
+    #[test]
+    fn mermaid_image_tier_is_text_before_size_cache_and_slot_after() {
+        let body = "flowchart LR\n  A[Build] --> B[Deploy]\n";
+        let src = format!("```mermaid\n{body}```\n");
+        let sizes = empty_diagram_size_cache();
+        let opts = RenderOpts {
+            graphics: true,
+            cell_px: Some((8, 17)),
+            diagram_sizes: Arc::clone(&sizes),
+            ..RenderOpts::default()
+        };
+        let key = empty_key();
+        let index = wiki_reader_core::Index {
+            collection_id: "t".into(),
+            pages: HashMap::default(),
+            edges: vec![],
+            by_from: HashMap::default(),
+            by_to: HashMap::default(),
+            by_id: HashMap::default(),
+            by_path: HashMap::default(),
+            diagnostics: vec![],
+        };
+        let cold = render_with(&src, None, &key, &index, 80, &opts);
+        assert!(
+            cold.image_slots.is_empty(),
+            "cache miss stays on text tier: slots={:?}",
+            cold.image_slots
+        );
+        assert!(!cold.lines.is_empty(), "lines={}", cold.lines.join("\n"));
+        assert_eq!(
+            cold.diagram_requests.len(),
+            1,
+            "requests={:?} lines=\n{}",
+            cold.diagram_requests,
+            cold.lines.join("\n")
+        );
+        assert!(
+            cold.block_actions
+                .iter()
+                .any(|a| a.kind == BlockActionKind::CopyCode && a.payload.contains("Build")),
+            "copy still carries Mermaid source"
+        );
+
+        let req = cold.diagram_requests[0].clone();
+        let svg = mermaid_to_svg(&req.source).expect("svg");
+        let (px_w, px_h) = svg_natural_size(svg.as_bytes()).expect("size");
+        sizes.insert(
+            req.hash,
+            DEFAULT_DIAGRAM_BG,
+            DiagramSize::Natural { px_w, px_h },
+        );
+        let warm = render_with(&src, None, &key, &index, 80, &opts);
+        assert_eq!(
+            warm.image_slots.len(),
+            1,
+            "warm lines=\n{}",
+            warm.lines.join("\n")
+        );
+        assert!(matches!(
+            warm.image_slots[0].source,
+            SlotSource::Mermaid { .. }
+        ));
+        assert!(warm.diagram_requests.is_empty());
+    }
+
+    #[test]
+    fn mermaid_size_cache_hit_across_widths_requests_once() {
+        let body = "flowchart LR\n  A[Build] --> B[Deploy]\n";
+        let src = format!("```mermaid\n{body}```\n");
+        let sizes = empty_diagram_size_cache();
+        let opts = RenderOpts {
+            graphics: true,
+            cell_px: Some((8, 17)),
+            diagram_sizes: Arc::clone(&sizes),
+            ..RenderOpts::default()
+        };
+        let key = empty_key();
+        let index = wiki_reader_core::Index {
+            collection_id: "t".into(),
+            pages: HashMap::default(),
+            edges: vec![],
+            by_from: HashMap::default(),
+            by_to: HashMap::default(),
+            by_id: HashMap::default(),
+            by_path: HashMap::default(),
+            diagnostics: vec![],
+        };
+        let cold = render_with(&src, None, &key, &index, 80, &opts);
+        assert_eq!(cold.diagram_requests.len(), 1);
+        let req = &cold.diagram_requests[0];
+        let svg = mermaid_to_svg(&req.source).expect("svg");
+        let (px_w, px_h) = svg_natural_size(svg.as_bytes()).expect("size");
+        sizes.insert(
+            req.hash,
+            DEFAULT_DIAGRAM_BG,
+            DiagramSize::Natural { px_w, px_h },
+        );
+        for w in [80u16, 60, 80] {
+            let doc = render_with(&src, None, &key, &index, w, &opts);
+            assert!(
+                doc.diagram_requests.is_empty(),
+                "width {w} must not re-measure"
+            );
+        }
+    }
+
+    #[test]
+    fn mermaid_failed_measure_shows_parse_reason() {
+        // Valid Mermaid so the text tier succeeds; the Failed cache entry supplies the header.
+        let body = "flowchart LR\n  A[Build] --> B[Deploy]\n";
+        let src = format!("```mermaid\n{body}```\n");
+        let sizes = empty_diagram_size_cache();
+        let opts = RenderOpts {
+            graphics: true,
+            cell_px: Some((8, 17)),
+            diagram_sizes: Arc::clone(&sizes),
+            ..RenderOpts::default()
+        };
+        let key = empty_key();
+        let index = wiki_reader_core::Index {
+            collection_id: "t".into(),
+            pages: HashMap::default(),
+            edges: vec![],
+            by_from: HashMap::default(),
+            by_to: HashMap::default(),
+            by_id: HashMap::default(),
+            by_path: HashMap::default(),
+            diagnostics: vec![],
+        };
+        let cold = render_with(&src, None, &key, &index, 80, &opts);
+        let req = cold.diagram_requests[0].clone();
+        sizes.insert(
+            req.hash,
+            DEFAULT_DIAGRAM_BG,
+            DiagramSize::Text(DiagramTextReason::Failed("parse boom".into())),
+        );
+        let warm = render_with(&src, None, &key, &index, 80, &opts);
+        let plain = warm.lines.join("\n");
+        assert!(
+            plain.contains("parse boom"),
+            "failed reason in header: {plain}"
+        );
+    }
+
+    #[test]
+    fn mermaid_illegible_natural_size_shows_too_wide() {
+        let body = "flowchart LR\n  A[Build] --> B[Deploy]\n";
+        let src = format!("```mermaid\n{body}```\n");
+        let sizes = empty_diagram_size_cache();
+        let opts = RenderOpts {
+            graphics: true,
+            cell_px: Some((8, 17)),
+            diagram_sizes: Arc::clone(&sizes),
+            ..RenderOpts::default()
+        };
+        let key = empty_key();
+        let index = wiki_reader_core::Index {
+            collection_id: "t".into(),
+            pages: HashMap::default(),
+            edges: vec![],
+            by_from: HashMap::default(),
+            by_to: HashMap::default(),
+            by_id: HashMap::default(),
+            by_path: HashMap::default(),
+            diagnostics: vec![],
+        };
+        let cold = render_with(&src, None, &key, &index, 80, &opts);
+        let hash = cold.diagram_requests[0].hash;
+        sizes.insert(
+            hash,
+            DEFAULT_DIAGRAM_BG,
+            DiagramSize::Natural {
+                px_w: 8000,
+                px_h: 400,
+            },
+        );
+        let warm = render_with(&src, None, &key, &index, 80, &opts);
+        assert!(warm.image_slots.is_empty());
+        let plain = warm.lines.join("\n");
+        assert!(
+            plain.contains("too wide"),
+            "legibility miss shows too wide: {plain}"
+        );
+    }
+
+    #[test]
+    fn mermaid_slots_snapshot_by_width() {
+        let body = "flowchart LR\n  A[Build] --> B[Deploy]\n";
+        let src = format!("```mermaid\n{body}```\n");
+        // Discover the exact fence body the renderer hashes (newline handling).
+        let probe_sizes = empty_diagram_size_cache();
+        let probe = render_with(
+            &src,
+            None,
+            &empty_key(),
+            &wiki_reader_core::Index {
+                collection_id: "t".into(),
+                pages: HashMap::default(),
+                edges: vec![],
+                by_from: HashMap::default(),
+                by_to: HashMap::default(),
+                by_id: HashMap::default(),
+                by_path: HashMap::default(),
+                diagnostics: vec![],
+            },
+            80,
+            &RenderOpts {
+                graphics: true,
+                cell_px: Some((8, 17)),
+                diagram_sizes: Arc::clone(&probe_sizes),
+                ..RenderOpts::default()
+            },
+        );
+        let fence_body = probe.diagram_requests[0].source.clone();
+        let fence_hash = probe.diagram_requests[0].hash;
+        let svg = mermaid_to_svg(&fence_body).expect("svg");
+        let (px_w, px_h) = svg_natural_size(svg.as_bytes()).expect("size");
+        for w in [40u16, 60, 80, 120] {
+            let sizes = empty_diagram_size_cache();
+            // One natural size per diagram; legibility is decided per width at layout.
+            sizes.insert(
+                fence_hash,
+                DEFAULT_DIAGRAM_BG,
+                DiagramSize::Natural { px_w, px_h },
+            );
+            let opts = RenderOpts {
+                graphics: true,
+                cell_px: Some((8, 17)),
+                diagram_sizes: sizes,
+                ..RenderOpts::default()
+            };
+            let key = empty_key();
+            let index = wiki_reader_core::Index {
+                collection_id: "t".into(),
+                pages: HashMap::default(),
+                edges: vec![],
+                by_from: HashMap::default(),
+                by_to: HashMap::default(),
+                by_id: HashMap::default(),
+                by_path: HashMap::default(),
+                diagnostics: vec![],
+            };
+            let doc = render_with(&src, None, &key, &index, w, &opts);
+            let mut out = doc.lines.join("\n");
+            for slot in &doc.image_slots {
+                use std::fmt::Write as _;
+                let _ = write!(
+                    out,
+                    "\nslot line={} {}x{} mermaid",
+                    slot.line, slot.cols, slot.rows
+                );
+            }
+            insta::assert_snapshot!(format!("mermaid_{w}"), out);
+        }
     }
 
     /// Manual / release budget: `cargo test -p wiki-reader-render --release -- --ignored`

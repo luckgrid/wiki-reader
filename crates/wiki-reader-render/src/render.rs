@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use pulldown_cmark::{
     BlockQuoteKind, CodeBlockKind, CowStr, Event, HeadingLevel, Options, Parser, Tag, TagEnd,
@@ -14,7 +15,13 @@ use wiki_reader_core::nav::{Target, resolve};
 use wiki_reader_core::parse::{self, github_slug};
 use wiki_reader_core::provider::PageKey;
 
-use crate::images::{ImagePlan, ImageSlot, placeholder_text, plan_image};
+use crate::diagrams::{
+    DiagramEnv, DiagramTier, content_hash, diagram_lines_with_reason, select_tier,
+};
+use crate::images::{
+    DiagramRequest, DiagramSize, DiagramSizeCache, DiagramTextReason, ImagePlan, ImageSlot,
+    SlotSource, empty_diagram_size_cache, placeholder_text, plan_image, slot_geometry,
+};
 use crate::{LinkClass, LinkId, LinkSpan};
 
 /// Semantic style for a span (TUI maps to theme colours).
@@ -116,6 +123,8 @@ pub struct RenderedDoc {
     pub headings: Vec<(String, u32)>,
     /// Rows reserved for images, document order. Empty unless `RenderOpts::cell_px` is set.
     pub image_slots: Vec<ImageSlot>,
+    /// Mermaid fences waiting on an off-thread size measure (image tier, cache miss).
+    pub diagram_requests: Vec<DiagramRequest>,
     pub word_count: u32,
     pub updated: String,
 }
@@ -157,6 +166,9 @@ fn content_block_id(kind: BlockActionKind, text: &str) -> u32 {
     h
 }
 
+/// Default Mermaid raster background until P3-07 themes wire a real token (`code_bg`).
+pub const DEFAULT_DIAGRAM_BG: (u8, u8, u8) = (30, 32, 36);
+
 /// Optional expansion state for re-layout.
 #[derive(Debug, Clone)]
 pub struct RenderOpts {
@@ -170,6 +182,16 @@ pub struct RenderOpts {
     /// Terminal cell size in pixels. `Some` only when a graphics protocol is usable: block images
     /// then reserve rows ([`RenderedDoc::image_slots`]); `None` keeps the text placeholder.
     pub cell_px: Option<(u16, u16)>,
+    /// Confirmed graphics protocol from the TUI probe (`cell_px.is_some()`). Never from `HERDR_ENV`.
+    pub graphics: bool,
+    /// `$TMUX` set — forces the text tier (ADR-0004).
+    pub tmux: bool,
+    /// `HERDR_ENV=1` — Kitty-only image preference when graphics are confirmed.
+    pub herdr: bool,
+    /// Mermaid raster background (part of the size/slot cache key).
+    pub diagram_bg: (u8, u8, u8),
+    /// Shared Mermaid natural-size cache filled by the image worker.
+    pub diagram_sizes: Arc<DiagramSizeCache>,
 }
 
 impl Default for RenderOpts {
@@ -179,6 +201,11 @@ impl Default for RenderOpts {
             diagram_mode: wiki_reader_core::config::DiagramMode::Auto,
             image_root: None,
             cell_px: None,
+            graphics: false,
+            tmux: false,
+            herdr: false,
+            diagram_bg: DEFAULT_DIAGRAM_BG,
+            diagram_sizes: empty_diagram_size_cache(),
         }
     }
 }
@@ -223,6 +250,11 @@ pub fn render_with(
     state.diagram_mode = opts.diagram_mode;
     state.image_root.clone_from(&opts.image_root);
     state.cell_px = opts.cell_px;
+    state.graphics = opts.graphics;
+    state.tmux = opts.tmux;
+    state.herdr = opts.herdr;
+    state.diagram_bg = opts.diagram_bg;
+    state.diagram_sizes = Arc::clone(&opts.diagram_sizes);
 
     if parsed.frontmatter.kind.is_some()
         || !parsed.frontmatter.props.is_empty()
@@ -283,6 +315,7 @@ pub fn render_with(
         source_map,
         headings: state.headings,
         image_slots: state.image_slots,
+        diagram_requests: state.diagram_requests,
         word_count,
         updated,
     }
@@ -373,7 +406,13 @@ struct LayoutState<'a> {
     diagram_mode: wiki_reader_core::config::DiagramMode,
     image_root: Option<PathBuf>,
     cell_px: Option<(u16, u16)>,
+    graphics: bool,
+    tmux: bool,
+    herdr: bool,
+    diagram_bg: (u8, u8, u8),
+    diagram_sizes: Arc<DiagramSizeCache>,
     image_slots: Vec<ImageSlot>,
+    diagram_requests: Vec<DiagramRequest>,
 }
 
 /// A link whose display columns are only known after the table is laid out.
@@ -440,7 +479,13 @@ impl<'a> LayoutState<'a> {
             diagram_mode: wiki_reader_core::config::DiagramMode::Auto,
             image_root: None,
             cell_px: None,
+            graphics: false,
+            tmux: false,
+            herdr: false,
+            diagram_bg: DEFAULT_DIAGRAM_BG,
+            diagram_sizes: empty_diagram_size_cache(),
             image_slots: Vec::new(),
+            diagram_requests: Vec::new(),
         }
     }
 
@@ -501,12 +546,7 @@ impl<'a> LayoutState<'a> {
             max_cols,
         );
         match plan {
-            ImagePlan::Slot {
-                path,
-                stamp,
-                cols,
-                rows,
-            } => {
+            ImagePlan::Slot { source, cols, rows } => {
                 let line = u32::try_from(self.styled.len()).unwrap_or(0);
                 for _ in 0..rows {
                     self.styled.push(StyledLine {
@@ -527,9 +567,8 @@ impl<'a> LayoutState<'a> {
                     line,
                     rows,
                     cols,
-                    path,
+                    source,
                     alt: alt.to_owned(),
-                    stamp,
                 });
             }
             ImagePlan::Placeholder(reason) => {
@@ -541,6 +580,130 @@ impl<'a> LayoutState<'a> {
                 self.finish_block();
             }
         }
+    }
+
+    /// Mermaid fence: image slot when sized and legible, else text/source with a reason.
+    #[allow(clippy::too_many_lines)] // layout FSM: slot vs text + CopyCode in one place
+    fn emit_mermaid(&mut self, body: &str, close_src: u32) {
+        let width = u16::try_from(self.width).unwrap_or(80);
+        let env = DiagramEnv {
+            tmux: self.tmux,
+            herdr: self.herdr,
+            kitty_graphics: self.graphics && self.cell_px.is_some(),
+        };
+        let tier = select_tier(self.diagram_mode, &env);
+        let hash = content_hash(body);
+        let bg = self.diagram_bg;
+
+        let image_plan = if tier == DiagramTier::Image {
+            match self.diagram_sizes.get(hash, bg) {
+                Some(DiagramSize::Natural { px_w, px_h }) => {
+                    let cell_px = self.cell_px.unwrap_or((8, 17));
+                    if crate::mermaid_raster::is_legible(px_w, px_h, cell_px, width) {
+                        let (cols, rows) = slot_geometry(px_w, px_h, cell_px, width);
+                        Some((cols, rows))
+                    } else {
+                        // Width-scoped: do not overwrite the natural-size cache entry.
+                        None
+                    }
+                }
+                Some(DiagramSize::Text(_)) => None,
+                None => {
+                    if let Some(cell_px) = self.cell_px {
+                        self.diagram_requests.push(DiagramRequest {
+                            hash,
+                            source: body.to_owned(),
+                            width,
+                            bg,
+                            cell_px,
+                        });
+                    }
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        let start_line = u32::try_from(self.styled.len()).unwrap_or(0);
+        if let Some((cols, rows)) = image_plan {
+            self.ensure_block_gap(close_src);
+            self.mark_block(close_src);
+            for _ in 0..rows {
+                self.styled.push(StyledLine {
+                    spans: vec![StyledSpan {
+                        text: String::new(),
+                        kind: StyleKind::ImageSlot,
+                    }],
+                    source_line: close_src,
+                });
+            }
+            self.styled.push(StyledLine {
+                spans: Vec::new(),
+                source_line: close_src,
+            });
+            self.image_slots.push(ImageSlot {
+                line: start_line,
+                rows,
+                cols,
+                source: SlotSource::Mermaid {
+                    hash,
+                    bg,
+                    source: body.to_owned(),
+                },
+                alt: "diagram".into(),
+            });
+        } else {
+            let reason_owned: Option<String> = match tier {
+                DiagramTier::Image if self.cell_px.is_none() || !self.graphics => {
+                    Some("no graphics protocol".into())
+                }
+                DiagramTier::Image => match self.diagram_sizes.get(hash, bg) {
+                    Some(DiagramSize::Text(DiagramTextReason::Failed(msg))) => Some(msg),
+                    Some(
+                        DiagramSize::Text(DiagramTextReason::TooWide) | DiagramSize::Natural { .. },
+                    ) => Some("too wide".into()),
+                    None => None, // measuring: plain text tier until the cache warms
+                },
+                DiagramTier::Text
+                    if env.tmux
+                        && matches!(
+                            self.diagram_mode,
+                            wiki_reader_core::config::DiagramMode::Image
+                        ) =>
+                {
+                    Some("tmux: text tier".into())
+                }
+                _ => None,
+            };
+            let reason = reason_owned.as_deref();
+            let paint_tier = if tier == DiagramTier::Image {
+                DiagramTier::Text
+            } else {
+                tier
+            };
+            let (lines, _) = diagram_lines_with_reason(body, paint_tier, width, reason);
+            for (i, line) in lines.iter().enumerate() {
+                let src_line = close_src.saturating_add(u32::try_from(i).unwrap_or(0));
+                self.push_raw_line(line.clone(), StyleKind::CodeBlock, src_line);
+            }
+        }
+
+        let end = u16::try_from(
+            body.lines()
+                .next()
+                .map_or(8usize, |l| l.chars().count())
+                .min(usize::from(u16::MAX)),
+        )
+        .unwrap_or(8);
+        let id = content_block_id(BlockActionKind::CopyCode, &format!("mermaid\n{body}"));
+        self.block_actions.push(BlockAction {
+            id,
+            kind: BlockActionKind::CopyCode,
+            line: start_line,
+            cols: (0, end.max(1)),
+            payload: body.to_owned(),
+        });
     }
 
     fn handle(&mut self, event: Event<'_>, src: u32, src_end: u32) {
@@ -763,36 +926,7 @@ impl<'a> LayoutState<'a> {
                 let close_src = src_end.max(src);
                 if crate::diagrams::is_mermaid_lang(&self.code_fence_lang) {
                     let body = std::mem::take(&mut self.code_body);
-                    let tier = crate::diagrams::select_tier(
-                        self.diagram_mode,
-                        &crate::diagrams::DiagramEnv::default(),
-                    );
-                    let (lines, _reason) = crate::diagrams::diagram_lines(
-                        &body,
-                        tier,
-                        u16::try_from(self.width).unwrap_or(80),
-                    );
-                    let start_line = u32::try_from(self.styled.len()).unwrap_or(0);
-                    for (i, line) in lines.iter().enumerate() {
-                        let src_line = close_src.saturating_add(u32::try_from(i).unwrap_or(0));
-                        self.push_raw_line(line.clone(), StyleKind::CodeBlock, src_line);
-                    }
-                    let end = u16::try_from(
-                        lines
-                            .first()
-                            .map_or(8usize, |l| l.chars().count())
-                            .min(usize::from(u16::MAX)),
-                    )
-                    .unwrap_or(8);
-                    let id =
-                        content_block_id(BlockActionKind::CopyCode, &format!("mermaid\n{body}"));
-                    self.block_actions.push(BlockAction {
-                        id,
-                        kind: BlockActionKind::CopyCode,
-                        line: start_line,
-                        cols: (0, end.max(1)),
-                        payload: body,
-                    });
+                    self.emit_mermaid(&body, close_src);
                     self.code_fence_lang.clear();
                     return;
                 }

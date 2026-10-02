@@ -2,6 +2,7 @@
 //! query and paints `▀` cells, so `TestBackend` can see where pictures land.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ratatui::Terminal;
@@ -9,12 +10,18 @@ use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui_image::picker::Picker;
 
+use wiki_reader_render::SlotSource;
+
 use super::App;
 use super::draw::draw;
 use crate::tui::images::ImageManager;
 
 /// Halfblocks paint `▀` or `▄` depending on which half of the cell is opaque.
 const HALVES: [&str; 2] = ["▀", "▄"];
+
+fn slot_ends_with(slot: &wiki_reader_render::ImageSlot, name: &str) -> bool {
+    matches!(&slot.source, SlotSource::File { path, .. } if path.ends_with(name))
+}
 
 fn images_fixture() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/images")
@@ -144,7 +151,7 @@ fn slot_below_the_fold_paints_nothing_until_scrolled_into_view() {
         .doc
         .image_slots()
         .iter()
-        .find(|s| s.path.ends_with("tall.png"))
+        .find(|s| slot_ends_with(s, "tall.png"))
         .expect("tall slot")
         .clone();
     let geom = app.viewer_geom;
@@ -228,7 +235,11 @@ fn leaving_the_page_releases_its_pictures() {
 fn disabled_manager_has_no_cell_size() {
     assert!(ImageManager::disabled().cell_px().is_none());
     assert_eq!(
-        ImageManager::enabled(Picker::halfblocks()).cell_px(),
+        ImageManager::enabled_with_sizes(
+            Picker::halfblocks(),
+            Arc::new(wiki_reader_render::DiagramSizeCache::new()),
+        )
+        .cell_px(),
         Some((10, 20))
     );
 }
@@ -281,7 +292,7 @@ fn scrolling_back_shows_the_cached_picture_without_a_new_decode() {
         .doc
         .image_slots()
         .iter()
-        .find(|s| s.path.ends_with("tall.png"))
+        .find(|s| slot_ends_with(s, "tall.png"))
         .expect("tall slot")
         .clone();
     let near_first = first.line.saturating_sub(2);
@@ -353,5 +364,90 @@ fn decode_failures_are_not_retried_when_scrolling_back() {
     assert!(
         any_text(&term, "[image: Broken] — "),
         "reason shown at once"
+    );
+}
+
+fn mermaid_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/mermaid")
+}
+
+#[test]
+fn mermaid_diagram_swaps_from_text_to_halfblocks_slot() {
+    use crate::tui::action::Action;
+
+    let mut app = graphics_app(&mermaid_fixture());
+    // Open the compact common-types page so a small flowchart can become a slot.
+    let key = wiki_reader_core::provider::PageKey {
+        collection_id: app.navigator.index().collection_id.clone(),
+        relative_path: PathBuf::from("common-types.md"),
+    };
+    app.load_page(&key);
+    let mut term = terminal(120, 40);
+    draw_to(&mut term, &mut app);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while Instant::now() < deadline {
+        app.images.poll();
+        if app.images.take_diagram_relayout() {
+            app.relayout_after_diagram_size();
+        }
+        draw_to(&mut term, &mut app);
+        if !app.doc.image_slots().is_empty() && !app.images.has_pending() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(
+        !app.doc.image_slots().is_empty(),
+        "warm size cache should produce Mermaid slots"
+    );
+    wait_for_images(&mut app);
+    draw_to(&mut term, &mut app);
+    let buf = term.backend().buffer();
+    assert!(
+        (0..buf.area.height).any(|y| has_half(buf, y)),
+        "halfblocks paint the Mermaid slot"
+    );
+
+    let slot = app.doc.image_slots()[0].clone();
+    app.scroll = slot.line.saturating_sub(2);
+    app.cursor_line = app.scroll;
+    draw_to(&mut term, &mut app);
+    wait_for_images(&mut app);
+    draw_to(&mut term, &mut app);
+    assert!((0..term.backend().buffer().area.height).any(|y| has_half(term.backend().buffer(), y)));
+
+    app.update(Action::OpenHelp);
+    draw_to(&mut term, &mut app);
+    app.help = None;
+    draw_to(&mut term, &mut app);
+    wait_for_images(&mut app);
+    draw_to(&mut term, &mut app);
+    assert!(
+        (0..term.backend().buffer().area.height).any(|y| has_half(term.backend().buffer(), y)),
+        "diagram returns after the popup closes"
+    );
+}
+
+#[test]
+fn diagram_relayout_preserves_text_selection() {
+    use crate::tui::selection::{Pos, Selection};
+
+    let mut app = graphics_app(&mermaid_fixture());
+    let key = wiki_reader_core::provider::PageKey {
+        collection_id: app.navigator.index().collection_id.clone(),
+        relative_path: PathBuf::from("common-types.md"),
+    };
+    app.load_page(&key);
+    let sel = Selection {
+        anchor: Pos { line: 1, col: 0 },
+        head: Pos { line: 2, col: 5 },
+    };
+    app.selection = Some(sel);
+    app.selecting = true;
+    app.relayout_after_diagram_size();
+    assert_eq!(app.selection, Some(sel));
+    assert!(
+        app.selecting,
+        "drag must survive a measure-driven re-layout"
     );
 }

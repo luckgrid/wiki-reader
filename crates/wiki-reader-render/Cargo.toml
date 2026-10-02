@@ -11,8 +11,10 @@ readme = "../../README.md"
 
 [dependencies]
 image = { workspace = true }
+mermaid-rs-renderer = { workspace = true }
 mermaid-text = { workspace = true }
 pulldown-cmark = { workspace = true }
+resvg = { workspace = true }
 unicode-width = { workspace = true }
 wiki-reader-core = { workspace = true }
 

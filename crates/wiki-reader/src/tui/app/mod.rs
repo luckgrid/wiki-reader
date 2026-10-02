@@ -405,27 +405,57 @@ impl App {
     }
 
     fn render_opts(&self) -> RenderOpts {
+        let env = wiki_reader_render::DiagramEnv::from_process();
         RenderOpts {
             expanded: self.expanded_blocks.clone(),
             diagram_mode: self.diagram_mode,
             image_root: Some(self.provider.root().to_path_buf()),
             cell_px: self.images.cell_px(),
+            graphics: self.images.cell_px().is_some(),
+            tmux: env.tmux,
+            herdr: env.herdr,
+            diagram_bg: wiki_reader_render::DEFAULT_DIAGRAM_BG,
+            diagram_sizes: self.images.diagram_sizes(),
         }
     }
 
     /// `diagrams = "text" | "source"` opts out of graphics entirely, including the startup probe.
     pub(crate) fn graphics_allowed(&self) -> bool {
-        !matches!(
-            self.diagram_mode,
-            wiki_reader_core::config::DiagramMode::Text
-                | wiki_reader_core::config::DiagramMode::Source
-        )
+        crate::tui::images::should_probe(self.diagram_mode)
+    }
+
+    /// Config mode visible to the startup probe (ADR-0004 step 1).
+    pub(crate) fn diagram_mode_for_probe(&self) -> wiki_reader_core::config::DiagramMode {
+        self.diagram_mode
     }
 
     /// Enable image drawing with a confirmed protocol. Call before the first draw: the first
     /// layout pass re-renders the page, which then reserves rows for images.
     pub(crate) fn enable_graphics(&mut self, picker: ratatui_image::picker::Picker) {
-        self.images = crate::tui::images::ImageManager::enabled(picker);
+        let sizes = self.images.diagram_sizes();
+        self.images = crate::tui::images::ImageManager::enabled_with_sizes(picker, sizes);
+    }
+
+    /// After a Mermaid size measure, re-layout the current page keeping the source-line scroll.
+    /// Preserves text selection: display coords may drift slightly when slot heights change.
+    pub(crate) fn relayout_after_diagram_size(&mut self) {
+        if !matches!(self.doc, PageDoc::Rendered(_)) {
+            return;
+        }
+        let key = self.navigator.tab().current().page.clone();
+        let source = self.doc.source_cursor(self.cursor_line);
+        let source_scroll = self.doc.source_cursor(self.scroll);
+        self.reload_page_keeping_view_ex(&key, source, source_scroll, false, false);
+        self.images
+            .queue_diagram_requests(self.doc.diagram_requests());
+        self.images.retain_for(self.doc.image_slots());
+    }
+
+    /// Queue any Mermaid measures from the current doc and keep decode state in sync.
+    pub(crate) fn sync_images_after_render(&mut self) {
+        self.images
+            .queue_diagram_requests(self.doc.diagram_requests());
+        self.images.retain_for(self.doc.image_slots());
     }
 
     pub(crate) fn view_state(&self) -> ViewState {
@@ -1254,7 +1284,7 @@ impl App {
                     // Index may lag the watcher; force a fresh parse for this paint and
                     // kick a rebuild so backlinks/nav catch up.
                     self.note_watcher_dirty(true);
-                    self.reload_page_keeping_view_ex(&key, source, source_scroll, true);
+                    self.reload_page_keeping_view_ex(&key, source, source_scroll, true, true);
                 }
                 if !exit.success {
                     self.message = if saved {
@@ -1469,7 +1499,7 @@ impl App {
                         ))
                     }
                 };
-                self.images.retain_for(self.doc.image_slots());
+                self.sync_images_after_render();
                 self.cursor_line = 0;
                 self.cursor_col = 0;
                 self.scroll = 0;
@@ -1523,7 +1553,7 @@ impl App {
     }
 
     fn reload_page_keeping_view(&mut self, key: &PageKey, source_cursor: u32, source_scroll: u32) {
-        self.reload_page_keeping_view_ex(key, source_cursor, source_scroll, false);
+        self.reload_page_keeping_view_ex(key, source_cursor, source_scroll, false, true);
     }
 
     /// Reload the current page, optionally ignoring the indexed `Page` so parse
@@ -1534,6 +1564,7 @@ impl App {
         source_cursor: u32,
         source_scroll: u32,
         fresh_parse: bool,
+        clear_selection: bool,
     ) {
         match self.provider.read(key) {
             Ok(src) => {
@@ -1563,9 +1594,11 @@ impl App {
                         ))
                     }
                 };
-                self.images.retain_for(self.doc.image_slots());
-                self.selection = None;
-                self.selecting = false;
+                self.sync_images_after_render();
+                if clear_selection {
+                    self.selection = None;
+                    self.selecting = false;
+                }
                 self.restore_view_after_relayout(source_cursor, source_scroll);
                 if matches!(mode, ViewMode::Raw) {
                     self.spawn_highlight(src);

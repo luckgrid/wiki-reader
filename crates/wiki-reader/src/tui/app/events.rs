@@ -54,8 +54,9 @@ pub fn run(root: &Path, config: Option<&Path>) -> io::Result<()> {
         keyboard_enhancement: false,
     };
     // The graphics probe reads stdin, so it runs before mouse capture, the keyboard-enhancement
-    // query and the first event read (ADR-0004).
-    if app.graphics_allowed()
+    // query and the first event read (ADR-0004). Config `diagrams = text|source` skips it entirely.
+    if images::should_probe(app.diagram_mode_for_probe())
+        && app.graphics_allowed()
         && let Some(picker) = images::detect_picker(&images::GraphicsEnv::from_process())
     {
         app.enable_graphics(picker);
@@ -130,6 +131,9 @@ fn run_loop(
         }
         app.poll_watcher();
         app.images.poll();
+        if app.images.take_diagram_relayout() {
+            app.relayout_after_diagram_size();
+        }
         app.flush_session(false);
         // Poll fast mid-drag so a held pointer keeps scrolling the View, and while a picture is
         // still decoding so it appears promptly.
