@@ -1,10 +1,12 @@
 //! Markdown → `RenderedDoc` (styled lines, link spans, source map).
 
 mod diagrams;
+mod images;
 mod link_span;
 mod render;
 
 pub use diagrams::{DiagramEnv, DiagramTier, diagram_lines, is_mermaid_lang, select_tier};
+pub use images::{ImageSlot, MAX_SLOT_ROWS, slot_geometry};
 pub use link_span::{LinkClass, LinkId, LinkSpan};
 pub use render::{
     BlockAction, BlockActionKind, RenderOpts, RenderedDoc, StyleKind, StyledLine, StyledSpan,
@@ -1305,6 +1307,127 @@ mod tests {
             let doc = render(&src, page, &key, &index, w);
             let text = doc.lines.join("\n");
             insta::assert_snapshot!(format!("elements_{w}"), text);
+        }
+    }
+
+    /// Render `fixtures/images/README.md` with the given graphics availability.
+    fn render_images_fixture(cell_px: Option<(u16, u16)>, width: u16) -> RenderedDoc {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/images");
+        let provider = FsProvider::open(&root).unwrap();
+        let index = wiki_reader_core::Index::build(&provider).unwrap();
+        let key = PageKey {
+            collection_id: index.collection_id.clone(),
+            relative_path: std::path::PathBuf::from("README.md"),
+        };
+        let src = provider.read(&key).unwrap();
+        let opts = RenderOpts {
+            image_root: Some(provider.root().to_path_buf()),
+            cell_px,
+            ..RenderOpts::default()
+        };
+        render_with(&src, index.pages.get(&key), &key, &index, width, &opts)
+    }
+
+    #[test]
+    fn block_images_reserve_slots_in_document_order() {
+        let doc = render_images_fixture(Some((8, 17)), 80);
+        let names: Vec<_> = doc
+            .image_slots
+            .iter()
+            .map(|s| s.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["small.png", "wide.png", "photo.jpg", "tall.png"]);
+        let small = &doc.image_slots[0];
+        assert_eq!((small.cols, small.rows), (20, 4));
+        // 1600×400 px shrinks to 80 columns (640 px): 640×160 px ⇒ 10 rows.
+        let wide = &doc.image_slots[1];
+        assert_eq!((wide.cols, wide.rows), (80, 10));
+        assert_eq!(doc.image_slots[3].rows, MAX_SLOT_ROWS);
+        for slot in &doc.image_slots {
+            let first = slot.line as usize;
+            let rows = usize::from(slot.rows);
+            assert!(
+                doc.styled[first..first + rows]
+                    .iter()
+                    .all(|l| l.spans.iter().all(|s| s.kind == StyleKind::ImageSlot)),
+                "{slot:?}"
+            );
+            assert!(doc.lines[first..first + rows].iter().all(String::is_empty));
+            // A blank gap row separates the slot from the following block.
+            assert!(doc.lines[first + rows].is_empty(), "{slot:?}");
+            assert!(first > 0 && doc.lines[first - 1].is_empty(), "{slot:?}");
+        }
+        let after = doc
+            .lines
+            .iter()
+            .position(|l| l == "Text after the last image.")
+            .expect("text after");
+        let tall = &doc.image_slots[3];
+        assert_eq!(after, tall.line as usize + usize::from(tall.rows) + 1);
+    }
+
+    #[test]
+    fn without_graphics_every_image_is_a_placeholder() {
+        let doc = render_images_fixture(None, 80);
+        assert!(doc.image_slots.is_empty());
+        assert!(
+            doc.lines
+                .iter()
+                .any(|l| l == "[image: Small grid] img/small.png — no graphics protocol"),
+            "{}",
+            doc.lines.join("\n")
+        );
+    }
+
+    #[test]
+    fn rejected_images_show_the_reason_even_with_graphics() {
+        let doc = render_images_fixture(Some((8, 17)), 100);
+        let text = doc.lines.join("\n");
+        for expected in [
+            "[image: Remote] https://example.com/logo.png — URL images are never fetched",
+            "[image: Escape] ../../README.md.png — outside the collection",
+            "[image: Missing] img/nope.png — file not found",
+            "[image: Vector] img/diagram.svg — unsupported image format",
+        ] {
+            assert!(text.contains(expected), "missing {expected:?} in\n{text}");
+        }
+    }
+
+    #[test]
+    fn inline_list_and_quote_images_stay_text() {
+        let doc = render_images_fixture(Some((8, 17)), 80);
+        assert_eq!(
+            doc.image_slots.len(),
+            4,
+            "only block-level images get slots"
+        );
+        let text = doc.lines.join("\n");
+        for expected in [
+            "An image inside a sentence [image: inline icon] stays inline text.",
+            "• [image: In a list]",
+            "│ [image: In a quote]",
+        ] {
+            assert!(text.contains(expected), "missing {expected:?} in\n{text}");
+        }
+    }
+
+    #[test]
+    fn image_slots_snapshot_by_width() {
+        for w in [40u16, 60, 80, 120] {
+            let doc = render_images_fixture(Some((8, 17)), w);
+            let mut out = doc.lines.join("\n");
+            for slot in &doc.image_slots {
+                use std::fmt::Write as _;
+                let _ = write!(
+                    out,
+                    "\nslot line={} {}x{} {}",
+                    slot.line,
+                    slot.cols,
+                    slot.rows,
+                    slot.path.file_name().unwrap().to_string_lossy()
+                );
+            }
+            insta::assert_snapshot!(format!("images_{w}"), out);
         }
     }
 

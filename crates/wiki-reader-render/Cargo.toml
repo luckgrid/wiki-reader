@@ -10,6 +10,7 @@ homepage.workspace = true
 readme = "../../README.md"
 
 [dependencies]
+image = { workspace = true }
 mermaid-text = { workspace = true }
 pulldown-cmark = { workspace = true }
 unicode-width = { workspace = true }

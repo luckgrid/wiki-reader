@@ -1,0 +1,262 @@
+//! Image slots end to end through the real draw path. A halfblocks picker needs no terminal
+//! query and paints `▀` cells, so `TestBackend` can see where pictures land.
+
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
+
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
+use ratatui::buffer::Buffer;
+use ratatui_image::picker::Picker;
+
+use super::App;
+use super::draw::draw;
+use crate::tui::images::ImageManager;
+
+/// Halfblocks paint `▀` or `▄` depending on which half of the cell is opaque.
+const HALVES: [&str; 2] = ["▀", "▄"];
+
+fn images_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/images")
+}
+
+fn graphics_app(root: &Path) -> App {
+    let mut app = App::for_tests(root).expect("app");
+    app.enable_graphics(Picker::halfblocks());
+    app
+}
+
+fn draw_to(terminal: &mut Terminal<TestBackend>, app: &mut App) {
+    terminal.draw(|frame| draw(frame, app)).expect("draw");
+}
+
+fn terminal(width: u16, height: u16) -> Terminal<TestBackend> {
+    Terminal::new(TestBackend::new(width, height)).expect("terminal")
+}
+
+/// Block until the decode worker has finished everything queued.
+fn wait_for_images(app: &mut App) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while app.images.has_pending() {
+        assert!(Instant::now() < deadline, "decode worker timed out");
+        app.images.poll();
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+fn row_text(buf: &Buffer, y: u16) -> String {
+    (0..buf.area.width).map(|x| buf[(x, y)].symbol()).collect()
+}
+
+fn has_half(buf: &Buffer, y: u16) -> bool {
+    (0..buf.area.width).any(|x| HALVES.contains(&buf[(x, y)].symbol()))
+}
+
+fn any_text(terminal: &Terminal<TestBackend>, needle: &str) -> bool {
+    let buf = terminal.backend().buffer();
+    (0..buf.area.height).any(|y| row_text(buf, y).contains(needle))
+}
+
+#[test]
+fn without_graphics_the_page_shows_text_placeholders() {
+    let mut app = App::for_tests(&images_fixture()).expect("app");
+    let mut term = terminal(100, 40);
+    draw_to(&mut term, &mut app);
+    assert!(app.doc.image_slots().is_empty());
+    assert!(any_text(
+        &term,
+        "[image: Small grid] img/small.png — no graphics protocol"
+    ));
+    let buf = term.backend().buffer();
+    assert!((0..buf.area.height).all(|y| !has_half(buf, y)));
+}
+
+#[test]
+fn slot_shows_its_placeholder_until_the_decode_lands() {
+    let mut app = graphics_app(&images_fixture());
+    let mut term = terminal(100, 40);
+    draw_to(&mut term, &mut app);
+    assert!(!app.doc.image_slots().is_empty(), "graphics reserve rows");
+    assert!(app.images.has_pending());
+    assert!(any_text(&term, "[image: Small grid]"));
+
+    wait_for_images(&mut app);
+    draw_to(&mut term, &mut app);
+    assert!(
+        !any_text(&term, "[image: Small grid]"),
+        "picture replaces it"
+    );
+}
+
+#[test]
+fn ready_picture_paints_exactly_the_reserved_rows() {
+    let mut app = graphics_app(&images_fixture());
+    let mut term = terminal(100, 60);
+    draw_to(&mut term, &mut app);
+    wait_for_images(&mut app);
+    draw_to(&mut term, &mut app);
+
+    let geom = app.viewer_geom;
+    let slot = app.doc.image_slots()[0].clone();
+    let buf = term.backend().buffer();
+    let first = geom.top_y + u16::try_from(slot.line).expect("line");
+    for dy in 0..slot.rows {
+        assert!(has_half(buf, first + dy), "slot row {dy} has pixels");
+    }
+    assert!(!has_half(buf, first + slot.rows), "the gap row stays blank");
+    // Pictures start at the text column, not under the cursor marker.
+    let x = (0..buf.area.width)
+        .find(|&x| HALVES.contains(&buf[(x, first)].symbol()))
+        .expect("a pixel");
+    assert_eq!(x, geom.text_x);
+}
+
+#[test]
+fn slot_scrolled_off_the_top_is_cropped_to_its_visible_rows() {
+    let mut app = graphics_app(&images_fixture());
+    let mut term = terminal(100, 60);
+    draw_to(&mut term, &mut app);
+    wait_for_images(&mut app);
+    let slot = app.doc.image_slots()[0].clone();
+    // Hide the slot's first two rows: rows 2 and 3 remain at the top of the viewer.
+    app.scroll = slot.line + 2;
+    app.cursor_line = app.scroll;
+    draw_to(&mut term, &mut app);
+
+    let top = app.viewer_geom.top_y;
+    let buf = term.backend().buffer();
+    assert!(has_half(buf, top) && has_half(buf, top + 1));
+    assert!(
+        !has_half(buf, top + 2),
+        "only two rows of the slot are visible"
+    );
+}
+
+#[test]
+fn slot_below_the_fold_paints_nothing_until_scrolled_into_view() {
+    let mut app = graphics_app(&images_fixture());
+    // 20 rows: the tall slot sits far below the first screen.
+    let mut term = terminal(100, 20);
+    draw_to(&mut term, &mut app);
+    wait_for_images(&mut app);
+    draw_to(&mut term, &mut app);
+    let tall = app
+        .doc
+        .image_slots()
+        .iter()
+        .find(|s| s.path.ends_with("tall.png"))
+        .expect("tall slot")
+        .clone();
+    let geom = app.viewer_geom;
+    assert!(
+        tall.line > u32::from(geom.rows),
+        "tall slot starts offscreen"
+    );
+
+    app.scroll = tall.line;
+    app.cursor_line = tall.line;
+    draw_to(&mut term, &mut app);
+    let buf = term.backend().buffer();
+    assert!(has_half(buf, geom.top_y), "visible once scrolled to");
+}
+
+#[test]
+fn corrupt_file_keeps_the_placeholder_and_says_why() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    std::fs::write(
+        dir.path().join("README.md"),
+        "# Page\n\n![Broken](bad.png)\n",
+    )
+    .expect("page");
+    // A real 8×8 PNG with its pixel data corrupted: the header still reads, the decode fails.
+    let path = dir.path().join("bad.png");
+    image::RgbaImage::from_pixel(8, 8, image::Rgba([10, 20, 30, 255]))
+        .save(&path)
+        .expect("png");
+    let mut png = std::fs::read(&path).expect("read");
+    let idat = png
+        .windows(4)
+        .position(|w| w == b"IDAT")
+        .expect("IDAT chunk");
+    for byte in &mut png[idat + 4..idat + 8] {
+        *byte ^= 0xFF;
+    }
+    std::fs::write(&path, png).expect("corrupt");
+
+    let mut app = graphics_app(dir.path());
+    let mut term = terminal(80, 20);
+    draw_to(&mut term, &mut app);
+    assert_eq!(
+        app.doc.image_slots().len(),
+        1,
+        "header is readable, so a slot is reserved"
+    );
+    wait_for_images(&mut app);
+    draw_to(&mut term, &mut app);
+    assert!(
+        any_text(&term, "[image: Broken] — "),
+        "failure reason shown"
+    );
+    let buf = term.backend().buffer();
+    assert!((0..buf.area.height).all(|y| !has_half(buf, y)));
+}
+
+#[test]
+fn leaving_the_page_releases_its_pictures() {
+    let mut app = graphics_app(&images_fixture());
+    let mut term = terminal(100, 60);
+    draw_to(&mut term, &mut app);
+    wait_for_images(&mut app);
+    app.images.retain_for(&[]);
+    assert!(!app.images.has_pending());
+    // A fresh draw queues them again.
+    draw_to(&mut term, &mut app);
+    assert!(app.images.has_pending());
+}
+
+#[test]
+fn disabled_manager_has_no_cell_size() {
+    assert!(ImageManager::disabled().cell_px().is_none());
+    assert_eq!(
+        ImageManager::enabled(Picker::halfblocks()).cell_px(),
+        Some((10, 20))
+    );
+}
+
+#[test]
+fn popup_clear_covers_a_picture_and_it_returns_when_the_popup_closes() {
+    use crate::tui::action::Action;
+    let mut app = graphics_app(&images_fixture());
+    let mut term = terminal(100, 30);
+    draw_to(&mut term, &mut app);
+    wait_for_images(&mut app);
+    let slot = app.doc.image_slots()[0].clone();
+    // Put the slot a few rows below the top of the viewer: under a centred popup.
+    app.scroll = slot.line.saturating_sub(8);
+    app.cursor_line = app.scroll;
+    draw_to(&mut term, &mut app);
+    let first = app.viewer_geom.top_y + 8;
+    let slot_rows = first..first + slot.rows;
+    let painted = |term: &Terminal<TestBackend>| {
+        let buf = term.backend().buffer();
+        slot_rows.clone().filter(|&y| has_half(buf, y)).count()
+    };
+    assert_eq!(
+        painted(&term),
+        usize::from(slot.rows),
+        "visible before the popup"
+    );
+
+    app.update(Action::OpenHelp);
+    draw_to(&mut term, &mut app);
+    assert_eq!(painted(&term), 0, "the popup's Clear covers the picture");
+
+    app.update(Action::Back);
+    app.help = None;
+    draw_to(&mut term, &mut app);
+    assert_eq!(
+        painted(&term),
+        usize::from(slot.rows),
+        "picture returns after the popup"
+    );
+}

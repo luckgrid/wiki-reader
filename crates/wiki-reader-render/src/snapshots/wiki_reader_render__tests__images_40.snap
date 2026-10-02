@@ -1,0 +1,118 @@
+---
+source: crates/wiki-reader-render/src/lib.rs
+expression: out
+---
+Image fixtures
+────────────────────────────────────────
+
+Manual and snapshot inputs for P3-12b.
+The cases that must not render a
+picture are intentional: remote URLs, ..
+ escapes and missing files all show the
+text placeholder.
+
+
+Local images
+────────────────────────────────────────
+
+A small PNG (20×4 cells at 8×17 px
+cells):
+
+
+
+
+
+
+A wide PNG that shrinks to the pane
+width:
+
+
+
+
+
+
+
+A JPEG:
+
+
+
+
+
+
+
+A tall PNG, capped at 30 rows, with a
+white stripe every 100 px to check
+scroll cropping:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Text after the last image.
+
+
+Placeholders
+────────────────────────────────────────
+
+A remote image is never fetched:
+
+[image: Remote]
+https://example.com/logo.png — URL
+images are never fetched
+
+A path that escapes the collection:
+
+[image: Escape] ../../README.md.png —
+outside the collection
+
+A missing file:
+
+[image: Missing] img/nope.png — file
+not found
+
+An unsupported format:
+
+[image: Vector] img/diagram.svg —
+unsupported image format
+
+
+Inline
+────────────────────────────────────────
+
+An image inside a sentence [image:
+inline icon] stays inline text.
+
+• [image: In a list]
+
+│ [image: In a quote]
+slot line=16 20x4 small.png
+slot line=24 40x5 wide.png
+slot line=32 40x5 photo.jpg
+slot line=42 16x30 tall.png

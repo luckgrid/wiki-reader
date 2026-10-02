@@ -36,6 +36,8 @@ mod nav_ui;
 mod viewer_state;
 
 #[cfg(test)]
+mod image_tests;
+#[cfg(test)]
 mod tests;
 
 pub use events::run;
@@ -149,6 +151,8 @@ pub struct App {
     pub(crate) clipboard: Box<dyn ClipboardWriter>,
     /// Diagram tier preference from config.
     diagram_mode: wiki_reader_core::config::DiagramMode,
+    /// Terminal graphics (startup probe result), decode worker and prepared pictures.
+    pub(crate) images: crate::tui::images::ImageManager,
     /// When false, skip session load/save (tests).
     persist_session: bool,
     /// Last successful session save (debounce).
@@ -276,6 +280,7 @@ impl App {
             expanded_for_page: None,
             clipboard: Box::new(Osc52Clipboard),
             diagram_mode: config.diagrams,
+            images: crate::tui::images::ImageManager::disabled(),
             persist_session,
             session_saved_at: None,
             session_dirty: false,
@@ -403,7 +408,24 @@ impl App {
         RenderOpts {
             expanded: self.expanded_blocks.clone(),
             diagram_mode: self.diagram_mode,
+            image_root: Some(self.provider.root().to_path_buf()),
+            cell_px: self.images.cell_px(),
         }
+    }
+
+    /// `diagrams = "text" | "source"` opts out of graphics entirely, including the startup probe.
+    pub(crate) fn graphics_allowed(&self) -> bool {
+        !matches!(
+            self.diagram_mode,
+            wiki_reader_core::config::DiagramMode::Text
+                | wiki_reader_core::config::DiagramMode::Source
+        )
+    }
+
+    /// Enable image drawing with a confirmed protocol. Call before the first draw: the first
+    /// layout pass re-renders the page, which then reserves rows for images.
+    pub(crate) fn enable_graphics(&mut self, picker: ratatui_image::picker::Picker) {
+        self.images = crate::tui::images::ImageManager::enabled(picker);
     }
 
     pub(crate) fn view_state(&self) -> ViewState {
@@ -1446,6 +1468,7 @@ impl App {
                         ))
                     }
                 };
+                self.images.retain_for(self.doc.image_slots());
                 self.cursor_line = 0;
                 self.cursor_col = 0;
                 self.scroll = 0;
@@ -1539,6 +1562,7 @@ impl App {
                         ))
                     }
                 };
+                self.images.retain_for(self.doc.image_slots());
                 self.selection = None;
                 self.selecting = false;
                 self.restore_view_after_relayout(source_cursor, source_scroll);

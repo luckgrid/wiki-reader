@@ -97,6 +97,18 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         &mut app.hit_map,
     );
 
+    // Pictures go over the viewer text and under popups (their `Clear` covers them). A narrow
+    // terminal's nav overlay has no `Clear` of its own, so pictures wait until it closes.
+    if !regions.nav_overlay {
+        app.images.draw(
+            frame,
+            app.doc.image_slots(),
+            app.scroll,
+            app.viewer_geom,
+            &theme,
+        );
+    }
+
     if regions.side_nav.width > 0 {
         side_nav::draw(
             frame,
