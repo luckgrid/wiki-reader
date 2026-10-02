@@ -17,6 +17,14 @@ path = "src/main.rs"
 name = "keylog"
 path = "examples/keylog.rs"
 
+[[example]]
+name = "image-protocol"
+path = "examples/image_protocol.rs"
+
+[[example]]
+name = "mermaid-image"
+path = "examples/mermaid_image.rs"
+
 [dependencies]
 clap = { workspace = true }
 ratatui = { workspace = true }
@@ -28,9 +36,13 @@ wiki-reader-core = { workspace = true }
 wiki-reader-render = { workspace = true }
 
 [dev-dependencies]
-insta = { workspace = true }
-tempfile = { workspace = true }
 filetime = { workspace = true }
+image = { workspace = true }
+insta = { workspace = true }
+mermaid-rs-renderer = { workspace = true }
+ratatui-image = { workspace = true }
+resvg = { workspace = true }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true
