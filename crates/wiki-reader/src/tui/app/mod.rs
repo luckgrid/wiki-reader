@@ -445,13 +445,15 @@ impl App {
         let source = self.doc.source_cursor(self.cursor_line);
         let source_scroll = self.doc.source_cursor(self.scroll);
         self.reload_page_keeping_view(&key, source, source_scroll);
-        self.images.queue_diagram_requests(self.doc.diagram_requests());
+        self.images
+            .queue_diagram_requests(self.doc.diagram_requests());
         self.images.retain_for(self.doc.image_slots());
     }
 
     /// Queue any Mermaid measures from the current doc and keep decode state in sync.
     pub(crate) fn sync_images_after_render(&mut self) {
-        self.images.queue_diagram_requests(self.doc.diagram_requests());
+        self.images
+            .queue_diagram_requests(self.doc.diagram_requests());
         self.images.retain_for(self.doc.image_slots());
     }
 

@@ -237,12 +237,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let case = &cases[selected];
             frame.render_widget(
                 Paragraph::new(vec![
-                    Line::from(format!(
-                        "{}/{} {}",
-                        selected + 1,
-                        cases.len(),
-                        case.label
-                    )),
+                    Line::from(format!("{}/{} {}", selected + 1, cases.len(), case.label)),
                     Line::from(format!(
                         "protocol={:?} query={query_elapsed:?} raster={}x{} render={:?}",
                         picker.protocol_type(),
@@ -253,7 +248,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ]),
                 details_area,
             );
-            let block = Block::default().borders(Borders::ALL).title("Mermaid image");
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .title("Mermaid image");
             let inner = block.inner(image_area);
             frame.render_widget(block, image_area);
             frame.render_widget(Image::new(&protocol).allow_clipping(true), inner);

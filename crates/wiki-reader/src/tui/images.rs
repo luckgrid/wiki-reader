@@ -130,8 +130,7 @@ pub fn accept_picker(mut picker: Picker, accept: Accept) -> Option<Picker> {
 pub fn should_probe(mode: wiki_reader_core::config::DiagramMode) -> bool {
     !matches!(
         mode,
-        wiki_reader_core::config::DiagramMode::Text
-            | wiki_reader_core::config::DiagramMode::Source
+        wiki_reader_core::config::DiagramMode::Text | wiki_reader_core::config::DiagramMode::Source
     )
 }
 
@@ -209,14 +208,8 @@ pub fn slot_visible(
 /// Identity of a prepared picture. File stamp / Mermaid hash keep stale cache entries out.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum SlotKeySource {
-    File {
-        path: PathBuf,
-        stamp: (u64, u64),
-    },
-    Mermaid {
-        hash: u64,
-        bg: (u8, u8, u8),
-    },
+    File { path: PathBuf, stamp: (u64, u64) },
+    Mermaid { hash: u64, bg: (u8, u8, u8) },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -348,7 +341,8 @@ fn prepare(
                 img
             } else {
                 let src = mermaid_source.ok_or_else(|| "missing mermaid source".to_owned())?;
-                let raster = render_mermaid_for_pane(src, cell_px, max_cols).map_err(|e| e.to_string())?;
+                let raster =
+                    render_mermaid_for_pane(src, cell_px, max_cols).map_err(|e| e.to_string())?;
                 let img = Arc::new(raster.image);
                 mermaid_rgba
                     .lock()
@@ -541,7 +535,11 @@ impl ImageManager {
         };
         for req in requests {
             let key = (req.hash, req.width, req.bg);
-            if self.diagram_sizes.get(req.hash, req.width, req.bg).is_some() {
+            if self
+                .diagram_sizes
+                .get(req.hash, req.width, req.bg)
+                .is_some()
+            {
                 continue;
             }
             if !self.measuring.insert(key) {
@@ -1189,7 +1187,11 @@ mod tests {
         let img = prepare(&key, (8, 17), None, (8, 17), 10, &rgba).expect("prepare");
         assert_eq!((img.width(), img.height()), (80, 51));
         let rgba_img = img.to_rgba8();
-        assert_eq!(rgba_img.get_pixel(0, 0).0[3], 255, "picture at the top-left");
+        assert_eq!(
+            rgba_img.get_pixel(0, 0).0[3],
+            255,
+            "picture at the top-left"
+        );
         assert_eq!(
             rgba_img.get_pixel(0, 40).0[3],
             0,

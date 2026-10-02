@@ -67,7 +67,8 @@ fn usvg_options() -> usvg::Options<'static> {
 /// Returns [`RasterError::Raster`] or [`RasterError::TooManyPixels`].
 pub fn rasterise_svg(svg: &[u8]) -> Result<RasterImage, RasterError> {
     let options = usvg_options();
-    let tree = usvg::Tree::from_data(svg, &options).map_err(|e| RasterError::Raster(e.to_string()))?;
+    let tree =
+        usvg::Tree::from_data(svg, &options).map_err(|e| RasterError::Raster(e.to_string()))?;
     let size = tree.size().to_int_size();
     let px_w = size.width();
     let px_h = size.height();
@@ -89,7 +90,8 @@ pub fn rasterise_svg(svg: &[u8]) -> Result<RasterImage, RasterError> {
 /// Returns [`RasterError::Raster`] or [`RasterError::TooManyPixels`].
 pub fn svg_natural_size(svg: &[u8]) -> Result<(u32, u32), RasterError> {
     let options = usvg_options();
-    let tree = usvg::Tree::from_data(svg, &options).map_err(|e| RasterError::Raster(e.to_string()))?;
+    let tree =
+        usvg::Tree::from_data(svg, &options).map_err(|e| RasterError::Raster(e.to_string()))?;
     let size = tree.size().to_int_size();
     let px_w = size.width();
     let px_h = size.height();

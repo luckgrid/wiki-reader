@@ -254,9 +254,7 @@ pub fn diagram_lines_with_reason(
     if let Some(reason) = reason
         && tier == DiagramTier::Text
         && fallback_reason.is_none()
-        && !lines
-            .first()
-            .is_some_and(|l| l.starts_with("│ diagram ("))
+        && !lines.first().is_some_and(|l| l.starts_with("│ diagram ("))
     {
         let mut headed = text_tier_header_lines(reason, width);
         headed.append(&mut lines);

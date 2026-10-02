@@ -7,8 +7,8 @@ mod mermaid_raster;
 mod render;
 
 pub use diagrams::{
-    DiagramEnv, DiagramTier, content_hash, diagram_lines, diagram_lines_with_reason, is_mermaid_lang,
-    select_tier,
+    DiagramEnv, DiagramTier, content_hash, diagram_lines, diagram_lines_with_reason,
+    is_mermaid_lang, select_tier,
 };
 pub use images::{
     DiagramRequest, DiagramSize, DiagramSizeCache, ImageSlot, MAX_SLOT_ROWS, SlotSource,
@@ -20,8 +20,8 @@ pub use mermaid_raster::{
     render_mermaid, render_mermaid_for_pane, svg_natural_size,
 };
 pub use render::{
-    BlockAction, BlockActionKind, DEFAULT_DIAGRAM_BG, RenderOpts, RenderedDoc, StyleKind, StyledLine,
-    StyledSpan, render, render_with,
+    BlockAction, BlockActionKind, DEFAULT_DIAGRAM_BG, RenderOpts, RenderedDoc, StyleKind,
+    StyledLine, StyledSpan, render, render_with,
 };
 
 #[cfg(test)]
@@ -1355,7 +1355,13 @@ mod tests {
             .collect();
         assert_eq!(
             names,
-            ["small.png", "wide.png", "photo.jpg", "tall.png", "diagram.svg"]
+            [
+                "small.png",
+                "wide.png",
+                "photo.jpg",
+                "tall.png",
+                "diagram.svg"
+            ]
         );
         let small = &doc.image_slots[0];
         assert_eq!((small.cols, small.rows), (20, 4));
@@ -1524,11 +1530,7 @@ mod tests {
             "cache miss stays on text tier: slots={:?}",
             cold.image_slots
         );
-        assert!(
-            !cold.lines.is_empty(),
-            "lines={}",
-            cold.lines.join("\n")
-        );
+        assert!(!cold.lines.is_empty(), "lines={}", cold.lines.join("\n"));
         assert_eq!(
             cold.diagram_requests.len(),
             1,

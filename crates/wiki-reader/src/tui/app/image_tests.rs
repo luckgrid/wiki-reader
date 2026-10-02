@@ -235,7 +235,7 @@ fn leaving_the_page_releases_its_pictures() {
 fn disabled_manager_has_no_cell_size() {
     assert!(ImageManager::disabled().cell_px().is_none());
     assert_eq!(
-                ImageManager::enabled_with_sizes(
+        ImageManager::enabled_with_sizes(
             Picker::halfblocks(),
             Arc::new(wiki_reader_render::DiagramSizeCache::new()),
         )

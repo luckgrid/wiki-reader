@@ -69,11 +69,7 @@ impl DiagramSizeCache {
 
     #[must_use]
     pub fn get(&self, hash: u64, width: u16, bg: (u8, u8, u8)) -> Option<DiagramSize> {
-        self.inner
-            .lock()
-            .ok()?
-            .get(&(hash, width, bg))
-            .copied()
+        self.inner.lock().ok()?.get(&(hash, width, bg)).copied()
     }
 
     pub fn insert(&self, hash: u64, width: u16, bg: (u8, u8, u8), size: DiagramSize) {
@@ -259,12 +255,27 @@ mod tests {
     #[test]
     fn size_cache_key_includes_bg_and_width() {
         let cache = DiagramSizeCache::new();
-        cache.insert(1, 80, (30, 32, 36), DiagramSize::Natural { px_w: 100, px_h: 50 });
+        cache.insert(
+            1,
+            80,
+            (30, 32, 36),
+            DiagramSize::Natural {
+                px_w: 100,
+                px_h: 50,
+            },
+        );
         assert_eq!(
             cache.get(1, 80, (30, 32, 36)),
-            Some(DiagramSize::Natural { px_w: 100, px_h: 50 })
+            Some(DiagramSize::Natural {
+                px_w: 100,
+                px_h: 50
+            })
         );
-        assert_eq!(cache.get(1, 60, (30, 32, 36)), None, "width is part of the key");
+        assert_eq!(
+            cache.get(1, 60, (30, 32, 36)),
+            None,
+            "width is part of the key"
+        );
         assert_eq!(cache.get(1, 80, (0, 0, 0)), None, "bg is part of the key");
     }
 }

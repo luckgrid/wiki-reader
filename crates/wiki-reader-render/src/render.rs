@@ -15,7 +15,9 @@ use wiki_reader_core::nav::{Target, resolve};
 use wiki_reader_core::parse::{self, github_slug};
 use wiki_reader_core::provider::PageKey;
 
-use crate::diagrams::{DiagramEnv, DiagramTier, content_hash, diagram_lines_with_reason, select_tier};
+use crate::diagrams::{
+    DiagramEnv, DiagramTier, content_hash, diagram_lines_with_reason, select_tier,
+};
 use crate::images::{
     DiagramRequest, DiagramSize, DiagramSizeCache, ImagePlan, ImageSlot, SlotSource,
     empty_diagram_size_cache, placeholder_text, plan_image, slot_geometry,
@@ -544,11 +546,7 @@ impl<'a> LayoutState<'a> {
             max_cols,
         );
         match plan {
-            ImagePlan::Slot {
-                source,
-                cols,
-                rows,
-            } => {
+            ImagePlan::Slot { source, cols, rows } => {
                 let line = u32::try_from(self.styled.len()).unwrap_or(0);
                 for _ in 0..rows {
                     self.styled.push(StyledLine {
