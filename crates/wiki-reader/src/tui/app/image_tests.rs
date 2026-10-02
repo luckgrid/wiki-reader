@@ -156,8 +156,18 @@ fn slot_below_the_fold_paints_nothing_until_scrolled_into_view() {
     app.scroll = tall.line;
     app.cursor_line = tall.line;
     draw_to(&mut term, &mut app);
+    assert!(
+        app.images.has_pending(),
+        "an offscreen picture is queued only when it becomes visible"
+    );
+    assert!(
+        !has_half(term.backend().buffer(), geom.top_y),
+        "placeholder remains while the newly visible picture decodes"
+    );
+    wait_for_images(&mut app);
+    draw_to(&mut term, &mut app);
     let buf = term.backend().buffer();
-    assert!(has_half(buf, geom.top_y), "visible once scrolled to");
+    assert!(has_half(buf, geom.top_y), "visible once decoded");
 }
 
 #[test]
@@ -258,5 +268,90 @@ fn popup_clear_covers_a_picture_and_it_returns_when_the_popup_closes() {
         painted(&term),
         usize::from(slot.rows),
         "picture returns after the popup"
+    );
+}
+
+#[test]
+fn scrolling_back_shows_the_cached_picture_without_a_new_decode() {
+    let mut app = graphics_app(&images_fixture());
+    let mut term = terminal(100, 20);
+    draw_to(&mut term, &mut app);
+    let first = app.doc.image_slots()[0].clone();
+    let tall = app
+        .doc
+        .image_slots()
+        .iter()
+        .find(|s| s.path.ends_with("tall.png"))
+        .expect("tall slot")
+        .clone();
+    let near_first = first.line.saturating_sub(2);
+    app.scroll = near_first;
+    app.cursor_line = near_first;
+    draw_to(&mut term, &mut app);
+    wait_for_images(&mut app);
+
+    // Scroll far away so the first picture is off screen, and let the new one decode.
+    app.scroll = tall.line;
+    app.cursor_line = tall.line;
+    draw_to(&mut term, &mut app);
+    wait_for_images(&mut app);
+
+    // Back again: painted on the very first draw, nothing queued.
+    app.scroll = near_first;
+    app.cursor_line = near_first;
+    draw_to(&mut term, &mut app);
+    assert!(!app.images.has_pending(), "no second decode");
+    let y = app.viewer_geom.top_y + 2;
+    assert!(
+        has_half(term.backend().buffer(), y),
+        "cached picture, no placeholder flash"
+    );
+}
+
+#[test]
+fn decode_failures_are_not_retried_when_scrolling_back() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let filler = "filler line\n\n".repeat(40);
+    std::fs::write(
+        dir.path().join("README.md"),
+        format!("# Page\n\n![Broken](bad.png)\n\n{filler}"),
+    )
+    .expect("page");
+    let path = dir.path().join("bad.png");
+    image::RgbaImage::from_pixel(8, 8, image::Rgba([10, 20, 30, 255]))
+        .save(&path)
+        .expect("png");
+    let mut png = std::fs::read(&path).expect("read");
+    let idat = png
+        .windows(4)
+        .position(|w| w == b"IDAT")
+        .expect("IDAT chunk");
+    for byte in &mut png[idat + 4..idat + 8] {
+        *byte ^= 0xFF;
+    }
+    std::fs::write(&path, png).expect("corrupt");
+
+    let mut app = graphics_app(dir.path());
+    let mut term = terminal(80, 16);
+    draw_to(&mut term, &mut app);
+    wait_for_images(&mut app);
+    draw_to(&mut term, &mut app);
+    assert!(any_text(&term, "[image: Broken] — "));
+
+    app.scroll = 40;
+    app.cursor_line = 40;
+    draw_to(&mut term, &mut app);
+    assert!(!any_text(&term, "[image: Broken]"), "off screen");
+
+    app.scroll = 0;
+    app.cursor_line = 0;
+    draw_to(&mut term, &mut app);
+    assert!(
+        !app.images.has_pending(),
+        "the failure is remembered, not retried"
+    );
+    assert!(
+        any_text(&term, "[image: Broken] — "),
+        "reason shown at once"
     );
 }

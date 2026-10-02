@@ -1419,6 +1419,7 @@ impl App {
                         "# page removed\n\nThis page no longer exists on disk.\nPress Back to leave.\n",
                         None,
                     ));
+                    self.images.retain_for(&[]);
                     self.cursor_line = 0;
                     self.scroll = 0;
                     self.clear_item_focus();

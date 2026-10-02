@@ -1,9 +1,10 @@
 //! Terminal graphics: startup probe (ADR-0004), background decode, and drawing image slots
 //! (ADR-0017). The text placeholder always works; pictures are an upgrade.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use image::imageops::FilterType;
@@ -26,6 +27,9 @@ use crate::tui::theme::Theme;
 const DEFAULT_QUERY_TIMEOUT: Duration = Duration::from_millis(250);
 /// Diagnostic override for the probe timeout, in milliseconds.
 const QUERY_TIMEOUT_ENV: &str = "WIKI_READER_IMAGE_QUERY_TIMEOUT_MS";
+/// Prepared pictures kept for scroll-back, in RGBA bytes. Visible pictures are never evicted, so
+/// the cache can exceed this by at most one screenful.
+const READY_BYTE_BUDGET: u64 = 64 * 1024 * 1024;
 /// Decode allocation cap: four bytes per pixel at the pixel cap, doubled for the decoder's copy.
 const MAX_DECODE_ALLOC: u64 = MAX_IMAGE_PIXELS * 4 * 2;
 
@@ -209,15 +213,48 @@ struct Job {
     key: SlotKey,
 }
 
+/// The slots on screen. The worker skips queued jobs that left it, so scrolling quickly through
+/// a long page does not decode every picture that flew past.
+type Wanted = Arc<Mutex<HashSet<SlotKey>>>;
+
+enum Outcome {
+    Ready(Box<StatefulProtocol>),
+    Failed(String),
+    /// Not on screen any more when the worker reached it; nothing was decoded.
+    Skipped,
+}
+
 struct Done {
     key: SlotKey,
-    result: Result<Box<StatefulProtocol>, String>,
+    outcome: Outcome,
 }
 
 enum Entry {
     Pending,
-    Ready(Box<StatefulProtocol>),
+    Ready {
+        protocol: Box<StatefulProtocol>,
+        /// Prepared RGBA size, for the cache budget.
+        bytes: u64,
+        /// `ImageManager::tick` when last drawn (least-recently-used eviction).
+        used: u64,
+    },
+    /// Kept for the page, so a file that cannot be decoded is not retried on every scroll-in.
     Failed(String),
+}
+
+/// Run one job: skip it if unwanted, otherwise decode and build the protocol.
+fn run_job(key: &SlotKey, wanted: &Wanted, font: (u16, u16), picker: &Picker) -> Outcome {
+    if !wanted
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .contains(key)
+    {
+        return Outcome::Skipped;
+    }
+    match prepare(key, font) {
+        Ok(img) => Outcome::Ready(Box::new(picker.new_resize_protocol(img))),
+        Err(reason) => Outcome::Failed(reason),
+    }
 }
 
 /// Decode `key.path`, scale it to the slot's pixel size (preserving aspect, never above the
@@ -247,7 +284,11 @@ pub struct ImageManager {
     picker: Option<Picker>,
     jobs: Option<Sender<Job>>,
     done: Option<Receiver<Done>>,
+    wanted: Wanted,
     entries: HashMap<SlotKey, Entry>,
+    /// Counts draws; stamps `Entry::Ready::used`.
+    tick: u64,
+    ready_budget: u64,
 }
 
 impl ImageManager {
@@ -258,7 +299,10 @@ impl ImageManager {
             picker: None,
             jobs: None,
             done: None,
+            wanted: Wanted::default(),
             entries: HashMap::new(),
+            tick: 0,
+            ready_budget: READY_BYTE_BUDGET,
         }
     }
 
@@ -267,14 +311,20 @@ impl ImageManager {
     pub fn enabled(picker: Picker) -> Self {
         let (job_tx, job_rx) = mpsc::channel::<Job>();
         let (done_tx, done_rx) = mpsc::channel::<Done>();
+        let wanted = Wanted::default();
         let worker_picker = picker.clone();
+        let worker_wanted = Arc::clone(&wanted);
         let font = picker.font_size();
         std::thread::spawn(move || {
             // One image at a time, in the order slots were first drawn.
             while let Ok(Job { key }) = job_rx.recv() {
-                let result = prepare(&key, (font.width, font.height))
-                    .map(|img| Box::new(worker_picker.new_resize_protocol(img)));
-                if done_tx.send(Done { key, result }).is_err() {
+                let outcome = run_job(
+                    &key,
+                    &worker_wanted,
+                    (font.width, font.height),
+                    &worker_picker,
+                );
+                if done_tx.send(Done { key, outcome }).is_err() {
                     break;
                 }
             }
@@ -283,7 +333,10 @@ impl ImageManager {
             picker: Some(picker),
             jobs: Some(job_tx),
             done: Some(done_rx),
+            wanted,
             entries: HashMap::new(),
+            tick: 0,
+            ready_budget: READY_BYTE_BUDGET,
         }
     }
 
@@ -301,15 +354,38 @@ impl ImageManager {
         let Some(done) = &self.done else {
             return false;
         };
+        let font = self.cell_px().unwrap_or((0, 0));
         let mut changed = false;
-        while let Ok(Done { key, result }) = done.try_recv() {
+        while let Ok(Done { key, outcome }) = done.try_recv() {
             // A key dropped by `retain_for` while decoding is not resurrected.
-            if let Some(entry) = self.entries.get_mut(&key) {
-                *entry = match result {
-                    Ok(protocol) => Entry::Ready(protocol),
-                    Err(reason) => Entry::Failed(reason),
-                };
-                changed = true;
+            let Some(entry) = self.entries.get_mut(&key) else {
+                continue;
+            };
+            match outcome {
+                Outcome::Ready(protocol) => {
+                    let bytes = u64::from(key.cols)
+                        * u64::from(font.0)
+                        * u64::from(key.rows)
+                        * u64::from(font.1)
+                        * 4;
+                    *entry = Entry::Ready {
+                        protocol,
+                        bytes,
+                        used: self.tick,
+                    };
+                    changed = true;
+                }
+                Outcome::Failed(reason) => {
+                    *entry = Entry::Failed(reason);
+                    changed = true;
+                }
+                // Left the screen before the worker got to it: forget it, so a later scroll-in
+                // queues it again.
+                Outcome::Skipped => {
+                    if matches!(entry, Entry::Pending) {
+                        self.entries.remove(&key);
+                    }
+                }
             }
         }
         changed
@@ -321,10 +397,44 @@ impl ImageManager {
         self.entries.values().any(|e| matches!(e, Entry::Pending))
     }
 
-    /// Keep only the pictures `slots` need; everything else is released.
+    /// Keep only the entries `slots` need (pictures and decode failures); release the rest.
+    /// Called when a page is (re)built, so state never outlives its page.
     pub fn retain_for(&mut self, slots: &[ImageSlot]) {
         let keep: Vec<SlotKey> = slots.iter().map(SlotKey::of).collect();
         self.entries.retain(|key, _| keep.contains(key));
+    }
+
+    /// Drop least-recently-drawn prepared pictures until the cache fits its budget. Pictures on
+    /// screen are never evicted, and failures cost almost nothing, so they stay.
+    fn evict_over_budget(&mut self, visible: &HashSet<SlotKey>) {
+        let mut total: u64 = self
+            .entries
+            .values()
+            .map(|e| match e {
+                Entry::Ready { bytes, .. } => *bytes,
+                _ => 0,
+            })
+            .sum();
+        if total <= self.ready_budget {
+            return;
+        }
+        let mut candidates: Vec<(u64, SlotKey)> = self
+            .entries
+            .iter()
+            .filter_map(|(key, e)| match e {
+                Entry::Ready { used, .. } if !visible.contains(key) => Some((*used, key.clone())),
+                _ => None,
+            })
+            .collect();
+        candidates.sort_by_key(|(used, _)| *used);
+        for (_, key) in candidates {
+            if total <= self.ready_budget {
+                break;
+            }
+            if let Some(Entry::Ready { bytes, .. }) = self.entries.remove(&key) {
+                total -= bytes;
+            }
+        }
     }
 
     /// Queue a decode for `slot` if it has no entry yet.
@@ -350,6 +460,11 @@ impl ImageManager {
     /// Draw pictures for `slots` over their reserved rows. Call after the viewer text and before
     /// popups, so a popup's `Clear` covers a picture. A slot that is not ready (or cannot be
     /// shown whole or cropped at one edge) gets its `[image: alt]` placeholder on its first row.
+    ///
+    /// Only visible slots are queued, and the worker skips queued jobs that scrolled away, so a
+    /// page with arbitrarily many image references cannot turn the per-image limits into
+    /// unbounded aggregate work. Prepared pictures stay cached for scroll-back up to a byte
+    /// budget (least recently drawn go first); decode failures stay for the page.
     pub fn draw(
         &mut self,
         frame: &mut Frame<'_>,
@@ -361,12 +476,31 @@ impl ImageManager {
         if self.picker.is_none() {
             return;
         }
+        self.tick += 1;
+        let visible_keys: HashSet<_> = slots
+            .iter()
+            .filter(|slot| slot_visible(slot, scroll, geom.text_x, geom.top_y, geom.rows).is_some())
+            .map(SlotKey::of)
+            .collect();
+        self.wanted
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone_from(&visible_keys);
+        self.evict_over_budget(&visible_keys);
+
         for slot in slots {
-            self.ensure(slot);
             let visible = slot_visible(slot, scroll, geom.text_x, geom.top_y, geom.rows);
+            let Some((rect, clip)) = visible else {
+                // This also draws the documented fallback for a slot clipped at both edges;
+                // a completely off-screen slot is a no-op.
+                draw_placeholder(frame, slot, scroll, geom, None, theme);
+                continue;
+            };
+            self.ensure(slot);
             let key = SlotKey::of(slot);
-            match (self.entries.get_mut(&key), visible) {
-                (Some(Entry::Ready(protocol)), Some((rect, clip))) => {
+            match self.entries.get_mut(&key) {
+                Some(Entry::Ready { protocol, used, .. }) => {
+                    *used = self.tick;
                     let rect = rect.intersection(frame.area());
                     let resize = Resize::Crop(Some(CropOptions {
                         clip_top: clip == Clip::Top,
@@ -378,7 +512,7 @@ impl ImageManager {
                         protocol.as_mut(),
                     );
                 }
-                (entry, _) => {
+                entry => {
                     let note = match entry {
                         Some(Entry::Failed(reason)) => Some(reason.as_str()),
                         _ => None,
@@ -620,6 +754,102 @@ mod tests {
             );
             assert_eq!(accepted_protocol(ProtocolType::Kitty, (8, 0), accept), None);
         }
+    }
+
+    fn key(name: &str) -> SlotKey {
+        SlotKey {
+            path: PathBuf::from(name),
+            stamp: (1, 1),
+            cols: 4,
+            rows: 2,
+        }
+    }
+
+    fn ready(bytes: u64, used: u64) -> Entry {
+        Entry::Ready {
+            protocol: Box::new(
+                Picker::halfblocks().new_resize_protocol(DynamicImage::new_rgba8(2, 2)),
+            ),
+            bytes,
+            used,
+        }
+    }
+
+    fn manager_with(budget: u64, entries: Vec<(SlotKey, Entry)>) -> ImageManager {
+        let mut manager = ImageManager::enabled(Picker::halfblocks());
+        manager.ready_budget = budget;
+        manager.entries.extend(entries);
+        manager
+    }
+
+    #[test]
+    fn eviction_drops_least_recently_drawn_first() {
+        let visible: HashSet<_> = [key("c")].into();
+        let mut manager = manager_with(
+            250,
+            vec![
+                (key("a"), ready(100, 1)),
+                (key("b"), ready(100, 2)),
+                (key("c"), ready(100, 3)),
+                (key("failed"), Entry::Failed("bad".into())),
+            ],
+        );
+        manager.evict_over_budget(&visible);
+        assert!(
+            !manager.entries.contains_key(&key("a")),
+            "oldest goes first"
+        );
+        for kept in ["b", "c", "failed"] {
+            assert!(manager.entries.contains_key(&key(kept)), "{kept}");
+        }
+    }
+
+    #[test]
+    fn eviction_never_drops_visible_pictures_or_failures() {
+        let visible: HashSet<_> = [key("c")].into();
+        let mut manager = manager_with(
+            50,
+            vec![
+                (key("a"), ready(100, 1)),
+                (key("b"), ready(100, 2)),
+                (key("c"), ready(100, 3)),
+                (key("failed"), Entry::Failed("bad".into())),
+                (key("pending"), Entry::Pending),
+            ],
+        );
+        manager.evict_over_budget(&visible);
+        assert!(!manager.entries.contains_key(&key("a")));
+        assert!(!manager.entries.contains_key(&key("b")));
+        for kept in ["c", "failed", "pending"] {
+            assert!(manager.entries.contains_key(&key(kept)), "{kept}");
+        }
+    }
+
+    #[test]
+    fn under_budget_nothing_is_evicted() {
+        let mut manager = manager_with(
+            1000,
+            vec![(key("a"), ready(100, 1)), (key("b"), ready(100, 2))],
+        );
+        manager.evict_over_budget(&HashSet::new());
+        assert_eq!(manager.entries.len(), 2);
+    }
+
+    #[test]
+    fn worker_skips_jobs_that_left_the_screen_without_touching_the_file() {
+        let wanted = Wanted::default();
+        let picker = Picker::halfblocks();
+        // Not wanted: skipped, even though the file does not exist (it was never opened).
+        assert!(matches!(
+            run_job(&key("gone.png"), &wanted, (10, 20), &picker),
+            Outcome::Skipped
+        ));
+        // Wanted: it is decoded, and a missing file is a failure rather than a skip.
+        wanted.lock().unwrap().insert(key("gone.png"));
+        assert!(matches!(
+            run_job(&key("gone.png"), &wanted, (10, 20), &picker),
+            Outcome::Failed(_)
+        ));
     }
 
     #[test]

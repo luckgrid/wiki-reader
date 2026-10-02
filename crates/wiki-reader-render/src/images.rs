@@ -21,7 +21,7 @@ pub struct ImageSlot {
     pub path: PathBuf,
     /// Alt text, for the placeholder shown while loading or when decoding fails.
     pub alt: String,
-    /// File size and modified seconds, so an edited file is not served from a stale cache.
+    /// File size and modified nanoseconds, so an edited file is not served from a stale cache.
     pub stamp: (u64, u64),
 }
 
@@ -87,7 +87,7 @@ pub(crate) fn plan_image(
     let (cols, rows) = slot_geometry(px_w, px_h, cell_px, max_cols);
     ImagePlan::Slot {
         path: local.path,
-        stamp: (local.bytes, local.modified_secs),
+        stamp: (local.bytes, local.modified_nanos),
         cols,
         rows,
     }

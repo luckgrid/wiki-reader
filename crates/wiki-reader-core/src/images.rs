@@ -61,8 +61,8 @@ pub struct LocalImage {
     pub path: PathBuf,
     /// File size in bytes (part of the freshness stamp).
     pub bytes: u64,
-    /// Modified time in seconds since the epoch (part of the freshness stamp).
-    pub modified_secs: u64,
+    /// Modified time in nanoseconds since the epoch (part of the freshness stamp).
+    pub modified_nanos: u64,
 }
 
 /// Formats ADR-0017 allows (SVG joins with the rasteriser in P3-12c).
@@ -157,15 +157,16 @@ pub fn resolve_local_image(
     if meta.len() > MAX_IMAGE_FILE_BYTES {
         return Err(ImageReject::TooLarge);
     }
-    let modified_secs = meta
+    let modified_nanos = meta
         .modified()
         .ok()
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-        .map_or(0, |d| d.as_secs());
+        .and_then(|d| u64::try_from(d.as_nanos()).ok())
+        .unwrap_or(0);
     Ok(LocalImage {
         path: canonical,
         bytes: meta.len(),
-        modified_secs,
+        modified_nanos,
     })
 }
 
