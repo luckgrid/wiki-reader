@@ -1,0 +1,11 @@
+---
+source: crates/wiki-reader-render/src/lib.rs
+expression: out
+---
+
+
+
+
+
+
+slot line=0 34x5 mermaid

@@ -40,8 +40,6 @@ wiki-reader-render = { workspace = true }
 [dev-dependencies]
 filetime = { workspace = true }
 insta = { workspace = true }
-mermaid-rs-renderer = { workspace = true }
-resvg = { workspace = true }
 tempfile = { workspace = true }
 
 [lints]

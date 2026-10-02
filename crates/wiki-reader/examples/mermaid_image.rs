@@ -1,16 +1,11 @@
-//! P3-12a Mermaid-to-terminal-image spike.
+//! P3-12a Mermaid-to-terminal-image spike (kept for manual checks).
 //!
 //! Run from the repository root:
 //!
 //! ```text
-//! cargo run -p wiki-reader --example mermaid-image -- fixtures/elements/README.md
-//! cargo run -p wiki-reader --example mermaid-image -- fixtures/mermaid/common-types.md wiki/architecture/rendering.md
+//! cargo run -p wiki-reader --example mermaid-image -- fixtures/mermaid/common-types.md
 //! cargo run -p wiki-reader --example mermaid-image -- --render-only --output-dir /tmp/mermaid fixtures/mermaid/common-types.md
 //! ```
-//!
-//! Markdown inputs contribute every `mermaid`/`mmd` fenced block. A `.mmd` input is treated as
-//! one diagram. SVG layout uses `mermaid-rs-renderer`; `resvg` rasterises with the embedded Noto
-//! Sans font, without loading system fonts.
 
 use std::env;
 use std::fs;
@@ -18,8 +13,7 @@ use std::io::{IsTerminal, stdout};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use image::{DynamicImage, RgbaImage};
-use mermaid_rs_renderer::{RenderOptions, render_with_options};
+use image::DynamicImage;
 use ratatui::crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind,
     KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
@@ -32,11 +26,8 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui_image::picker::Picker;
 use ratatui_image::picker::cap_parser::QueryStdioOptions;
 use ratatui_image::{Image, Resize};
-use resvg::{tiny_skia, usvg};
+use wiki_reader_render::render_mermaid;
 
-const FONT: &[u8] = include_bytes!("fonts/NotoSans.ttf");
-const LAYOUT_FONT_FAMILY: &str = "WikiReaderEmbeddedNotoSans";
-const RASTER_FONT_FAMILY: &str = "Noto Sans";
 const DEFAULT_QUERY_TIMEOUT_MS: u64 = 250;
 
 struct TerminalGuard {
@@ -71,9 +62,7 @@ struct DiagramSource {
 struct RenderedDiagram {
     label: String,
     image: DynamicImage,
-    svg: String,
     elapsed: Duration,
-    deterministic: bool,
 }
 
 fn args() -> Args {
@@ -152,46 +141,14 @@ fn extract_diagrams(path: &Path) -> Result<Vec<DiagramSource>, Box<dyn std::erro
 }
 
 fn render_diagram(diagram: DiagramSource) -> Result<RenderedDiagram, Box<dyn std::error::Error>> {
-    let mut options = RenderOptions::modern();
-    // An intentionally private family makes the renderer use its deterministic fallback metrics
-    // instead of whichever matching system font happens to be installed. Before rasterisation,
-    // the family is rewritten to the embedded font's real name.
-    options.theme.font_family = LAYOUT_FONT_FAMILY.to_string();
-
     let started = Instant::now();
-    let svg = render_with_options(&diagram.source, options.clone())?;
+    let raster = render_mermaid(&diagram.source)?;
     let elapsed = started.elapsed();
-    let second_svg = render_with_options(&diagram.source, options)?;
-    let deterministic = svg.as_bytes() == second_svg.as_bytes();
-    let image = rasterise(&svg)?;
-
     Ok(RenderedDiagram {
         label: diagram.label,
-        image,
-        svg,
+        image: DynamicImage::ImageRgba8(raster.image),
         elapsed,
-        deterministic,
     })
-}
-
-fn rasterise(svg: &str) -> Result<DynamicImage, Box<dyn std::error::Error>> {
-    let mut options = usvg::Options::default();
-    options.fontdb_mut().load_font_data(FONT.to_vec());
-    options.font_family = RASTER_FONT_FAMILY.to_string();
-    options.image_href_resolver = usvg::ImageHrefResolver {
-        resolve_data: Box::new(|_, _, _| None),
-        resolve_string: Box::new(|_, _| None),
-    };
-
-    let raster_svg = svg.replace(LAYOUT_FONT_FAMILY, RASTER_FONT_FAMILY);
-    let tree = usvg::Tree::from_data(raster_svg.as_bytes(), &options)?;
-    let size = tree.size().to_int_size();
-    let mut pixmap = tiny_skia::Pixmap::new(size.width(), size.height())
-        .ok_or("diagram dimensions cannot be rasterised")?;
-    resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
-    let rgba = RgbaImage::from_raw(size.width(), size.height(), pixmap.take())
-        .ok_or("resvg returned an invalid RGBA buffer")?;
-    Ok(DynamicImage::ImageRgba8(rgba))
 }
 
 fn load_cases(
@@ -208,18 +165,15 @@ fn load_cases(
             match render_diagram(diagram) {
                 Ok(result) => {
                     println!(
-                        "ok: {} — {}x{}, {} SVG bytes, {:?}, deterministic={}",
+                        "ok: {} — {}x{}, {:?}",
                         result.label,
                         result.image.width(),
                         result.image.height(),
-                        result.svg.len(),
-                        result.elapsed,
-                        result.deterministic
+                        result.elapsed
                     );
                     if let Some(output_dir) = output_dir {
                         let stem = format!("diagram-{:02}", rendered.len() + 1);
                         result.image.save(output_dir.join(format!("{stem}.png")))?;
-                        fs::write(output_dir.join(format!("{stem}.svg")), &result.svg)?;
                     }
                     rendered.push(result);
                 }
@@ -290,13 +244,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         case.label
                     )),
                     Line::from(format!(
-                        "protocol={:?} query={query_elapsed:?} raster={}x{} SVG={} bytes render={:?} deterministic={}",
+                        "protocol={:?} query={query_elapsed:?} raster={}x{} render={:?}",
                         picker.protocol_type(),
                         case.image.width(),
                         case.image.height(),
-                        case.svg.len(),
                         case.elapsed,
-                        case.deterministic
                     )),
                 ]),
                 details_area,

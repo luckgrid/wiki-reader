@@ -18,7 +18,10 @@ use ratatui_image::picker::{Picker, ProtocolType};
 use ratatui_image::protocol::StatefulProtocol;
 use ratatui_image::{CropOptions, Resize, StatefulImage};
 use wiki_reader_core::images::MAX_IMAGE_PIXELS;
-use wiki_reader_render::ImageSlot;
+use wiki_reader_render::{
+    DiagramRequest, DiagramSize, DiagramSizeCache, ImageSlot, SlotSource, rasterise_svg,
+    render_mermaid_for_pane,
+};
 
 use crate::tui::theme::Theme;
 
@@ -120,6 +123,20 @@ pub fn accept_picker(mut picker: Picker, accept: Accept) -> Option<Picker> {
 
 /// Probe the terminal if policy allows. Must run after `ratatui::try_init` and before mouse
 /// capture, keyboard enhancement and the first event read (both consume stdin).
+///
+/// `diagrams = "text" | "source"` must skip the probe entirely (ADR-0004 step 1) — callers pass
+/// that via [`should_probe`].
+#[must_use]
+pub fn should_probe(mode: wiki_reader_core::config::DiagramMode) -> bool {
+    !matches!(
+        mode,
+        wiki_reader_core::config::DiagramMode::Text
+            | wiki_reader_core::config::DiagramMode::Source
+    )
+}
+
+/// Probe the terminal if policy allows. Must run after `ratatui::try_init` and before mouse
+/// capture, keyboard enhancement and the first event read (both consume stdin).
 #[must_use]
 pub fn detect_picker(env: &GraphicsEnv) -> Option<Picker> {
     let accept = probe_plan(env)?;
@@ -189,32 +206,64 @@ pub fn slot_visible(
 
 // ── Background decode ────────────────────────────────────────────────────────────────────────
 
-/// Identity of a prepared picture. The file stamp keeps an edited image from a stale cache.
+/// Identity of a prepared picture. File stamp / Mermaid hash keep stale cache entries out.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum SlotKeySource {
+    File {
+        path: PathBuf,
+        stamp: (u64, u64),
+    },
+    Mermaid {
+        hash: u64,
+        bg: (u8, u8, u8),
+    },
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct SlotKey {
-    path: PathBuf,
-    stamp: (u64, u64),
+    source: SlotKeySource,
     cols: u16,
     rows: u16,
 }
 
 impl SlotKey {
     fn of(slot: &ImageSlot) -> Self {
+        let source = match &slot.source {
+            SlotSource::File { path, stamp } => SlotKeySource::File {
+                path: path.clone(),
+                stamp: *stamp,
+            },
+            SlotSource::Mermaid { hash, bg, .. } => SlotKeySource::Mermaid {
+                hash: *hash,
+                bg: *bg,
+            },
+        };
         Self {
-            path: slot.path.clone(),
-            stamp: slot.stamp,
+            source,
             cols: slot.cols,
             rows: slot.rows,
         }
     }
 }
 
-struct Job {
-    key: SlotKey,
+/// Shared Mermaid RGBA cache so size-measure and slot-prepare share one raster.
+type MermaidRgba = Arc<Mutex<HashMap<(u64, (u8, u8, u8)), Arc<RgbaImage>>>>;
+
+enum Job {
+    /// Decode/rasterise a visible slot into a protocol.
+    Decode {
+        key: SlotKey,
+        /// Mermaid fence body when `key` is Mermaid.
+        mermaid_source: Option<String>,
+        cell_px: (u16, u16),
+        max_cols: u16,
+    },
+    /// Measure a Mermaid fence off-thread and fill the size cache (triggers a re-layout).
+    Measure(DiagramRequest),
 }
 
-/// The slots on screen. The worker skips queued jobs that left it, so scrolling quickly through
-/// a long page does not decode every picture that flew past.
+/// The slots on screen. The worker skips queued decode jobs that left it, so scrolling quickly
+/// through a long page does not decode every picture that flew past.
 type Wanted = Arc<Mutex<HashSet<SlotKey>>>;
 
 enum Outcome {
@@ -222,10 +271,12 @@ enum Outcome {
     Failed(String),
     /// Not on screen any more when the worker reached it; nothing was decoded.
     Skipped,
+    /// Size cache updated; the page should re-layout so the block can become a slot.
+    DiagramSized,
 }
 
 struct Done {
-    key: SlotKey,
+    key: Option<SlotKey>,
     outcome: Outcome,
 }
 
@@ -242,41 +293,146 @@ enum Entry {
     Failed(String),
 }
 
-/// Run one job: skip it if unwanted, otherwise decode and build the protocol.
-fn run_job(key: &SlotKey, wanted: &Wanted, font: (u16, u16), picker: &Picker) -> Outcome {
-    if !wanted
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .contains(key)
-    {
-        return Outcome::Skipped;
-    }
-    match prepare(key, font) {
-        Ok(img) => Outcome::Ready(Box::new(picker.new_resize_protocol(img))),
-        Err(reason) => Outcome::Failed(reason),
-    }
-}
-
-/// Decode `key.path`, scale it to the slot's pixel size (preserving aspect, never above the
-/// slot) and pad to exactly that size, so a later top/bottom crop keeps the scale.
-fn prepare(key: &SlotKey, font: (u16, u16)) -> Result<DynamicImage, String> {
-    let mut reader = ImageReader::open(&key.path)
-        .map_err(|e| e.to_string())?
-        .with_guessed_format()
-        .map_err(|e| e.to_string())?;
-    let mut limits = Limits::default();
-    limits.max_alloc = Some(MAX_DECODE_ALLOC);
-    reader.limits(limits);
-    let decoded = reader.decode().map_err(|e| e.to_string())?;
-    if u64::from(decoded.width()) * u64::from(decoded.height()) > MAX_IMAGE_PIXELS {
-        return Err("image too large".into());
-    }
-    let target_w = u32::from(key.cols) * u32::from(font.0);
-    let target_h = u32::from(key.rows) * u32::from(font.1);
+fn scale_and_pad(decoded: &DynamicImage, cols: u16, rows: u16, font: (u16, u16)) -> DynamicImage {
+    let target_w = u32::from(cols) * u32::from(font.0);
+    let target_h = u32::from(rows) * u32::from(font.1);
     let scaled = decoded.resize(target_w, target_h, FilterType::Triangle);
     let mut canvas = RgbaImage::new(target_w, target_h);
     image::imageops::overlay(&mut canvas, &scaled.to_rgba8(), 0, 0);
-    Ok(DynamicImage::ImageRgba8(canvas))
+    DynamicImage::ImageRgba8(canvas)
+}
+
+fn is_svg_path(path: &std::path::Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("svg"))
+}
+
+/// Decode / rasterise `key` and pad to the slot's pixel size.
+fn prepare(
+    key: &SlotKey,
+    font: (u16, u16),
+    mermaid_source: Option<&str>,
+    cell_px: (u16, u16),
+    max_cols: u16,
+    mermaid_rgba: &MermaidRgba,
+) -> Result<DynamicImage, String> {
+    let decoded = match &key.source {
+        SlotKeySource::File { path, .. } => {
+            if is_svg_path(path) {
+                let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+                let raster = rasterise_svg(&bytes).map_err(|e| e.to_string())?;
+                DynamicImage::ImageRgba8(raster.image)
+            } else {
+                let mut reader = ImageReader::open(path)
+                    .map_err(|e| e.to_string())?
+                    .with_guessed_format()
+                    .map_err(|e| e.to_string())?;
+                let mut limits = Limits::default();
+                limits.max_alloc = Some(MAX_DECODE_ALLOC);
+                reader.limits(limits);
+                let decoded = reader.decode().map_err(|e| e.to_string())?;
+                if u64::from(decoded.width()) * u64::from(decoded.height()) > MAX_IMAGE_PIXELS {
+                    return Err("image too large".into());
+                }
+                decoded
+            }
+        }
+        SlotKeySource::Mermaid { hash, bg } => {
+            let cached = mermaid_rgba
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .get(&(*hash, *bg))
+                .cloned();
+            let rgba = if let Some(img) = cached {
+                img
+            } else {
+                let src = mermaid_source.ok_or_else(|| "missing mermaid source".to_owned())?;
+                let raster = render_mermaid_for_pane(src, cell_px, max_cols).map_err(|e| e.to_string())?;
+                let img = Arc::new(raster.image);
+                mermaid_rgba
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .insert((*hash, *bg), Arc::clone(&img));
+                img
+            };
+            DynamicImage::ImageRgba8((*rgba).clone())
+        }
+    };
+    Ok(scale_and_pad(&decoded, key.cols, key.rows, font))
+}
+
+fn run_measure(
+    req: &DiagramRequest,
+    sizes: &DiagramSizeCache,
+    mermaid_rgba: &MermaidRgba,
+) -> Outcome {
+    match render_mermaid_for_pane(&req.source, req.cell_px, req.width) {
+        Ok(raster) => {
+            sizes.insert(
+                req.hash,
+                req.width,
+                req.bg,
+                DiagramSize::Natural {
+                    px_w: raster.px_w,
+                    px_h: raster.px_h,
+                },
+            );
+            mermaid_rgba
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .insert((req.hash, req.bg), Arc::new(raster.image));
+            Outcome::DiagramSized
+        }
+        Err(wiki_reader_render::RasterError::TooWide) => {
+            sizes.insert(req.hash, req.width, req.bg, DiagramSize::Text);
+            Outcome::DiagramSized
+        }
+        Err(_) => {
+            // Parse/raster failure: mark Text so we stop re-requesting; text tier already shows.
+            sizes.insert(req.hash, req.width, req.bg, DiagramSize::Text);
+            Outcome::DiagramSized
+        }
+    }
+}
+
+/// Run one job: skip decode if unwanted, otherwise decode and build the protocol.
+fn run_job(
+    job: &Job,
+    wanted: &Wanted,
+    font: (u16, u16),
+    picker: &Picker,
+    sizes: &DiagramSizeCache,
+    mermaid_rgba: &MermaidRgba,
+) -> Outcome {
+    match job {
+        Job::Measure(req) => run_measure(req, sizes, mermaid_rgba),
+        Job::Decode {
+            key,
+            mermaid_source,
+            cell_px,
+            max_cols,
+        } => {
+            if !wanted
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .contains(key)
+            {
+                return Outcome::Skipped;
+            }
+            match prepare(
+                key,
+                font,
+                mermaid_source.as_deref(),
+                *cell_px,
+                *max_cols,
+                mermaid_rgba,
+            ) {
+                Ok(img) => Outcome::Ready(Box::new(picker.new_resize_protocol(img))),
+                Err(reason) => Outcome::Failed(reason),
+            }
+        }
+    }
 }
 
 /// Owns the terminal's graphics capability, the decode worker and the prepared pictures.
@@ -289,6 +445,13 @@ pub struct ImageManager {
     /// Counts draws; stamps `Entry::Ready::used`.
     tick: u64,
     ready_budget: u64,
+    diagram_sizes: Arc<DiagramSizeCache>,
+    /// Set when a Mermaid measure finished; the app re-lays out the page.
+    diagram_relayout: bool,
+    /// Hashes already queued for measure this session (avoid re-queue spam).
+    measuring: HashSet<(u64, u16, (u8, u8, u8))>,
+    /// In-flight measure jobs (for `has_pending` / fast poll).
+    measure_inflight: usize,
 }
 
 impl ImageManager {
@@ -303,26 +466,38 @@ impl ImageManager {
             entries: HashMap::new(),
             tick: 0,
             ready_budget: READY_BYTE_BUDGET,
+            diagram_sizes: Arc::new(DiagramSizeCache::new()),
+            diagram_relayout: false,
+            measuring: HashSet::new(),
+            measure_inflight: 0,
         }
     }
 
-    /// Start the decode worker for a confirmed protocol.
+    /// Start the decode worker, sharing a Mermaid size cache with the renderer.
     #[must_use]
-    pub fn enabled(picker: Picker) -> Self {
+    pub fn enabled_with_sizes(picker: Picker, diagram_sizes: Arc<DiagramSizeCache>) -> Self {
         let (job_tx, job_rx) = mpsc::channel::<Job>();
         let (done_tx, done_rx) = mpsc::channel::<Done>();
         let wanted = Wanted::default();
         let worker_picker = picker.clone();
         let worker_wanted = Arc::clone(&wanted);
+        let worker_sizes = Arc::clone(&diagram_sizes);
+        let mermaid_rgba = MermaidRgba::default();
+        let worker_rgba = Arc::clone(&mermaid_rgba);
         let font = picker.font_size();
         std::thread::spawn(move || {
-            // One image at a time, in the order slots were first drawn.
-            while let Ok(Job { key }) = job_rx.recv() {
+            while let Ok(job) = job_rx.recv() {
+                let key = match &job {
+                    Job::Decode { key, .. } => Some(key.clone()),
+                    Job::Measure(_) => None,
+                };
                 let outcome = run_job(
-                    &key,
+                    &job,
                     &worker_wanted,
                     (font.width, font.height),
                     &worker_picker,
+                    &worker_sizes,
+                    &worker_rgba,
                 );
                 if done_tx.send(Done { key, outcome }).is_err() {
                     break;
@@ -337,7 +512,17 @@ impl ImageManager {
             entries: HashMap::new(),
             tick: 0,
             ready_budget: READY_BYTE_BUDGET,
+            diagram_sizes,
+            diagram_relayout: false,
+            measuring: HashSet::new(),
+            measure_inflight: 0,
         }
+    }
+
+    /// Shared Mermaid natural-size cache (also passed into [`wiki_reader_render::RenderOpts`]).
+    #[must_use]
+    pub fn diagram_sizes(&self) -> Arc<DiagramSizeCache> {
+        Arc::clone(&self.diagram_sizes)
     }
 
     /// Cell size in pixels when a protocol is active (the renderer sizes slots from it).
@@ -349,6 +534,32 @@ impl ImageManager {
         })
     }
 
+    /// Queue Mermaid size measures from the latest render. Idempotent per (hash, width, bg).
+    pub fn queue_diagram_requests(&mut self, requests: &[DiagramRequest]) {
+        let Some(tx) = &self.jobs else {
+            return;
+        };
+        for req in requests {
+            let key = (req.hash, req.width, req.bg);
+            if self.diagram_sizes.get(req.hash, req.width, req.bg).is_some() {
+                continue;
+            }
+            if !self.measuring.insert(key) {
+                continue;
+            }
+            if tx.send(Job::Measure(req.clone())).is_ok() {
+                self.measure_inflight += 1;
+            } else {
+                self.measuring.remove(&key);
+            }
+        }
+    }
+
+    /// True when a Mermaid measure finished and the page should re-layout.
+    pub fn take_diagram_relayout(&mut self) -> bool {
+        std::mem::take(&mut self.diagram_relayout)
+    }
+
     /// Drain finished decodes. True when a picture arrived, so the frame needs a redraw.
     pub fn poll(&mut self) -> bool {
         let Some(done) = &self.done else {
@@ -357,33 +568,44 @@ impl ImageManager {
         let font = self.cell_px().unwrap_or((0, 0));
         let mut changed = false;
         while let Ok(Done { key, outcome }) = done.try_recv() {
-            // A key dropped by `retain_for` while decoding is not resurrected.
-            let Some(entry) = self.entries.get_mut(&key) else {
-                continue;
-            };
             match outcome {
-                Outcome::Ready(protocol) => {
-                    let bytes = u64::from(key.cols)
-                        * u64::from(font.0)
-                        * u64::from(key.rows)
-                        * u64::from(font.1)
-                        * 4;
-                    *entry = Entry::Ready {
-                        protocol,
-                        bytes,
-                        used: self.tick,
+                Outcome::DiagramSized => {
+                    self.diagram_relayout = true;
+                    self.measure_inflight = self.measure_inflight.saturating_sub(1);
+                    changed = true;
+                }
+                other => {
+                    let Some(key) = key else {
+                        continue;
                     };
-                    changed = true;
-                }
-                Outcome::Failed(reason) => {
-                    *entry = Entry::Failed(reason);
-                    changed = true;
-                }
-                // Left the screen before the worker got to it: forget it, so a later scroll-in
-                // queues it again.
-                Outcome::Skipped => {
-                    if matches!(entry, Entry::Pending) {
-                        self.entries.remove(&key);
+                    // A key dropped by `retain_for` while decoding is not resurrected.
+                    let Some(entry) = self.entries.get_mut(&key) else {
+                        continue;
+                    };
+                    match other {
+                        Outcome::Ready(protocol) => {
+                            let bytes = u64::from(key.cols)
+                                * u64::from(font.0)
+                                * u64::from(key.rows)
+                                * u64::from(font.1)
+                                * 4;
+                            *entry = Entry::Ready {
+                                protocol,
+                                bytes,
+                                used: self.tick,
+                            };
+                            changed = true;
+                        }
+                        Outcome::Failed(reason) => {
+                            *entry = Entry::Failed(reason);
+                            changed = true;
+                        }
+                        Outcome::Skipped => {
+                            if matches!(entry, Entry::Pending) {
+                                self.entries.remove(&key);
+                            }
+                        }
+                        Outcome::DiagramSized => unreachable!("handled above"),
                     }
                 }
             }
@@ -391,10 +613,10 @@ impl ImageManager {
         changed
     }
 
-    /// True while a decode is queued or running (the loop polls faster to show it promptly).
+    /// True while a decode or measure is queued or running.
     #[must_use]
     pub fn has_pending(&self) -> bool {
-        self.entries.values().any(|e| matches!(e, Entry::Pending))
+        self.entries.values().any(|e| matches!(e, Entry::Pending)) || self.measure_inflight > 0
     }
 
     /// Keep only the entries `slots` need (pictures and decode failures); release the rest.
@@ -402,6 +624,9 @@ impl ImageManager {
     pub fn retain_for(&mut self, slots: &[ImageSlot]) {
         let keep: Vec<SlotKey> = slots.iter().map(SlotKey::of).collect();
         self.entries.retain(|key, _| keep.contains(key));
+        // Allow re-measure after a page change if sizes were cleared externally.
+        self.measuring
+            .retain(|(hash, width, bg)| self.diagram_sizes.get(*hash, *width, *bg).is_none());
     }
 
     /// Drop least-recently-drawn prepared pictures until the cache fits its budget. Pictures on
@@ -443,10 +668,20 @@ impl ImageManager {
         if self.entries.contains_key(&key) {
             return;
         }
-        let queued = self
-            .jobs
-            .as_ref()
-            .is_some_and(|tx| tx.send(Job { key: key.clone() }).is_ok());
+        let mermaid_source = match &slot.source {
+            SlotSource::Mermaid { source, .. } => Some(source.clone()),
+            SlotSource::File { .. } => None,
+        };
+        let cell_px = self.cell_px().unwrap_or((8, 17));
+        let queued = self.jobs.as_ref().is_some_and(|tx| {
+            tx.send(Job::Decode {
+                key: key.clone(),
+                mermaid_source,
+                cell_px,
+                max_cols: slot.cols,
+            })
+            .is_ok()
+        });
         self.entries.insert(
             key,
             if queued {
@@ -583,9 +818,11 @@ mod tests {
             line,
             rows,
             cols: 20,
-            path: PathBuf::from("a.png"),
+            source: SlotSource::File {
+                path: PathBuf::from("a.png"),
+                stamp: (1, 1),
+            },
             alt: "alt".into(),
-            stamp: (1, 1),
         }
     }
 
@@ -650,6 +887,73 @@ mod tests {
             ..env()
         };
         assert_eq!(probe_plan(&tmux), None);
+    }
+
+    #[test]
+    fn diagrams_text_and_source_skip_the_probe() {
+        use wiki_reader_core::config::DiagramMode;
+        assert!(!should_probe(DiagramMode::Text));
+        assert!(!should_probe(DiagramMode::Source));
+        assert!(should_probe(DiagramMode::Auto));
+        assert!(should_probe(DiagramMode::Image));
+    }
+
+    #[test]
+    fn adr_detection_table_outside_herdr() {
+        assert_eq!(
+            probe_plan(&GraphicsEnv {
+                term_program: Some("ghostty".into()),
+                ..env()
+            }),
+            Some(Accept::KittyOrIterm2)
+        );
+        assert_eq!(
+            probe_plan(&GraphicsEnv {
+                term_program: Some("WezTerm".into()),
+                ..env()
+            }),
+            Some(Accept::KittyOrIterm2)
+        );
+        assert_eq!(
+            probe_plan(&GraphicsEnv {
+                kitty_window: true,
+                ..env()
+            }),
+            Some(Accept::KittyOrIterm2)
+        );
+        assert_eq!(
+            probe_plan(&GraphicsEnv {
+                term: Some("xterm-kitty".into()),
+                ..env()
+            }),
+            Some(Accept::KittyOrIterm2)
+        );
+        // Terminal.app / unknown: no probe.
+        assert_eq!(
+            probe_plan(&GraphicsEnv {
+                term_program: Some("Apple_Terminal".into()),
+                ..env()
+            }),
+            None
+        );
+        assert_eq!(probe_plan(&env()), None);
+    }
+
+    #[test]
+    fn herdr_never_accepts_sixel_or_iterm2() {
+        let cell = (8, 17);
+        assert_eq!(
+            accepted_protocol(ProtocolType::Sixel, cell, Accept::KittyOnly),
+            None
+        );
+        assert_eq!(
+            accepted_protocol(ProtocolType::Iterm2, cell, Accept::KittyOnly),
+            None
+        );
+        assert_eq!(
+            accepted_protocol(ProtocolType::Kitty, cell, Accept::KittyOnly),
+            Some(ProtocolType::Kitty)
+        );
     }
 
     #[test]
@@ -758,8 +1062,10 @@ mod tests {
 
     fn key(name: &str) -> SlotKey {
         SlotKey {
-            path: PathBuf::from(name),
-            stamp: (1, 1),
+            source: SlotKeySource::File {
+                path: PathBuf::from(name),
+                stamp: (1, 1),
+            },
             cols: 4,
             rows: 2,
         }
@@ -776,7 +1082,10 @@ mod tests {
     }
 
     fn manager_with(budget: u64, entries: Vec<(SlotKey, Entry)>) -> ImageManager {
-        let mut manager = ImageManager::enabled(Picker::halfblocks());
+        let mut manager = ImageManager::enabled_with_sizes(
+            Picker::halfblocks(),
+            Arc::new(DiagramSizeCache::new()),
+        );
         manager.ready_budget = budget;
         manager.entries.extend(entries);
         manager
@@ -839,15 +1148,23 @@ mod tests {
     fn worker_skips_jobs_that_left_the_screen_without_touching_the_file() {
         let wanted = Wanted::default();
         let picker = Picker::halfblocks();
+        let sizes = DiagramSizeCache::new();
+        let rgba = MermaidRgba::default();
+        let job = Job::Decode {
+            key: key("gone.png"),
+            mermaid_source: None,
+            cell_px: (10, 20),
+            max_cols: 4,
+        };
         // Not wanted: skipped, even though the file does not exist (it was never opened).
         assert!(matches!(
-            run_job(&key("gone.png"), &wanted, (10, 20), &picker),
+            run_job(&job, &wanted, (10, 20), &picker, &sizes, &rgba),
             Outcome::Skipped
         ));
         // Wanted: it is decoded, and a missing file is a failure rather than a skip.
         wanted.lock().unwrap().insert(key("gone.png"));
         assert!(matches!(
-            run_job(&key("gone.png"), &wanted, (10, 20), &picker),
+            run_job(&job, &wanted, (10, 20), &picker, &sizes, &rgba),
             Outcome::Failed(_)
         ));
     }
@@ -860,18 +1177,21 @@ mod tests {
             .save(&path)
             .expect("write png");
         let key = SlotKey {
-            path,
-            stamp: (0, 0),
+            source: SlotKeySource::File {
+                path,
+                stamp: (0, 0),
+            },
             cols: 10,
             rows: 3,
         };
+        let rgba = MermaidRgba::default();
         // Slot is 80×51 px: the 4:1 picture scales to 80×20, padded to the slot size.
-        let img = prepare(&key, (8, 17)).expect("prepare");
+        let img = prepare(&key, (8, 17), None, (8, 17), 10, &rgba).expect("prepare");
         assert_eq!((img.width(), img.height()), (80, 51));
-        let rgba = img.to_rgba8();
-        assert_eq!(rgba.get_pixel(0, 0).0[3], 255, "picture at the top-left");
+        let rgba_img = img.to_rgba8();
+        assert_eq!(rgba_img.get_pixel(0, 0).0[3], 255, "picture at the top-left");
         assert_eq!(
-            rgba.get_pixel(0, 40).0[3],
+            rgba_img.get_pixel(0, 40).0[3],
             0,
             "padding below is transparent"
         );
@@ -883,11 +1203,14 @@ mod tests {
         let path = dir.path().join("bad.png");
         std::fs::write(&path, b"not a png").expect("write");
         let key = SlotKey {
-            path,
-            stamp: (0, 0),
+            source: SlotKeySource::File {
+                path,
+                stamp: (0, 0),
+            },
             cols: 4,
             rows: 2,
         };
-        assert!(prepare(&key, (8, 17)).is_err());
+        let rgba = MermaidRgba::default();
+        assert!(prepare(&key, (8, 17), None, (8, 17), 4, &rgba).is_err());
     }
 }

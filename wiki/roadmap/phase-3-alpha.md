@@ -3,7 +3,7 @@ id: WR-ROADMAP-P3
 title: Phase 3 — Alpha polish
 summary: Diagrams and images first, then themes, sticky headers, nav chrome, and early herdr niceties.
 status: active
-updated: 2026-10-01
+updated: 2026-10-02
 related: [phase-2-mvp, phase-4-beta]
 nav_order: 3
 ---
@@ -36,9 +36,9 @@ Detail each row into spikes/acceptance only when it is next up. Dogfood bites re
 | P3-11 | Layout and theme config | C1 | todo | nav placement (left/right) and other layout options; owns config keys (nav width stays in session for P2-14); feature request from 2026-09-30 dogfood. The formatted view was removed ([ADR-0014](../decisions/0014-remove-formatted-view-toggle.md)), so it owns no view-mode key |
 | P3-12 | Image diagrams and images (D1) | D1 | doing | was P2-24b; umbrella for P3-12a…d |
 | P3-12a | Spike: protocol detection in Ghostty and herdr; accept ADR-0004 | D1 | done | [P3-S1](spikes/p3-s1-image-protocol.md): Kitty works direct/Herdr; iTerm2 must be forced from env; unknown terminals are not probed; crop/clear/swap pass; Mermaid mixed-go (12 valid blocks/6 common types pass, wide graphs fall back); ADR-0004 accepted |
-| P3-12b | Image slots + local images (static, in-collection, never fetched) | D1 | done | [ADR-0017](../decisions/0017-static-local-images-only.md); implemented: core path policy and caps, `ImageSlot` rows, `ImageManager` decode worker, startup probe, draw pass with top/bottom crop, `[image: alt]` fallback, `fixtures/images`. SVG moves to P3-12c with `resvg`. Manual check 2026-10-02 (`cargo run -p wiki-reader` at the repo root): pictures display in Ghostty, in a herdr pane and in iTerm2; Terminal.app and tmux show the `no graphics protocol` placeholder, as designed. Scroll-crop and popup behaviour were not itemised in the report; hardening: visible-only queue, LRU cache, failure cache |
-| P3-12c | Mermaid image tier | D1 | todo | `mermaid-rs-renderer` → `resvg` → PNG; off-thread (large wiki graph reached ~0.86 s), cached, embedded font; reject illegibly scaled wide results to text; do not infer Kitty from `HERDR_ENV` alone; recheck ~8.8 MiB spike-binary delta |
-| P3-12d | `diagrams` config + tier selection | D1 / C1 | todo | `auto \| image \| text \| source`; tmux → text; never Sixel under herdr |
+| P3-12b | Image slots + local images (static, in-collection, never fetched) | D1 | done | [ADR-0017](../decisions/0017-static-local-images-only.md); implemented: core path policy and caps, `ImageSlot` rows, `ImageManager` decode worker, startup probe, draw pass with top/bottom crop, `[image: alt]` fallback, `fixtures/images`. SVG moved to P3-12c with `resvg`. Manual check 2026-10-02 (`cargo run -p wiki-reader` at the repo root): pictures display in Ghostty, in a herdr pane and in iTerm2; Terminal.app and tmux show the `no graphics protocol` placeholder, as designed. Scroll-crop and popup behaviour were not itemised in the report; hardening: visible-only queue, LRU cache, failure cache |
+| P3-12c | Mermaid image tier | D1 | done | `mermaid-rs-renderer` → `resvg` → slots; off-thread size cache + re-layout; embedded Noto Sans; legibility gate ≥ 0.55 → text; SVG local images; release binary **+~6.7 MiB** (9.7 → 16.4 MiB, measured 2026-10-02 vs P3-12b) |
+| P3-12d | `diagrams` config + tier selection | D1 / C1 | todo | `auto \| image \| text \| source`; tmux → text even for `image`; `text`/`source` skip probe; herdr Kitty-only (never Sixel); fallback reasons in tier headers |
 | P3-01 | Sticky viewer section header | U1 | todo | |
 | P3-02 | Side nav header/footer sub-regions | U2 | todo | |
 | P3-04 | Optional header ‹ › buttons | U4 | todo | |

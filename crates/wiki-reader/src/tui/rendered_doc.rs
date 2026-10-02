@@ -75,6 +75,12 @@ impl RenderedViewerDoc {
         &self.inner.image_slots
     }
 
+    /// Mermaid fences waiting on an off-thread size measure.
+    #[must_use]
+    pub fn diagram_requests(&self) -> &[wiki_reader_render::DiagramRequest] {
+        &self.inner.diagram_requests
+    }
+
     #[must_use]
     pub fn block_actions(&self) -> &[wiki_reader_render::BlockAction] {
         &self.inner.block_actions

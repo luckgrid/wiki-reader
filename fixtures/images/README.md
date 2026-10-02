@@ -1,6 +1,6 @@
 # Image fixtures
 
-Manual and snapshot inputs for P3-12b. The cases that must **not** render a picture are
+Manual and snapshot inputs for P3-12b/c. The cases that must **not** render a picture are
 intentional: remote URLs, `..` escapes and missing files all show the text placeholder.
 
 ## Local images
@@ -21,6 +21,10 @@ A tall PNG, capped at 30 rows, with a white stripe every 100 px to check scroll 
 
 ![Tall bands](img/tall.png)
 
+A local SVG (rasterised with `resvg`, no external refs):
+
+![Vector](img/diagram.svg)
+
 Text after the last image.
 
 ## Placeholders
@@ -39,7 +43,7 @@ A missing file:
 
 An unsupported format:
 
-![Vector](img/diagram.svg)
+![Notes](img/notes.txt)
 
 ## Inline
 
