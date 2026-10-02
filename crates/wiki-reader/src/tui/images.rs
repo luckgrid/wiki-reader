@@ -19,8 +19,8 @@ use ratatui_image::protocol::StatefulProtocol;
 use ratatui_image::{CropOptions, Resize, StatefulImage};
 use wiki_reader_core::images::MAX_IMAGE_PIXELS;
 use wiki_reader_render::{
-    DiagramRequest, DiagramSize, DiagramSizeCache, DiagramTextReason, ImageSlot, SlotSource,
-    is_legible, mermaid_to_svg, rasterise_svg, render_mermaid, svg_natural_size,
+    DiagramPalette, DiagramRequest, DiagramSize, DiagramSizeCache, DiagramTextReason, ImageSlot,
+    SlotSource, is_legible, mermaid_to_svg, rasterise_svg, render_mermaid, svg_natural_size,
 };
 
 use crate::tui::theme::Theme;
@@ -209,7 +209,7 @@ pub fn slot_visible(
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum SlotKeySource {
     File { path: PathBuf, stamp: (u64, u64) },
-    Mermaid { hash: u64, bg: (u8, u8, u8) },
+    Mermaid { hash: u64, palette: DiagramPalette },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -226,9 +226,9 @@ impl SlotKey {
                 path: path.clone(),
                 stamp: *stamp,
             },
-            SlotSource::Mermaid { hash, bg, .. } => SlotKeySource::Mermaid {
+            SlotSource::Mermaid { hash, palette, .. } => SlotKeySource::Mermaid {
                 hash: *hash,
-                bg: *bg,
+                palette: *palette,
             },
         };
         Self {
@@ -285,11 +285,24 @@ enum Entry {
     Failed(String),
 }
 
-fn scale_and_pad(decoded: &DynamicImage, cols: u16, rows: u16, font: (u16, u16)) -> DynamicImage {
+/// Scale to the slot's pixel size and pad to exactly that size. Files pad transparent; a Mermaid
+/// card pads with its own background so the whole slot is one opaque rectangle.
+fn scale_and_pad(
+    decoded: &DynamicImage,
+    cols: u16,
+    rows: u16,
+    font: (u16, u16),
+    pad: Option<(u8, u8, u8)>,
+) -> DynamicImage {
     let target_w = u32::from(cols) * u32::from(font.0);
     let target_h = u32::from(rows) * u32::from(font.1);
     let scaled = decoded.resize(target_w, target_h, FilterType::Triangle);
     let mut canvas = RgbaImage::new(target_w, target_h);
+    if let Some((r, g, b)) = pad {
+        canvas
+            .pixels_mut()
+            .for_each(|p| *p = image::Rgba([r, g, b, 255]));
+    }
     image::imageops::overlay(&mut canvas, &scaled.to_rgba8(), 0, 0);
     DynamicImage::ImageRgba8(canvas)
 }
@@ -329,29 +342,34 @@ fn prepare(
                 decoded
             }
         }
-        SlotKeySource::Mermaid { .. } => {
+        SlotKeySource::Mermaid { palette, .. } => {
             let src = mermaid_source.ok_or_else(|| "missing mermaid source".to_owned())?;
-            let raster = render_mermaid(src).map_err(|e| e.to_string())?;
+            let raster = render_mermaid(src, palette).map_err(|e| e.to_string())?;
             if !is_legible(raster.px_w, raster.px_h, cell_px, max_cols) {
                 return Err("diagram too wide for pane".into());
             }
             DynamicImage::ImageRgba8(raster.image)
         }
     };
-    Ok(scale_and_pad(&decoded, key.cols, key.rows, font))
+    let pad = match &key.source {
+        SlotKeySource::Mermaid { palette, .. } => Some(palette.bg),
+        SlotKeySource::File { .. } => None,
+    };
+    Ok(scale_and_pad(&decoded, key.cols, key.rows, font, pad))
 }
 
 /// SVG layout + natural size only — no RGBA. Rasterisation happens in [`prepare`].
 fn run_measure(req: &DiagramRequest, sizes: &DiagramSizeCache) -> Outcome {
-    match mermaid_to_svg(&req.source).and_then(|svg| svg_natural_size(svg.as_bytes())) {
+    match mermaid_to_svg(&req.source, &req.palette).and_then(|svg| svg_natural_size(svg.as_bytes()))
+    {
         Ok((px_w, px_h)) => {
-            sizes.insert(req.hash, req.bg, DiagramSize::Natural { px_w, px_h });
+            sizes.insert(req.hash, req.palette, DiagramSize::Natural { px_w, px_h });
             Outcome::DiagramSized
         }
         Err(err) => {
             sizes.insert(
                 req.hash,
-                req.bg,
+                req.palette,
                 DiagramSize::Text(DiagramTextReason::Failed(err.to_string())),
             );
             Outcome::DiagramSized
@@ -445,7 +463,7 @@ pub struct ImageManager {
     /// Set when a Mermaid measure finished; the app re-lays out the page.
     diagram_relayout: bool,
     /// Hashes already queued for measure this session (avoid re-queue spam).
-    measuring: HashSet<(u64, (u8, u8, u8))>,
+    measuring: HashSet<(u64, DiagramPalette)>,
     /// In-flight measure jobs (for `has_pending` / fast poll).
     measure_inflight: usize,
 }
@@ -531,14 +549,14 @@ impl ImageManager {
         })
     }
 
-    /// Queue Mermaid size measures from the latest render. Idempotent per (hash, bg).
+    /// Queue Mermaid size measures from the latest render. Idempotent per (hash, palette).
     pub fn queue_diagram_requests(&mut self, requests: &[DiagramRequest]) {
         let Some(tx) = &self.measure_jobs else {
             return;
         };
         for req in requests {
-            let key = (req.hash, req.bg);
-            if self.diagram_sizes.get(req.hash, req.bg).is_some() {
+            let key = (req.hash, req.palette);
+            if self.diagram_sizes.get(req.hash, req.palette).is_some() {
                 continue;
             }
             if !self.measuring.insert(key) {
@@ -623,7 +641,7 @@ impl ImageManager {
         self.entries.retain(|key, _| keep.contains(key));
         // Allow re-measure after a page change if sizes were cleared externally.
         self.measuring
-            .retain(|(hash, bg)| self.diagram_sizes.get(*hash, *bg).is_none());
+            .retain(|(hash, palette)| self.diagram_sizes.get(*hash, *palette).is_none());
     }
 
     /// Drop least-recently-drawn prepared pictures until the cache fits its budget. Pictures on
@@ -1166,6 +1184,31 @@ mod tests {
     }
 
     #[test]
+    fn mermaid_slot_padding_is_the_palette_background_not_transparent() {
+        let palette = DiagramPalette::default();
+        let key = SlotKey {
+            source: SlotKeySource::Mermaid { hash: 1, palette },
+            cols: 40,
+            rows: 8,
+        };
+        let src = "flowchart LR\n  A[Build] --> B[Deploy]\n";
+        let img = prepare(&key, (8, 17), Some(src), (8, 17), 40)
+            .expect("prepare")
+            .to_rgba8();
+        assert_eq!((img.width(), img.height()), (320, 136));
+        assert!(
+            img.pixels().all(|p| p.0[3] == 255),
+            "the whole slot is one opaque card"
+        );
+        let (r, g, b) = palette.bg;
+        assert_eq!(
+            img.get_pixel(319, 135).0,
+            [r, g, b, 255],
+            "padding uses the card bg"
+        );
+    }
+
+    #[test]
     fn prepare_scales_to_the_slot_and_pads_to_its_exact_pixel_size() {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("wide.png");
@@ -1221,13 +1264,13 @@ mod tests {
             hash,
             source: src.into(),
             width: 80,
-            bg: (30, 32, 36),
+            palette: DiagramPalette::default(),
             cell_px: (8, 17),
         };
         assert!(matches!(run_measure(&req, &sizes), Outcome::DiagramSized));
-        let first = sizes.get(hash, req.bg).expect("cached");
+        let first = sizes.get(hash, req.palette).expect("cached");
         // Same key for every width: layout re-checks legibility.
-        assert_eq!(sizes.get(hash, req.bg), Some(first.clone()));
+        assert_eq!(sizes.get(hash, req.palette), Some(first.clone()));
         assert!(matches!(first, DiagramSize::Natural { .. }));
     }
 
@@ -1240,11 +1283,11 @@ mod tests {
             hash,
             source: src.into(),
             width: 80,
-            bg: (30, 32, 36),
+            palette: DiagramPalette::default(),
             cell_px: (8, 17),
         };
         assert!(matches!(run_measure(&req, &sizes), Outcome::DiagramSized));
-        match sizes.get(hash, req.bg) {
+        match sizes.get(hash, req.palette) {
             Some(DiagramSize::Text(DiagramTextReason::Failed(msg))) => {
                 assert!(!msg.is_empty(), "{msg}");
             }
@@ -1262,7 +1305,7 @@ mod tests {
                 hash: 1,
                 source: "graph LR; A --> B".into(),
                 width: 80,
-                bg: (0, 0, 0),
+                palette: DiagramPalette::default(),
                 cell_px: (8, 17),
             })
             .unwrap();

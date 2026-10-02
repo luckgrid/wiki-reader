@@ -15,6 +15,106 @@ const RASTER_FONT_FAMILY: &str = "Noto Sans";
 /// Minimum scale of natural diagram pixels into the slot before the text tier is preferred.
 pub const MIN_LEGIBLE_SCALE: f64 = 0.55;
 
+/// Colours a Mermaid diagram is drawn with, so the picture matches the active theme.
+///
+/// Plain RGB so the renderer stays terminal-free; the TUI fills it from its theme tokens. It is
+/// part of every diagram cache key, so changing preset re-measures and re-rasterises.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DiagramPalette {
+    /// Card background, also used to fill the slot's padding so the picture is opaque.
+    pub bg: (u8, u8, u8),
+    /// Labels and titles.
+    pub text: (u8, u8, u8),
+    /// Edges and axes.
+    pub line: (u8, u8, u8),
+    /// Node fill.
+    pub node_fill: (u8, u8, u8),
+    /// Node outline.
+    pub node_border: (u8, u8, u8),
+    /// Subgraph / cluster fill.
+    pub cluster_fill: (u8, u8, u8),
+    /// Subgraph / cluster outline.
+    pub cluster_border: (u8, u8, u8),
+    /// Sequence / state note fill (its text uses [`text`](Self::text)).
+    pub note_fill: (u8, u8, u8),
+    /// Sequence / state note outline.
+    pub note_border: (u8, u8, u8),
+}
+
+impl Default for DiagramPalette {
+    /// Dark card, matching the default (dark) theme's code background.
+    fn default() -> Self {
+        Self {
+            bg: (30, 32, 36),
+            text: (226, 229, 236),
+            line: (140, 148, 164),
+            node_fill: (44, 48, 58),
+            node_border: (110, 120, 140),
+            cluster_fill: (38, 41, 50),
+            cluster_border: (80, 88, 104),
+            note_fill: (58, 54, 40),
+            note_border: (150, 130, 80),
+        }
+    }
+}
+
+/// Mid-tone categorical slices that keep light labels readable on a dark card. Mermaid's own
+/// dark pie colours (`#0b0000`, `#010029`, …) vanish into a dark background.
+const DARK_PIE: [&str; 12] = [
+    "#3B6EA8", "#B8683A", "#4C9A6A", "#9A4C86", "#A8903A", "#4A9AA8", "#A84C54", "#6A6AB8",
+    "#7A9A3A", "#B8587A", "#5A7A8A", "#8A6A4A",
+];
+
+impl DiagramPalette {
+    /// CSS hex colour (`#rrggbb`) for the SVG theme.
+    fn hex((r, g, b): (u8, u8, u8)) -> String {
+        format!("#{r:02X}{g:02X}{b:02X}")
+    }
+
+    /// Dark when the card is darker than mid-grey; picks the base theme the palette overlays.
+    fn is_dark(&self) -> bool {
+        let (r, g, b) = self.bg;
+        // Rec. 601 luma is enough to tell a dark card from a light one.
+        (u32::from(r) * 299 + u32::from(g) * 587 + u32::from(b) * 114) / 1000 < 128
+    }
+
+    /// Overlay the palette on `theme`, which is `Theme::modern()` for light cards and
+    /// `Theme::dark()` for dark ones, so the fields the palette does not name (git graph, pie
+    /// strokes, commit labels) are at least the right way round.
+    fn apply(&self, theme: &mut mermaid_rs_renderer::Theme) {
+        let text = Self::hex(self.text);
+        let line = Self::hex(self.line);
+        let node_fill = Self::hex(self.node_fill);
+        let node_border = Self::hex(self.node_border);
+        theme.background = Self::hex(self.bg);
+        theme.edge_label_background = Self::hex(self.bg);
+        theme.text_color.clone_from(&text);
+        theme.primary_text_color.clone_from(&text);
+        theme.pie_title_text_color.clone_from(&text);
+        theme.pie_section_text_color.clone_from(&text);
+        theme.pie_legend_text_color.clone_from(&text);
+        theme.line_color.clone_from(&line);
+        theme.sequence_actor_line.clone_from(&line);
+        theme.primary_color.clone_from(&node_fill);
+        theme.secondary_color.clone_from(&node_fill);
+        theme.tertiary_color.clone_from(&node_fill);
+        theme.sequence_actor_fill.clone_from(&node_fill);
+        theme.sequence_activation_fill.clone_from(&node_fill);
+        theme.primary_border_color.clone_from(&node_border);
+        theme.sequence_actor_border.clone_from(&node_border);
+        theme.sequence_activation_border.clone_from(&node_border);
+        theme.cluster_background = Self::hex(self.cluster_fill);
+        theme.cluster_border = Self::hex(self.cluster_border);
+        theme.sequence_note_fill = Self::hex(self.note_fill);
+        theme.sequence_note_border = Self::hex(self.note_border);
+        theme.pie_outer_stroke_color.clone_from(&node_border);
+        if self.is_dark() {
+            theme.pie_colors = DARK_PIE.map(str::to_owned);
+            theme.pie_stroke_color = Self::hex(self.bg);
+        }
+    }
+}
+
 /// Why a Mermaid/SVG raster failed or was rejected.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RasterError {
@@ -77,7 +177,14 @@ pub fn rasterise_svg(svg: &[u8]) -> Result<RasterImage, RasterError> {
     }
     let mut pixmap = tiny_skia::Pixmap::new(px_w, px_h)
         .ok_or_else(|| RasterError::Raster("diagram dimensions cannot be rasterised".into()))?;
-    resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
+    // The SVG size is fractional (268.77 px); stretch it onto the whole-pixel canvas so the last
+    // column and row are fully covered instead of half-transparent.
+    #[allow(clippy::cast_precision_loss)] // pixel sizes are far below f32's exact-integer range
+    let transform = tiny_skia::Transform::from_scale(
+        px_w as f32 / tree.size().width(),
+        px_h as f32 / tree.size().height(),
+    );
+    resvg::render(&tree, transform, &mut pixmap.as_mut());
     let image = RgbaImage::from_raw(px_w, px_h, pixmap.take())
         .ok_or_else(|| RasterError::Raster("resvg returned an invalid RGBA buffer".into()))?;
     Ok(RasterImage { image, px_w, px_h })
@@ -106,9 +213,16 @@ pub fn svg_natural_size(svg: &[u8]) -> Result<(u32, u32), RasterError> {
 /// # Errors
 ///
 /// Returns [`RasterError::Parse`] when the renderer rejects the source.
-pub fn mermaid_to_svg(src: &str) -> Result<String, RasterError> {
+pub fn mermaid_to_svg(src: &str, palette: &DiagramPalette) -> Result<String, RasterError> {
     let mut options = RenderOptions::modern();
+    if palette.is_dark() {
+        // Same metrics as `modern()`: only colours change with the palette, never the layout.
+        let font_size = options.theme.font_size;
+        options.theme = mermaid_rs_renderer::Theme::dark();
+        options.theme.font_size = font_size;
+    }
     options.theme.font_family = LAYOUT_FONT_FAMILY.to_string();
+    palette.apply(&mut options.theme);
     render_with_options(src, options).map_err(|e| RasterError::Parse(e.to_string()))
 }
 
@@ -117,8 +231,8 @@ pub fn mermaid_to_svg(src: &str) -> Result<String, RasterError> {
 /// # Errors
 ///
 /// Propagates parse/raster errors from [`mermaid_to_svg`] / [`rasterise_svg`].
-pub fn render_mermaid(src: &str) -> Result<RasterImage, RasterError> {
-    let svg = mermaid_to_svg(src)?;
+pub fn render_mermaid(src: &str, palette: &DiagramPalette) -> Result<RasterImage, RasterError> {
+    let svg = mermaid_to_svg(src, palette)?;
     let raster_svg = svg.replace(LAYOUT_FONT_FAMILY, RASTER_FONT_FAMILY);
     rasterise_svg(raster_svg.as_bytes())
 }
@@ -136,10 +250,11 @@ pub fn is_legible(px_w: u32, px_h: u32, cell_px: (u16, u16), max_cols: u16) -> b
 /// Returns [`RasterError::TooWide`] when the effective scale is below the gate, or other raster errors.
 pub fn render_mermaid_for_pane(
     src: &str,
+    palette: &DiagramPalette,
     cell_px: (u16, u16),
     max_cols: u16,
 ) -> Result<RasterImage, RasterError> {
-    let rendered = render_mermaid(src)?;
+    let rendered = render_mermaid(src, palette)?;
     if !is_legible(rendered.px_w, rendered.px_h, cell_px, max_cols) {
         return Err(RasterError::TooWide);
     }
@@ -153,8 +268,8 @@ mod tests {
     #[test]
     fn deterministic_bytes_across_two_renders() {
         let src = "flowchart LR\n  A[Build] --> B[Deploy]\n";
-        let a = render_mermaid(src).expect("first");
-        let b = render_mermaid(src).expect("second");
+        let a = render_mermaid(src, &DiagramPalette::default()).expect("first");
+        let b = render_mermaid(src, &DiagramPalette::default()).expect("second");
         assert_eq!(a.px_w, b.px_w);
         assert_eq!(a.px_h, b.px_h);
         assert_eq!(a.image.as_raw(), b.image.as_raw());
@@ -185,7 +300,8 @@ mod tests {
 
     #[test]
     fn malformed_mermaid_is_a_parse_error() {
-        let err = render_mermaid("not a diagram {{{").expect_err("parse");
+        let err =
+            render_mermaid("not a diagram {{{", &DiagramPalette::default()).expect_err("parse");
         assert!(matches!(err, RasterError::Parse(_)), "{err:?}");
     }
 
@@ -199,14 +315,143 @@ mod tests {
     #[test]
     fn wide_graph_fixture_falls_back_for_pane() {
         let md = include_str!("../../../fixtures/mermaid/wide-graph.md");
-        let err = render_mermaid_for_pane(fence_body(md), (8, 17), 80).expect_err("wide");
+        let err = render_mermaid_for_pane(fence_body(md), &DiagramPalette::default(), (8, 17), 80)
+            .expect_err("wide");
         assert!(matches!(err, RasterError::TooWide), "{err:?}");
     }
 
     #[test]
     fn malformed_fixture_is_a_parse_error() {
         let md = include_str!("../../../fixtures/mermaid/malformed.md");
-        let err = render_mermaid(fence_body(md)).expect_err("parse");
+        let err = render_mermaid(fence_body(md), &DiagramPalette::default()).expect_err("parse");
         assert!(matches!(err, RasterError::Parse(_)), "{err:?}");
+    }
+
+    fn light() -> DiagramPalette {
+        DiagramPalette {
+            bg: (250, 250, 252),
+            text: (20, 24, 32),
+            line: (90, 98, 112),
+            node_fill: (232, 236, 244),
+            node_border: (120, 130, 150),
+            cluster_fill: (240, 242, 248),
+            cluster_border: (190, 196, 210),
+            note_fill: (255, 247, 237),
+            note_border: (253, 186, 116),
+        }
+    }
+
+    #[test]
+    fn svg_carries_the_palette_colours() {
+        let src = "flowchart LR\n  A[Build] --> B[Deploy]\n";
+        let dark = mermaid_to_svg(src, &DiagramPalette::default()).expect("dark");
+        let light = mermaid_to_svg(src, &light()).expect("light");
+        assert!(dark.to_uppercase().contains("#1E2024"), "dark card bg");
+        assert!(light.to_uppercase().contains("#FAFAFC"), "light card bg");
+        assert!(
+            !light.to_uppercase().contains("#FFFFFF"),
+            "no stray light-theme white"
+        );
+        assert_ne!(dark, light);
+    }
+
+    #[test]
+    fn rendered_card_is_opaque_and_uses_the_background() {
+        let src = "flowchart LR\n  A[Build] --> B[Deploy]\n";
+        let img = render_mermaid(src, &DiagramPalette::default()).expect("render");
+        assert!(
+            img.image.pixels().all(|p| p.0[3] == 255),
+            "no transparent pixels"
+        );
+        // The corner is background, not a node.
+        assert_eq!(img.image.get_pixel(0, 0).0[..3], [30, 32, 36]);
+    }
+
+    #[test]
+    fn palettes_differ_as_cache_keys() {
+        assert_ne!(DiagramPalette::default(), light());
+    }
+
+    /// The body of every fenced mermaid block in `md`.
+    fn fences(md: &str) -> Vec<&str> {
+        let mut out = Vec::new();
+        let mut rest = md;
+        while let Some(at) = rest.find("```mermaid") {
+            let body = rest[at + "```mermaid".len()..].trim_start_matches(['\r', '\n']);
+            let end = body.find("```").expect("fence close");
+            out.push(body[..end].trim_end_matches(['\r', '\n']));
+            rest = &body[end + 3..];
+        }
+        out
+    }
+
+    fn herdr() -> DiagramPalette {
+        DiagramPalette {
+            bg: (24, 24, 24),
+            text: (240, 240, 240),
+            line: (160, 160, 160),
+            node_fill: (38, 38, 38),
+            node_border: (255, 199, 153),
+            cluster_fill: (30, 30, 30),
+            cluster_border: (80, 80, 80),
+            note_fill: (52, 46, 40),
+            note_border: (255, 199, 153),
+        }
+    }
+
+    const SEQUENCE_NOTE: &str = "sequenceDiagram\n  participant A\n  participant B\n  A->>B: hi\n  Note over A,B: remember\n";
+
+    #[test]
+    fn note_fill_follows_the_palette_not_the_light_default() {
+        let dark = mermaid_to_svg(SEQUENCE_NOTE, &DiagramPalette::default())
+            .expect("dark")
+            .to_uppercase();
+        assert!(dark.contains("#3A3628"), "dark note fill");
+        assert!(
+            !dark.contains("#FFF7ED"),
+            "no light note fill on a dark card"
+        );
+        let light_svg = mermaid_to_svg(SEQUENCE_NOTE, &light())
+            .expect("light")
+            .to_uppercase();
+        assert!(light_svg.contains("#FFF7ED"), "light note fill");
+    }
+
+    #[test]
+    fn dark_pie_and_git_graph_do_not_keep_light_defaults() {
+        let pie = "pie title Status\n  \"a\" : 3\n  \"b\" : 2\n";
+        let svg = mermaid_to_svg(pie, &DiagramPalette::default())
+            .expect("pie")
+            .to_uppercase();
+        assert!(svg.contains("#3B6EA8"), "mid-tone slice colour");
+        assert!(!svg.contains("#0B0000"), "mermaid's near-black dark slice");
+        let git = "gitGraph\n  commit\n  branch x\n  commit\n";
+        assert!(mermaid_to_svg(git, &DiagramPalette::default()).is_ok());
+    }
+
+    #[test]
+    fn every_fixture_diagram_renders_under_every_palette() {
+        let common = include_str!("../../../fixtures/mermaid/common-types.md");
+        let themed = include_str!("../../../fixtures/mermaid/themed.md");
+        let all: Vec<&str> = fences(common).into_iter().chain(fences(themed)).collect();
+        assert!(all.len() >= 9, "fixtures changed shape: {}", all.len());
+        for palette in [DiagramPalette::default(), light(), herdr()] {
+            for src in &all {
+                let img = render_mermaid(src, &palette).unwrap_or_else(|e| panic!("{e}: {src}"));
+                assert!(img.px_w > 0 && img.px_h > 0);
+            }
+        }
+    }
+
+    #[test]
+    fn layout_does_not_depend_on_the_palette() {
+        // Colours change with the preset; sizes must not, or a theme switch would reflow pages.
+        let src = "flowchart LR\n  A[Build] --> B[Deploy]\n";
+        let size = |p: &DiagramPalette| {
+            let svg = mermaid_to_svg(src, p).expect("svg");
+            svg_natural_size(svg.as_bytes()).expect("size")
+        };
+        assert_eq!(size(&DiagramPalette::default()), size(&light()));
+        assert_eq!(size(&DiagramPalette::default()), size(&herdr()));
     }
 }

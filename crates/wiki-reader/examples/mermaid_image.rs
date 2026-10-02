@@ -26,7 +26,7 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui_image::picker::Picker;
 use ratatui_image::picker::cap_parser::QueryStdioOptions;
 use ratatui_image::{Image, Resize};
-use wiki_reader_render::render_mermaid;
+use wiki_reader_render::{DiagramPalette, render_mermaid};
 
 const DEFAULT_QUERY_TIMEOUT_MS: u64 = 250;
 
@@ -142,7 +142,7 @@ fn extract_diagrams(path: &Path) -> Result<Vec<DiagramSource>, Box<dyn std::erro
 
 fn render_diagram(diagram: DiagramSource) -> Result<RenderedDiagram, Box<dyn std::error::Error>> {
     let started = Instant::now();
-    let raster = render_mermaid(&diagram.source)?;
+    let raster = render_mermaid(&diagram.source, &DiagramPalette::default())?;
     let elapsed = started.elapsed();
     Ok(RenderedDiagram {
         label: diagram.label,

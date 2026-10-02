@@ -32,10 +32,9 @@ fn markdown_syntax(ps: &SyntaxSet) -> Option<&SyntaxReference> {
         .or_else(|| ps.find_syntax_by_name("Markdown"))
 }
 
-fn pick_theme(ts: &ThemeSet) -> Option<&Theme> {
-    ts.themes
-        .get("base16-ocean.dark")
-        .or_else(|| ts.themes.values().next())
+/// The preset's syntect theme, or any bundled one if the name is unknown.
+fn pick_theme<'a>(ts: &'a ThemeSet, name: &str) -> Option<&'a Theme> {
+    ts.themes.get(name).or_else(|| ts.themes.values().next())
 }
 
 /// Highlight `source` as markdown. Falls back to plain lines on error.
@@ -43,13 +42,13 @@ fn pick_theme(ts: &ThemeSet) -> Option<&Theme> {
 /// Call off the UI thread — full-page syntect is ~370 ms / 50 KB (release) and
 /// applies asynchronously; the UI paints plain text until the worker result lands.
 #[must_use]
-pub fn highlight_markdown(source: &str) -> Vec<Vec<HlSpan>> {
+pub fn highlight_markdown(source: &str, theme_name: &str) -> Vec<Vec<HlSpan>> {
     let ps = syntax_set();
     let ts = theme_set();
     let Some(syntax) = markdown_syntax(ps) else {
         return plain(source);
     };
-    let Some(theme) = pick_theme(ts) else {
+    let Some(theme) = pick_theme(ts, theme_name) else {
         return plain(source);
     };
     let mut h = HighlightLines::new(syntax, theme);
@@ -131,15 +130,15 @@ mod tests {
             "# Heading\n\nParagraph with `code` and **bold**.\n\n```rust\nfn main() {}\n```\n\n";
         let small = chunk.repeat(350);
         let large = chunk.repeat(700);
-        let _ = highlight_markdown("warm");
+        let _ = highlight_markdown("warm", "base16-ocean.dark");
         let t_small = {
             let start = Instant::now();
-            assert!(!highlight_markdown(&small).is_empty());
+            assert!(!highlight_markdown(&small, "base16-ocean.dark").is_empty());
             start.elapsed()
         };
         let t_large = {
             let start = Instant::now();
-            assert!(!highlight_markdown(&large).is_empty());
+            assert!(!highlight_markdown(&large, "base16-ocean.dark").is_empty());
             start.elapsed()
         };
         let ratio = t_large.as_secs_f64() / t_small.as_secs_f64().max(1e-9);

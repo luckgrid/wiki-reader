@@ -34,6 +34,19 @@ pub enum DiagramMode {
     Source,
 }
 
+/// Built-in colour preset (`theme = "dark" | "light" | "herdr"`; P3-07).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ThemeName {
+    /// Tuned for dark terminals; the default.
+    #[default]
+    Dark,
+    /// Tuned for light terminals.
+    Light,
+    /// Dark, matching herdr's palette.
+    Herdr,
+}
+
 /// `[nav]` table.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
 pub struct NavConfig {
@@ -49,8 +62,9 @@ pub struct Config {
     pub opener: Option<String>,
     pub editor: Option<String>,
     pub diagrams: DiagramMode,
-    /// Theme name or path (token table wiring is later).
-    pub theme: Option<String>,
+    /// Built-in colour preset. An unknown value in a later file is ignored (with a diagnostic),
+    /// so the value from an earlier file, or `dark`, stays; same rule as `diagrams`.
+    pub theme: ThemeName,
     /// Action-name → key chord overrides (e.g. `"quit" = "Q"`).
     pub keys: BTreeMap<String, String>,
     /// Human-readable diagnostics for bad / unknown keys.
@@ -164,19 +178,11 @@ impl Config {
             }
         }
         if let Some(v) = table.get("theme") {
-            match expect_string(v, "theme") {
-                Ok(s) => {
-                    self.theme = Some(s);
-                    if !self
-                        .diagnostics
-                        .iter()
-                        .any(|d| d.starts_with("theme stored"))
-                    {
-                        self.diagnostics
-                            .push("theme stored but inert until themes land (P3-07)".into());
-                    }
-                }
-                Err(msg) => self.diagnostics.push(msg),
+            match v.clone().try_into::<ThemeName>() {
+                Ok(t) => self.theme = t,
+                Err(_) => self.diagnostics.push(format!(
+                    "theme: expected \"dark\", \"light\" or \"herdr\", got {v}"
+                )),
             }
         }
         if let Some(v) = table.get("keys") {
@@ -344,19 +350,64 @@ editor = 42
     }
 
     #[test]
-    fn theme_key_records_inert_diagnostic() {
+    fn theme_key_selects_a_preset() {
         let tmp = tempdir().unwrap();
         let path = tmp.path().join("user.toml");
-        fs::write(&path, r#"theme = "dark""#).unwrap();
+        for (value, want) in [
+            ("dark", ThemeName::Dark),
+            ("light", ThemeName::Light),
+            ("herdr", ThemeName::Herdr),
+        ] {
+            fs::write(&path, format!("theme = \"{value}\"")).unwrap();
+            let cfg = Config::load_with_xdg(tmp.path(), None, Some(&path));
+            assert_eq!(cfg.theme, want);
+            assert!(cfg.diagnostics.is_empty(), "diags={:?}", cfg.diagnostics);
+        }
+    }
+
+    #[test]
+    fn unknown_theme_alone_stays_dark_with_a_diagnostic() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("user.toml");
+        fs::write(&path, r#"theme = "bogus""#).unwrap();
         let cfg = Config::load_with_xdg(tmp.path(), None, Some(&path));
-        assert_eq!(cfg.theme.as_deref(), Some("dark"));
+        assert_eq!(cfg.theme, ThemeName::Dark);
         assert!(
-            cfg.diagnostics
-                .iter()
-                .any(|d| d.contains("theme stored but inert")),
+            cfg.diagnostics.iter().any(|d| d.starts_with("theme:")),
             "diags={:?}",
             cfg.diagnostics
         );
+    }
+
+    #[test]
+    fn invalid_theme_in_a_later_file_keeps_the_earlier_value() {
+        let tmp = tempdir().unwrap();
+        let xdg = tmp.path().join("user.toml");
+        fs::write(&xdg, r#"theme = "light""#).unwrap();
+        fs::write(tmp.path().join(".wiki-reader.toml"), r#"theme = "neon""#).unwrap();
+        let cfg = Config::load_with_xdg(tmp.path(), None, Some(&xdg));
+        assert_eq!(
+            cfg.theme,
+            ThemeName::Light,
+            "a typo must not flip the user's theme"
+        );
+        assert!(
+            cfg.diagnostics.iter().any(|d| d.starts_with("theme:")),
+            "diags={:?}",
+            cfg.diagnostics
+        );
+        // A valid later value still overrides.
+        fs::write(tmp.path().join(".wiki-reader.toml"), r#"theme = "herdr""#).unwrap();
+        let cfg = Config::load_with_xdg(tmp.path(), None, Some(&xdg));
+        assert_eq!(cfg.theme, ThemeName::Herdr);
+    }
+
+    #[test]
+    fn missing_theme_is_dark_without_a_diagnostic() {
+        let tmp = tempdir().unwrap();
+        let cfg = Config::load_with_xdg(tmp.path(), None, None);
+        assert_eq!(cfg.theme, ThemeName::Dark);
+        assert!(cfg.diagnostics.is_empty(), "diags={:?}", cfg.diagnostics);
     }
 
     #[test]

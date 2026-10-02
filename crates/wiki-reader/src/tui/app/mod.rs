@@ -254,7 +254,7 @@ impl App {
             viewer_geom: crate::tui::regions::viewer::ViewerGeom::default(),
             nav_viewport: 20,
             hit_map: HitMap::default(),
-            theme: Theme::default(),
+            theme: Theme::from_name(config.theme),
             quit: false,
             chord: Chord::None,
             input_mode: InputMode::Normal,
@@ -414,7 +414,7 @@ impl App {
             graphics: self.images.cell_px().is_some(),
             tmux: env.tmux,
             herdr: env.herdr,
-            diagram_bg: wiki_reader_render::DEFAULT_DIAGRAM_BG,
+            diagram_palette: self.theme.diagram,
             diagram_sizes: self.images.diagram_sizes(),
         }
     }
@@ -1347,8 +1347,9 @@ impl App {
         let token = self.highlight_token;
         let (tx, rx) = mpsc::channel();
         self.highlight_rx = Some((token, rx));
+        let syntax = self.theme.syntax;
         std::thread::spawn(move || {
-            let hl = crate::tui::highlight::highlight_markdown(&source);
+            let hl = crate::tui::highlight::highlight_markdown(&source, syntax);
             let _ = tx.send(hl);
         });
     }
