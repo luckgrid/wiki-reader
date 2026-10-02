@@ -56,6 +56,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 - 2026-10-01: **Phase 2 feature complete; Phase 3 activated.** Nothing in scope is left: P2-24b (image diagrams) is P3-12 and P2-49 stays deferred. The adoption clock keeps running in the background and the formal exit verdict is still ≈ 2026-10-13; until then Phase 2 takes dogfood fixes only, and new features go to Phase 3
 - 2026-10-01: dogfood round 6 merged to main (#96); v0.1.0-alpha.4.1 cut (a point release, not alpha.5, since Phase 2 only takes fixes now); clock continues on alpha.4.1
 - 2026-10-02: P3-12c/d (Mermaid image tier + diagrams config) cut as v0.1.0-alpha.5; Phase 2 dogfood clock continues on alpha.5
+- 2026-10-02: dogfood request filed as P2-55: the copy-path key (`y`) should copy what has focus, including a nav folder, and work from either pane. Same day, three larger requests went to Phase 3 (P3-13 options window, P3-14 table viewer, P3-15 image and diagram viewer)
 
 ## Interim acceptance walk (2026-09-30)
 
@@ -166,6 +167,7 @@ Judged from tests, dogfood QA, and code — not a full interactive sweep of ever
 | P2-52 | Help overlay merges keys that do the same thing into one row joined with ` / ` (`↑ / Shift+Tab`, `k / ↑`, `/ / Ctrl+k`, `Ctrl+Enter / Shift+Enter`), driven by `help_entries()` so the generated keymap table matches; nav `Ctrl+→` opens the page in a new tab **and focuses the View** (`Action::NewTabFocusView`), `Ctrl+Enter` / `Shift+Enter` keep focus in the nav | TB / U3 | done | round 6 |
 | P2-53 | Event loop applies every queued event (cap 256) before one redraw, and discards unread input when the terminal is restored; a wheel flick no longer lags behind the pointer or leaks mouse reports into the shell | K1 | done | round 6; found when the wheel kept scrolling after the user stopped |
 | P2-54 | Heading colour and spacing: H3 and H4 share H2's peach (H5/H6 stay gray); H2 gets two blank rows above like H3–H6 (H1 unchanged) | D1 / U3 | done | round 6; supersedes the H3–H5 gray in P2-36 and widens P2-51 to H2–H6 |
+| P2-55 | Copy path follows focus: `y` already copies the viewed page's path from either pane (`Action::CopyPagePath`, `app/mod.rs`), but with the nav focused it ignores the selected row. Make it copy the **selected nav row**: a page's file path, or a folder's path for a group (the "file group"); with the View focused it keeps copying the viewed page. Status line says what was copied. Open: keep the path relative to the collection root (today) or offer the absolute path (e.g. `Y`-style second key or a config choice); `Y` is taken by "copy focused link target" | K4 | todo | dogfood request 2026-10-02; a papercut on an existing key, so it fits the freeze. Needs `UPDATE_DOCS=1` for the keymap table if help text changes |
 | P2-R38 | Copy fixes: empty table cells kept, wrapped cells rejoined, OSC 52 cap on the encoded payload (75 KB of text), held drag keeps scrolling | CP | done | round 2 follow-ups (PR 2) |
 | P2-24b | Image diagrams and images | D1 | moved | slipped to Phase 3 as P3-12 (2026-09-30), now split into P3-12a…d; images follow [ADR-0017](../decisions/0017-static-local-images-only.md) |
 
