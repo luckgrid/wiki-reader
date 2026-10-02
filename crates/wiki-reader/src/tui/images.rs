@@ -19,8 +19,8 @@ use ratatui_image::protocol::StatefulProtocol;
 use ratatui_image::{CropOptions, Resize, StatefulImage};
 use wiki_reader_core::images::MAX_IMAGE_PIXELS;
 use wiki_reader_render::{
-    DiagramRequest, DiagramSize, DiagramSizeCache, ImageSlot, SlotSource, rasterise_svg,
-    render_mermaid_for_pane,
+    DiagramRequest, DiagramSize, DiagramSizeCache, DiagramTextReason, ImageSlot, SlotSource,
+    is_legible, mermaid_to_svg, rasterise_svg, render_mermaid, svg_natural_size,
 };
 
 use crate::tui::theme::Theme;
@@ -239,18 +239,17 @@ impl SlotKey {
     }
 }
 
-/// Shared Mermaid RGBA cache so size-measure and slot-prepare share one raster.
-type MermaidRgba = Arc<Mutex<HashMap<(u64, (u8, u8, u8)), Arc<RgbaImage>>>>;
+/// Decode job payload (visible slot → protocol).
+struct DecodeJob {
+    key: SlotKey,
+    /// Mermaid fence body when `key` is Mermaid.
+    mermaid_source: Option<String>,
+    cell_px: (u16, u16),
+    max_cols: u16,
+}
 
 enum Job {
-    /// Decode/rasterise a visible slot into a protocol.
-    Decode {
-        key: SlotKey,
-        /// Mermaid fence body when `key` is Mermaid.
-        mermaid_source: Option<String>,
-        cell_px: (u16, u16),
-        max_cols: u16,
-    },
+    Decode(DecodeJob),
     /// Measure a Mermaid fence off-thread and fill the size cache (triggers a re-layout).
     Measure(DiagramRequest),
 }
@@ -308,7 +307,6 @@ fn prepare(
     mermaid_source: Option<&str>,
     cell_px: (u16, u16),
     max_cols: u16,
-    mermaid_rgba: &MermaidRgba,
 ) -> Result<DynamicImage, String> {
     let decoded = match &key.source {
         SlotKeySource::File { path, .. } => {
@@ -331,60 +329,31 @@ fn prepare(
                 decoded
             }
         }
-        SlotKeySource::Mermaid { hash, bg } => {
-            let cached = mermaid_rgba
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .get(&(*hash, *bg))
-                .cloned();
-            let rgba = if let Some(img) = cached {
-                img
-            } else {
-                let src = mermaid_source.ok_or_else(|| "missing mermaid source".to_owned())?;
-                let raster =
-                    render_mermaid_for_pane(src, cell_px, max_cols).map_err(|e| e.to_string())?;
-                let img = Arc::new(raster.image);
-                mermaid_rgba
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .insert((*hash, *bg), Arc::clone(&img));
-                img
-            };
-            DynamicImage::ImageRgba8((*rgba).clone())
+        SlotKeySource::Mermaid { .. } => {
+            let src = mermaid_source.ok_or_else(|| "missing mermaid source".to_owned())?;
+            let raster = render_mermaid(src).map_err(|e| e.to_string())?;
+            if !is_legible(raster.px_w, raster.px_h, cell_px, max_cols) {
+                return Err("diagram too wide for pane".into());
+            }
+            DynamicImage::ImageRgba8(raster.image)
         }
     };
     Ok(scale_and_pad(&decoded, key.cols, key.rows, font))
 }
 
-fn run_measure(
-    req: &DiagramRequest,
-    sizes: &DiagramSizeCache,
-    mermaid_rgba: &MermaidRgba,
-) -> Outcome {
-    match render_mermaid_for_pane(&req.source, req.cell_px, req.width) {
-        Ok(raster) => {
+/// SVG layout + natural size only — no RGBA. Rasterisation happens in [`prepare`].
+fn run_measure(req: &DiagramRequest, sizes: &DiagramSizeCache) -> Outcome {
+    match mermaid_to_svg(&req.source).and_then(|svg| svg_natural_size(svg.as_bytes())) {
+        Ok((px_w, px_h)) => {
+            sizes.insert(req.hash, req.bg, DiagramSize::Natural { px_w, px_h });
+            Outcome::DiagramSized
+        }
+        Err(err) => {
             sizes.insert(
                 req.hash,
-                req.width,
                 req.bg,
-                DiagramSize::Natural {
-                    px_w: raster.px_w,
-                    px_h: raster.px_h,
-                },
+                DiagramSize::Text(DiagramTextReason::Failed(err.to_string())),
             );
-            mermaid_rgba
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .insert((req.hash, req.bg), Arc::new(raster.image));
-            Outcome::DiagramSized
-        }
-        Err(wiki_reader_render::RasterError::TooWide) => {
-            sizes.insert(req.hash, req.width, req.bg, DiagramSize::Text);
-            Outcome::DiagramSized
-        }
-        Err(_) => {
-            // Parse/raster failure: mark Text so we stop re-requesting; text tier already shows.
-            sizes.insert(req.hash, req.width, req.bg, DiagramSize::Text);
             Outcome::DiagramSized
         }
     }
@@ -397,16 +366,15 @@ fn run_job(
     font: (u16, u16),
     picker: &Picker,
     sizes: &DiagramSizeCache,
-    mermaid_rgba: &MermaidRgba,
 ) -> Outcome {
     match job {
-        Job::Measure(req) => run_measure(req, sizes, mermaid_rgba),
-        Job::Decode {
+        Job::Measure(req) => run_measure(req, sizes),
+        Job::Decode(DecodeJob {
             key,
             mermaid_source,
             cell_px,
             max_cols,
-        } => {
+        }) => {
             if !wanted
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
@@ -414,16 +382,49 @@ fn run_job(
             {
                 return Outcome::Skipped;
             }
-            match prepare(
-                key,
-                font,
-                mermaid_source.as_deref(),
-                *cell_px,
-                *max_cols,
-                mermaid_rgba,
-            ) {
+            match prepare(key, font, mermaid_source.as_deref(), *cell_px, *max_cols) {
                 Ok(img) => Outcome::Ready(Box::new(picker.new_resize_protocol(img))),
                 Err(reason) => Outcome::Failed(reason),
+            }
+        }
+    }
+}
+
+/// Block until the next job arrives, preferring Decode over Measure.
+///
+/// `deferred` holds a Measure that was already received but yielded to a Decode.
+fn recv_prefer_decode(
+    decode_rx: &Receiver<DecodeJob>,
+    measure_rx: &Receiver<DiagramRequest>,
+    deferred: &mut Option<DiagramRequest>,
+) -> Option<Job> {
+    loop {
+        if let Ok(job) = decode_rx.try_recv() {
+            return Some(Job::Decode(job));
+        }
+        if let Some(req) = deferred.take() {
+            return Some(Job::Measure(req));
+        }
+        match measure_rx.recv_timeout(Duration::from_millis(20)) {
+            Ok(req) => {
+                if let Ok(job) = decode_rx.try_recv() {
+                    *deferred = Some(req);
+                    return Some(Job::Decode(job));
+                }
+                return Some(Job::Measure(req));
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                match decode_rx.try_recv() {
+                    Ok(job) => return Some(Job::Decode(job)),
+                    Err(mpsc::TryRecvError::Empty) => {}
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        // Decodes closed; drain measures.
+                        return measure_rx.recv().ok().map(Job::Measure);
+                    }
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                return decode_rx.recv().ok().map(Job::Decode);
             }
         }
     }
@@ -432,7 +433,8 @@ fn run_job(
 /// Owns the terminal's graphics capability, the decode worker and the prepared pictures.
 pub struct ImageManager {
     picker: Option<Picker>,
-    jobs: Option<Sender<Job>>,
+    decode_jobs: Option<Sender<DecodeJob>>,
+    measure_jobs: Option<Sender<DiagramRequest>>,
     done: Option<Receiver<Done>>,
     wanted: Wanted,
     entries: HashMap<SlotKey, Entry>,
@@ -443,7 +445,7 @@ pub struct ImageManager {
     /// Set when a Mermaid measure finished; the app re-lays out the page.
     diagram_relayout: bool,
     /// Hashes already queued for measure this session (avoid re-queue spam).
-    measuring: HashSet<(u64, u16, (u8, u8, u8))>,
+    measuring: HashSet<(u64, (u8, u8, u8))>,
     /// In-flight measure jobs (for `has_pending` / fast poll).
     measure_inflight: usize,
 }
@@ -454,7 +456,8 @@ impl ImageManager {
     pub fn disabled() -> Self {
         Self {
             picker: None,
-            jobs: None,
+            decode_jobs: None,
+            measure_jobs: None,
             done: None,
             wanted: Wanted::default(),
             entries: HashMap::new(),
@@ -470,19 +473,19 @@ impl ImageManager {
     /// Start the decode worker, sharing a Mermaid size cache with the renderer.
     #[must_use]
     pub fn enabled_with_sizes(picker: Picker, diagram_sizes: Arc<DiagramSizeCache>) -> Self {
-        let (job_tx, job_rx) = mpsc::channel::<Job>();
+        let (decode_tx, decode_rx) = mpsc::channel::<DecodeJob>();
+        let (measure_tx, measure_rx) = mpsc::channel::<DiagramRequest>();
         let (done_tx, done_rx) = mpsc::channel::<Done>();
         let wanted = Wanted::default();
         let worker_picker = picker.clone();
         let worker_wanted = Arc::clone(&wanted);
         let worker_sizes = Arc::clone(&diagram_sizes);
-        let mermaid_rgba = MermaidRgba::default();
-        let worker_rgba = Arc::clone(&mermaid_rgba);
         let font = picker.font_size();
         std::thread::spawn(move || {
-            while let Ok(job) = job_rx.recv() {
+            let mut deferred = None;
+            while let Some(job) = recv_prefer_decode(&decode_rx, &measure_rx, &mut deferred) {
                 let key = match &job {
-                    Job::Decode { key, .. } => Some(key.clone()),
+                    Job::Decode(DecodeJob { key, .. }) => Some(key.clone()),
                     Job::Measure(_) => None,
                 };
                 let outcome = run_job(
@@ -491,7 +494,6 @@ impl ImageManager {
                     (font.width, font.height),
                     &worker_picker,
                     &worker_sizes,
-                    &worker_rgba,
                 );
                 if done_tx.send(Done { key, outcome }).is_err() {
                     break;
@@ -500,7 +502,8 @@ impl ImageManager {
         });
         Self {
             picker: Some(picker),
-            jobs: Some(job_tx),
+            decode_jobs: Some(decode_tx),
+            measure_jobs: Some(measure_tx),
             done: Some(done_rx),
             wanted,
             entries: HashMap::new(),
@@ -528,24 +531,20 @@ impl ImageManager {
         })
     }
 
-    /// Queue Mermaid size measures from the latest render. Idempotent per (hash, width, bg).
+    /// Queue Mermaid size measures from the latest render. Idempotent per (hash, bg).
     pub fn queue_diagram_requests(&mut self, requests: &[DiagramRequest]) {
-        let Some(tx) = &self.jobs else {
+        let Some(tx) = &self.measure_jobs else {
             return;
         };
         for req in requests {
-            let key = (req.hash, req.width, req.bg);
-            if self
-                .diagram_sizes
-                .get(req.hash, req.width, req.bg)
-                .is_some()
-            {
+            let key = (req.hash, req.bg);
+            if self.diagram_sizes.get(req.hash, req.bg).is_some() {
                 continue;
             }
             if !self.measuring.insert(key) {
                 continue;
             }
-            if tx.send(Job::Measure(req.clone())).is_ok() {
+            if tx.send(req.clone()).is_ok() {
                 self.measure_inflight += 1;
             } else {
                 self.measuring.remove(&key);
@@ -624,7 +623,7 @@ impl ImageManager {
         self.entries.retain(|key, _| keep.contains(key));
         // Allow re-measure after a page change if sizes were cleared externally.
         self.measuring
-            .retain(|(hash, width, bg)| self.diagram_sizes.get(*hash, *width, *bg).is_none());
+            .retain(|(hash, bg)| self.diagram_sizes.get(*hash, *bg).is_none());
     }
 
     /// Drop least-recently-drawn prepared pictures until the cache fits its budget. Pictures on
@@ -671,8 +670,8 @@ impl ImageManager {
             SlotSource::File { .. } => None,
         };
         let cell_px = self.cell_px().unwrap_or((8, 17));
-        let queued = self.jobs.as_ref().is_some_and(|tx| {
-            tx.send(Job::Decode {
+        let queued = self.decode_jobs.as_ref().is_some_and(|tx| {
+            tx.send(DecodeJob {
                 key: key.clone(),
                 mermaid_source,
                 cell_px,
@@ -1029,7 +1028,7 @@ mod tests {
         assert_eq!(
             accepted_protocol(ProtocolType::Sixel, cell, Accept::KittyOrIterm2),
             None,
-            "Sixel stays text until P3-12d"
+            "Sixel is never accepted (text tier is better)"
         );
         assert_eq!(
             accepted_protocol(ProtocolType::Halfblocks, cell, Accept::KittyOrIterm2),
@@ -1147,22 +1146,21 @@ mod tests {
         let wanted = Wanted::default();
         let picker = Picker::halfblocks();
         let sizes = DiagramSizeCache::new();
-        let rgba = MermaidRgba::default();
-        let job = Job::Decode {
+        let job = Job::Decode(DecodeJob {
             key: key("gone.png"),
             mermaid_source: None,
             cell_px: (10, 20),
             max_cols: 4,
-        };
+        });
         // Not wanted: skipped, even though the file does not exist (it was never opened).
         assert!(matches!(
-            run_job(&job, &wanted, (10, 20), &picker, &sizes, &rgba),
+            run_job(&job, &wanted, (10, 20), &picker, &sizes),
             Outcome::Skipped
         ));
         // Wanted: it is decoded, and a missing file is a failure rather than a skip.
         wanted.lock().unwrap().insert(key("gone.png"));
         assert!(matches!(
-            run_job(&job, &wanted, (10, 20), &picker, &sizes, &rgba),
+            run_job(&job, &wanted, (10, 20), &picker, &sizes),
             Outcome::Failed(_)
         ));
     }
@@ -1182,9 +1180,8 @@ mod tests {
             cols: 10,
             rows: 3,
         };
-        let rgba = MermaidRgba::default();
         // Slot is 80×51 px: the 4:1 picture scales to 80×20, padded to the slot size.
-        let img = prepare(&key, (8, 17), None, (8, 17), 10, &rgba).expect("prepare");
+        let img = prepare(&key, (8, 17), None, (8, 17), 10).expect("prepare");
         assert_eq!((img.width(), img.height()), (80, 51));
         let rgba_img = img.to_rgba8();
         assert_eq!(
@@ -1212,7 +1209,82 @@ mod tests {
             cols: 4,
             rows: 2,
         };
-        let rgba = MermaidRgba::default();
-        assert!(prepare(&key, (8, 17), None, (8, 17), 4, &rgba).is_err());
+        assert!(prepare(&key, (8, 17), None, (8, 17), 4).is_err());
+    }
+
+    #[test]
+    fn measure_stores_natural_size_without_raster_and_survives_width_change() {
+        let sizes = DiagramSizeCache::new();
+        let src = "flowchart LR\n  A[Build] --> B[Deploy]\n";
+        let hash = wiki_reader_render::content_hash(src);
+        let req = DiagramRequest {
+            hash,
+            source: src.into(),
+            width: 80,
+            bg: (30, 32, 36),
+            cell_px: (8, 17),
+        };
+        assert!(matches!(run_measure(&req, &sizes), Outcome::DiagramSized));
+        let first = sizes.get(hash, req.bg).expect("cached");
+        // Same key for every width: layout re-checks legibility.
+        assert_eq!(sizes.get(hash, req.bg), Some(first.clone()));
+        assert!(matches!(first, DiagramSize::Natural { .. }));
+    }
+
+    #[test]
+    fn measure_records_parse_failure_reason() {
+        let sizes = DiagramSizeCache::new();
+        let src = "not a real mermaid {{{";
+        let hash = wiki_reader_render::content_hash(src);
+        let req = DiagramRequest {
+            hash,
+            source: src.into(),
+            width: 80,
+            bg: (30, 32, 36),
+            cell_px: (8, 17),
+        };
+        assert!(matches!(run_measure(&req, &sizes), Outcome::DiagramSized));
+        match sizes.get(hash, req.bg) {
+            Some(DiagramSize::Text(DiagramTextReason::Failed(msg))) => {
+                assert!(!msg.is_empty(), "{msg}");
+            }
+            other => panic!("expected Failed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decode_is_preferred_over_pending_measure() {
+        let (decode_tx, decode_rx) = mpsc::channel::<DecodeJob>();
+        let (measure_tx, measure_rx) = mpsc::channel::<DiagramRequest>();
+        let mut deferred = None;
+        measure_tx
+            .send(DiagramRequest {
+                hash: 1,
+                source: "graph LR; A --> B".into(),
+                width: 80,
+                bg: (0, 0, 0),
+                cell_px: (8, 17),
+            })
+            .unwrap();
+        decode_tx
+            .send(DecodeJob {
+                key: key("vis.png"),
+                mermaid_source: None,
+                cell_px: (8, 17),
+                max_cols: 4,
+            })
+            .unwrap();
+        let job = recv_prefer_decode(&decode_rx, &measure_rx, &mut deferred).expect("job");
+        assert!(
+            matches!(job, Job::Decode(_)),
+            "decode must win when both are pending"
+        );
+        assert!(
+            deferred.is_some()
+                || matches!(
+                    recv_prefer_decode(&decode_rx, &measure_rx, &mut deferred),
+                    Some(Job::Measure(_))
+                )
+        );
     }
 }

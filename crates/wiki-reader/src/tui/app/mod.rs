@@ -411,7 +411,7 @@ impl App {
             diagram_mode: self.diagram_mode,
             image_root: Some(self.provider.root().to_path_buf()),
             cell_px: self.images.cell_px(),
-            kitty_graphics: self.images.cell_px().is_some(),
+            graphics: self.images.cell_px().is_some(),
             tmux: env.tmux,
             herdr: env.herdr,
             diagram_bg: wiki_reader_render::DEFAULT_DIAGRAM_BG,
@@ -437,6 +437,7 @@ impl App {
     }
 
     /// After a Mermaid size measure, re-layout the current page keeping the source-line scroll.
+    /// Preserves text selection: display coords may drift slightly when slot heights change.
     pub(crate) fn relayout_after_diagram_size(&mut self) {
         if !matches!(self.doc, PageDoc::Rendered(_)) {
             return;
@@ -444,7 +445,7 @@ impl App {
         let key = self.navigator.tab().current().page.clone();
         let source = self.doc.source_cursor(self.cursor_line);
         let source_scroll = self.doc.source_cursor(self.scroll);
-        self.reload_page_keeping_view(&key, source, source_scroll);
+        self.reload_page_keeping_view_ex(&key, source, source_scroll, false, false);
         self.images
             .queue_diagram_requests(self.doc.diagram_requests());
         self.images.retain_for(self.doc.image_slots());
@@ -1283,7 +1284,7 @@ impl App {
                     // Index may lag the watcher; force a fresh parse for this paint and
                     // kick a rebuild so backlinks/nav catch up.
                     self.note_watcher_dirty(true);
-                    self.reload_page_keeping_view_ex(&key, source, source_scroll, true);
+                    self.reload_page_keeping_view_ex(&key, source, source_scroll, true, true);
                 }
                 if !exit.success {
                     self.message = if saved {
@@ -1552,7 +1553,7 @@ impl App {
     }
 
     fn reload_page_keeping_view(&mut self, key: &PageKey, source_cursor: u32, source_scroll: u32) {
-        self.reload_page_keeping_view_ex(key, source_cursor, source_scroll, false);
+        self.reload_page_keeping_view_ex(key, source_cursor, source_scroll, false, true);
     }
 
     /// Reload the current page, optionally ignoring the indexed `Page` so parse
@@ -1563,6 +1564,7 @@ impl App {
         source_cursor: u32,
         source_scroll: u32,
         fresh_parse: bool,
+        clear_selection: bool,
     ) {
         match self.provider.read(key) {
             Ok(src) => {
@@ -1593,8 +1595,10 @@ impl App {
                     }
                 };
                 self.sync_images_after_render();
-                self.selection = None;
-                self.selecting = false;
+                if clear_selection {
+                    self.selection = None;
+                    self.selecting = false;
+                }
                 self.restore_view_after_relayout(source_cursor, source_scroll);
                 if matches!(mode, ViewMode::Raw) {
                     self.spawn_highlight(src);

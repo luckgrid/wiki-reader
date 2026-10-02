@@ -44,17 +44,26 @@ pub struct ImageSlot {
     pub alt: String,
 }
 
-/// Natural size known after an off-thread Mermaid (or SVG) measure, or a forced text tier.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DiagramSize {
-    /// Natural SVG/raster pixel size (legible for the requested width).
-    Natural { px_w: u32, px_h: u32 },
-    /// Prefer the text (or source) tier for this content/width/background.
-    Text,
+/// Why a Mermaid fence stays on the text tier after a measure (or permanent failure).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DiagramTextReason {
+    /// Natural size is known but does not fit the pane at a legible scale.
+    TooWide,
+    /// Parse / SVG layout failed; message is shown in the tier header.
+    Failed(String),
 }
 
-/// Shared `(content_hash, width_cols, bg) → size` map filled by the image worker.
-type DiagramSizeKey = (u64, u16, (u8, u8, u8));
+/// Natural size known after an off-thread Mermaid measure, or a forced text tier.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DiagramSize {
+    /// Natural SVG pixel size (width legibility is decided at layout time).
+    Natural { px_w: u32, px_h: u32 },
+    /// Prefer the text (or source) tier for this content/background.
+    Text(DiagramTextReason),
+}
+
+/// Shared `(content_hash, bg) → size` map filled by the image worker.
+type DiagramSizeKey = (u64, (u8, u8, u8));
 
 #[derive(Debug, Default)]
 pub struct DiagramSizeCache {
@@ -68,13 +77,13 @@ impl DiagramSizeCache {
     }
 
     #[must_use]
-    pub fn get(&self, hash: u64, width: u16, bg: (u8, u8, u8)) -> Option<DiagramSize> {
-        self.inner.lock().ok()?.get(&(hash, width, bg)).copied()
+    pub fn get(&self, hash: u64, bg: (u8, u8, u8)) -> Option<DiagramSize> {
+        self.inner.lock().ok()?.get(&(hash, bg)).cloned()
     }
 
-    pub fn insert(&self, hash: u64, width: u16, bg: (u8, u8, u8), size: DiagramSize) {
+    pub fn insert(&self, hash: u64, bg: (u8, u8, u8), size: DiagramSize) {
         if let Ok(mut map) = self.inner.lock() {
-            map.insert((hash, width, bg), size);
+            map.insert((hash, bg), size);
         }
     }
 }
@@ -100,6 +109,19 @@ pub(crate) enum ImagePlan {
     Placeholder(ImageReject),
 }
 
+/// Fit scale for `px_w × px_h` into `max_cols` × [`MAX_SLOT_ROWS`] at `cell_px`. Never upscales.
+#[must_use]
+pub fn fit_scale(px_w: u32, px_h: u32, cell_px: (u16, u16), max_cols: u16) -> f64 {
+    let cell_w = f64::from(cell_px.0.max(1));
+    let cell_h = f64::from(cell_px.1.max(1));
+    let w = f64::from(px_w.max(1));
+    let h = f64::from(px_h.max(1));
+    let max_cols = max_cols.max(1);
+    (f64::from(max_cols) * cell_w / w)
+        .min(f64::from(MAX_SLOT_ROWS) * cell_h / h)
+        .min(1.0)
+}
+
 /// Columns × rows for an image of `px_w × px_h` pixels: natural size, shrunk to fit
 /// `max_cols` and [`MAX_SLOT_ROWS`] while keeping the aspect ratio. Never upscales.
 #[must_use]
@@ -110,9 +132,7 @@ pub fn slot_geometry(px_w: u32, px_h: u32, cell_px: (u16, u16), max_cols: u16) -
     let w = f64::from(px_w.max(1));
     let h = f64::from(px_h.max(1));
     let max_cols = max_cols.max(1);
-    let scale = (f64::from(max_cols) * cell_w / w)
-        .min(f64::from(MAX_SLOT_ROWS) * cell_h / h)
-        .min(1.0);
+    let scale = fit_scale(px_w, px_h, cell_px, max_cols);
     let cols = (w * scale / cell_w).ceil().clamp(1.0, f64::from(max_cols));
     let rows = (h * scale / cell_h)
         .ceil()
@@ -253,11 +273,10 @@ mod tests {
     }
 
     #[test]
-    fn size_cache_key_includes_bg_and_width() {
+    fn size_cache_key_is_hash_and_bg() {
         let cache = DiagramSizeCache::new();
         cache.insert(
             1,
-            80,
             (30, 32, 36),
             DiagramSize::Natural {
                 px_w: 100,
@@ -265,17 +284,20 @@ mod tests {
             },
         );
         assert_eq!(
-            cache.get(1, 80, (30, 32, 36)),
+            cache.get(1, (30, 32, 36)),
             Some(DiagramSize::Natural {
                 px_w: 100,
                 px_h: 50
             })
         );
+        // Width is not part of the key: the same natural size serves every pane width.
         assert_eq!(
-            cache.get(1, 60, (30, 32, 36)),
-            None,
-            "width is part of the key"
+            cache.get(1, (30, 32, 36)),
+            Some(DiagramSize::Natural {
+                px_w: 100,
+                px_h: 50
+            })
         );
-        assert_eq!(cache.get(1, 80, (0, 0, 0)), None, "bg is part of the key");
+        assert_eq!(cache.get(1, (0, 0, 0)), None, "bg is part of the key");
     }
 }

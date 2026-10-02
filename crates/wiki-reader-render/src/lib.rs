@@ -11,8 +11,8 @@ pub use diagrams::{
     is_mermaid_lang, select_tier,
 };
 pub use images::{
-    DiagramRequest, DiagramSize, DiagramSizeCache, ImageSlot, MAX_SLOT_ROWS, SlotSource,
-    empty_diagram_size_cache, slot_geometry,
+    DiagramRequest, DiagramSize, DiagramSizeCache, DiagramTextReason, ImageSlot, MAX_SLOT_ROWS,
+    SlotSource, empty_diagram_size_cache, fit_scale, slot_geometry,
 };
 pub use link_span::{LinkClass, LinkId, LinkSpan};
 pub use mermaid_raster::{
@@ -1508,7 +1508,7 @@ mod tests {
         let src = format!("```mermaid\n{body}```\n");
         let sizes = empty_diagram_size_cache();
         let opts = RenderOpts {
-            kitty_graphics: true,
+            graphics: true,
             cell_px: Some((8, 17)),
             diagram_sizes: Arc::clone(&sizes),
             ..RenderOpts::default()
@@ -1546,16 +1546,12 @@ mod tests {
         );
 
         let req = cold.diagram_requests[0].clone();
-        let raster =
-            render_mermaid_for_pane(&req.source, (8, 17), 80).expect("compact diagram is legible");
+        let svg = mermaid_to_svg(&req.source).expect("svg");
+        let (px_w, px_h) = svg_natural_size(svg.as_bytes()).expect("size");
         sizes.insert(
             req.hash,
-            80,
             DEFAULT_DIAGRAM_BG,
-            DiagramSize::Natural {
-                px_w: raster.px_w,
-                px_h: raster.px_h,
-            },
+            DiagramSize::Natural { px_w, px_h },
         );
         let warm = render_with(&src, None, &key, &index, 80, &opts);
         assert_eq!(
@@ -1569,6 +1565,126 @@ mod tests {
             SlotSource::Mermaid { .. }
         ));
         assert!(warm.diagram_requests.is_empty());
+    }
+
+    #[test]
+    fn mermaid_size_cache_hit_across_widths_requests_once() {
+        let body = "flowchart LR\n  A[Build] --> B[Deploy]\n";
+        let src = format!("```mermaid\n{body}```\n");
+        let sizes = empty_diagram_size_cache();
+        let opts = RenderOpts {
+            graphics: true,
+            cell_px: Some((8, 17)),
+            diagram_sizes: Arc::clone(&sizes),
+            ..RenderOpts::default()
+        };
+        let key = empty_key();
+        let index = wiki_reader_core::Index {
+            collection_id: "t".into(),
+            pages: HashMap::default(),
+            edges: vec![],
+            by_from: HashMap::default(),
+            by_to: HashMap::default(),
+            by_id: HashMap::default(),
+            by_path: HashMap::default(),
+            diagnostics: vec![],
+        };
+        let cold = render_with(&src, None, &key, &index, 80, &opts);
+        assert_eq!(cold.diagram_requests.len(), 1);
+        let req = &cold.diagram_requests[0];
+        let svg = mermaid_to_svg(&req.source).expect("svg");
+        let (px_w, px_h) = svg_natural_size(svg.as_bytes()).expect("size");
+        sizes.insert(
+            req.hash,
+            DEFAULT_DIAGRAM_BG,
+            DiagramSize::Natural { px_w, px_h },
+        );
+        for w in [80u16, 60, 80] {
+            let doc = render_with(&src, None, &key, &index, w, &opts);
+            assert!(
+                doc.diagram_requests.is_empty(),
+                "width {w} must not re-measure"
+            );
+        }
+    }
+
+    #[test]
+    fn mermaid_failed_measure_shows_parse_reason() {
+        // Valid Mermaid so the text tier succeeds; the Failed cache entry supplies the header.
+        let body = "flowchart LR\n  A[Build] --> B[Deploy]\n";
+        let src = format!("```mermaid\n{body}```\n");
+        let sizes = empty_diagram_size_cache();
+        let opts = RenderOpts {
+            graphics: true,
+            cell_px: Some((8, 17)),
+            diagram_sizes: Arc::clone(&sizes),
+            ..RenderOpts::default()
+        };
+        let key = empty_key();
+        let index = wiki_reader_core::Index {
+            collection_id: "t".into(),
+            pages: HashMap::default(),
+            edges: vec![],
+            by_from: HashMap::default(),
+            by_to: HashMap::default(),
+            by_id: HashMap::default(),
+            by_path: HashMap::default(),
+            diagnostics: vec![],
+        };
+        let cold = render_with(&src, None, &key, &index, 80, &opts);
+        let req = cold.diagram_requests[0].clone();
+        sizes.insert(
+            req.hash,
+            DEFAULT_DIAGRAM_BG,
+            DiagramSize::Text(DiagramTextReason::Failed("parse boom".into())),
+        );
+        let warm = render_with(&src, None, &key, &index, 80, &opts);
+        let plain = warm.lines.join("\n");
+        assert!(
+            plain.contains("parse boom"),
+            "failed reason in header: {plain}"
+        );
+    }
+
+    #[test]
+    fn mermaid_illegible_natural_size_shows_too_wide() {
+        let body = "flowchart LR\n  A[Build] --> B[Deploy]\n";
+        let src = format!("```mermaid\n{body}```\n");
+        let sizes = empty_diagram_size_cache();
+        let opts = RenderOpts {
+            graphics: true,
+            cell_px: Some((8, 17)),
+            diagram_sizes: Arc::clone(&sizes),
+            ..RenderOpts::default()
+        };
+        let key = empty_key();
+        let index = wiki_reader_core::Index {
+            collection_id: "t".into(),
+            pages: HashMap::default(),
+            edges: vec![],
+            by_from: HashMap::default(),
+            by_to: HashMap::default(),
+            by_id: HashMap::default(),
+            by_path: HashMap::default(),
+            diagnostics: vec![],
+        };
+        let cold = render_with(&src, None, &key, &index, 80, &opts);
+        let hash = cold.diagram_requests[0].hash;
+        sizes.insert(
+            hash,
+            DEFAULT_DIAGRAM_BG,
+            DiagramSize::Natural {
+                px_w: 8000,
+                px_h: 400,
+            },
+        );
+        let warm = render_with(&src, None, &key, &index, 80, &opts);
+        assert!(warm.image_slots.is_empty());
+        let plain = warm.lines.join("\n");
+        assert!(
+            plain.contains("too wide"),
+            "legibility miss shows too wide: {plain}"
+        );
     }
 
     #[test]
@@ -1593,7 +1709,7 @@ mod tests {
             },
             80,
             &RenderOpts {
-                kitty_graphics: true,
+                graphics: true,
                 cell_px: Some((8, 17)),
                 diagram_sizes: Arc::clone(&probe_sizes),
                 ..RenderOpts::default()
@@ -1601,27 +1717,18 @@ mod tests {
         );
         let fence_body = probe.diagram_requests[0].source.clone();
         let fence_hash = probe.diagram_requests[0].hash;
+        let svg = mermaid_to_svg(&fence_body).expect("svg");
+        let (px_w, px_h) = svg_natural_size(svg.as_bytes()).expect("size");
         for w in [40u16, 60, 80, 120] {
             let sizes = empty_diagram_size_cache();
-            match render_mermaid_for_pane(&fence_body, (8, 17), w) {
-                Ok(img) => {
-                    sizes.insert(
-                        fence_hash,
-                        w,
-                        DEFAULT_DIAGRAM_BG,
-                        DiagramSize::Natural {
-                            px_w: img.px_w,
-                            px_h: img.px_h,
-                        },
-                    );
-                }
-                Err(RasterError::TooWide) => {
-                    sizes.insert(fence_hash, w, DEFAULT_DIAGRAM_BG, DiagramSize::Text);
-                }
-                Err(e) => panic!("{e}"),
-            }
+            // One natural size per diagram; legibility is decided per width at layout.
+            sizes.insert(
+                fence_hash,
+                DEFAULT_DIAGRAM_BG,
+                DiagramSize::Natural { px_w, px_h },
+            );
             let opts = RenderOpts {
-                kitty_graphics: true,
+                graphics: true,
                 cell_px: Some((8, 17)),
                 diagram_sizes: sizes,
                 ..RenderOpts::default()

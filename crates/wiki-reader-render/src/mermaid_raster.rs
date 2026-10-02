@@ -6,7 +6,7 @@ use image::RgbaImage;
 use mermaid_rs_renderer::{RenderOptions, render_with_options};
 use resvg::{tiny_skia, usvg};
 
-use crate::images::slot_geometry;
+use crate::images::fit_scale;
 
 const FONT: &[u8] = include_bytes!("../fonts/NotoSans.ttf");
 /// Private family so mermaid-rs-renderer uses fallback metrics instead of a system font.
@@ -126,18 +126,7 @@ pub fn render_mermaid(src: &str) -> Result<RasterImage, RasterError> {
 /// True when fitting `px_w`×`px_h` into `max_cols` at `cell_px` keeps scale ≥ [`MIN_LEGIBLE_SCALE`].
 #[must_use]
 pub fn is_legible(px_w: u32, px_h: u32, cell_px: (u16, u16), max_cols: u16) -> bool {
-    let cell_w = f64::from(cell_px.0.max(1));
-    let w = f64::from(px_w.max(1));
-    let max_cols = max_cols.max(1);
-    // Same scale formula as `slot_geometry`, but only the width/height fit matter for legibility.
-    let scale = (f64::from(max_cols) * cell_w / w)
-        .min({
-            let cell_h = f64::from(cell_px.1.max(1));
-            let h = f64::from(px_h.max(1));
-            f64::from(crate::images::MAX_SLOT_ROWS) * cell_h / h
-        })
-        .min(1.0);
-    scale >= MIN_LEGIBLE_SCALE
+    fit_scale(px_w, px_h, cell_px, max_cols) >= MIN_LEGIBLE_SCALE
 }
 
 /// Rasterise Mermaid and reject results that would be illegible in the pane.
@@ -154,7 +143,6 @@ pub fn render_mermaid_for_pane(
     if !is_legible(rendered.px_w, rendered.px_h, cell_px, max_cols) {
         return Err(RasterError::TooWide);
     }
-    let _ = slot_geometry(rendered.px_w, rendered.px_h, cell_px, max_cols);
     Ok(rendered)
 }
 

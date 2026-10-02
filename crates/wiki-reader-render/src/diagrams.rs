@@ -12,17 +12,21 @@ use wiki_reader_core::config::DiagramMode;
 pub struct DiagramEnv {
     pub tmux: bool,
     pub herdr: bool,
-    /// Confirmed graphics protocol from the TUI probe — never inferred from `HERDR_ENV` alone.
+    /// Confirmed graphics protocol from the TUI probe — never inferred from env vars alone.
     pub kitty_graphics: bool,
 }
 
 impl DiagramEnv {
-    /// Read tmux / herdr env vars. Graphics capability is supplied by the caller (probe result).
+    /// Read tmux / herdr env vars.
+    ///
+    /// `kitty_graphics` is always `false` here: graphics capability comes only from the
+    /// TUI startup probe (set by the caller on a copy of this env, or via `RenderOpts::graphics`).
     #[must_use]
     pub fn from_process() -> Self {
         Self {
             tmux: std::env::var_os("TMUX").is_some(),
             herdr: std::env::var_os("HERDR_ENV").as_deref() == Some(std::ffi::OsStr::new("1")),
+            // Probe result only — never guess from TERM / HERDR_ENV.
             kitty_graphics: false,
         }
     }
@@ -47,7 +51,7 @@ pub fn select_tier(mode: DiagramMode, env: &DiagramEnv) -> DiagramTier {
         };
     }
     match mode {
-        DiagramMode::Image => {
+        DiagramMode::Image | DiagramMode::Auto => {
             if env.kitty_graphics {
                 DiagramTier::Image
             } else {
@@ -56,19 +60,6 @@ pub fn select_tier(mode: DiagramMode, env: &DiagramEnv) -> DiagramTier {
         }
         DiagramMode::Text => DiagramTier::Text,
         DiagramMode::Source => DiagramTier::Source,
-        DiagramMode::Auto => {
-            if env.herdr {
-                if env.kitty_graphics {
-                    DiagramTier::Image
-                } else {
-                    DiagramTier::Text
-                }
-            } else if env.kitty_graphics {
-                DiagramTier::Image
-            } else {
-                DiagramTier::Text
-            }
-        }
     }
 }
 

@@ -427,3 +427,27 @@ fn mermaid_diagram_swaps_from_text_to_halfblocks_slot() {
         "diagram returns after the popup closes"
     );
 }
+
+#[test]
+fn diagram_relayout_preserves_text_selection() {
+    use crate::tui::selection::{Pos, Selection};
+
+    let mut app = graphics_app(&mermaid_fixture());
+    let key = wiki_reader_core::provider::PageKey {
+        collection_id: app.navigator.index().collection_id.clone(),
+        relative_path: PathBuf::from("common-types.md"),
+    };
+    app.load_page(&key);
+    let sel = Selection {
+        anchor: Pos { line: 1, col: 0 },
+        head: Pos { line: 2, col: 5 },
+    };
+    app.selection = Some(sel);
+    app.selecting = true;
+    app.relayout_after_diagram_size();
+    assert_eq!(app.selection, Some(sel));
+    assert!(
+        app.selecting,
+        "drag must survive a measure-driven re-layout"
+    );
+}

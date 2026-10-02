@@ -19,8 +19,8 @@ use crate::diagrams::{
     DiagramEnv, DiagramTier, content_hash, diagram_lines_with_reason, select_tier,
 };
 use crate::images::{
-    DiagramRequest, DiagramSize, DiagramSizeCache, ImagePlan, ImageSlot, SlotSource,
-    empty_diagram_size_cache, placeholder_text, plan_image, slot_geometry,
+    DiagramRequest, DiagramSize, DiagramSizeCache, DiagramTextReason, ImagePlan, ImageSlot,
+    SlotSource, empty_diagram_size_cache, placeholder_text, plan_image, slot_geometry,
 };
 use crate::{LinkClass, LinkId, LinkSpan};
 
@@ -183,7 +183,7 @@ pub struct RenderOpts {
     /// then reserve rows ([`RenderedDoc::image_slots`]); `None` keeps the text placeholder.
     pub cell_px: Option<(u16, u16)>,
     /// Confirmed graphics protocol from the TUI probe (`cell_px.is_some()`). Never from `HERDR_ENV`.
-    pub kitty_graphics: bool,
+    pub graphics: bool,
     /// `$TMUX` set — forces the text tier (ADR-0004).
     pub tmux: bool,
     /// `HERDR_ENV=1` — Kitty-only image preference when graphics are confirmed.
@@ -201,7 +201,7 @@ impl Default for RenderOpts {
             diagram_mode: wiki_reader_core::config::DiagramMode::Auto,
             image_root: None,
             cell_px: None,
-            kitty_graphics: false,
+            graphics: false,
             tmux: false,
             herdr: false,
             diagram_bg: DEFAULT_DIAGRAM_BG,
@@ -250,7 +250,7 @@ pub fn render_with(
     state.diagram_mode = opts.diagram_mode;
     state.image_root.clone_from(&opts.image_root);
     state.cell_px = opts.cell_px;
-    state.kitty_graphics = opts.kitty_graphics;
+    state.graphics = opts.graphics;
     state.tmux = opts.tmux;
     state.herdr = opts.herdr;
     state.diagram_bg = opts.diagram_bg;
@@ -406,7 +406,7 @@ struct LayoutState<'a> {
     diagram_mode: wiki_reader_core::config::DiagramMode,
     image_root: Option<PathBuf>,
     cell_px: Option<(u16, u16)>,
-    kitty_graphics: bool,
+    graphics: bool,
     tmux: bool,
     herdr: bool,
     diagram_bg: (u8, u8, u8),
@@ -479,7 +479,7 @@ impl<'a> LayoutState<'a> {
             diagram_mode: wiki_reader_core::config::DiagramMode::Auto,
             image_root: None,
             cell_px: None,
-            kitty_graphics: false,
+            graphics: false,
             tmux: false,
             herdr: false,
             diagram_bg: DEFAULT_DIAGRAM_BG,
@@ -589,26 +589,25 @@ impl<'a> LayoutState<'a> {
         let env = DiagramEnv {
             tmux: self.tmux,
             herdr: self.herdr,
-            kitty_graphics: self.kitty_graphics && self.cell_px.is_some(),
+            kitty_graphics: self.graphics && self.cell_px.is_some(),
         };
         let tier = select_tier(self.diagram_mode, &env);
         let hash = content_hash(body);
         let bg = self.diagram_bg;
 
         let image_plan = if tier == DiagramTier::Image {
-            match self.diagram_sizes.get(hash, width, bg) {
+            match self.diagram_sizes.get(hash, bg) {
                 Some(DiagramSize::Natural { px_w, px_h }) => {
                     let cell_px = self.cell_px.unwrap_or((8, 17));
                     if crate::mermaid_raster::is_legible(px_w, px_h, cell_px, width) {
                         let (cols, rows) = slot_geometry(px_w, px_h, cell_px, width);
                         Some((cols, rows))
                     } else {
-                        self.diagram_sizes
-                            .insert(hash, width, bg, DiagramSize::Text);
+                        // Width-scoped: do not overwrite the natural-size cache entry.
                         None
                     }
                 }
-                Some(DiagramSize::Text) => None,
+                Some(DiagramSize::Text(_)) => None,
                 None => {
                     if let Some(cell_px) = self.cell_px {
                         self.diagram_requests.push(DiagramRequest {
@@ -655,14 +654,15 @@ impl<'a> LayoutState<'a> {
                 alt: "diagram".into(),
             });
         } else {
-            let reason = match tier {
-                DiagramTier::Image if self.cell_px.is_none() || !self.kitty_graphics => {
-                    Some("no graphics protocol")
+            let reason_owned: Option<String> = match tier {
+                DiagramTier::Image if self.cell_px.is_none() || !self.graphics => {
+                    Some("no graphics protocol".into())
                 }
-                DiagramTier::Image => match self.diagram_sizes.get(hash, width, bg) {
-                    Some(DiagramSize::Text | DiagramSize::Natural { .. }) => {
-                        Some("diagram too wide for pane")
-                    }
+                DiagramTier::Image => match self.diagram_sizes.get(hash, bg) {
+                    Some(DiagramSize::Text(DiagramTextReason::Failed(msg))) => Some(msg),
+                    Some(
+                        DiagramSize::Text(DiagramTextReason::TooWide) | DiagramSize::Natural { .. },
+                    ) => Some("too wide".into()),
                     None => None, // measuring: plain text tier until the cache warms
                 },
                 DiagramTier::Text
@@ -672,10 +672,11 @@ impl<'a> LayoutState<'a> {
                             wiki_reader_core::config::DiagramMode::Image
                         ) =>
                 {
-                    Some("tmux: text tier")
+                    Some("tmux: text tier".into())
                 }
                 _ => None,
             };
+            let reason = reason_owned.as_deref();
             let paint_tier = if tier == DiagramTier::Image {
                 DiagramTier::Text
             } else {
