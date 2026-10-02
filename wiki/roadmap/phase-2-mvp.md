@@ -55,7 +55,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 - 2026-10-01: dogfood round 6: help window merges alternate keys onto one row and nav `Ctrl+→` opens the new tab and focuses its View (P2-52); mouse-wheel flicks no longer back up the event queue (P2-53); H3/H4 take H2's peach and H2 gets two blank rows above (P2-54). Not reproduced on demand: the runaway scroll, which the user saw once and which the fix targets by design (one redraw per batch, not per event)
 - 2026-10-01: **Phase 2 feature complete; Phase 3 activated.** Nothing in scope is left: P2-24b (image diagrams) is P3-12 and P2-49 stays deferred. The adoption clock keeps running in the background and the formal exit verdict is still ≈ 2026-10-13; until then Phase 2 takes dogfood fixes only, and new features go to Phase 3
 - 2026-10-01: dogfood round 6 merged to main (#96); v0.1.0-alpha.4.1 cut (a point release, not alpha.5, since Phase 2 only takes fixes now); clock continues on alpha.4.1
-- 2026-10-02: P3-12c/d (Mermaid image tier + diagrams config) ready for v0.1.0-alpha.5 (tag after merge); Phase 2 dogfood clock continues on alpha.5 once tagged
+- 2026-10-02: P3-12c/d (Mermaid image tier + diagrams config) cut as v0.1.0-alpha.5; Phase 2 dogfood clock continues on alpha.5
 
 ## Interim acceptance walk (2026-09-30)
 
