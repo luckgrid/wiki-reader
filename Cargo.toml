@@ -33,6 +33,8 @@ globset = "0.4.16"
 unicode-width = "0.2.0"
 shell-words = "1.1.1"
 mermaid-text = "0.56.1"
+mermaid-rs-renderer = { version = "0.3.1", default-features = false }
+resvg = { version = "0.48.1", default-features = false, features = ["text"] }
 signal-hook = "0.3.18"
 wiki-reader-core = { path = "crates/wiki-reader-core", version = "0.1.0-alpha.4.1" }
 wiki-reader-render = { path = "crates/wiki-reader-render", version = "0.1.0-alpha.4.1" }

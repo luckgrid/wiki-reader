@@ -2,14 +2,14 @@
 id: WR-ADR-0004
 title: "ADR-0004: Tiered diagram rendering"
 summary: Render Mermaid in tiers — Kitty image, Unicode text, then source — with herdr-aware detection.
-status: proposed
+status: accepted
 updated: 2026-10-02
 related: []
 ---
 
 # ADR-0004: Tiered diagram rendering
 
-**Status:** Proposed (accept after the remaining P3-12a terminal checks) · **Date:** 2026-09-27
+**Status:** Accepted · **Date:** 2026-09-27 · **Accepted:** 2026-10-02
 
 ## Context
 
@@ -22,13 +22,16 @@ Per block: **image** (mermaid-rs-renderer → resvg → ratatui-image, Kitty pro
 1. Read the config request. `text` and `source` do not probe the terminal.
 2. `$TMUX` set → text, including fallback from an explicit `image` request.
 3. `HERDR_ENV=1` → run the Picker query at startup. Only a confirmed Kitty result enables images; every other result uses text. Never Sixel or iTerm2.
-4. Otherwise → ratatui-image auto-detect.
+4. Outside Herdr, iTerm2 is selected explicitly from `TERM_PROGRAM=iTerm.app`; its tested capability response incorrectly preferred Kitty, which iTerm2 did not render.
+5. Otherwise, probe only when environment hints identify a known graphics-terminal candidate. Kitty and iTerm2 are supported; Sixel is experimental for the alpha; Halfblocks selects the text tier because its low-fidelity raster is worse for diagrams. Terminal.app and unknown terminals select text without probing.
 
-The query runs after `ratatui::try_init` enters the alternate screen and before mouse capture, keyboard-enhancement queries and the first event read. Image setup failure degrades to text, then source.
+The query runs after `ratatui::try_init` enters the alternate screen and before mouse capture, keyboard-enhancement queries and the first event read. Its default timeout is 250 ms and `WIKI_READER_IMAGE_QUERY_TIMEOUT_MS` is the diagnostic override; users can avoid the probe entirely with `diagrams = "text"` or `"source"`. Image setup failure degrades to text, then source.
 
 ## Consequences
 
 - ➕ Readable diagrams everywhere; best quality where possible.
 - ➖ Two rendering paths to test.
-- `ratatui-image` 11.1.0 query timeouts can leave a worker blocked on stdin, so known-unsupported environments are not probed and the probe is never retried in-process.
-- [P3-S1](../roadmap/spikes/p3-s1-image-protocol.md): Kitty detection and a real PNG are verified in Ghostty through herdr 0.9.0; direct Ghostty and a non-Kitty terminal remain before acceptance.
+- `ratatui-image` 11.1.0 query timeouts can leave a worker blocked on stdin. A no-response pseudo-terminal hung in the following keyboard query at 50, 250 and 500 ms, so unknown environments are not probed and the probe is never retried in-process.
+- `StatefulImage` with top `CropOptions` correctly clips a partially visible slot. Render the image first, then `Clear`, then popup content; this sequence and protocol replacement showed no stale graphics in Ghostty or Herdr.
+- The terminal-image dependencies added about 50 locked packages in spike part 1. Mermaid plus `resvg` adds another 39 and increased the release spike binary by about 8.8 MiB; the production binary is measured again before P3-12b/c promote the dependencies.
+- [P3-S1](../roadmap/spikes/p3-s1-image-protocol.md): real images are verified in Ghostty direct and through Herdr 0.9.0, forced iTerm2 works, and Terminal.app correctly maps to text. Mermaid rendering is a mixed go: compact diagrams are good and wide diagrams need per-block text fallback.
