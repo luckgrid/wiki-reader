@@ -9,7 +9,7 @@ related: [development]
 
 # Releasing and upgrading
 
-Two audiences: people who install wiki-reader and want a newer (or older) version, and maintainers who publish releases. Releases are built by [`.github/workflows/release.yml`](../../.github/workflows/release.yml) from `v*` tags and published under [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases). Versions containing `-` (for example `v0.1.0-alpha.5`) are marked as prereleases automatically.
+Two audiences: people who install wiki-reader and want a newer (or older) version, and maintainers who publish releases. Releases are built by [`.github/workflows/release.yml`](../../.github/workflows/release.yml) from `v*` tags and published under [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases). Versions containing `-` (for example `v0.1.0-alpha.5.1`) are marked as prereleases automatically.
 
 ## Upgrade or replace an installed version
 
@@ -31,7 +31,7 @@ Quit any running wiki-reader before replacing the binary.
 cargo install --locked --force --git https://github.com/luckgrid/wiki-reader wiki-reader
 
 # A specific release (also how you roll back)
-cargo install --locked --force --git https://github.com/luckgrid/wiki-reader --tag v0.1.0-alpha.5 wiki-reader
+cargo install --locked --force --git https://github.com/luckgrid/wiki-reader --tag v0.1.0-alpha.5.1 wiki-reader
 ```
 
 `--force` is what replaces the already-installed binary in `~/.cargo/bin`. Confirm with `which wiki-reader` that you are not still hitting a copy elsewhere.

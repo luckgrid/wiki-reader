@@ -56,6 +56,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. The t
 - 2026-10-01: **Phase 2 feature complete; Phase 3 activated.** Nothing in scope is left: P2-24b (image diagrams) is P3-12 and P2-49 stays deferred. The adoption clock keeps running in the background and the formal exit verdict is still ≈ 2026-10-13; until then Phase 2 takes dogfood fixes only, and new features go to Phase 3
 - 2026-10-01: dogfood round 6 merged to main (#96); v0.1.0-alpha.4.1 cut (a point release, not alpha.5, since Phase 2 only takes fixes now); clock continues on alpha.4.1
 - 2026-10-02: P3-12c/d (Mermaid image tier + diagrams config) cut as v0.1.0-alpha.5; Phase 2 dogfood clock continues on alpha.5
+- 2026-10-02: P2-55 (copy path follows focus + `copy.path` config) merged (#104); v0.1.0-alpha.5.1 cut (a point release, not alpha.6, since Phase 2 only takes fixes now); clock continues on alpha.5.1
 - 2026-10-02: dogfood request filed as P2-55: the copy-path key (`y`) should copy what has focus, including a nav folder, and work from either pane. Same day, three larger requests went to Phase 3 (P3-13 options window, P3-14 table viewer, P3-15 image and diagram viewer)
 
 ## Interim acceptance walk (2026-09-30)
