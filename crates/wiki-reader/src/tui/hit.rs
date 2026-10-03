@@ -21,6 +21,8 @@ pub enum Hit {
     OpenOptions,
     /// Header ◫.
     NavToggle,
+    /// Click outside the narrow nav overlay (dismiss, never click through).
+    NavDismiss,
     /// Header ✕.
     Quit,
     /// Viewer footer prev.
@@ -106,7 +108,7 @@ impl HitMap {
             Hit::OptionsRow(_) => Action::OptionsApply, // index applied in apply_mouse
             Hit::ModalDismiss => Action::CloseModal,
             Hit::ModalBody => Action::None,
-            Hit::NavToggle => Action::ToggleNav,
+            Hit::NavToggle | Hit::NavDismiss => Action::ToggleNav,
             Hit::Prev => Action::PrevPage,
             Hit::Next => Action::NextPage,
             Hit::Breadcrumb(key) => Action::GoToPage(key.clone()),

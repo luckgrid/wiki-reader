@@ -236,6 +236,13 @@ pub(crate) fn apply_mouse(
     match mouse.kind {
         MouseEventKind::Down(MouseButton::Left) => {
             let hit = app.hit_map.hit_at(mouse.column, mouse.row)?.clone();
+            if matches!(hit, Hit::NavDismiss) {
+                // Queued clicks can still use the old hit map until the next draw.
+                if app.nav_visible {
+                    app.update(Action::ToggleNav);
+                }
+                return None;
+            }
             if matches!(hit, Hit::NavDivider) {
                 app.nav_dragging = true;
                 return None;
@@ -339,7 +346,13 @@ pub(crate) fn apply_mouse(
         }
         MouseEventKind::Down(MouseButton::Middle) => {
             let hit = app.hit_map.hit_at(mouse.column, mouse.row)?.clone();
-            app.middle_click_hit(hit);
+            if matches!(hit, Hit::NavDismiss) {
+                if app.nav_visible {
+                    app.update(Action::ToggleNav);
+                }
+            } else {
+                app.middle_click_hit(hit);
+            }
             None
         }
         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
