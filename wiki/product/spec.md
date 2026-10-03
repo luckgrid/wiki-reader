@@ -91,7 +91,7 @@ Terminal markdown tools display files but don't support wiki browsing: links are
 |----|-------------|---------------------|
 | P1 | Custom nav order | `SUMMARY.md`/`_sidebar.md` and `nav_order` respected ([content model](content-model.md)). |
 | B1 | Linked from | Backlinks listed at the end of the article, focusable. |
-| TB | Tabs (secondary) | `t`/middle-click/Shift+click/Ctrl+click, `Shift+Enter` and `Ctrl+Enter` open a new tab when the terminal reports them (in the nav, `Ctrl+→` also focuses the new tab's view); the current page's filename tab is shown in a compact two-row View bar with connected bottom rules when a full label fits, literal `|` separators, dim inactive text and a heavy active underline (dimmer with Nav focus), without background fills; prev/next use a matching bottom bar; per-tab history. |
+| TB | Tabs (secondary) | `t`/middle-click/Shift+click/Ctrl+click, `Shift+Enter` and `Ctrl+Enter` open a new tab when the terminal reports them (in the nav, `Ctrl+→` also focuses the new tab's view); the current page's filename tab is shown in a bordered three-row View tab bar (one cell per tab, `│` dividers) when a full label fits, with bold focus-colour active text (dimmer with Nav focus) and muted inactive text, without background fills; prev/next use a matching bottom bar; per-tab history. |
 | BA | Block actions | Expand table, show frontmatter, expand diagram, copy code: all in the Tab cycle. |
 | D1 | Diagrams | Tiered Mermaid per [ADR-0004](../decisions/0004-diagram-rendering.md). |
 | R1 | Responsive | Side nav auto-hides below 80 cols; overlay via `◫`/`b`. |

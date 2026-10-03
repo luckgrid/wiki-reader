@@ -10,7 +10,7 @@ nav_order: 3
 
 # Phase 3 — Alpha polish
 
-Phase 1 is closed and Phase 2 is feature complete (dogfood hold until ≈ 2026-10-13, fixes only; see [phase-2-mvp.md](phase-2-mvp.md)). Phase 3 was activated on 2026-10-01. Images, diagrams, themes, nav position, the options window and the table/image viewers have shipped; next is cheap chrome, a lite install, then viewer polish. Dogfood bites live in the [dogfood log](dogfood-log.md).
+Phase 1 is closed and Phase 2 is feature complete (dogfood hold until ≈ 2026-10-13, fixes only; see [phase-2-mvp.md](phase-2-mvp.md)). Phase 3 was activated on 2026-10-01. Images, diagrams, themes, nav position, the options window and the table/image viewers have shipped; the chrome pass (P3-16 nav labels, P3-18 footer buttons, P3-17 bordered bars) is done and awaits release as v0.1.3; next are the lite install, then viewer polish. Dogfood bites live in the [dogfood log](dogfood-log.md).
 
 ## Exit criteria
 
@@ -25,11 +25,11 @@ End with a recorded decision, not an automatic status change:
 
 ## Proposed order
 
-**Done:** P3-08 install; P3-06 Help; P3-12a–d images and diagrams; P3-07 themes / P3-11 layout; P3-13 options window; P3-14 table viewer; P3-15 image and diagram viewer.
+**Done:** P3-08 install; P3-06 Help; P3-12a–d images and diagrams; P3-07 themes / P3-11 layout; P3-13 options window; P3-14 table viewer; P3-15 image and diagram viewer; P3-16 nav label modes (closes P3-03); P3-18 footer buttons; P3-17 chrome pass (bordered bars). The chrome pass is unreleased until v0.1.3.
 
-1. **P3-16** — Nav label modes: drop `title+filename`; `filename` shows real file-system names (folds into P3-03).
-2. **P3-18** — Footer buttons: ⚙ moves from the header to the footer's bottom right, with a `?` help button to its left (part of P3-02).
-3. **P3-17** — Chrome pass: tab titles end in `.md`; the View's tab bar and prev/next bar are fully bordered three-row boxes with `│` dividers; the search bar in the nav matches the tab bar; selected labels are bold in the focus colour. P3-18 lands first so footer geometry changes once.
+1. **P3-16** — Nav label modes: drop `title+filename`; `filename` shows real file-system names (folds into P3-03). *Done.*
+2. **P3-18** — Footer buttons: ⚙ moves from the header to the footer's bottom right, with a `?` help button to its left (part of P3-02). *Done.*
+3. **P3-17** — Chrome pass: tab titles end in `.md`; the View's tab bar and prev/next bar are fully bordered three-row boxes with `│` dividers; the search bar in the nav matches the tab bar; selected labels are bold in the focus colour. P3-18 lands first so footer geometry changes once. *Done.*
 4. **P3-19** — Lite build: move image/SVG/Mermaid-raster into `wiki-reader-media` behind a default-on cargo feature (before the viewer rework so that code lands once).
 5. **P3-20** — Viewer sizing: content-sized windows capped at today's size; fit / actual-size toggle.
 6. **P3-21** — Image/diagram carousel (Tab / Shift+Tab).

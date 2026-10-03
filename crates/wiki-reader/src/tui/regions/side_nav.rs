@@ -38,7 +38,7 @@ pub fn visible_rows(tree: &NavTree, expanded: &std::collections::HashSet<NodeId>
     rows
 }
 
-/// Draw search row + flat visible tree rows; register hits.
+/// Draw the search bar + flat visible tree rows; register hits.
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub fn draw(
     frame: &mut Frame<'_>,
@@ -84,7 +84,7 @@ pub fn draw(
         return;
     }
 
-    // Inner chrome: search box, blank — then the tree list.
+    // Inner chrome: search bar, seam rule — then the tree list.
     // NAV_CHROME_ROWS = borders(2) + these two rows.
     let list_offset: u16 = 2;
     debug_assert_eq!(NAV_CHROME_ROWS, 2 + list_offset);

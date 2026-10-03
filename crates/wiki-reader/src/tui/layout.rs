@@ -3,7 +3,7 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use wiki_reader_core::config::NavPosition;
 
-/// Rows consumed by nav pane chrome: top/bottom borders + search + gap.
+/// Rows consumed by nav pane chrome: top/bottom borders + search bar + its seam rule.
 pub const NAV_CHROME_ROWS: u16 = 4;
 
 /// Inner left padding in the viewer (cursor marker column; P2-19).

@@ -4130,7 +4130,7 @@ fn copy_dir(src: &Path, dst: &Path) {
     }
 }
 
-/// Text of the viewer's bottom border row (where prev/next are drawn).
+/// Text of the footer bar's label row (where prev/next are drawn).
 fn footer_row(root: &Path) -> String {
     let mut app = App::new(root).unwrap();
     app.update(Action::GoToPage(PageKey {

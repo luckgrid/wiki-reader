@@ -35,12 +35,6 @@ pub struct Theme {
     pub accent: Color,
     /// Cursor line highlight.
     pub cursor_line: Color,
-    /// Nav search box background.
-    pub search_box: Color,
-    /// Active tab fill.
-    pub tab_active: Color,
-    /// Inactive tab fill.
-    pub tab_inactive: Color,
     /// Internal link text.
     pub link: Color,
     /// Broken / unresolved link.
@@ -124,7 +118,7 @@ struct Site {
     paint: bool,
     /// Code blocks and the diagram card.
     panel: Option<Rgb>,
-    /// Raised fills: nav search box, inactive tabs, quote bar, diagram nodes.
+    /// Raised fills: muted surface, quote bar, diagram nodes.
     raised: Option<Rgb>,
     /// Unfocused borders.
     stroke: Option<Rgb>,
@@ -310,9 +304,6 @@ impl Theme {
             on_peach: col(p.on_warm),
             accent: col(p.accent),
             cursor_line: col(tint(p.warm, 0.16)),
-            search_box: col(raised),
-            tab_active: col(tint(p.warm, 0.22)),
-            tab_inactive: col(raised),
             link: col(p.link),
             link_broken: col(p.red),
             link_external: col(p.purple),
@@ -378,9 +369,6 @@ impl Theme {
             // Stronger than near-black so the row reads on Reset surfaces (P3-07 owns presets).
             cursor_line: Color::Rgb(70, 75, 100),
             // ponytail: Reset surface means unknown terminal bg; DarkGray reads on both until P3-07.
-            search_box: Color::DarkGray,
-            tab_active: Color::Rgb(50, 60, 80),
-            tab_inactive: Color::Rgb(35, 38, 48),
             link: Color::Cyan,
             link_broken: Color::Red,
             link_external: Color::Magenta,
@@ -956,7 +944,7 @@ mod tests {
         );
         // The site's panel and raised neutrals.
         assert_eq!(dark.code_bg, Color::Rgb(9, 9, 9));
-        assert_eq!(dark.search_box, Color::Rgb(36, 36, 36));
+        assert_eq!(dark.surface_muted, Color::Rgb(36, 36, 36));
         assert_eq!(light.code_bg, Color::Rgb(245, 245, 245));
         for t in [
             Theme::herdr("vesper").0,
