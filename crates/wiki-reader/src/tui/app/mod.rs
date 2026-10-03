@@ -17,6 +17,7 @@ use super::focus::FocusPane;
 use super::help_ui::HelpOverlay;
 use super::hit::HitMap;
 use super::keymap::{Chord, InputMode};
+use super::modal_viewer::{self, ModalContent, ModalEvent};
 use super::opener::{Opener, SystemOpener};
 use super::options_ui::{self, OptionRow, OptionsOverlay};
 use super::page_doc::PageDoc;
@@ -124,6 +125,8 @@ pub struct App {
     pub help: Option<HelpOverlay>,
     /// Options overlay (None when closed).
     pub options: Option<OptionsOverlay>,
+    /// Modal viewer: table now, image / diagram in P3-15 (None when closed).
+    pub(crate) modal: Option<Box<dyn ModalContent>>,
     /// Where the options window persists changes (`--config` or the XDG file).
     pub(crate) config_write_path: Option<std::path::PathBuf>,
     /// Active colour preset.
@@ -281,6 +284,7 @@ impl App {
             search: None,
             help: None,
             options: None,
+            modal: None,
             // ponytail: tests never touch the real XDG file; they set a temp path explicitly.
             config_write_path: if skip_xdg {
                 config_path.map(Path::to_path_buf)
@@ -593,6 +597,8 @@ impl App {
             Action::CloseSearch => self.close_search(false),
             Action::OpenHelp => self.open_help(),
             Action::CloseHelp => self.close_help(),
+            Action::ModalKey(key) => self.modal_key(key),
+            Action::CloseModal => self.close_modal(),
             Action::OpenOptions => self.open_options(),
             Action::CloseOptions => self.close_options(),
             Action::OptionsUp => self.options_select(-1),
@@ -849,6 +855,8 @@ impl App {
             | Hit::SearchDismiss
             | Hit::HelpDismiss
             | Hit::HelpRow(_)
+            | Hit::ModalDismiss
+            | Hit::ModalBody
             | Hit::OpenOptions
             | Hit::OptionsDismiss
             | Hit::OptionsRow(_)
@@ -959,6 +967,36 @@ impl App {
         if self.search.is_none() {
             self.input_mode = InputMode::Normal;
         }
+        self.message.clear();
+    }
+
+    /// Open table `i` of the current page in the modal viewer.
+    pub(crate) fn open_table(&mut self, i: usize) {
+        let Some(table) = self.doc.tables().get(i).cloned() else {
+            return;
+        };
+        self.modal = Some(Box::new(super::table_viewer::TableViewer::new(table)));
+        self.input_mode = InputMode::Modal;
+        self.message.clear();
+    }
+
+    fn modal_key(&mut self, key: ratatui::crossterm::event::KeyEvent) {
+        let Some(modal) = self.modal.as_mut() else {
+            return;
+        };
+        match modal_viewer::handle_key(modal.as_mut(), key) {
+            ModalEvent::Stay => {}
+            ModalEvent::Close => self.close_modal(),
+            ModalEvent::Copy(text) => match self.clipboard.copy(&text) {
+                Ok(()) => self.message = "sent to clipboard (OSC 52)".into(),
+                Err(err) => self.message = format!("copy failed: {err}"),
+            },
+        }
+    }
+
+    fn close_modal(&mut self) {
+        self.modal = None;
+        self.input_mode = InputMode::Normal;
         self.message.clear();
     }
 

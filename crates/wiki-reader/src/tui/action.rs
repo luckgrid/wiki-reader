@@ -1,5 +1,6 @@
 //! Actions produced by keys or mouse hits.
 
+use ratatui::crossterm::event::KeyEvent;
 use wiki_reader_core::nav::NodeId;
 use wiki_reader_core::provider::PageKey;
 
@@ -54,6 +55,10 @@ pub enum Action {
     OptionsCycleLeft,
     /// Options: cycle selected value forward.
     OptionsCycleRight,
+    /// A key for the open modal viewer (P3-14); the content decides what it means.
+    ModalKey(KeyEvent),
+    /// Close the modal viewer (click outside).
+    CloseModal,
     /// Type a character into the search field.
     SearchChar(char),
     /// Backspace in search field.

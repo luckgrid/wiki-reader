@@ -348,6 +348,12 @@ pub(crate) fn apply_mouse(
         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
             // Popups own the wheel: it never falls through to the panes behind.
             let up = matches!(mouse.kind, MouseEventKind::ScrollUp);
+            if app.modal.is_some() {
+                use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+                let code = if up { KeyCode::Up } else { KeyCode::Down };
+                app.update(Action::ModalKey(KeyEvent::new(code, KeyModifiers::NONE)));
+                return None;
+            }
             if app.search.is_some() {
                 app.update(Action::SearchSelectDelta(if up { -1 } else { 1 }));
                 return None;

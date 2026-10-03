@@ -341,6 +341,16 @@ impl App {
             .find(|it| it.kind == FocusTarget::BlockAction && it.line == Some(line))
         {
             self.activate_block(&it.target);
+            return;
+        }
+        // Enter anywhere in a table opens it.
+        if let Some(i) = self
+            .doc
+            .tables()
+            .iter()
+            .position(|t| (t.line..t.line + t.height).contains(&line))
+        {
+            self.open_table(i);
         }
     }
 
@@ -362,6 +372,11 @@ impl App {
                 match self.clipboard.copy(&action.payload) {
                     Ok(()) => self.message = "sent to clipboard (OSC 52)".into(),
                     Err(err) => self.message = format!("copy failed: {err}"),
+                }
+            }
+            wiki_reader_render::BlockActionKind::ExpandTable => {
+                if let Ok(i) = action.payload.parse() {
+                    self.open_table(i);
                 }
             }
             wiki_reader_render::BlockActionKind::ToggleFrontmatter => {

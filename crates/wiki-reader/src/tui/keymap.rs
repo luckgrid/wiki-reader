@@ -21,6 +21,8 @@ pub enum InputMode {
     Help,
     /// Options overlay: select / cycle / dismiss.
     Options,
+    /// Modal viewer (table, later image): every key goes to the modal.
+    Modal,
     /// External URL open confirmation in the status bar.
     Confirm,
 }
@@ -711,6 +713,11 @@ pub fn map_with_overrides(
     // Ctrl+C always quits (raw mode has no SIGINT).
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
         return (Some(Action::Quit), Chord::None);
+    }
+
+    // Before overrides: typed filter text must not trigger remapped actions.
+    if mode == InputMode::Modal {
+        return (Some(Action::ModalKey(key)), Chord::None);
     }
 
     if let Some(over) = overrides

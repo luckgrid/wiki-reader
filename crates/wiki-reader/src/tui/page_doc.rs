@@ -22,6 +22,15 @@ impl PageDoc {
         }
     }
 
+    /// Cell grid of every table; the raw view has none.
+    #[must_use]
+    pub fn tables(&self) -> &[wiki_reader_render::DocTable] {
+        match self {
+            Self::Raw(_) => &[],
+            Self::Rendered(d) => d.tables(),
+        }
+    }
+
     /// Mermaid size-measure requests from the latest render.
     #[must_use]
     pub fn diagram_requests(&self) -> &[wiki_reader_render::DiagramRequest] {
