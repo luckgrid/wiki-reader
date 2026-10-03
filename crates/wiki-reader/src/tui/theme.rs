@@ -113,6 +113,30 @@ struct Palette {
     purple: Rgb,
     teal: Rgb,
     syntax: &'static str,
+    site: Site,
+}
+
+/// Values a preset takes straight from a design system rather than deriving, and whether it
+/// paints the screen. [`Site::NONE`] derives everything and leaves the terminal's own colours.
+#[derive(Clone, Copy)]
+struct Site {
+    /// Paint `bg` and `fg` over the whole screen instead of using the terminal's colours.
+    paint: bool,
+    /// Code blocks and the diagram card.
+    panel: Option<Rgb>,
+    /// Raised fills: nav search box, inactive tabs, quote bar, diagram nodes.
+    raised: Option<Rgb>,
+    /// Unfocused borders.
+    stroke: Option<Rgb>,
+}
+
+impl Site {
+    const NONE: Self = Self {
+        paint: false,
+        panel: None,
+        raised: None,
+        stroke: None,
+    };
 }
 
 fn mix(a: Rgb, b: Rgb, t: f32) -> Rgb {
@@ -131,50 +155,64 @@ const fn col(c: Rgb) -> Color {
     Color::Rgb(c.0, c.1, c.2)
 }
 
-/// luckgrid.net dark: neutral black and white with the site's lime accent and its terminal
-/// syntax hues (`src/styles/theme.css`, converted from OKLCH).
+/// luckgrid.net dark (`src/styles/theme.css` of that site, OKLCH mapped to sRGB the way a browser
+/// does it): black and white, the pale lime `--color-accent` as the fill, its vivid
+/// `--color-accent-stroke` for text and borders, and the site's terminal syntax hues.
 const LUCKGRID_DARK: Palette = Palette {
     bg: (0, 0, 0),
     fg: (255, 255, 255),
-    muted: (130, 130, 130),
-    secondary: (170, 170, 170),
-    accent: (173, 245, 0),
-    warm: (173, 245, 0),
+    muted: (122, 122, 122),
+    secondary: (209, 209, 209),
+    accent: (170, 247, 0),
+    warm: (219, 255, 164),
     on_warm: (0, 0, 0),
-    focus: (173, 245, 0),
-    link: (59, 199, 255),
+    focus: (219, 255, 164),
+    link: (58, 199, 255),
     h2: (252, 159, 48),
     folder: (252, 159, 48),
     red: (237, 75, 67),
     green: (128, 219, 162),
     orange: (252, 159, 48),
-    blue: (59, 199, 255),
+    blue: (58, 199, 255),
     purple: (184, 158, 255),
     teal: (67, 213, 220),
     syntax: "base16-ocean.dark",
+    site: Site {
+        paint: true,
+        panel: Some((9, 9, 9)),
+        raised: Some((36, 36, 36)),
+        stroke: Some((122, 122, 122)),
+    },
 };
 
-/// luckgrid.net light: white and black with the site's cyan-blue accent. Text colours are the
-/// site's hues darkened until they read on white (≥ 4.5:1); the bright cyan stays a fill.
+/// luckgrid.net light: white and black, the cyan `--color-accent` as the fill. Text colours are
+/// the site's hues darkened until they read on white (>= 4.5:1); the site's own stroke
+/// (0, 147, 188) is 3.7:1 and is too light for text.
 const LUCKGRID_LIGHT: Palette = Palette {
     bg: (255, 255, 255),
     fg: (0, 0, 0),
     muted: (96, 96, 96),
     secondary: (70, 70, 70),
-    accent: (0, 124, 154),
-    warm: (0, 199, 245),
+    accent: (0, 102, 153),
+    warm: (0, 201, 254),
     on_warm: (0, 0, 0),
     focus: (0, 124, 154),
     link: (0, 120, 170),
     h2: (160, 94, 0),
     folder: (160, 94, 0),
-    red: (178, 0, 16),
+    red: (179, 0, 13),
     green: (10, 118, 64),
     orange: (160, 94, 0),
     blue: (0, 120, 170),
     purple: (122, 90, 196),
     teal: (0, 124, 129),
     syntax: "InspiredGitHub",
+    site: Site {
+        paint: true,
+        panel: Some((245, 245, 245)),
+        raised: Some((235, 235, 235)),
+        stroke: Some((152, 152, 152)),
+    },
 };
 
 impl Theme {
@@ -212,6 +250,13 @@ impl Theme {
         }
     }
 
+    /// Style for the whole screen and every popup: the painted background and text colour, or
+    /// the terminal's own when a preset does not paint.
+    #[must_use]
+    pub fn base_style(&self) -> Style {
+        Style::default().bg(self.surface).fg(self.text)
+    }
+
     /// luckgrid.net dark; the default.
     #[must_use]
     pub fn dark() -> Self {
@@ -244,12 +289,19 @@ impl Theme {
         let tint = |c: Rgb, t: f32| mix(p.bg, c, t);
         let neutral = |t: f32| tint(p.fg, t);
         let risk = mix(p.red, p.purple, 0.5);
+        let panel = p.site.panel.unwrap_or_else(|| neutral(0.06));
+        let raised = p.site.raised.unwrap_or_else(|| neutral(0.10));
+        let (surface, text) = if p.site.paint {
+            (col(p.bg), col(p.fg))
+        } else {
+            (Color::Reset, Color::Reset)
+        };
         Self {
-            surface: Color::Reset,
-            surface_muted: col(neutral(0.10)),
-            border: col(neutral(0.30)),
+            surface,
+            surface_muted: col(raised),
+            border: col(p.site.stroke.unwrap_or_else(|| neutral(0.30))),
             border_focus: col(p.focus),
-            text: Color::Reset,
+            text,
             text_muted: col(p.muted),
             text_secondary: col(p.secondary),
             selection: col(tint(p.warm, 0.30)),
@@ -258,17 +310,17 @@ impl Theme {
             on_peach: col(p.on_warm),
             accent: col(p.accent),
             cursor_line: col(tint(p.warm, 0.16)),
-            search_box: col(neutral(0.08)),
+            search_box: col(raised),
             tab_active: col(tint(p.warm, 0.22)),
-            tab_inactive: col(neutral(0.08)),
+            tab_inactive: col(raised),
             link: col(p.link),
             link_broken: col(p.red),
             link_external: col(p.purple),
             link_unsupported: col(p.muted),
-            code_bg: col(neutral(0.06)),
+            code_bg: col(panel),
             code_fg: col(p.green),
             quote_text: col(p.fg),
-            quote_bar: col(neutral(0.12)),
+            quote_bar: col(raised),
             heading: [
                 col(p.accent),
                 col(p.h2),
@@ -293,12 +345,12 @@ impl Theme {
             status_plan: col(p.blue),
             syntax: p.syntax,
             diagram: DiagramPalette {
-                bg: neutral(0.06),
+                bg: panel,
                 text: tint(p.fg, 0.95),
                 line: p.secondary,
-                node_fill: neutral(0.14),
+                node_fill: raised,
                 node_border: p.warm,
-                cluster_fill: neutral(0.10),
+                cluster_fill: mix(panel, raised, 0.5),
                 cluster_border: neutral(0.30),
                 note_fill: tint(p.warm, 0.12),
                 note_border: p.warm,
@@ -386,6 +438,7 @@ const HERDR_VESPER: Palette = Palette {
     purple: (180, 160, 255),
     teal: (120, 220, 200),
     syntax: "base16-mocha.dark",
+    site: Site::NONE,
 };
 
 /// Palette for a lower-case herdr theme name, if wiki-reader knows it.
@@ -412,6 +465,7 @@ fn herdr_palette(name: &str) -> Option<Palette> {
             purple: (203, 166, 247),
             teal: (148, 226, 213),
             syntax: "base16-mocha.dark",
+            site: Site::NONE,
         },
         "catppuccin-latte" => Palette {
             bg: (239, 241, 245),
@@ -432,6 +486,7 @@ fn herdr_palette(name: &str) -> Option<Palette> {
             purple: (136, 57, 239),
             teal: (14, 110, 116),
             syntax: "InspiredGitHub",
+            site: Site::NONE,
         },
         "tokyo-night" => Palette {
             bg: (26, 27, 38),
@@ -452,6 +507,7 @@ fn herdr_palette(name: &str) -> Option<Palette> {
             purple: (187, 154, 247),
             teal: (115, 218, 202),
             syntax: "base16-ocean.dark",
+            site: Site::NONE,
         },
         "tokyo-night-day" => Palette {
             bg: (225, 226, 231),
@@ -472,6 +528,7 @@ fn herdr_palette(name: &str) -> Option<Palette> {
             purple: (110, 70, 190),
             teal: (0, 110, 110),
             syntax: "InspiredGitHub",
+            site: Site::NONE,
         },
         "gruvbox" => Palette {
             bg: (40, 40, 40),
@@ -492,6 +549,7 @@ fn herdr_palette(name: &str) -> Option<Palette> {
             purple: (211, 134, 155),
             teal: (142, 192, 124),
             syntax: "base16-ocean.dark",
+            site: Site::NONE,
         },
         "gruvbox-light" => Palette {
             bg: (251, 241, 199),
@@ -512,6 +570,7 @@ fn herdr_palette(name: &str) -> Option<Palette> {
             purple: (143, 63, 113),
             teal: (50, 100, 66),
             syntax: "InspiredGitHub",
+            site: Site::NONE,
         },
         "one-dark" => Palette {
             bg: (40, 44, 52),
@@ -532,6 +591,7 @@ fn herdr_palette(name: &str) -> Option<Palette> {
             purple: (198, 120, 221),
             teal: (86, 182, 194),
             syntax: "base16-ocean.dark",
+            site: Site::NONE,
         },
         "kanagawa" => Palette {
             bg: (31, 31, 40),
@@ -552,6 +612,7 @@ fn herdr_palette(name: &str) -> Option<Palette> {
             purple: (149, 127, 184),
             teal: (122, 168, 159),
             syntax: "base16-mocha.dark",
+            site: Site::NONE,
         },
         _ => return None,
     })
@@ -804,7 +865,8 @@ mod tests {
 
     #[test]
     fn dark_presets_are_readable_on_a_dark_terminal() {
-        assert_readable("dark", &Theme::dark(), (16, 16, 16));
+        // luckgrid paints its own black; the herdr presets sit on whatever the terminal has.
+        assert_readable("dark", &Theme::dark(), (0, 0, 0));
         for name in HERDR_DARK {
             let (t, known) = Theme::herdr(name);
             assert!(known, "{name}");
@@ -837,10 +899,39 @@ mod tests {
 
     #[test]
     fn dark_and_light_use_the_luckgrid_accents() {
-        // luckgrid.net: lime on dark, cyan-blue on light (theme.css, OKLCH converted).
-        assert_eq!(Theme::dark().accent, Color::Rgb(173, 245, 0));
-        assert_eq!(Theme::dark().peach, Color::Rgb(173, 245, 0));
-        assert_eq!(Theme::light().peach, Color::Rgb(0, 199, 245));
+        // luckgrid.net (theme.css, OKLCH mapped to sRGB like a browser): the pale lime accent is
+        // the fill and its vivid stroke is the text accent; light's fill is the bright cyan.
+        assert_eq!(Theme::dark().peach, Color::Rgb(219, 255, 164));
+        assert_eq!(Theme::dark().accent, Color::Rgb(170, 247, 0));
+        assert_ne!(Theme::dark().accent, Theme::dark().border_focus);
+        assert_eq!(Theme::light().peach, Color::Rgb(0, 201, 254));
+        assert_ne!(Theme::light().accent, Theme::light().border_focus);
+    }
+
+    #[test]
+    fn luckgrid_presets_paint_the_screen_and_the_others_do_not() {
+        let dark = Theme::dark();
+        assert_eq!(
+            (dark.surface, dark.text),
+            (Color::Rgb(0, 0, 0), Color::Rgb(255, 255, 255))
+        );
+        let light = Theme::light();
+        assert_eq!(
+            (light.surface, light.text),
+            (Color::Rgb(255, 255, 255), Color::Rgb(0, 0, 0))
+        );
+        // The site's panel and raised neutrals.
+        assert_eq!(dark.code_bg, Color::Rgb(9, 9, 9));
+        assert_eq!(dark.search_box, Color::Rgb(36, 36, 36));
+        assert_eq!(light.code_bg, Color::Rgb(245, 245, 245));
+        for t in [
+            Theme::herdr("vesper").0,
+            Theme::herdr("gruvbox").0,
+            Theme::ansi(),
+        ] {
+            assert_eq!((t.surface, t.text), (Color::Reset, Color::Reset));
+            assert_eq!(t.base_style().bg, Some(Color::Reset));
+        }
     }
 
     #[test]

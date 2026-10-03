@@ -282,8 +282,8 @@ The `theme` config key picks a built-in preset:
 
 | `theme =` | For | Notes |
 |-----------|-----|-------|
-| `"dark"` (default) | Dark terminals | The [luckgrid.net](https://luckgrid.net) dark palette: lime accent, blue links, orange H2–H4. Surface and body text are the terminal's own colours. |
-| `"light"` | Light terminals | The luckgrid.net light palette: cyan-blue accent. Every text colour is dark enough to read on white (a test enforces ≥ 4.5:1 per token). |
+| `"dark"` (default) | Dark terminals | The [luckgrid.net](https://luckgrid.net) dark palette, painted over the whole screen: black background, white text, lime accent, blue links, orange H2–H4. |
+| `"light"` | Light terminals | The luckgrid.net light palette, painted over the whole screen: white background, black text, cyan-blue accent. Every text colour is dark enough to read on white (a test enforces ≥ 4.5:1 per token). |
 | `"herdr"` | Inside herdr | Follows the theme named in herdr's own config (`[theme] name`): vesper, catppuccin, catppuccin-latte, tokyo-night, tokyo-night-day, gruvbox, gruvbox-light, one-dark, kanagawa, or terminal (ANSI colours). An unknown name uses vesper and says so. Read once at startup; see [ADR-0019](../decisions/0019-theme-presets.md). |
 
 Inside herdr (`HERDR_ENV=1`) the default is `herdr` when no config file sets `theme`; a theme chosen in the options window is written, so it wins from then on.

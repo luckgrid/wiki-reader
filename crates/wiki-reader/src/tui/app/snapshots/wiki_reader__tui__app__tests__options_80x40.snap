@@ -5,9 +5,9 @@ expression: out
  Worked Exampl┌ Options ─────────────────────────────────────────┐        ⚙ ◫ ✕ 
 ┌─────────────│                                                  │─────────────┐
 │▌/ Search…   │  Theme                                           │─────────────│
-│             │  > ● Dark                                        │             │
-│▌ Worked Exam│    ○ Light                                       │             │
-│  ▸ Architect│    ○ Herdr                                       │──           │
+│             │  > ● Dark (luckgrid)                             │             │
+│▌ Worked Exam│    ○ Light (luckgrid)                            │             │
+│  ▸ Architect│    ○ Herdr (follows herdr)                       │──           │
 │  ▸ Decisions│                                                  │             │
 │             │  Panels                                          │ default     │
 │             │    ● Nav left                                    │             │

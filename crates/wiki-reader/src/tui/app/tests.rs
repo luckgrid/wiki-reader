@@ -3137,11 +3137,45 @@ fn options_titles_and_cursor_use_different_colours() {
     };
     let theme = &app.theme;
     assert_eq!(find("Mermaid"), theme.accent, "group titles use the accent");
-    assert_eq!(find("> "), theme.peach, "cursor uses the fill colour");
+    assert_eq!(
+        find("> "),
+        theme.border_focus,
+        "cursor uses the chrome colour"
+    );
     assert_ne!(
-        theme.accent, theme.peach,
+        theme.accent, theme.border_focus,
         "the two roles are distinct in the default theme"
     );
+}
+
+#[test]
+fn luckgrid_themes_paint_every_cell_including_popups() {
+    use ratatui::style::Color;
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let all_painted = |buf: &Terminal<TestBackend>| {
+        buf.backend()
+            .buffer()
+            .content
+            .iter()
+            .all(|c| c.bg != Color::Reset)
+    };
+    let buf = draw_app(&mut app, 80, 30);
+    assert!(all_painted(&buf), "dark: every cell has a background");
+    assert_eq!(buf.backend().buffer()[(79, 29)].bg, app.theme.surface);
+    // A popup's `Clear` must not punch holes of the terminal's colour into the painted screen.
+    for open in [Action::OpenOptions, Action::OpenHelp, Action::OpenSearch] {
+        app.update(open);
+        let buf = draw_app(&mut app, 80, 30);
+        assert!(all_painted(&buf), "popup leaves unpainted cells");
+        app.update(Action::CloseOptions);
+        app.update(Action::CloseHelp);
+        app.update(Action::CloseSearch);
+    }
+    // Presets that follow the terminal paint nothing.
+    app.theme = Theme::herdr("vesper").0;
+    let buf = draw_app(&mut app, 80, 30);
+    assert_eq!(buf.backend().buffer()[(79, 29)].bg, Color::Reset);
 }
 
 #[test]

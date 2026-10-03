@@ -38,6 +38,11 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         app.clamp_nav_scroll();
     }
     let theme = app.theme;
+    // Paint the surface first so a preset with its own colours fills the whole screen.
+    frame.render_widget(
+        ratatui::widgets::Block::default().style(theme.base_style()),
+        area,
+    );
     let page = app.navigator.tab().current().page.clone();
     let crumbs = app.navigator.nav().tree.breadcrumb(&page);
     let nav = app.navigator.nav();
