@@ -93,11 +93,12 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 | 2026-10-03 | decision | Mirrored keybindings when nav is on the right filed for Phase 4 (low priority; needs ADR) | P4-06 |
 | 2026-10-03 | fix | P2-56 implementation: preserve palette-keyed Mermaid sizes across options theme changes instead of globally clearing them. A quick switch away and back could erase completed sizes while their queue keys still said measuring. The regression fails before the fix and checks all three themed.md cards repaint, with new work queued and no scrolling or page switch. Operator verified theme switches in Ghostty and a Herdr pane; diagrams render after the switch | P2-56 |
 
-## v0.1.2 (preparation)
+## v0.1.2
 
 | Date | Kind | Note | Task IDs |
 |------|------|------|----------|
-| 2026-10-03 | decision | v0.1.2 prepared to put P2-56 in the installed dogfood binary, plus the docs filing from #117. Tag/publication pending green CI on the release merge commit. The adoption clock does not restart; Phase 2 stays on fixes-only hold until the ≈ 2026-10-13 verdict | P2-56, P2-57, P2-58, P3-08 |
+| 2026-10-03 | decision | Prepare v0.1.2 to put P2-56 in the installed dogfood binary, plus the docs filing from #117 (#119). Require green CI on the release merge commit before tagging. The adoption clock does not restart; Phase 2 stays on fixes-only hold until the ≈ 2026-10-13 verdict | P2-56, P2-57, P2-58, P3-08 |
+| 2026-10-03 | release | [v0.1.2](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.2) published as a prerelease from #119 merge commit `13a1d2d` after its Ubuntu/macOS CI passed. All three release builds passed; three tarballs and three checksums present. macOS arm64 download checksum and binary version verified; Cargo dogfood install upgraded from tag v0.1.1 to v0.1.2 (`~/.cargo/bin/wiki-reader`, `--version` reports 0.1.2). Operator confirmed slow/quick dark/light/herdr theme switches on merged main in standalone Ghostty and Herdr before tagging. Clock continues without restarting | P2-56, P3-08 |
 
 ## Related
 
