@@ -25,12 +25,14 @@ Extend the reader past a single content pane: a right-hand widget slot, a first 
 
 | ID | Task | Reqs | Status | Notes |
 |----|------|------|--------|-------|
-| P4-01 | Right-hand widget slot with a small widget trait | | todo | was V2-01; read-only page + index; renders into a rect; registers hits |
+| P4-01 | Right-hand widget slot with a small widget trait | | todo | was V2-01; read-only page + index; renders into a rect; registers hits. Header/footer sub-regions beyond the P3-18 footer controls remain part of this widget-slot concern (P3-02 closed) |
 | P4-02 | First widgets: context engine, page metadata, backlinks graph summary | | todo | was V2-02; see [context engine](../architecture/context-engine.md) |
 | P4-03 | Agent CLI (`--json`) on the same core | | todo | was V2-03; see [integrations](../architecture/integrations.md) |
 | P4-04 | Revisit external providers and theme-token mapping | | todo | was V2-04; builds on the Phase 3 theme presets |
-| P4-05 | Follow herdr's theme live | | todo | [ADR-0019](../decisions/0019-theme-presets.md) reads herdr's theme name once at startup. Needs a herdr plugin (or a theme API herdr does not have yet): re-theme when herdr switches, use herdr's real palette values, honour `[theme.custom]` overrides and `auto_switch` light/dark. Filed 2026-10-02 (local time) from dogfood; the plugin question waits on the real herdr API, like P3-09 / P3-10 |
+| P4-05 | Follow herdr's theme live | | todo | [ADR-0019](../decisions/0019-theme-presets.md) reads herdr's theme name once at startup. Feasible without a plugin: watch and re-read herdr's `config.toml` using the existing `notify` dependency, then re-theme when the configured name changes. [P3-S2](spikes/p3-s2-herdr-integration.md) records the seam; no theme event/API is available. Custom palette mapping and terminal-driven `auto_switch` light/dark need separate evidence; a config watcher alone cannot observe terminal appearance. Filed 2026-10-02 (local time) from dogfood; implement in Phase 4 |
 | P4-06 | Mirrored keybindings when nav is on the right | | todo | dogfood 2026-10; low priority. Needs a dynamic keymap; Help, nav and View all read it. Today only the ←/→ hand-off at the nav edge mirrors (P3-11). Open design: ← opens the target and focuses the View with the cursor at the end of the row; the other directional keys flip by the same rule. Needs an ADR |
+| P4-07 | Optional header ‹ › buttons | U4 | todo | Deferred from P3-04 by operator decision 2026-10-03; history actions remain available through existing keys |
+| P4-08 | Link hover preview popover | W6 | todo | Deferred from P3-05 by operator decision 2026-10-03 |
 
 ## Deferred ideas feeding this phase
 
