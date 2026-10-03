@@ -919,7 +919,7 @@ fn view_mode_toggle_round_trips_raw_and_rendered() {
 fn toggling_raw_does_not_sync_highlight_whole_page() {
     use crate::tui::highlight::highlight_markdown;
     // Warm syntect assets so the worker isn't racing a multi-second first load on CI.
-    let _ = highlight_markdown("warm");
+    let _ = highlight_markdown("warm", "base16-ocean.dark");
     let root = fixture();
     let mut app = App::new(&root).unwrap();
     let _ = draw_app(&mut app, 100, 24);
@@ -959,7 +959,7 @@ fn wait_raw_highlights(app: &mut App) -> usize {
 #[test]
 fn rapid_raw_navigation_applies_only_final_page_highlight() {
     use crate::tui::highlight::highlight_markdown;
-    let _ = highlight_markdown("warm");
+    let _ = highlight_markdown("warm", "base16-ocean.dark");
     let root = fixture();
     let mut app = App::new(&root).unwrap();
     let _ = draw_app(&mut app, 100, 24);
@@ -986,7 +986,7 @@ fn rapid_raw_navigation_applies_only_final_page_highlight() {
 #[test]
 fn superseded_highlight_does_not_overwrite_after_leaving_raw() {
     use crate::tui::highlight::highlight_markdown;
-    let _ = highlight_markdown("warm");
+    let _ = highlight_markdown("warm", "base16-ocean.dark");
     let root = fixture();
     let mut app = App::new(&root).unwrap();
     let _ = draw_app(&mut app, 100, 24);
@@ -4265,4 +4265,48 @@ fn raw_status_column_counts_from_the_start_of_the_source_line() {
     assert_eq!(doc.row_col_offset(0), 0);
     assert_eq!(doc.row_col_offset(1), 10);
     assert_eq!(doc.row_col_offset(2), 20);
+}
+
+fn app_with_config(toml: &str) -> (App, tempfile::TempDir) {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let path = tmp.path().join("config.toml");
+    std::fs::write(&path, toml).expect("config");
+    let app = App::build(&fixture(), Some(&path), false, true).expect("app");
+    (app, tmp)
+}
+
+#[test]
+fn theme_config_selects_the_preset_for_drawing_and_diagrams() {
+    use wiki_reader_core::config::ThemeName;
+    let (mut app, _tmp) = app_with_config("theme = \"light\"\n");
+    let light = crate::tui::theme::Theme::from_name(ThemeName::Light);
+    assert_eq!(app.theme.link, light.link);
+    assert_eq!(
+        app.render_opts().diagram_palette,
+        light.diagram,
+        "Mermaid is drawn with the preset's colours"
+    );
+    assert_eq!(app.theme.syntax, "InspiredGitHub");
+
+    let terminal = draw_app(&mut app, 100, 24);
+    let buf = terminal.backend().buffer();
+    let x = buf.area.width - 2;
+    let rows = (0..buf.area.height)
+        .filter(|&y| buf[(x, y)].bg == light.cursor_line)
+        .count();
+    assert_eq!(rows, 1, "the light cursor row is painted");
+    let dark = crate::tui::theme::Theme::dark();
+    assert!(
+        (0..buf.area.height).all(|y| buf[(x, y)].bg != dark.cursor_line),
+        "no dark-preset colours leak into the light preset"
+    );
+}
+
+#[test]
+fn unknown_theme_keeps_the_dark_preset() {
+    use wiki_reader_core::config::ThemeName;
+    let (app, _tmp) = app_with_config("theme = \"neon\"\n");
+    let dark = crate::tui::theme::Theme::from_name(ThemeName::Dark);
+    assert_eq!(app.theme.link, dark.link);
+    assert_eq!(app.render_opts().diagram_palette, dark.diagram);
 }

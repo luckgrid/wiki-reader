@@ -16,12 +16,12 @@ pub use images::{
 };
 pub use link_span::{LinkClass, LinkId, LinkSpan};
 pub use mermaid_raster::{
-    MIN_LEGIBLE_SCALE, RasterError, RasterImage, is_legible, mermaid_to_svg, rasterise_svg,
-    render_mermaid, render_mermaid_for_pane, svg_natural_size,
+    DiagramPalette, MIN_LEGIBLE_SCALE, RasterError, RasterImage, is_legible, mermaid_to_svg,
+    rasterise_svg, render_mermaid, render_mermaid_for_pane, svg_natural_size,
 };
 pub use render::{
-    BlockAction, BlockActionKind, DEFAULT_DIAGRAM_BG, RenderOpts, RenderedDoc, StyleKind,
-    StyledLine, StyledSpan, render, render_with,
+    BlockAction, BlockActionKind, RenderOpts, RenderedDoc, StyleKind, StyledLine, StyledSpan,
+    render, render_with,
 };
 
 #[cfg(test)]
@@ -1546,11 +1546,11 @@ mod tests {
         );
 
         let req = cold.diagram_requests[0].clone();
-        let svg = mermaid_to_svg(&req.source).expect("svg");
+        let svg = mermaid_to_svg(&req.source, &DiagramPalette::default()).expect("svg");
         let (px_w, px_h) = svg_natural_size(svg.as_bytes()).expect("size");
         sizes.insert(
             req.hash,
-            DEFAULT_DIAGRAM_BG,
+            DiagramPalette::default(),
             DiagramSize::Natural { px_w, px_h },
         );
         let warm = render_with(&src, None, &key, &index, 80, &opts);
@@ -1592,11 +1592,11 @@ mod tests {
         let cold = render_with(&src, None, &key, &index, 80, &opts);
         assert_eq!(cold.diagram_requests.len(), 1);
         let req = &cold.diagram_requests[0];
-        let svg = mermaid_to_svg(&req.source).expect("svg");
+        let svg = mermaid_to_svg(&req.source, &DiagramPalette::default()).expect("svg");
         let (px_w, px_h) = svg_natural_size(svg.as_bytes()).expect("size");
         sizes.insert(
             req.hash,
-            DEFAULT_DIAGRAM_BG,
+            DiagramPalette::default(),
             DiagramSize::Natural { px_w, px_h },
         );
         for w in [80u16, 60, 80] {
@@ -1635,7 +1635,7 @@ mod tests {
         let req = cold.diagram_requests[0].clone();
         sizes.insert(
             req.hash,
-            DEFAULT_DIAGRAM_BG,
+            DiagramPalette::default(),
             DiagramSize::Text(DiagramTextReason::Failed("parse boom".into())),
         );
         let warm = render_with(&src, None, &key, &index, 80, &opts);
@@ -1672,7 +1672,7 @@ mod tests {
         let hash = cold.diagram_requests[0].hash;
         sizes.insert(
             hash,
-            DEFAULT_DIAGRAM_BG,
+            DiagramPalette::default(),
             DiagramSize::Natural {
                 px_w: 8000,
                 px_h: 400,
@@ -1717,14 +1717,14 @@ mod tests {
         );
         let fence_body = probe.diagram_requests[0].source.clone();
         let fence_hash = probe.diagram_requests[0].hash;
-        let svg = mermaid_to_svg(&fence_body).expect("svg");
+        let svg = mermaid_to_svg(&fence_body, &DiagramPalette::default()).expect("svg");
         let (px_w, px_h) = svg_natural_size(svg.as_bytes()).expect("size");
         for w in [40u16, 60, 80, 120] {
             let sizes = empty_diagram_size_cache();
             // One natural size per diagram; legibility is decided per width at layout.
             sizes.insert(
                 fence_hash,
-                DEFAULT_DIAGRAM_BG,
+                DiagramPalette::default(),
                 DiagramSize::Natural { px_w, px_h },
             );
             let opts = RenderOpts {

@@ -28,7 +28,7 @@ The rule: **nothing here blocks the POC.** Each integration has a seam built in 
 
 A typical design system is CSS/web-first. What transfers to a terminal is **semantic tokens**, not components.
 
-**Seam now:** semantic theme tokens ([UI spec](../product/ui-spec.md)), loaded from a theme TOML.
+**Seam now:** semantic theme tokens ([UI spec](../product/ui-spec.md)) with three built-in presets (`dark`, `light`, `herdr`) chosen by the `theme` config key. Loading tokens from a theme TOML is the next step and is not built.
 
 **Later:** a small generator (in either repo) that projects design-system color/emphasis tokens into a wiki-reader theme TOML, quantized for 256-color and truecolor. Shared *primitives* (surface, action, focus states) map to border/emphasis rules conceptually, not by code sharing.
 

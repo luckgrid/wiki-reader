@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use wiki_reader_core::images::{ImageReject, MAX_IMAGE_PIXELS, resolve_local_image};
 
-use crate::mermaid_raster::{self, RasterError};
+use crate::mermaid_raster::{self, DiagramPalette, RasterError};
 
 /// Tallest slot, in display rows. Keeps one image from filling several screens.
 pub const MAX_SLOT_ROWS: u16 = 30;
@@ -20,10 +20,10 @@ pub enum SlotSource {
         /// File size and modified nanoseconds (freshness stamp).
         stamp: (u64, u64),
     },
-    /// In-process Mermaid raster (content hash + background colour for the cache key).
+    /// In-process Mermaid raster (content hash + palette for the cache key).
     Mermaid {
         hash: u64,
-        bg: (u8, u8, u8),
+        palette: DiagramPalette,
         /// Fence body; used by the decode worker to (re)rasterise.
         source: String,
     },
@@ -58,12 +58,12 @@ pub enum DiagramTextReason {
 pub enum DiagramSize {
     /// Natural SVG pixel size (width legibility is decided at layout time).
     Natural { px_w: u32, px_h: u32 },
-    /// Prefer the text (or source) tier for this content/background.
+    /// Prefer the text (or source) tier for this content/palette.
     Text(DiagramTextReason),
 }
 
-/// Shared `(content_hash, bg) → size` map filled by the image worker.
-type DiagramSizeKey = (u64, (u8, u8, u8));
+/// Shared `(content_hash, palette) → size` map filled by the image worker.
+type DiagramSizeKey = (u64, DiagramPalette);
 
 #[derive(Debug, Default)]
 pub struct DiagramSizeCache {
@@ -77,13 +77,13 @@ impl DiagramSizeCache {
     }
 
     #[must_use]
-    pub fn get(&self, hash: u64, bg: (u8, u8, u8)) -> Option<DiagramSize> {
-        self.inner.lock().ok()?.get(&(hash, bg)).cloned()
+    pub fn get(&self, hash: u64, palette: DiagramPalette) -> Option<DiagramSize> {
+        self.inner.lock().ok()?.get(&(hash, palette)).cloned()
     }
 
-    pub fn insert(&self, hash: u64, bg: (u8, u8, u8), size: DiagramSize) {
+    pub fn insert(&self, hash: u64, palette: DiagramPalette, size: DiagramSize) {
         if let Ok(mut map) = self.inner.lock() {
-            map.insert((hash, bg), size);
+            map.insert((hash, palette), size);
         }
     }
 }
@@ -94,7 +94,7 @@ pub struct DiagramRequest {
     pub hash: u64,
     pub source: String,
     pub width: u16,
-    pub bg: (u8, u8, u8),
+    pub palette: DiagramPalette,
     pub cell_px: (u16, u16),
 }
 
@@ -273,18 +273,18 @@ mod tests {
     }
 
     #[test]
-    fn size_cache_key_is_hash_and_bg() {
+    fn size_cache_key_is_hash_and_palette() {
         let cache = DiagramSizeCache::new();
         cache.insert(
             1,
-            (30, 32, 36),
+            DiagramPalette::default(),
             DiagramSize::Natural {
                 px_w: 100,
                 px_h: 50,
             },
         );
         assert_eq!(
-            cache.get(1, (30, 32, 36)),
+            cache.get(1, DiagramPalette::default()),
             Some(DiagramSize::Natural {
                 px_w: 100,
                 px_h: 50
@@ -292,12 +292,16 @@ mod tests {
         );
         // Width is not part of the key: the same natural size serves every pane width.
         assert_eq!(
-            cache.get(1, (30, 32, 36)),
+            cache.get(1, DiagramPalette::default()),
             Some(DiagramSize::Natural {
                 px_w: 100,
                 px_h: 50
             })
         );
-        assert_eq!(cache.get(1, (0, 0, 0)), None, "bg is part of the key");
+        let other = DiagramPalette {
+            bg: (255, 255, 255),
+            ..DiagramPalette::default()
+        };
+        assert_eq!(cache.get(1, other), None, "palette is part of the key");
     }
 }

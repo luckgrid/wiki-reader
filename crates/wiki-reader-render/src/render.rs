@@ -22,6 +22,7 @@ use crate::images::{
     DiagramRequest, DiagramSize, DiagramSizeCache, DiagramTextReason, ImagePlan, ImageSlot,
     SlotSource, empty_diagram_size_cache, placeholder_text, plan_image, slot_geometry,
 };
+use crate::mermaid_raster::DiagramPalette;
 use crate::{LinkClass, LinkId, LinkSpan};
 
 /// Semantic style for a span (TUI maps to theme colours).
@@ -166,9 +167,6 @@ fn content_block_id(kind: BlockActionKind, text: &str) -> u32 {
     h
 }
 
-/// Default Mermaid raster background until P3-07 themes wire a real token (`code_bg`).
-pub const DEFAULT_DIAGRAM_BG: (u8, u8, u8) = (30, 32, 36);
-
 /// Optional expansion state for re-layout.
 #[derive(Debug, Clone)]
 pub struct RenderOpts {
@@ -188,8 +186,8 @@ pub struct RenderOpts {
     pub tmux: bool,
     /// `HERDR_ENV=1` — Kitty-only image preference when graphics are confirmed.
     pub herdr: bool,
-    /// Mermaid raster background (part of the size/slot cache key).
-    pub diagram_bg: (u8, u8, u8),
+    /// Mermaid colours (part of the size/slot cache key), filled from the active theme.
+    pub diagram_palette: DiagramPalette,
     /// Shared Mermaid natural-size cache filled by the image worker.
     pub diagram_sizes: Arc<DiagramSizeCache>,
 }
@@ -204,7 +202,7 @@ impl Default for RenderOpts {
             graphics: false,
             tmux: false,
             herdr: false,
-            diagram_bg: DEFAULT_DIAGRAM_BG,
+            diagram_palette: DiagramPalette::default(),
             diagram_sizes: empty_diagram_size_cache(),
         }
     }
@@ -253,7 +251,7 @@ pub fn render_with(
     state.graphics = opts.graphics;
     state.tmux = opts.tmux;
     state.herdr = opts.herdr;
-    state.diagram_bg = opts.diagram_bg;
+    state.diagram_palette = opts.diagram_palette;
     state.diagram_sizes = Arc::clone(&opts.diagram_sizes);
 
     if parsed.frontmatter.kind.is_some()
@@ -409,7 +407,7 @@ struct LayoutState<'a> {
     graphics: bool,
     tmux: bool,
     herdr: bool,
-    diagram_bg: (u8, u8, u8),
+    diagram_palette: DiagramPalette,
     diagram_sizes: Arc<DiagramSizeCache>,
     image_slots: Vec<ImageSlot>,
     diagram_requests: Vec<DiagramRequest>,
@@ -482,7 +480,7 @@ impl<'a> LayoutState<'a> {
             graphics: false,
             tmux: false,
             herdr: false,
-            diagram_bg: DEFAULT_DIAGRAM_BG,
+            diagram_palette: DiagramPalette::default(),
             diagram_sizes: empty_diagram_size_cache(),
             image_slots: Vec::new(),
             diagram_requests: Vec::new(),
@@ -593,10 +591,10 @@ impl<'a> LayoutState<'a> {
         };
         let tier = select_tier(self.diagram_mode, &env);
         let hash = content_hash(body);
-        let bg = self.diagram_bg;
+        let palette = self.diagram_palette;
 
         let image_plan = if tier == DiagramTier::Image {
-            match self.diagram_sizes.get(hash, bg) {
+            match self.diagram_sizes.get(hash, palette) {
                 Some(DiagramSize::Natural { px_w, px_h }) => {
                     let cell_px = self.cell_px.unwrap_or((8, 17));
                     if crate::mermaid_raster::is_legible(px_w, px_h, cell_px, width) {
@@ -614,7 +612,7 @@ impl<'a> LayoutState<'a> {
                             hash,
                             source: body.to_owned(),
                             width,
-                            bg,
+                            palette,
                             cell_px,
                         });
                     }
@@ -648,7 +646,7 @@ impl<'a> LayoutState<'a> {
                 cols,
                 source: SlotSource::Mermaid {
                     hash,
-                    bg,
+                    palette,
                     source: body.to_owned(),
                 },
                 alt: "diagram".into(),
@@ -658,7 +656,7 @@ impl<'a> LayoutState<'a> {
                 DiagramTier::Image if self.cell_px.is_none() || !self.graphics => {
                     Some("no graphics protocol".into())
                 }
-                DiagramTier::Image => match self.diagram_sizes.get(hash, bg) {
+                DiagramTier::Image => match self.diagram_sizes.get(hash, palette) {
                     Some(DiagramSize::Text(DiagramTextReason::Failed(msg))) => Some(msg),
                     Some(
                         DiagramSize::Text(DiagramTextReason::TooWide) | DiagramSize::Natural { .. },
