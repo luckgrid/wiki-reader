@@ -81,6 +81,13 @@ impl DiagramSizeCache {
         self.inner.lock().ok()?.get(&(hash, palette)).cloned()
     }
 
+    /// Drop every cached size (e.g. after a theme change).
+    pub fn clear(&self) {
+        if let Ok(mut map) = self.inner.lock() {
+            map.clear();
+        }
+    }
+
     pub fn insert(&self, hash: u64, palette: DiagramPalette, size: DiagramSize) {
         if let Ok(mut map) = self.inner.lock() {
             map.insert((hash, palette), size);
@@ -109,34 +116,39 @@ pub(crate) enum ImagePlan {
     Placeholder(ImageReject),
 }
 
-/// Fit scale for `px_w × px_h` into `max_cols` × [`MAX_SLOT_ROWS`] at `cell_px`. Never upscales.
+/// Fit scale for `px_w × px_h` into `max_cols` × `max_rows` at `cell_px`. Never upscales.
 #[must_use]
-pub fn fit_scale(px_w: u32, px_h: u32, cell_px: (u16, u16), max_cols: u16) -> f64 {
+pub fn fit_scale(px_w: u32, px_h: u32, cell_px: (u16, u16), max_cols: u16, max_rows: u16) -> f64 {
     let cell_w = f64::from(cell_px.0.max(1));
     let cell_h = f64::from(cell_px.1.max(1));
     let w = f64::from(px_w.max(1));
     let h = f64::from(px_h.max(1));
     let max_cols = max_cols.max(1);
     (f64::from(max_cols) * cell_w / w)
-        .min(f64::from(MAX_SLOT_ROWS) * cell_h / h)
+        .min(f64::from(max_rows.max(1)) * cell_h / h)
         .min(1.0)
 }
 
 /// Columns × rows for an image of `px_w × px_h` pixels: natural size, shrunk to fit
-/// `max_cols` and [`MAX_SLOT_ROWS`] while keeping the aspect ratio. Never upscales.
+/// `max_cols` and `max_rows` while keeping the aspect ratio. Never upscales.
 #[must_use]
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // clamped to u16 range
-pub fn slot_geometry(px_w: u32, px_h: u32, cell_px: (u16, u16), max_cols: u16) -> (u16, u16) {
+pub fn slot_geometry(
+    px_w: u32,
+    px_h: u32,
+    cell_px: (u16, u16),
+    max_cols: u16,
+    max_rows: u16,
+) -> (u16, u16) {
     let cell_w = f64::from(cell_px.0.max(1));
     let cell_h = f64::from(cell_px.1.max(1));
     let w = f64::from(px_w.max(1));
     let h = f64::from(px_h.max(1));
     let max_cols = max_cols.max(1);
-    let scale = fit_scale(px_w, px_h, cell_px, max_cols);
+    let max_rows = max_rows.max(1);
+    let scale = fit_scale(px_w, px_h, cell_px, max_cols, max_rows);
     let cols = (w * scale / cell_w).ceil().clamp(1.0, f64::from(max_cols));
-    let rows = (h * scale / cell_h)
-        .ceil()
-        .clamp(1.0, f64::from(MAX_SLOT_ROWS));
+    let rows = (h * scale / cell_h).ceil().clamp(1.0, f64::from(max_rows));
     (cols as u16, rows as u16)
 }
 
@@ -155,6 +167,7 @@ pub(crate) fn plan_image(
     dest: &str,
     cell_px: Option<(u16, u16)>,
     max_cols: u16,
+    max_rows: u16,
 ) -> ImagePlan {
     let Some(root) = root else {
         return ImagePlan::Placeholder(ImageReject::NoRoot);
@@ -187,7 +200,7 @@ pub(crate) fn plan_image(
         }
         (px_w, px_h)
     };
-    let (cols, rows) = slot_geometry(px_w, px_h, cell_px, max_cols);
+    let (cols, rows) = slot_geometry(px_w, px_h, cell_px, max_cols, max_rows);
     ImagePlan::Slot {
         source: SlotSource::File {
             path: local.path,
@@ -222,18 +235,21 @@ mod tests {
     #[test]
     fn small_image_keeps_its_natural_cell_size() {
         // 80×34 px at 8×17 cells is exactly 10×2.
-        assert_eq!(slot_geometry(80, 34, (8, 17), 80), (10, 2));
+        assert_eq!(slot_geometry(80, 34, (8, 17), 80, MAX_SLOT_ROWS), (10, 2));
     }
 
     #[test]
     fn wide_image_shrinks_to_the_pane_and_keeps_aspect() {
         // 1600×800 px into 80 cols (640 px): scale 0.4 → 640×320 px = 80×19 cells.
-        assert_eq!(slot_geometry(1600, 800, (8, 17), 80), (80, 19));
+        assert_eq!(
+            slot_geometry(1600, 800, (8, 17), 80, MAX_SLOT_ROWS),
+            (80, 19)
+        );
     }
 
     #[test]
     fn tall_image_is_capped_at_the_row_limit() {
-        let (cols, rows) = slot_geometry(400, 4000, (8, 17), 80);
+        let (cols, rows) = slot_geometry(400, 4000, (8, 17), 80, MAX_SLOT_ROWS);
         assert_eq!(rows, MAX_SLOT_ROWS);
         // 30 rows × 17 px = 510 px tall ⇒ scale 0.1275 ⇒ ≈51 px wide ⇒ 7 columns.
         assert_eq!(cols, 7);
@@ -241,14 +257,14 @@ mod tests {
 
     #[test]
     fn never_upscales_and_never_returns_zero() {
-        assert_eq!(slot_geometry(1, 1, (8, 17), 80), (1, 1));
-        let (cols, rows) = slot_geometry(16, 16, (8, 17), 80);
+        assert_eq!(slot_geometry(1, 1, (8, 17), 80, MAX_SLOT_ROWS), (1, 1));
+        let (cols, rows) = slot_geometry(16, 16, (8, 17), 80, MAX_SLOT_ROWS);
         assert_eq!((cols, rows), (2, 1));
     }
 
     #[test]
     fn unknown_cell_size_does_not_divide_by_zero() {
-        let (cols, rows) = slot_geometry(100, 100, (0, 0), 20);
+        let (cols, rows) = slot_geometry(100, 100, (0, 0), 20, MAX_SLOT_ROWS);
         assert!(cols >= 1 && rows >= 1);
     }
 
@@ -267,7 +283,14 @@ mod tests {
     #[test]
     fn missing_root_is_a_placeholder() {
         assert_eq!(
-            plan_image(None, Path::new("p.md"), "a.png", Some((8, 17)), 80),
+            plan_image(
+                None,
+                Path::new("p.md"),
+                "a.png",
+                Some((8, 17)),
+                80,
+                MAX_SLOT_ROWS
+            ),
             ImagePlan::Placeholder(ImageReject::NoRoot)
         );
     }

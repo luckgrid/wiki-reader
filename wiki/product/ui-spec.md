@@ -158,6 +158,7 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 | `x` | Close tab |
 | `/ / Ctrl+k` | Search |
 | `?` | Help |
+| `,` ⚙ | Options |
 | `n` | Next search match |
 | `N` | Previous search match |
 | `[` | Previous page |

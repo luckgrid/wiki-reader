@@ -130,6 +130,34 @@ impl NavPosition {
     }
 }
 
+/// `[images]` table (P3-13).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct ImagesConfig {
+    /// When false, skip graphics probe and always use text placeholders.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Tallest image/diagram slot in display rows (default 30).
+    #[serde(default = "default_max_slot_rows")]
+    pub max_slot_rows: u16,
+}
+
+impl Default for ImagesConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_slot_rows: default_max_slot_rows(),
+        }
+    }
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_max_slot_rows() -> u16 {
+    30
+}
+
 /// Typed fields the options window can persist ([ADR-0018](../../../wiki/decisions/0018-config-write-path.md)).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ConfigPatch {
@@ -138,6 +166,8 @@ pub struct ConfigPatch {
     pub nav_position: Option<NavPosition>,
     pub diagrams: Option<DiagramMode>,
     pub copy_path: Option<CopyPathMode>,
+    pub images_enabled: Option<bool>,
+    pub images_max_slot_rows: Option<u16>,
 }
 
 /// `[nav]` table.
@@ -161,6 +191,7 @@ pub struct Config {
     /// so the value from an earlier file, or `dark`, stays; same rule as `diagrams`.
     pub theme: ThemeName,
     pub copy: CopyConfig,
+    pub images: ImagesConfig,
     /// Action-name → key chord overrides (e.g. `"quit" = "Q"`).
     pub keys: BTreeMap<String, String>,
     /// Human-readable diagnostics for bad / unknown keys.
@@ -218,7 +249,15 @@ impl Config {
         for key in table.keys() {
             if !matches!(
                 key.as_str(),
-                "exclude" | "nav" | "opener" | "editor" | "diagrams" | "theme" | "copy" | "keys"
+                "exclude"
+                    | "nav"
+                    | "opener"
+                    | "editor"
+                    | "diagrams"
+                    | "theme"
+                    | "copy"
+                    | "images"
+                    | "keys"
             ) {
                 self.diagnostics.push(format!("unknown config key: {key}"));
             }
@@ -312,6 +351,32 @@ impl Config {
                     .push(format!("copy: expected table, got {v}"));
             }
         }
+        if let Some(v) = table.get("images") {
+            if let Some(img) = v.as_table() {
+                if let Some(en) = img.get("enabled") {
+                    match en.as_bool() {
+                        Some(b) => self.images.enabled = b,
+                        None => self
+                            .diagnostics
+                            .push(format!("images.enabled: expected bool, got {en}")),
+                    }
+                }
+                if let Some(rows) = img.get("max_slot_rows") {
+                    match rows.as_integer().and_then(|n| u16::try_from(n).ok()) {
+                        Some(n) if (1..=60).contains(&n) => self.images.max_slot_rows = n,
+                        Some(_) => self
+                            .diagnostics
+                            .push(format!("images.max_slot_rows: expected 1..=60, got {rows}")),
+                        None => self.diagnostics.push(format!(
+                            "images.max_slot_rows: expected integer 1..=60, got {rows}"
+                        )),
+                    }
+                }
+            } else {
+                self.diagnostics
+                    .push(format!("images: expected table, got {v}"));
+            }
+        }
         if let Some(v) = table.get("keys") {
             if trusted {
                 match parse_string_map(v) {
@@ -397,6 +462,18 @@ pub fn write_patch(path: &Path, update: &ConfigPatch) -> Result<(), String> {
             .as_table_mut()
             .ok_or_else(|| "copy: expected table".to_owned())?;
         table["path"] = toml_edit::value(copy_path.as_str());
+    }
+    if update.images_enabled.is_some() || update.images_max_slot_rows.is_some() {
+        let images = doc["images"].or_insert(toml_edit::Item::Table(toml_edit::Table::new()));
+        let table = images
+            .as_table_mut()
+            .ok_or_else(|| "images: expected table".to_owned())?;
+        if let Some(enabled) = update.images_enabled {
+            table["enabled"] = toml_edit::value(enabled);
+        }
+        if let Some(rows) = update.images_max_slot_rows {
+            table["max_slot_rows"] = toml_edit::value(i64::from(rows));
+        }
     }
 
     fs::write(path, doc.to_string())
@@ -822,6 +899,8 @@ quit = "Q"
                 nav_labels: Some(LabelMode::Filename),
                 diagrams: Some(DiagramMode::Text),
                 copy_path: Some(CopyPathMode::Absolute),
+                images_enabled: Some(false),
+                images_max_slot_rows: Some(40),
             },
         )
         .unwrap();
@@ -831,6 +910,8 @@ quit = "Q"
         assert_eq!(cfg.nav.labels, LabelMode::Filename);
         assert_eq!(cfg.diagrams, DiagramMode::Text);
         assert_eq!(cfg.copy.path, CopyPathMode::Absolute);
+        assert!(!cfg.images.enabled);
+        assert_eq!(cfg.images.max_slot_rows, 40);
         assert!(cfg.diagnostics.is_empty(), "diags={:?}", cfg.diagnostics);
     }
 

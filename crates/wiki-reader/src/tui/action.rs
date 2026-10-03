@@ -42,6 +42,18 @@ pub enum Action {
     HelpActivate,
     /// Scroll the help list one row (mouse wheel).
     HelpScroll(i32),
+    /// Open the options overlay (`,`).
+    OpenOptions,
+    /// Close the options overlay.
+    CloseOptions,
+    /// Options: previous row.
+    OptionsUp,
+    /// Options: next row.
+    OptionsDown,
+    /// Options: cycle selected value backward.
+    OptionsCycleLeft,
+    /// Options: cycle selected value forward.
+    OptionsCycleRight,
     /// Type a character into the search field.
     SearchChar(char),
     /// Backspace in search field.

@@ -315,6 +315,10 @@ pub(crate) fn apply_mouse(
                 app.help_activate(Some(i));
                 return None;
             }
+            if let Hit::OptionsRow(i) = hit {
+                app.options_activate(i);
+                return None;
+            }
             Some(HitMap::action_for(&hit))
         }
         MouseEventKind::Drag(MouseButton::Left) => {
@@ -346,6 +350,14 @@ pub(crate) fn apply_mouse(
             let up = matches!(mouse.kind, MouseEventKind::ScrollUp);
             if app.search.is_some() {
                 app.update(Action::SearchSelectDelta(if up { -1 } else { 1 }));
+                return None;
+            }
+            if app.options.is_some() {
+                app.update(if up {
+                    Action::OptionsUp
+                } else {
+                    Action::OptionsDown
+                });
                 return None;
             }
             if app.help.is_some() {

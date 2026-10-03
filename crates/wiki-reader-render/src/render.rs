@@ -190,6 +190,8 @@ pub struct RenderOpts {
     pub diagram_palette: DiagramPalette,
     /// Shared Mermaid natural-size cache filled by the image worker.
     pub diagram_sizes: Arc<DiagramSizeCache>,
+    /// Tallest image/diagram slot in rows (default [`crate::MAX_SLOT_ROWS`]).
+    pub max_slot_rows: u16,
 }
 
 impl Default for RenderOpts {
@@ -204,6 +206,7 @@ impl Default for RenderOpts {
             herdr: false,
             diagram_palette: DiagramPalette::default(),
             diagram_sizes: empty_diagram_size_cache(),
+            max_slot_rows: crate::MAX_SLOT_ROWS,
         }
     }
 }
@@ -253,6 +256,7 @@ pub fn render_with(
     state.herdr = opts.herdr;
     state.diagram_palette = opts.diagram_palette;
     state.diagram_sizes = Arc::clone(&opts.diagram_sizes);
+    state.max_slot_rows = opts.max_slot_rows;
 
     if parsed.frontmatter.kind.is_some()
         || !parsed.frontmatter.props.is_empty()
@@ -409,6 +413,7 @@ struct LayoutState<'a> {
     herdr: bool,
     diagram_palette: DiagramPalette,
     diagram_sizes: Arc<DiagramSizeCache>,
+    max_slot_rows: u16,
     image_slots: Vec<ImageSlot>,
     diagram_requests: Vec<DiagramRequest>,
 }
@@ -482,6 +487,7 @@ impl<'a> LayoutState<'a> {
             herdr: false,
             diagram_palette: DiagramPalette::default(),
             diagram_sizes: empty_diagram_size_cache(),
+            max_slot_rows: crate::MAX_SLOT_ROWS,
             image_slots: Vec::new(),
             diagram_requests: Vec::new(),
         }
@@ -542,6 +548,7 @@ impl<'a> LayoutState<'a> {
             dest,
             self.cell_px,
             max_cols,
+            self.max_slot_rows,
         );
         match plan {
             ImagePlan::Slot { source, cols, rows } => {
@@ -597,8 +604,15 @@ impl<'a> LayoutState<'a> {
             match self.diagram_sizes.get(hash, palette) {
                 Some(DiagramSize::Natural { px_w, px_h }) => {
                     let cell_px = self.cell_px.unwrap_or((8, 17));
-                    if crate::mermaid_raster::is_legible(px_w, px_h, cell_px, width) {
-                        let (cols, rows) = slot_geometry(px_w, px_h, cell_px, width);
+                    if crate::mermaid_raster::is_legible(
+                        px_w,
+                        px_h,
+                        cell_px,
+                        width,
+                        self.max_slot_rows,
+                    ) {
+                        let (cols, rows) =
+                            slot_geometry(px_w, px_h, cell_px, width, self.max_slot_rows);
                         Some((cols, rows))
                     } else {
                         // Width-scoped: do not overwrite the natural-size cache entry.

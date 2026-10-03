@@ -345,7 +345,7 @@ fn prepare(
         SlotKeySource::Mermaid { palette, .. } => {
             let src = mermaid_source.ok_or_else(|| "missing mermaid source".to_owned())?;
             let raster = render_mermaid(src, palette).map_err(|e| e.to_string())?;
-            if !is_legible(raster.px_w, raster.px_h, cell_px, max_cols) {
+            if !is_legible(raster.px_w, raster.px_h, cell_px, max_cols, key.rows) {
                 return Err("diagram too wide for pane".into());
             }
             DynamicImage::ImageRgba8(raster.image)

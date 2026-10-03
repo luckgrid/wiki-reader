@@ -14,6 +14,7 @@ pub mod images;
 pub mod keymap;
 pub mod layout;
 pub mod opener;
+pub mod options_ui;
 pub mod page_doc;
 pub mod regions;
 pub mod rendered_doc;

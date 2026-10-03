@@ -4,6 +4,7 @@ use super::*;
 use crate::tui::action::Action;
 use crate::tui::focus::FocusPane;
 use crate::tui::hit::{Hit, HitMap};
+use crate::tui::theme::Theme;
 use crate::tui::viewer_doc::{FocusTarget, ViewerDoc};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -94,11 +95,14 @@ fn chrome_pad_hits_header_icons_and_nav_search() {
     let buf = terminal.backend().buffer();
     let (tx, ty) = find_glyph(buf, "◫").expect("◫");
     let (qx, qy) = find_glyph(buf, "✕").expect("✕");
+    let (gx, gy) = find_glyph(buf, "⚙").expect("⚙");
     assert_eq!(app.hit_map.hit_at(tx, ty), Some(&Hit::NavToggle));
     assert_eq!(app.hit_map.hit_at(qx, qy), Some(&Hit::Quit));
+    assert_eq!(app.hit_map.hit_at(gx, gy), Some(&Hit::OpenOptions));
     // Padded: icons sit one col inset from the raw edge.
     assert_eq!(qx, 120 - 2, "✕ at chrome_pad right edge");
     assert_eq!(tx, 120 - 4, "◫ two cols left of ✕");
+    assert_eq!(gx, 120 - 6, "⚙ two cols left of ◫");
     assert!(
         find_glyph(buf, "○").is_none(),
         "no eye toggle in the header"
@@ -3041,6 +3045,56 @@ fn help_overlay_open_close_and_activate() {
     app.update(Action::HelpActivate);
     assert!(app.quit);
     assert!(app.help.is_none());
+}
+
+#[test]
+fn options_overlay_cycles_theme_and_persists() {
+    use wiki_reader_core::config::ThemeName;
+    let root = fixture();
+    let tmp = tempfile::tempdir().unwrap();
+    let mut app = App::new(&root).unwrap();
+    app.config_write_path = Some(tmp.path().join("config.toml"));
+    app.update(Action::OpenOptions);
+    assert!(app.options.is_some());
+    assert_eq!(app.input_mode, crate::tui::keymap::InputMode::Options);
+    let buf = draw_app(&mut app, 80, 24);
+    let text: String = buf
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(ratatui::buffer::Cell::symbol)
+        .collect();
+    assert!(text.contains("Theme") && text.contains("Max image rows"));
+    assert_eq!(app.theme_name, ThemeName::Dark);
+    app.update(Action::OptionsCycleRight);
+    assert_eq!(app.theme_name, ThemeName::Light);
+    let light = Theme::from_name(ThemeName::Light).text_secondary;
+    assert_eq!(app.theme.text_secondary, light);
+    assert_ne!(light, Theme::from_name(ThemeName::Dark).text_secondary);
+    let saved = std::fs::read_to_string(tmp.path().join("config.toml")).unwrap();
+    assert!(saved.contains("theme = \"light\""), "saved={saved}");
+    app.update(Action::OptionsDown);
+    app.update(Action::OptionsCycleRight);
+    assert_eq!(
+        app.nav_position,
+        wiki_reader_core::config::NavPosition::Right
+    );
+    app.update(Action::CloseOptions);
+    assert!(app.options.is_none());
+    assert_eq!(app.input_mode, crate::tui::keymap::InputMode::Normal);
+}
+
+#[test]
+fn options_write_error_sets_status_message() {
+    let root = fixture();
+    let tmp = tempfile::tempdir().unwrap();
+    let mut app = App::new(&root).unwrap();
+    // A directory is not a writable file.
+    app.config_write_path = Some(tmp.path().to_path_buf());
+    app.update(Action::OpenOptions);
+    app.update(Action::OptionsCycleRight);
+    assert!(!app.message.is_empty());
 }
 
 #[test]

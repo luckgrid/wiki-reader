@@ -5,6 +5,7 @@ use ratatui::Frame;
 use super::App;
 use crate::tui::focus::FocusPane;
 use crate::tui::layout;
+use crate::tui::options_ui::{OptionRow, OptionsOverlay};
 use crate::tui::page_doc::PageDoc;
 use crate::tui::regions::status::StatusModel;
 use crate::tui::regions::{header, side_nav, status, viewer};
@@ -41,7 +42,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     let crumbs = app.navigator.nav().tree.breadcrumb(&page);
     let nav = app.navigator.nav();
     // A popup owns the keys: both panes behind it drop their active colours.
-    let overlay_open = app.search.is_some() || app.help.is_some();
+    let overlay_open = app.search.is_some() || app.help.is_some() || app.options.is_some();
 
     header::draw(frame, regions.header, &crumbs, &theme, &mut app.hit_map);
 
@@ -148,6 +149,8 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
                 "SEARCH"
             } else if app.help.is_some() {
                 "HELP"
+            } else if app.options.is_some() {
+                "OPTIONS"
             } else {
                 app.focus.label()
             },
@@ -187,6 +190,15 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     }
     if let Some(help) = &mut app.help {
         draw_help_overlay(frame, area, help, &theme, &mut app.hit_map);
+    }
+    if app.options.is_some() {
+        let values: Vec<String> = OptionRow::ALL
+            .iter()
+            .map(|r| app.option_value(*r))
+            .collect();
+        if let Some(opts) = app.options.as_mut() {
+            draw_options_overlay(frame, area, opts, &values, &theme, &mut app.hit_map);
+        }
     }
 }
 
@@ -557,6 +569,89 @@ fn draw_help_overlay(
         if row.action.is_some() {
             hits.push(row_rect, Hit::HelpRow(abs));
         }
+    }
+}
+
+fn draw_options_overlay(
+    frame: &mut Frame<'_>,
+    area: ratatui::layout::Rect,
+    opts: &mut OptionsOverlay,
+    values: &[String],
+    theme: &crate::tui::theme::Theme,
+    hits: &mut crate::tui::hit::HitMap,
+) {
+    use crate::tui::hit::Hit;
+    use crate::tui::regions::footer::ellipsis;
+    use crate::tui::regions::overlay::{
+        POPUP_PAD, centered_panel, clamp_scroll, ensure_visible, popup_accent, popup_block,
+        popup_row,
+    };
+    use ratatui::style::Modifier;
+    use ratatui::text::{Line, Span};
+    use ratatui::widgets::{Clear, Paragraph};
+
+    hits.push(area, Hit::OptionsDismiss);
+
+    let rows = OptionRow::ALL.len();
+    let h = u16::try_from(rows + 4).unwrap_or(u16::MAX);
+    let rect = centered_panel(area, 50, h, 30, 6);
+    frame.render_widget(Clear, rect);
+    let title = Line::from(Span::styled(
+        " Options (←/→ change, Esc close) ",
+        popup_accent(theme),
+    ));
+    let block = popup_block(title, theme);
+    let inner = block.inner(rect);
+    frame.render_widget(block, rect);
+    hits.push(rect, Hit::FocusViewer);
+
+    // One blank row top and bottom, like help.
+    let visible = usize::from(inner.height.saturating_sub(2));
+    if inner.width == 0 || visible == 0 {
+        return;
+    }
+    opts.list_height = visible;
+    opts.scroll = ensure_visible(opts.selected, opts.scroll, visible);
+    opts.scroll = clamp_scroll(opts.scroll, visible, rows);
+
+    let content_w = usize::from(inner.width.saturating_sub(POPUP_PAD * 2));
+    for row_i in 0..visible {
+        let abs = opts.scroll + row_i;
+        let Some(row) = OptionRow::ALL.get(abs) else {
+            break;
+        };
+        let row_rect = ratatui::layout::Rect {
+            x: inner.x,
+            y: inner
+                .y
+                .saturating_add(1)
+                .saturating_add(u16::try_from(row_i).unwrap_or(0)),
+            width: inner.width,
+            height: 1,
+        };
+        let selected = abs == opts.selected;
+        let label_style = if selected {
+            theme.text().add_modifier(Modifier::BOLD)
+        } else {
+            theme.text()
+        };
+        let value = ellipsis(values.get(abs).map_or("", String::as_str), content_w / 2);
+        let label = ellipsis(
+            row.label(),
+            content_w.saturating_sub(Span::raw(value.as_str()).width() + 1),
+        );
+        // Label … value, value right-aligned.
+        let gap = content_w
+            .saturating_sub(Span::raw(label.as_str()).width() + Span::raw(value.as_str()).width())
+            .max(1);
+        let spans = vec![
+            Span::styled(label, label_style),
+            Span::raw(" ".repeat(gap)),
+            Span::styled(value, popup_accent(theme)),
+        ];
+        let bg = selected.then_some(theme.cursor_line);
+        frame.render_widget(Paragraph::new(popup_row(spans, inner.width, bg)), row_rect);
+        hits.push(row_rect, Hit::OptionsRow(abs));
     }
 }
 
