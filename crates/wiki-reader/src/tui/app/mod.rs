@@ -886,6 +886,7 @@ impl App {
             | Hit::ModalDismiss
             | Hit::ModalBody
             | Hit::OpenOptions
+            | Hit::OpenHelp
             | Hit::OptionsDismiss
             | Hit::OptionsRow(_)
             | Hit::FocusNav

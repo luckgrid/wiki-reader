@@ -2,7 +2,7 @@
 source: crates/wiki-reader/src/tui/app/tests.rs
 expression: out
 ---
- Worked Example Wiki                                                                                              ⚙ ◫ ✕ 
+ Worked Example Wiki                                                                                                ◫ ✕ 
 ┌────────────────────────────┐┌┌ Help (? or Esc to close) ──────────────────────────────┐──────────────────────────────┐
 │▌/ Search…                  │││                                                        │──────────────────────────────│
 │                            │││  ── Global ──────────────────────────────────────────  │                              │
@@ -17,12 +17,12 @@ expression: out
 │                            │││  t                          New tab                    │                              │
 │                            │││  x                          Close tab                  │                              │
 │                            │││  / / Ctrl+k                 Search                     │                              │
-│                            │││  ?                          Help                       │                              │
+│                            │││  ? / ?                      Help                       │                              │
 │                            │││  , / c / ⚙                  Options (toggle)           │                              │
 │                            │││  n                          Next search match          │                              │
 │                            │││  N                          Previous search match      │                              │
 │                            │││  [                          Previous page              │                              │
 │                            │││  ]                          Next page                  │                              │
 │                            │││                                                        │                              │
-└────────────────────────────┘└└────────────────────────────────────────────────────────┘───┤ Architecture Overview › ├┘
+└────────────────────────────┘└└────────────────────────────────────────────────────────┘ Architecture Overview › ├ ? ⚙┘
   HELP  · README.md · L1:C1 11% · 2026-09-28 · draft · 29w · 1m

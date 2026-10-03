@@ -2,7 +2,7 @@
 source: crates/wiki-reader/src/tui/app/tests.rs
 expression: out
 ---
- Worked Example Wiki                                                      ⚙ ◫ ✕ 
+ Worked Example Wiki                                                        ◫ ✕ 
 ┌─────────────┌ Options ─────────────────────────────────────────┐─────────────┐
 │▌/ Search…   │                                                  │─────────────│
 │             │  Theme                                           │             │
@@ -40,5 +40,5 @@ expression: out
 │             │    ○ Absolute path                               │             │
 │             │                                                  │             │
 │             │  ↑↓ / j k Navigate  Enter Apply  Esc / c Close   │             │
-└─────────────└──────────────────────────────────────────────────┘e Overvi… › ├┘
+└─────────────└──────────────────────────────────────────────────┘Over… › ├ ? ⚙┘
   OPTIONS  · README.md · L1:C1 9% · 2026-09-28 · draft · 29w · 1m

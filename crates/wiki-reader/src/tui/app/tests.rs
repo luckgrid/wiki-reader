@@ -85,7 +85,7 @@ fn narrow_nav_overlay_is_opaque_and_outside_clicks_only_dismiss() {
             assert_eq!(terminal.backend().buffer()[(x, 7)].symbol(), " ");
         }
         let page = app.navigator.tab().current().page.clone();
-        // The header gear normally opens options, but now only dismisses the nav.
+        // The footer gear normally opens options, but only dismisses the overlay.
         let (x, y) = find_glyph(terminal.backend().buffer(), "⚙").unwrap();
         mouse_at(&mut app, MouseEventKind::Down(MouseButton::Left), x, y);
         assert!(!app.nav_visible);
@@ -168,14 +168,14 @@ fn long_breadcrumbs_keep_header_controls_visible_and_hits_clipped() {
             })
             .unwrap();
         let buf = terminal.backend().buffer();
-        assert_eq!(buf[(width - 6, 0)].symbol(), "⚙");
+        assert!(find_glyph(buf, "⚙").is_none(), "options moved to footer");
         assert_eq!(buf[(width - 4, 0)].symbol(), "◫");
         assert_eq!(buf[(width - 2, 0)].symbol(), "✕");
         assert!(find_glyph(buf, "…").is_some());
         assert!(matches!(hits.hit_at(width - 4, 0), Some(Hit::NavToggle)));
         for (rect, hit) in hits.entries() {
             if matches!(hit, Hit::Breadcrumb(_)) {
-                assert!(rect.right() <= width - 7);
+                assert!(rect.right() <= width - 5);
             }
         }
     }
@@ -267,7 +267,9 @@ fn chrome_pad_hits_header_icons_and_nav_search() {
     // Padded: icons sit one col inset from the raw edge.
     assert_eq!(qx, 120 - 2, "✕ at chrome_pad right edge");
     assert_eq!(tx, 120 - 4, "◫ two cols left of ✕");
-    assert_eq!(gx, 120 - 6, "⚙ two cols left of ◫");
+    assert_eq!((gx, gy), (120 - 2, 22), "⚙ at View footer right edge");
+    assert_eq!(buf[(gx - 2, gy)].symbol(), "?");
+    assert_eq!(app.hit_map.hit_at(gx - 2, gy), Some(&Hit::OpenHelp));
     assert!(
         find_glyph(buf, "○").is_none(),
         "no eye toggle in the header"
@@ -282,6 +284,40 @@ fn chrome_pad_hits_header_icons_and_nav_search() {
         Some(&Hit::NavSearchRow),
         "search hit on padded chrome row"
     );
+}
+
+#[test]
+fn footer_buttons_open_popups_on_both_nav_sides_and_responsive_widths() {
+    for position in [NavPosition::Left, NavPosition::Right] {
+        for width in [40, 60, 80, 120] {
+            for (hit, glyph) in [(Hit::OpenHelp, "?"), (Hit::OpenOptions, "⚙")] {
+                let mut app = App::new(&fixture()).unwrap();
+                app.nav_position = position;
+                let terminal = draw_app(&mut app, width, 24);
+                let (rect, _) = app
+                    .hit_map
+                    .entries()
+                    .iter()
+                    .find(|(_, candidate)| *candidate == hit)
+                    .expect("footer control hit");
+                let (x, y) = (rect.x, rect.y);
+                assert_eq!(y, 22);
+                assert_eq!(terminal.backend().buffer()[(x, y)].symbol(), glyph);
+                mouse_at(&mut app, MouseEventKind::Down(MouseButton::Left), x, y);
+                if hit == Hit::OpenHelp {
+                    let help = app.help.as_ref().expect("help opens");
+                    let row = help
+                        .rows
+                        .iter()
+                        .find(|row| row.action == Some(Action::OpenHelp))
+                        .unwrap();
+                    assert_eq!(row.icon, Some("?"));
+                } else {
+                    assert!(app.options.is_some());
+                }
+            }
+        }
+    }
 }
 
 #[test]

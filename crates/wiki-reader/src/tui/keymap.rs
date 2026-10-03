@@ -182,12 +182,13 @@ pub struct Binding {
     pub matcher: Option<Matcher>,
 }
 
-/// Header icon that also triggers `action`, shown next to its key in help.
+/// Chrome icon that also triggers `action`, shown next to its key in help.
 #[must_use]
 pub fn binding_icon(action: &Action) -> Option<&'static str> {
     match action {
         Action::ToggleNav => Some("◫"),
         Action::OpenOptions => Some("⚙"),
+        Action::OpenHelp => Some("?"),
         Action::Quit => Some("✕"),
         _ => None,
     }

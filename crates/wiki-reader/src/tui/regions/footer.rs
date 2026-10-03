@@ -1,4 +1,4 @@
-//! View footer chrome: outlined ‹ prev / next › buttons on the bottom border (P2-18).
+//! View footer chrome: outlined ‹ prev / next › buttons and ? / ⚙ controls.
 
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::Style;
@@ -66,7 +66,8 @@ pub(crate) fn button(text: &str, selected: bool, border: Style, theme: &Theme) -
     ])
 }
 
-/// Build left/right bottom titles, each capped to half the border (never overlap).
+/// Reserve the right-hand ? / ⚙ controls, then split the rest between prev/next.
+/// On tiny panes, hide links that cannot fit their chrome and retain only visible icons.
 ///
 /// `pane_focused` is whether the View pane has focus; the button outline follows
 /// the pane border colour. A missing side yields an empty title, so the border
@@ -81,15 +82,22 @@ pub fn titles(
     theme: &Theme,
     hits: &mut HitMap,
 ) -> FooterTitles {
-    let border_y = area.y.saturating_add(area.height.saturating_sub(1));
+    if area.height < 2 || area.width < 3 {
+        return FooterTitles {
+            left: Line::default(),
+            right: Line::default(),
+        };
+    }
+    let border_y = area.bottom() - 1;
     // Interior of the bottom border between corner glyphs.
     let inner_w = area.width.saturating_sub(2);
-    let half = (inner_w / 2).max(1);
+    let controls_w = inner_w.min(4);
+    let half = (inner_w - controls_w) / 2;
     let left_x = area.x.saturating_add(1);
     let budget = usize::from(half).saturating_sub(BUTTON_CHROME);
     let border = theme.border(pane_focused);
 
-    let left = prev_label.map(|l| {
+    let left = prev_label.filter(|_| half >= 7).map(|l| {
         let text = format!("‹ {}", ellipsis(l, budget.saturating_sub(2)));
         let w = col_width(&text) + BUTTON_CHROME;
         hits.push(
@@ -109,7 +117,7 @@ pub fn titles(
         )
     });
 
-    let right = next_label.map(|l| {
+    let right = next_label.filter(|_| half >= 7).map(|l| {
         let text = format!("{} ›", ellipsis(l, budget.saturating_sub(2)));
         let w = u16::try_from(col_width(&text) + BUTTON_CHROME)
             .unwrap_or(1)
@@ -117,7 +125,7 @@ pub fn titles(
             .max(1);
         let x = area
             .x
-            .saturating_add(area.width.saturating_sub(1).saturating_sub(w));
+            .saturating_add(area.width.saturating_sub(1 + controls_w).saturating_sub(w));
         hits.push(
             Rect {
                 x,
@@ -135,9 +143,17 @@ pub fn titles(
         )
     });
 
+    let controls: String = " ? ⚙".chars().skip(usize::from(4 - controls_w)).collect();
+    for (offset, hit) in [(3, Hit::OpenHelp), (1, Hit::OpenOptions)] {
+        if inner_w >= offset {
+            hits.push(Rect::new(area.right() - 1 - offset, border_y, 1, 1), hit);
+        }
+    }
+    let mut right = right.unwrap_or_default();
+    right.spans.push(Span::styled(controls, theme.accent()));
     FooterTitles {
         left: left.unwrap_or_default().alignment(Alignment::Left),
-        right: right.unwrap_or_default().alignment(Alignment::Right),
+        right: right.alignment(Alignment::Right),
     }
 }
 
@@ -146,6 +162,38 @@ mod tests {
     use super::*;
     use crate::tui::hit::HitMap;
     use crate::tui::theme::Theme;
+
+    #[test]
+    fn tiny_footers_only_register_visible_non_overlapping_hits() {
+        let theme = Theme::default();
+        for width in 0..50 {
+            for height in 0..4 {
+                let area = Rect::new(5, 7, width, height);
+                let mut hits = HitMap::default();
+                let titles = titles(
+                    area,
+                    Some("Previous"),
+                    Some("Next"),
+                    None,
+                    true,
+                    &theme,
+                    &mut hits,
+                );
+                assert!(
+                    titles.left.width() + titles.right.width()
+                        <= usize::from(width.saturating_sub(2))
+                );
+                for (i, (rect, _)) in hits.entries().iter().enumerate() {
+                    assert!(height >= 2);
+                    assert_eq!(rect.y, area.bottom() - 1);
+                    assert!(rect.x > area.x && rect.right() < area.right());
+                    for (other, _) in &hits.entries()[i + 1..] {
+                        assert!(rect.intersection(*other).is_empty());
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn long_titles_do_not_overlap_at_narrow_widths() {
@@ -169,9 +217,9 @@ mod tests {
             );
             let lw = t.left.width();
             let rw = t.right.width();
-            let half = usize::from((w.saturating_sub(2)) / 2);
+            let half = usize::from((w.saturating_sub(6)) / 2);
             assert!(lw <= half, "w={w}: left {lw} > half {half}");
-            assert!(rw <= half, "w={w}: right {rw} > half {half}");
+            assert!(rw <= half + 4, "w={w}: right {rw} > budget {}", half + 4);
             assert!(lw + rw <= usize::from(w.saturating_sub(2)));
         }
     }
