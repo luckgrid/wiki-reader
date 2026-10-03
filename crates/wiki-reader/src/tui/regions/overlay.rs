@@ -11,20 +11,22 @@ use crate::tui::theme::Theme;
 /// Columns of blank padding inside a popup, left and right.
 pub const POPUP_PAD: u16 = 2;
 
-/// Peach-bordered popup frame with `title` on the top border.
+/// Popup frame with `title` on the top border: focus-coloured border, painted with the theme's
+/// surface (a popup's `Clear` would otherwise show the terminal's own background).
 #[must_use]
 pub fn popup_block(title: Line<'static>, theme: &Theme) -> Block<'static> {
     Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(theme.peach))
+        .border_style(Style::default().fg(theme.border_focus))
+        .style(theme.base_style())
         .title(title)
 }
 
-/// Peach bold style for popup titles and accents.
+/// Bold focus-colour style for popup titles, keys and the cursor row.
 #[must_use]
 pub fn popup_accent(theme: &Theme) -> Style {
     Style::default()
-        .fg(theme.peach)
+        .fg(theme.border_focus)
         .add_modifier(Modifier::BOLD)
 }
 

@@ -22,9 +22,9 @@ impl OptionChoice {
     #[must_use]
     pub fn label(self) -> String {
         match self {
-            Self::Theme(ThemeName::Dark) => "Dark".into(),
-            Self::Theme(ThemeName::Light) => "Light".into(),
-            Self::Theme(ThemeName::Herdr) => "Herdr".into(),
+            Self::Theme(ThemeName::Dark) => "Dark (luckgrid)".into(),
+            Self::Theme(ThemeName::Light) => "Light (luckgrid)".into(),
+            Self::Theme(ThemeName::Herdr) => "Herdr (follows herdr)".into(),
             Self::NavPosition(NavPosition::Left) => "Nav left".into(),
             Self::NavPosition(NavPosition::Right) => "Nav right".into(),
             Self::NavLabels(LabelMode::Title) => "Page titles".into(),

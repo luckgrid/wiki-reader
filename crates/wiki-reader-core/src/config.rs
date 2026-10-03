@@ -190,6 +190,9 @@ pub struct Config {
     /// Built-in colour preset. An unknown value in a later file is ignored (with a diagnostic),
     /// so the value from an earlier file, or `dark`, stays; same rule as `diagrams`.
     pub theme: ThemeName,
+    /// True once a config file set a valid `theme`; without it, running inside herdr defaults the
+    /// theme to `herdr`.
+    pub theme_set: bool,
     pub copy: CopyConfig,
     pub images: ImagesConfig,
     /// Action-name → key chord overrides (e.g. `"quit" = "Q"`).
@@ -329,7 +332,10 @@ impl Config {
         }
         if let Some(v) = table.get("theme") {
             match v.clone().try_into::<ThemeName>() {
-                Ok(t) => self.theme = t,
+                Ok(t) => {
+                    self.theme = t;
+                    self.theme_set = true;
+                }
                 Err(_) => self.diagnostics.push(format!(
                     "theme: expected \"dark\", \"light\" or \"herdr\", got {v}"
                 )),
