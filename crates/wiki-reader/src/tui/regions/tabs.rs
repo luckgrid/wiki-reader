@@ -1,9 +1,8 @@
-//! View tabs: connected compact title/separator rows with a solid background.
-//! Active selection uses the accent with View focus and a darker fill with Nav focus.
+//! View tabs: plain dim labels separated by |, with an accent/heavy active underline.
 
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
-use ratatui::style::Style;
+use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
 use wiki_reader_core::nav::Tab;
 
@@ -22,7 +21,7 @@ fn filename(tab: &Tab) -> String {
 /// Longest label a tab shows before it is ellipsized.
 const MAX_LABEL: usize = 18;
 
-/// Pane-edge labels `┤ a.md × │ b.md × ├`, with shared separators.
+/// Plain labels ` a.md × | b.md × `, separated by literal |.
 /// Registers [`Hit::Tab`] over each padded cell and
 /// [`Hit::TabClose`] over its `×`.
 ///
@@ -39,19 +38,11 @@ pub fn titles(
     theme: &Theme,
     hits: &mut HitMap,
 ) -> Line<'static> {
-    if area.height < 2 || area.width < 9 {
+    if area.height < 2 || area.width < 7 {
         return Line::default();
     }
-    // Pane sides and the closed group's two borders.
-    let inner_w = usize::from(area.width - 4);
-    let border = theme.border(pane_focused).bg(theme.surface_muted);
-    let fill = if pane_focused {
-        Style::default().bg(theme.peach).fg(theme.on_peach)
-    } else {
-        Style::default()
-            .bg(theme.tab_unfocused())
-            .fg(ratatui::style::Color::White)
-    };
+    let inner_w = usize::from(area.width - 2);
+    let border = theme.border(pane_focused).remove_modifier(Modifier::BOLD);
     let labels: Vec<_> = tabs
         .iter()
         .map(|tab| ellipsis(&filename(tab), MAX_LABEL.min(inner_w.saturating_sub(4))))
@@ -82,7 +73,7 @@ pub fn titles(
         }
     }
 
-    let mut x = area.x.saturating_add(2);
+    let mut x = area.x.saturating_add(1);
     let mut cells: Vec<Span<'static>> = Vec::new();
     for (i, label) in labels.into_iter().enumerate().filter(|(i, _)| shown[*i]) {
         let text = format!(" {label} × ");
@@ -91,7 +82,7 @@ pub fn titles(
             continue;
         };
         if !cells.is_empty() {
-            cells.push(Span::styled("│", border));
+            cells.push(Span::styled("|", border));
             x = x.saturating_add(1);
         }
         hits.push(
@@ -117,16 +108,16 @@ pub fn titles(
             Hit::TabClose(i),
         );
         let selected = i == active && !muted;
-        cells.push(Span::styled(text, if selected { fill } else { border }));
+        cells.push(Span::styled(
+            text,
+            theme.chrome_label_style(selected, pane_focused),
+        ));
         x = x.saturating_add(w16);
     }
     if cells.is_empty() {
         return Line::default();
     }
-    let mut spans = vec![Span::styled("┤", border)];
-    spans.extend(cells);
-    spans.push(Span::styled("├", border));
-    Line::from(spans).alignment(Alignment::Left)
+    Line::from(cells).alignment(Alignment::Left)
 }
 
 /// Paint the connected top strip; only edge-row labels and × have hits.
@@ -152,6 +143,6 @@ pub fn draw(
         area,
         labels,
         true,
-        theme.border(pane_focused).bg(theme.surface_muted),
+        theme.border(pane_focused).remove_modifier(Modifier::BOLD),
     );
 }

@@ -2967,12 +2967,12 @@ fn narrow_tab_bar_keeps_the_active_tab_visible() {
 }
 
 #[test]
-fn single_tab_keeps_darker_selection_with_nav_focus() {
+fn tabs_use_accent_text_heavy_active_underline_and_dim_inactive_labels() {
     let root = fixture();
     let mut app = App::new(&root).unwrap();
     assert_eq!(app.navigator.tab_count(), 1);
     let theme = app.theme;
-    let tab_fill = |app: &mut App| {
+    let tab_color = |app: &mut App| {
         let terminal = draw_app(app, 120, 24);
         let buf = terminal.backend().buffer();
         let y = app
@@ -2982,27 +2982,57 @@ fn single_tab_keeps_darker_selection_with_nav_focus() {
             .find(|(_, h)| *h == Hit::Tab(0))
             .map(|(r, _)| (r.x, r.y))
             .expect("the current page's tab is always drawn");
-        // Label cell, one past the `┤ `.
-        buf[(y.0 + 2, y.1)].bg
+        assert_eq!(buf[(y.0 + 2, y.1)].bg, app.theme.surface);
+        assert_eq!(buf[(y.0 + 2, y.1 + 1)].symbol(), "━");
+        buf[(y.0 + 2, y.1)].fg
     };
     app.update(Action::FocusViewer);
-    assert_eq!(tab_fill(&mut app), theme.peach, "active tab fills peach");
+    assert_eq!(
+        tab_color(&mut app),
+        theme.accent,
+        "active tab uses accent text"
+    );
     app.update(Action::FocusNav);
     assert_eq!(
-        tab_fill(&mut app),
-        theme.tab_unfocused(),
-        "Nav focus retains darker selection"
+        tab_color(&mut app),
+        theme.text_secondary,
+        "Nav focus retains dimmer active text"
     );
     app.update(Action::OpenHelp);
-    assert_ne!(
-        tab_fill(&mut app),
-        theme.tab_unfocused(),
-        "popup mutes tab selection"
+    let muted = crate::tui::regions::tabs::titles(
+        ratatui::layout::Rect::new(0, 0, 120, 2),
+        app.navigator.tabs(),
+        0,
+        false,
+        true,
+        &theme,
+        &mut HitMap::default(),
     );
+    assert!(
+        muted.spans.iter().all(|span| !span
+            .style
+            .add_modifier
+            .contains(ratatui::style::Modifier::BOLD)),
+        "popup mutes active underline"
+    );
+    app.update(Action::CloseHelp);
+    app.update(Action::NewTab);
+    app.update(Action::FocusViewer);
+    let terminal = draw_app(&mut app, 120, 24);
+    let buf = terminal.backend().buffer();
+    assert!((0..120).any(|x| buf[(x, 1)].symbol() == "|"));
+    let (rect, _) = app
+        .hit_map
+        .entries()
+        .iter()
+        .find(|(_, hit)| *hit == Hit::Tab(0))
+        .unwrap();
+    assert_eq!(buf[(rect.x + 1, rect.y)].fg, theme.text_muted);
+    assert_eq!(buf[(rect.x + 1, rect.y + 1)].symbol(), "─");
 }
 
 #[test]
-fn compact_chrome_is_connected_filled_and_only_label_rows_are_clickable() {
+fn compact_chrome_has_no_fills_and_only_label_rows_are_clickable() {
     for position in [NavPosition::Left, NavPosition::Right] {
         for width in [40, 60, 80, 120] {
             let mut app = App::new(&fixture()).unwrap();
@@ -3016,13 +3046,13 @@ fn compact_chrome_is_connected_filled_and_only_label_rows_are_clickable() {
             assert_eq!(app.viewer_geom.top_y, 3);
             assert_eq!(app.viewer_geom.rows, 18);
             for (rect, hit) in app.hit_map.entries() {
-                let (x, seam_y, junction) = match hit {
-                    Hit::Tab(_) => (rect.x - 1, rect.y + 1, "┴"),
-                    Hit::Prev | Hit::Next => (rect.x, rect.y - 1, "┬"),
+                let seam_y = rect.y + 1;
+                let underline = match hit {
+                    Hit::Tab(_) => "━",
+                    Hit::Prev | Hit::Next => "─",
                     _ => continue,
                 };
-                assert_eq!(buf[(x, rect.y)].symbol(), "┤");
-                assert_eq!(buf[(x, seam_y)].symbol(), junction);
+                assert_eq!(buf[(rect.x + 1, seam_y)].symbol(), underline);
                 assert!(!matches!(
                     app.hit_map.hit_at(rect.x, seam_y),
                     Some(Hit::Tab(_) | Hit::TabClose(_) | Hit::Prev | Hit::Next)
@@ -3031,34 +3061,21 @@ fn compact_chrome_is_connected_filled_and_only_label_rows_are_clickable() {
                 assert_eq!(
                     buf[(fill_x, rect.y)].bg,
                     buf[(fill_x, seam_y)].bg,
-                    "selected interior fill continues through separator"
+                    "label and underline have no background fill"
                 );
             }
             let regions =
                 crate::tui::layout::split(buf.area, app.nav_visible, app.nav_width, position);
             for y in [1, 2, 21, 22] {
-                assert_eq!(
-                    buf[(
-                        regions.viewer.x,
-                        if y == 1 {
-                            2
-                        } else if y == 22 {
-                            21
-                        } else {
-                            y
-                        }
-                    )]
-                        .symbol(),
-                    "├"
-                );
+                if y == 2 {
+                    assert_eq!(buf[(regions.viewer.x, y)].symbol(), "├");
+                }
+                if y == 22 {
+                    assert_eq!(buf[(regions.viewer.x, y)].symbol(), "└");
+                }
                 for x in regions.viewer.x..regions.viewer.right() {
                     let bg = buf[(x, y)].bg;
-                    assert!(
-                        bg == app.theme.surface_muted
-                            || bg == app.theme.peach
-                            || bg == app.theme.tab_unfocused(),
-                        "no unfilled gaps at {x},{y}"
-                    );
+                    assert_eq!(bg, app.theme.surface, "no background fills at {x},{y}");
                 }
             }
             let tab_row: String = (0..width).map(|x| buf[(x, 1)].symbol()).collect();
@@ -3104,11 +3121,11 @@ fn tiny_chrome_widths_keep_active_tabs_and_non_overlapping_footer_hits() {
             hits.entries()
                 .iter()
                 .any(|(_, hit)| *hit == Hit::Tab(app.navigator.active())),
-            width >= 9
+            width >= 7
         );
         for (rect, hit) in hits.entries() {
             assert!(rect.x > 0 && rect.right() < width);
-            assert!(rect.y == 0 || rect.y == 3);
+            assert!(rect.y == 0 || rect.y == 2);
             if matches!(hit, Hit::TabClose(_)) {
                 assert_eq!(terminal.backend().buffer()[(rect.x, rect.y)].symbol(), "×");
             }
@@ -3147,7 +3164,7 @@ fn short_terminals_clip_whole_chrome_strips_and_keep_layout_controls() {
             }
             if matches!(hit, Hit::Prev | Hit::Next) {
                 assert!(regions.viewer.height >= 4);
-                assert_eq!(rect.y, regions.viewer.bottom() - 1);
+                assert_eq!(rect.y, regions.viewer.bottom() - 2);
             }
         }
     }
@@ -3780,7 +3797,7 @@ fn footer_missing_side_leaves_the_border_unbroken() {
     let (app, row) = footer_border(&root, "README.md", 100);
     assert!(!row.contains("‹"), "{row}");
     assert!(!row.contains('—'), "{row}");
-    assert!(row.contains(" › ├"), "next button present: {row}");
+    assert!(row.contains(" › "), "next control present: {row}");
     assert!(
         !app.hit_map
             .entries()
@@ -3790,7 +3807,7 @@ fn footer_missing_side_leaves_the_border_unbroken() {
     );
     // Padded outline buttons.
     let (_, row) = footer_border(&root, "architecture/design-system/tokens.md", 100);
-    assert!(row.contains("┤ ‹ Design System ├"), "{row}");
+    assert!(row.contains(" ‹ Design System "), "{row}");
 }
 
 #[test]
@@ -3798,7 +3815,7 @@ fn footer_button_colours_follow_pane_focus_and_selection() {
     let root = fixture();
     let (mut app, _) = footer_border(&root, "architecture/design-system/tokens.md", 100);
     let theme = app.theme;
-    // (outline colour of the prev button, fill of the next button's label)
+    // Foreground, background and underline of the next label.
     let find_style = |app: &mut App| {
         let terminal = draw_app(app, 100, 24);
         let buf = terminal.backend().buffer();
@@ -3813,22 +3830,26 @@ fn footer_button_colours_follow_pane_focus_and_selection() {
         let nx = (0..buf.area.width)
             .find(|&nx| buf[(nx, y)].symbol() == "›")
             .expect("next button");
-        (buf[(x, y)].fg, buf[(nx, y)].bg)
+        assert_eq!(buf[(x, y)].bg, theme.surface);
+        (
+            buf[(nx, y)].fg,
+            buf[(nx, y)].bg,
+            buf[(nx, y + 1)].symbol().to_owned(),
+        )
     };
-    // View focused: teal outline, no fill.
     app.update(Action::FocusViewer);
-    let (fg, bg) = find_style(&mut app);
-    assert_eq!(fg, theme.border_focus);
-    assert_ne!(bg, theme.peach);
-    // Nav focused: gray outline.
+    let (fg, bg, underline) = find_style(&mut app);
+    assert_eq!(fg, theme.text_muted);
+    assert_eq!(bg, theme.surface);
+    assert_eq!(underline, "─");
     app.update(Action::FocusNav);
-    let (fg, _) = find_style(&mut app);
-    assert_eq!(fg, theme.border);
-    // Tab-selected button fills peach.
+    assert_eq!(find_style(&mut app).0, theme.text_muted);
     app.update(Action::FocusViewer);
     app.update(Action::FocusFooter);
-    let (_, bg) = find_style(&mut app);
-    assert_eq!(bg, theme.peach);
+    let (fg, bg, underline) = find_style(&mut app);
+    assert_eq!(fg, theme.accent);
+    assert_eq!(bg, theme.surface);
+    assert_eq!(underline, "━");
 }
 
 #[test]

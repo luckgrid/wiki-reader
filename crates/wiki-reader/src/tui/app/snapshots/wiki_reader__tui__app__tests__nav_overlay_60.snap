@@ -3,7 +3,7 @@ source: crates/wiki-reader/src/tui/app/tests.rs
 expression: "rows.join(\"\\n\")"
 ---
  Worked Example Wiki                                    ◫ ✕ 
-┌────────────────────────────┐─────────────────────────────┐
+┌────────────────────────────┐                             ┐
 │▌/ Search…                  │─────────────────────────────┤
 │                            │─────────────────────────────│
 │▌ Worked Example Wiki       │                             │
@@ -23,6 +23,6 @@ expression: "rows.join(\"\\n\")"
 │                            │                             │
 │                            │                             │
 │                            │                             │
-│                            │──┬─────────────────────────┬┤
-└────────────────────────────┘──┤ Architecture Overview › ├┘
+│                            │     Architecture Overview › │
+└────────────────────────────┘─────────────────────────────┘
   VIEW  · README.md · L1:C1 10% · 2026-09-28 · draft    ? ⚙

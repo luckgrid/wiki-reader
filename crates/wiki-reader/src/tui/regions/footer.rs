@@ -2,7 +2,7 @@
 
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
-use ratatui::style::Style;
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
@@ -50,22 +50,19 @@ pub(crate) fn ellipsis(s: &str, max: usize) -> String {
     out
 }
 
-/// Columns a button adds around its text: `┤ ` … ` ├`.
-pub(crate) const BUTTON_CHROME: usize = 4;
+/// One space on either side of a plain navigation label.
+pub(crate) const BUTTON_CHROME: usize = 2;
 
-/// Label row embedded in the pane edge; the strip adds its connected separator.
-/// Selected (Tab-focused) labels fill the inside peach.
-pub(crate) fn button(text: &str, selected: bool, border: Style, theme: &Theme) -> Line<'static> {
-    let inner = if selected {
-        Style::default().bg(theme.peach).fg(theme.on_peach)
-    } else {
-        border
-    };
-    Line::from(vec![
-        Span::styled("┤", border),
-        Span::styled(format!(" {text} "), inner),
-        Span::styled("├", border),
-    ])
+pub(crate) fn button(
+    text: &str,
+    selected: bool,
+    pane_focused: bool,
+    theme: &Theme,
+) -> Line<'static> {
+    Line::from(Span::styled(
+        format!(" {text} "),
+        theme.chrome_label_style(selected, pane_focused),
+    ))
 }
 
 /// Build left/right label rows, each capped to half the bar (never overlap).
@@ -89,15 +86,13 @@ pub fn titles(
             right: Line::default(),
         };
     }
-    let border_y = area.y + 1;
+    let border_y = area.y;
     // Interior of the bottom border between corner glyphs.
     let inner_w = area.width.saturating_sub(2);
     let half = (inner_w / 2).max(1);
     let left_x = area.x.saturating_add(1);
     let budget = usize::from(half).saturating_sub(BUTTON_CHROME);
-    let border = theme.border(pane_focused).bg(theme.surface_muted);
-
-    let left = prev_label.filter(|_| half >= 7).map(|l| {
+    let left = prev_label.filter(|_| half >= 5).map(|l| {
         let text = format!("‹ {}", ellipsis(l, budget.saturating_sub(2)));
         let w = col_width(&text) + BUTTON_CHROME;
         hits.push(
@@ -112,12 +107,12 @@ pub fn titles(
         button(
             &text,
             focused == Some(FocusTarget::FooterPrev),
-            border,
+            pane_focused,
             theme,
         )
     });
 
-    let right = next_label.filter(|_| half >= 7).map(|l| {
+    let right = next_label.filter(|_| half >= 5).map(|l| {
         let text = format!("{} ›", ellipsis(l, budget.saturating_sub(2)));
         let w = u16::try_from(col_width(&text) + BUTTON_CHROME)
             .unwrap_or(1)
@@ -138,7 +133,7 @@ pub fn titles(
         button(
             &text,
             focused == Some(FocusTarget::FooterNext),
-            border,
+            pane_focused,
             theme,
         )
     });
@@ -149,9 +144,9 @@ pub fn titles(
     }
 }
 
-/// Two connected rows, like a table title/separator: labels on the pane edge,
-/// a shared horizontal rule toward the article, and a solid background throughout.
-/// Each `(x, line)` uses an absolute column inside the pane's corner glyphs.
+/// Plain label row and a connected bottom rule. Selected spans are bold and get
+/// a heavy underline; all other segments use a thin rule. No background fills.
+/// Each `(x, line)` uses an absolute column inside the pane's side glyphs.
 pub(crate) fn draw_strip(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -163,39 +158,39 @@ pub(crate) fn draw_strip(
         return;
     }
     let rule = "─".repeat(usize::from(area.width - 2));
+    let padding = " ".repeat(usize::from(area.width - 2));
     let edge = if top {
-        format!("┌{rule}┐")
+        format!("┌{padding}┐")
+    } else {
+        format!("│{padding}│")
+    };
+    let seam = if top {
+        format!("├{rule}┤")
     } else {
         format!("└{rule}┘")
     };
-    let seam = format!("├{rule}┤");
-    let rows = if top {
-        vec![edge, seam]
-    } else {
-        vec![seam, edge]
-    };
+    let rows = [edge, seam];
     frame.render_widget(Paragraph::new(rows.join("\n")).style(border), area);
-    for (x, mut label) in labels {
+    for (x, label) in labels {
         if label.width() == 0 {
             continue;
         }
-        let last = label.spans.len() - 1;
-        let mut separator = Vec::new();
-        for (i, span) in label.spans.iter_mut().enumerate() {
-            let junction = i == 0 || i == last || span.content == "│";
-            separator.push(Span::styled(
-                if junction {
-                    if top { "┴".into() } else { "┬".into() }
+        let separator: Vec<_> = label
+            .spans
+            .iter()
+            .map(|span| {
+                let glyph = if span.style.add_modifier.contains(Modifier::BOLD) {
+                    "━"
                 } else {
-                    "─".repeat(span.width())
-                },
-                border.patch(span.style),
-            ));
-        }
+                    "─"
+                };
+                Span::styled(glyph.repeat(span.width()), border.patch(span.style))
+            })
+            .collect();
         let width = u16::try_from(label.width()).unwrap_or(0);
-        label = label.alignment(Alignment::Left);
-        let label_y = area.y + u16::from(!top);
-        let seam_y = area.y + u16::from(top);
+        let label = label.alignment(Alignment::Left);
+        let label_y = area.y;
+        let seam_y = area.y + 1;
         frame.render_widget(
             Paragraph::new(label).style(border),
             Rect::new(x, label_y, width, 1),
@@ -238,7 +233,7 @@ pub fn draw(
         area,
         labels,
         false,
-        theme.border(pane_focused).bg(theme.surface_muted),
+        theme.border(pane_focused).remove_modifier(Modifier::BOLD),
     );
 }
 
