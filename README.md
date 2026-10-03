@@ -64,7 +64,7 @@ crates.io packaging metadata is prepared (`version` on path deps, repository/rea
 Check your version with `wiki-reader --version` and `which wiki-reader`. Upgrade the **same way you installed** (mixing paths leaves two binaries; whichever is first on `PATH` wins).
 
 ```bash
-# cargo install → ~/.cargo/bin (--force replaces it; add --tag vX.Y.Z-alpha.N to pin one)
+# cargo install → ~/.cargo/bin (--force replaces it; add --tag v0.1.N to pin one)
 cargo install --locked --force --git https://github.com/luckgrid/wiki-reader wiki-reader
 
 # release tarball → usually ~/.local/bin (verify and unpack as above, then overwrite)
