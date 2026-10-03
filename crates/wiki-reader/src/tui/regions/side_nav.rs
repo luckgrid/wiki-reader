@@ -5,7 +5,7 @@
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use wiki_reader_core::config::NavPosition;
@@ -97,33 +97,22 @@ pub fn draw(
         height: 1,
     };
     hits.push(search_rect, Hit::NavSearchRow);
-    // Same bar in both states; focus switches the bar and text to the accent.
+    // A bordered bar like the View's tab bar: label row, then a seam rule. The
+    // label takes the same colours as a tab (bold focus colour when the cursor is on it).
     let on_search = matches!(cursor, NavStop::Search);
-    let (mark_fg, text_fg) = if on_search {
-        (theme.accent, theme.accent)
-    } else {
-        (theme.border, theme.text)
-    };
-    let search_bg = theme.cursor_line;
+    let label_style = theme.chrome_label_style(on_search, focused);
     // `/` is the key that opens search, and renders at text height in every font.
-    let search_label = "/ Search…";
-    let search_w = 1 + Span::raw(search_label).width();
-    let mut search_spans = vec![
-        Span::styled("▌", Style::default().fg(mark_fg).bg(search_bg)),
-        Span::styled(search_label, Style::default().fg(text_fg).bg(search_bg)),
+    let search_spans = vec![
+        Span::styled(" ", label_style),
+        Span::styled("/", label_style.add_modifier(Modifier::BOLD)),
+        Span::styled(" Search…", label_style),
     ];
-    if search_w < usize::from(inner.width) {
-        search_spans.push(Span::styled(
-            " ".repeat(usize::from(inner.width) - search_w),
-            Style::default().bg(search_bg),
-        ));
-    }
 
     let rows = visible_rows(tree, expanded);
     let scroll = usize::from(scroll);
     let mut lines = vec![
         Line::from(search_spans),
-        Line::from(""), // gap under search
+        Line::from(""), // seam rule, drawn over the borders below
     ];
     let max_rows = usize::from(inner.height.saturating_sub(list_offset));
     for (i, row) in rows.into_iter().skip(scroll).take(max_rows).enumerate() {
@@ -211,6 +200,21 @@ pub fn draw(
     }
 
     frame.render_widget(Paragraph::new(lines), inner);
+    draw_search_seam(frame, area, inner, theme.border(focused));
+}
+
+/// The rule under the search bar: `├──┤` across the pane, in the pane's border style.
+fn draw_search_seam(frame: &mut Frame<'_>, area: Rect, inner: Rect, border: Style) {
+    if inner.height < 2 || area.width < 3 {
+        return;
+    }
+    let y = inner.y + 1;
+    let buf = frame.buffer_mut();
+    for x in area.x + 1..area.right() - 1 {
+        buf[(x, y)].set_symbol("─").set_style(border);
+    }
+    buf[(area.x, y)].set_symbol("├").set_style(border);
+    buf[(area.right() - 1, y)].set_symbol("┤").set_style(border);
 }
 
 fn collect_visible(

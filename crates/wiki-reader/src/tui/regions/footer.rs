@@ -1,22 +1,13 @@
-//! Compact View footer: connected two-row ‹ prev / next › controls.
+//! View footer: a connected three-row bar with ‹ prev and next › cells.
 
 use ratatui::Frame;
-use ratatui::layout::{Alignment, Rect};
-use ratatui::style::{Modifier, Style};
+use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
 
 use crate::tui::hit::{Hit, HitMap};
+use crate::tui::regions::bar::{self, BAR_ROWS, Cell};
 use crate::tui::theme::Theme;
 use crate::tui::viewer_doc::FocusTarget;
-
-/// Truncated button label rows and hit geometry for the View bottom bar.
-pub struct FooterTitles {
-    /// Left-aligned prev title.
-    pub left: Line<'static>,
-    /// Right-aligned next title.
-    pub right: Line<'static>,
-}
 
 pub(crate) fn col_width(s: &str) -> usize {
     Span::raw(s).width()
@@ -65,13 +56,14 @@ pub(crate) fn button(
     ))
 }
 
-/// Build left/right label rows, each capped to half the bar (never overlap).
+/// Build the prev (left) and next (right) cells and register their hits on the
+/// label row (the middle row of the bar).
 ///
-/// `pane_focused` is whether the View pane has focus; the button outline follows
-/// the pane border colour. A missing side yields an empty title, so the border
-/// remains empty.
+/// Each cell is sized to its label and capped so the two cells and their dividers
+/// never overlap. `pane_focused` is whether the View pane has focus. A missing side
+/// yields no cell, so the bar stays empty there.
 #[must_use]
-pub fn titles(
+pub fn cells(
     area: Rect,
     prev_label: Option<&str>,
     next_label: Option<&str>,
@@ -79,130 +71,74 @@ pub fn titles(
     pane_focused: bool,
     theme: &Theme,
     hits: &mut HitMap,
-) -> FooterTitles {
-    if area.height < 2 || area.width < 3 {
-        return FooterTitles {
-            left: Line::default(),
-            right: Line::default(),
-        };
+) -> Vec<Cell> {
+    if area.height < BAR_ROWS || area.width < 3 {
+        return Vec::new();
     }
-    let border_y = area.y;
-    // Interior of the bottom border between corner glyphs.
+    let label_y = area.y + 1;
     let inner_w = area.width.saturating_sub(2);
-    let half = (inner_w / 2).max(1);
-    let left_x = area.x.saturating_add(1);
-    let budget = usize::from(half).saturating_sub(BUTTON_CHROME);
-    let left = prev_label.filter(|_| half >= 5).map(|l| {
-        let text = format!("‹ {}", ellipsis(l, budget.saturating_sub(2)));
-        let w = col_width(&text) + BUTTON_CHROME;
+    // Two cells plus the dividers beside them fit in the interior.
+    let cap = inner_w.saturating_sub(2) / 2;
+    let budget = usize::from(cap).saturating_sub(BUTTON_CHROME);
+    let mut out = Vec::new();
+
+    if let Some(label) = prev_label.filter(|_| cap >= 5) {
+        let text = format!("‹ {}", ellipsis(label, budget.saturating_sub(2)));
+        let w = u16::try_from(col_width(&text) + BUTTON_CHROME)
+            .unwrap_or(1)
+            .clamp(1, cap);
+        let x = area.x + 1;
         hits.push(
             Rect {
-                x: left_x,
-                y: border_y,
-                width: u16::try_from(w).unwrap_or(1).min(half).max(1),
+                x,
+                y: label_y,
+                width: w,
                 height: 1,
             },
             Hit::Prev,
         );
-        button(
-            &text,
-            focused == Some(FocusTarget::FooterPrev),
-            pane_focused,
-            theme,
-        )
-    });
+        out.push(Cell {
+            x,
+            width: w,
+            line: button(
+                &text,
+                focused == Some(FocusTarget::FooterPrev),
+                pane_focused,
+                theme,
+            ),
+        });
+    }
 
-    let right = next_label.filter(|_| half >= 5).map(|l| {
-        let text = format!("{} ›", ellipsis(l, budget.saturating_sub(2)));
+    if let Some(label) = next_label.filter(|_| cap >= 5) {
+        let text = format!("{} ›", ellipsis(label, budget.saturating_sub(2)));
         let w = u16::try_from(col_width(&text) + BUTTON_CHROME)
             .unwrap_or(1)
-            .min(half)
-            .max(1);
-        let x = area
-            .x
-            .saturating_add(area.width.saturating_sub(1).saturating_sub(w));
+            .clamp(1, cap);
+        let x = area.right() - 1 - w;
         hits.push(
             Rect {
                 x,
-                y: border_y,
+                y: label_y,
                 width: w,
                 height: 1,
             },
             Hit::Next,
         );
-        button(
-            &text,
-            focused == Some(FocusTarget::FooterNext),
-            pane_focused,
-            theme,
-        )
-    });
-
-    FooterTitles {
-        left: left.unwrap_or_default().alignment(Alignment::Left),
-        right: right.unwrap_or_default().alignment(Alignment::Right),
+        out.push(Cell {
+            x,
+            width: w,
+            line: button(
+                &text,
+                focused == Some(FocusTarget::FooterNext),
+                pane_focused,
+                theme,
+            ),
+        });
     }
+    out
 }
 
-/// Plain label row and a connected bottom rule. Selected spans are bold and get
-/// a heavy underline; all other segments use a thin rule. No background fills.
-/// Each `(x, line)` uses an absolute column inside the pane's side glyphs.
-pub(crate) fn draw_strip(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    labels: Vec<(u16, Line<'static>)>,
-    top: bool,
-    border: Style,
-) {
-    if area.height < 2 || area.width < 2 {
-        return;
-    }
-    let rule = "─".repeat(usize::from(area.width - 2));
-    let padding = " ".repeat(usize::from(area.width - 2));
-    let edge = if top {
-        format!("┌{padding}┐")
-    } else {
-        format!("│{padding}│")
-    };
-    let seam = if top {
-        format!("├{rule}┤")
-    } else {
-        format!("└{rule}┘")
-    };
-    let rows = [edge, seam];
-    frame.render_widget(Paragraph::new(rows.join("\n")).style(border), area);
-    for (x, label) in labels {
-        if label.width() == 0 {
-            continue;
-        }
-        let separator: Vec<_> = label
-            .spans
-            .iter()
-            .map(|span| {
-                let glyph = if span.style.add_modifier.contains(Modifier::BOLD) {
-                    "━"
-                } else {
-                    "─"
-                };
-                Span::styled(glyph.repeat(span.width()), border.patch(span.style))
-            })
-            .collect();
-        let width = u16::try_from(label.width()).unwrap_or(0);
-        let label = label.alignment(Alignment::Left);
-        let label_y = area.y;
-        let seam_y = area.y + 1;
-        frame.render_widget(
-            Paragraph::new(label).style(border),
-            Rect::new(x, label_y, width, 1),
-        );
-        frame.render_widget(
-            Paragraph::new(Line::from(separator)),
-            Rect::new(x, seam_y, width, 1),
-        );
-    }
-}
-
-/// Draw prev/next on the bottom edge with a shared separator toward the article.
+/// Draw the bottom bar (`area` is its three rows) in the pane's border style.
 #[allow(clippy::too_many_arguments)]
 pub fn draw(
     frame: &mut Frame<'_>,
@@ -214,27 +150,8 @@ pub fn draw(
     theme: &Theme,
     hits: &mut HitMap,
 ) {
-    let titles = titles(area, prev, next, focused, pane_focused, theme, hits);
-    let mut labels = Vec::new();
-    for (line, right) in [(titles.left, false), (titles.right, true)] {
-        let width = u16::try_from(line.width()).unwrap_or(0);
-        if width == 0 {
-            continue;
-        }
-        let x = if right {
-            area.right() - 1 - width
-        } else {
-            area.x + 1
-        };
-        labels.push((x, line));
-    }
-    draw_strip(
-        frame,
-        area,
-        labels,
-        false,
-        theme.border(pane_focused).remove_modifier(Modifier::BOLD),
-    );
+    let cells = cells(area, prev, next, focused, pane_focused, theme, hits);
+    bar::draw(frame, area, false, &cells, theme.border(pane_focused));
 }
 
 #[cfg(test)]
@@ -246,15 +163,15 @@ mod tests {
     #[test]
     fn long_titles_do_not_overlap_at_narrow_widths() {
         let theme = Theme::default();
-        for w in [40u16, 60, 80] {
+        for w in [8u16, 12, 40, 60, 80] {
             let area = Rect {
                 x: 0,
                 y: 0,
                 width: w,
-                height: 10,
+                height: BAR_ROWS,
             };
             let mut hits = HitMap::default();
-            let t = titles(
+            let cells = cells(
                 area,
                 Some("A very long previous page title that would collide"),
                 Some("Another extremely long next page title here"),
@@ -263,12 +180,20 @@ mod tests {
                 &theme,
                 &mut hits,
             );
-            let lw = t.left.width();
-            let rw = t.right.width();
-            let half = usize::from((w.saturating_sub(2)) / 2);
-            assert!(lw <= half, "w={w}: left {lw} > half {half}");
-            assert!(rw <= half, "w={w}: right {rw} > half {half}");
-            assert!(lw + rw <= usize::from(w.saturating_sub(2)));
+            for pair in cells.windows(2) {
+                // A divider column sits between the cells.
+                assert!(
+                    pair[0].x + pair[0].width < pair[1].x,
+                    "w={w}: cells touch or overlap"
+                );
+            }
+            for cell in &cells {
+                assert!(cell.x > 0 && cell.x + cell.width < w);
+                assert_eq!(cell.line.width(), usize::from(cell.width));
+            }
+            for (rect, _) in hits.entries() {
+                assert_eq!(rect.y, 1, "hits sit on the label row");
+            }
         }
     }
 }

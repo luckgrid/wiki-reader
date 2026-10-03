@@ -9,13 +9,34 @@ pub const NAV_CHROME_ROWS: u16 = 4;
 /// Inner left padding in the viewer (cursor marker column; P2-19).
 pub const VIEWER_LEFT_PAD: u16 = 1;
 
-/// Compact title/separator rows at each edge for connected tab / prev-next bars.
-pub const VIEWER_STRIP_ROWS: u16 = 2;
+/// Rows of a connected tab / prev-next bar, counting the pane border row it shares.
+pub const VIEWER_BAR_ROWS: u16 = 3;
 
-/// Article rows after reserving the two-row top and bottom bars.
+/// Rows the View reserves at its top and bottom edges for a pane `height` rows tall.
+///
+/// A bar is drawn only when all of its rows fit, top first, then bottom. An edge
+/// without a bar keeps just the pane's one border row.
+#[must_use]
+pub fn viewer_edge_rows(height: u16) -> (u16, u16) {
+    let top = if height > VIEWER_BAR_ROWS {
+        VIEWER_BAR_ROWS
+    } else {
+        height.min(1)
+    };
+    let rest = height - top;
+    let bottom = if rest >= VIEWER_BAR_ROWS {
+        VIEWER_BAR_ROWS
+    } else {
+        rest.min(1)
+    };
+    (top, bottom)
+}
+
+/// Article rows after reserving the top and bottom edges.
 #[must_use]
 pub fn viewer_visible_rows(height: u16) -> u16 {
-    height.saturating_sub(2 * VIEWER_STRIP_ROWS)
+    let (top, bottom) = viewer_edge_rows(height);
+    height - top - bottom
 }
 
 /// Computed region rectangles for one frame.
@@ -25,7 +46,7 @@ pub struct Regions {
     pub header: Rect,
     /// Side nav (zero-sized when hidden).
     pub side_nav: Rect,
-    /// Viewer pane (tabs and prev/next occupy connected two-row bars).
+    /// Viewer pane (tabs and prev/next occupy connected three-row bars).
     pub viewer: Rect,
     /// Status content row.
     pub status: Rect,
@@ -171,6 +192,25 @@ mod tests {
         assert_eq!(nav_width(120, false, Some(99)), Some(NAV_WIDTH_MAX));
         // Narrow ignores preferred.
         assert_eq!(nav_width(60, true, Some(40)), Some(30));
+    }
+
+    #[test]
+    fn viewer_bars_are_dropped_whole_on_short_panes() {
+        // (height, top edge rows, bottom edge rows, article rows)
+        for (h, top, bottom, rows) in [
+            (0, 0, 0, 0),
+            (1, 1, 0, 0),
+            (2, 1, 1, 0),
+            (3, 1, 1, 1),
+            (4, 3, 1, 0),
+            (5, 3, 1, 1),
+            (6, 3, 3, 0),
+            (7, 3, 3, 1),
+            (24, 3, 3, 18),
+        ] {
+            assert_eq!(viewer_edge_rows(h), (top, bottom), "height {h}");
+            assert_eq!(viewer_visible_rows(h), rows, "height {h}");
+        }
     }
 
     #[test]

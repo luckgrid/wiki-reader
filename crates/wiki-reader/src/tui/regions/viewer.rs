@@ -8,7 +8,7 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 
 use crate::tui::highlight::HlSpan;
 use crate::tui::hit::{Hit, HitMap};
-use crate::tui::layout::{VIEWER_LEFT_PAD, VIEWER_STRIP_ROWS};
+use crate::tui::layout::{VIEWER_BAR_ROWS, VIEWER_LEFT_PAD, viewer_edge_rows};
 use crate::tui::selection::Selection;
 use crate::tui::text_col;
 use crate::tui::theme::Theme;
@@ -113,37 +113,42 @@ pub fn draw(
         .borders(Borders::ALL)
         .border_style(theme.border(focused));
     frame.render_widget(block, area);
-    let top_rows = area.height.min(VIEWER_STRIP_ROWS);
-    let bottom_rows = area.height.saturating_sub(top_rows).min(VIEWER_STRIP_ROWS);
-    let top = Rect {
-        height: top_rows,
-        ..area
-    };
-    let bottom = Rect {
-        y: area.bottom() - bottom_rows,
-        height: bottom_rows,
-        ..area
-    };
-    crate::tui::regions::tabs::draw(
-        frame,
-        top,
-        tabs,
-        active_tab,
-        focused,
-        chrome_muted,
-        theme,
-        hits,
-    );
-    crate::tui::regions::footer::draw(
-        frame,
-        bottom,
-        prev_label,
-        next_label,
-        footer_focus,
-        focused,
-        theme,
-        hits,
-    );
+    let (top_rows, bottom_rows) = viewer_edge_rows(area.height);
+    // A bar is drawn only when its full three rows fit; otherwise the pane keeps
+    // its plain border row there, with no controls or hits.
+    if top_rows == VIEWER_BAR_ROWS {
+        let top = Rect {
+            height: VIEWER_BAR_ROWS,
+            ..area
+        };
+        crate::tui::regions::tabs::draw(
+            frame,
+            top,
+            tabs,
+            active_tab,
+            focused,
+            chrome_muted,
+            theme,
+            hits,
+        );
+    }
+    if bottom_rows == VIEWER_BAR_ROWS {
+        let bottom = Rect {
+            y: area.bottom() - VIEWER_BAR_ROWS,
+            height: VIEWER_BAR_ROWS,
+            ..area
+        };
+        crate::tui::regions::footer::draw(
+            frame,
+            bottom,
+            prev_label,
+            next_label,
+            footer_focus,
+            focused,
+            theme,
+            hits,
+        );
+    }
     let inner_area = Rect {
         x: area.x.saturating_add(1),
         y: area.y.saturating_add(top_rows),

@@ -3,19 +3,19 @@ source: crates/wiki-reader/src/tui/app/tests.rs
 expression: out
 ---
  Worked Example Wiki                                                        ◫ ✕ 
-┌─────────────┌ Options ─────────────────────────────────────────┐             ┐
-│▌/ Search…   │                                                  │─────────────┤
-│             │  Theme                                           │─────────────│
-│▌ Worked Exam│  > ● Dark (luckgrid)                             │             │
+┌─────────────┌ Options ─────────────────────────────────────────┐─────────────┐
+│ / Search…   │                                                  │             │
+├─────────────│  Theme                                           │─────────────┤
+│▌ Worked Exam│  > ● Dark (luckgrid)                             │─────────────│
 │  ▸ architect│    ○ Light (luckgrid)                            │             │
-│  ▸ decisions│    ○ Herdr (follows herdr)                       │──           │
-│             │                                                  │             │
-│             │  Panels                                          │ default     │
-│             │    ● Nav left                                    │             │
+│  ▸ decisions│    ○ Herdr (follows herdr)                       │             │
+│             │                                                  │──           │
+│             │  Panels                                          │             │
+│             │    ● Nav left                                    │ default     │
 │             │    ○ Nav right                                   │             │
-│             │                                                  │ Token       │
-│             │  Nav labels                                      │history      │
-│             │    ● Page titles                                 │             │
+│             │                                                  │             │
+│             │  Nav labels                                      │ Token       │
+│             │    ● Page titles                                 │history      │
 │             │    ○ File names                                  │             │
 │             │                                                  │             │
 │             │  Mermaid                                         │             │
@@ -38,7 +38,7 @@ expression: out
 │             │  Copy path (y)                                   │             │
 │             │    ● Relative to the collection                  │             │
 │             │    ○ Absolute path                               │             │
-│             │                                                  │             │
+│             │                                                  │─────────────┤
 │             │  ↑↓ / j k Navigate  Enter Apply  Esc / c Close   │e Overview › │
 └─────────────└──────────────────────────────────────────────────┘─────────────┘
   OPTIONS  · README.md · L1:C1 9% · 2026-09-28 · draft · 29w · 1m           ? ⚙

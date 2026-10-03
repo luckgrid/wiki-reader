@@ -722,14 +722,15 @@ impl Theme {
         Style::default().fg(fg)
     }
 
-    /// No-fill chrome labels: selected text is bold/accent (secondary off-focus),
-    /// inactive text is muted. Bold also identifies the heavy underline segment.
+    /// No-fill chrome labels: selected text is bold in the focus colour (peach in the
+    /// herdr presets; `peach` itself is a fill and is too light for text on light
+    /// presets), secondary off-focus. Inactive text is muted.
     #[must_use]
     pub fn chrome_label_style(&self, selected: bool, pane_focused: bool) -> Style {
         if selected {
             Style::default()
                 .fg(if pane_focused {
-                    self.accent
+                    self.border_focus
                 } else {
                     self.text_secondary
                 })
@@ -814,7 +815,7 @@ mod tests {
     fn chrome_labels_use_legible_tokens_without_background_fills() {
         for theme in [Theme::dark(), Theme::light(), Theme::herdr("vesper").0] {
             for (selected, focused, color) in [
-                (true, true, theme.accent),
+                (true, true, theme.border_focus),
                 (true, false, theme.text_secondary),
                 (false, true, theme.text_muted),
             ] {

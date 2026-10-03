@@ -5,10 +5,10 @@ A terminal wiki reader for markdown collections. It browses like a documentation
 <!-- ui-diagram:start -->
 ```text
  Worked Example Wiki                                                        ◫ ✕
-┌────────────────────────┐┌ README.md ×                                        ┐
-│▌/ Search…              │├━━━━━━━━━━━━━───────────────────────────────────────┤
-│                        ││▌── frontmatter ▸ ──────────────────────────────────│
-│▌ Worked Example Wiki   ││                                                    │
+┌────────────────────────┐┌─────────────┬─────────────┬────────────────────────┐
+│ / Search…              ││ README.md × │ tokens.md × │                        │
+├────────────────────────┤├─────────────┴─────────────┴────────────────────────┤
+│▌ Worked Example Wiki   ││▌── frontmatter ▸ ──────────────────────────────────│
 │  ▸ architecture        ││                                                    │
 │  ▸ decisions           ││ Worked Example Wiki                                │
 │                        ││ ────────────────────────────────────────           │
@@ -16,9 +16,11 @@ A terminal wiki reader for markdown collections. It browses like a documentation
 │                        ││ A tiny markdown collection used as the default     │
 │                        ││ smoke-test root.                                   │
 │                        ││                                                    │
-│                        ││                                                    │
-│                        ││                            Architecture Overview › │
-└────────────────────────┘└────────────────────────────────────────────────────┘
+│                        ││ Start at Architecture Overview, follow Token       │
+│                        ││ Projection, then return via back when history      │
+│                        │├────────────┬─────────────┬─────────────────────────┤
+│                        ││ ‹ Overview │             │ Architecture Overview › │
+└────────────────────────┘└────────────┴─────────────┴─────────────────────────┘
   VIEW  · README.md · L1:C1 9% · 2026-09-28 · draft · 29w · 1m              ? ⚙
 ```
 <!-- ui-diagram:end -->

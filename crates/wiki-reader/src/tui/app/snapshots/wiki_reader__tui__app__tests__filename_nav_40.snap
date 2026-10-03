@@ -3,17 +3,18 @@ source: crates/wiki-reader/src/tui/app/tests.rs
 expression: out
 ---
  Worked Example Wiki › … › Token P… ◫ ✕ 
-┌────────────────────────────┐         ┐
-│▌/ Search…                  │─────────┤
-│                            │─────────│
-│  README.md                 │         │
+┌────────────────────────────┐─────────┐
+│ / Search…                  │         │
+├────────────────────────────┤─────────┤
+│  README.md                 │─────────│
 │  ▾ architecture            │         │
-│     README.md              │─────────│
-│     ▾ design-system        │         │
+│     README.md              │         │
+│     ▾ design-system        │─────────│
 │        README.md           │         │
-│▌       tokens.md           │stem and │
-│     ▸ wfos                 │         │
+│▌       tokens.md           │         │
+│     ▸ wfos                 │stem and │
 │  ▸ decisions               │         │
+│                            │         │
 │                            │         │
 │                            │────────┐│
 │                            │        ││
@@ -21,8 +22,7 @@ expression: out
 │                            │────────┤│
 │                            │        ││
 │                            │tectur… ││
-│                            │────────┤│
-│                            │        ││
+│                            │─────────┤
 │                            │low OS › │
 └────────────────────────────┘─────────┘
   NAV  · architecture/design-system ? ⚙

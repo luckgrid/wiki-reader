@@ -17,10 +17,10 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 <!-- ui-diagram:start -->
 ```text
  Worked Example Wiki                                                        ◫ ✕
-┌────────────────────────┐┌ README.md ×                                        ┐
-│▌/ Search…              │├━━━━━━━━━━━━━───────────────────────────────────────┤
-│                        ││▌── frontmatter ▸ ──────────────────────────────────│
-│▌ Worked Example Wiki   ││                                                    │
+┌────────────────────────┐┌─────────────┬─────────────┬────────────────────────┐
+│ / Search…              ││ README.md × │ tokens.md × │                        │
+├────────────────────────┤├─────────────┴─────────────┴────────────────────────┤
+│▌ Worked Example Wiki   ││▌── frontmatter ▸ ──────────────────────────────────│
 │  ▸ architecture        ││                                                    │
 │  ▸ decisions           ││ Worked Example Wiki                                │
 │                        ││ ────────────────────────────────────────           │
@@ -28,9 +28,11 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 │                        ││ A tiny markdown collection used as the default     │
 │                        ││ smoke-test root.                                   │
 │                        ││                                                    │
-│                        ││                                                    │
-│                        ││                            Architecture Overview › │
-└────────────────────────┘└────────────────────────────────────────────────────┘
+│                        ││ Start at Architecture Overview, follow Token       │
+│                        ││ Projection, then return via back when history      │
+│                        │├────────────┬─────────────┬─────────────────────────┤
+│                        ││ ‹ Overview │             │ Architecture Overview › │
+└────────────────────────┘└────────────┴─────────────┴─────────────────────────┘
   VIEW  · README.md · L1:C1 9% · 2026-09-28 · draft · 29w · 1m              ? ⚙
 ```
 <!-- ui-diagram:end -->
@@ -51,18 +53,18 @@ Regions:
 
 - **Header:** one padded row with the breadcrumb on the left and the icon buttons on the right, directly above the panes. The last crumb is the current page and is drawn gray (read-only); the others are links.
 - **Side nav:** a bordered pane holding the search row and the page tree. Neither pane has a title tag; the status pill (`NAV` / `VIEW`) says which one has focus. Its width defaults to 26 (30 at ≥ 120 columns) and can be dragged.
-- **View:** a bordered pane with compact **two-row tab and prev/next bars**, with no boxes or background fills. Each bar has a plain label row and a connected bottom rule; the active/focused label gets a heavy `━` underline. Article content starts after the top strip and ends before the bottom strip; the cursor line is marked `▌`.
+- **View:** a bordered pane with a **three-row tab bar** at the top and a **three-row prev/next bar** at the bottom, both fully bordered boxes with `│` dividers between cells and no background fills. Each bar is the pane border, a label row and a seam rule. Article content starts below the top bar and ends above the bottom bar; the cursor line is marked `▌`.
 - **Status bar:** one padded row directly under the panes.
 
-**Tabs** show actual filenames including extensions (`tokens.md`, `×` closes), even for a single page whenever a complete label and close glyph fit. Tabs are separated by literal `|`; inactive labels use muted text. The active tab uses accent text and a heavy `━` bottom rule with View focus, secondary/dimmer text with the same heavy rule with Nav focus, and muted text/thin rule behind popups. Both bar rows retain the article's base background, without any selection fill. A right-hand widget slot is reserved for Phase 4.
+**Tabs** show actual filenames including extensions (`tokens.md`, `×` closes), even for a single page whenever a complete label and close glyph fit. Each tab is its own cell, separated by `│`; the rest of the bar is an empty cell. The active tab is bold in the focus colour (peach in the herdr presets) with View focus, bold secondary text with Nav focus, and muted like the other tabs behind popups. Inactive tabs use muted text. Every bar glyph is thin and takes the border style of its pane (focus colour when focused, dim otherwise), so the bar always matches the pane frame. A right-hand widget slot is reserved for Phase 4.
 
 ### Batch A layout (P3-18 / P3-17)
 
-P3-18 places ⚙ at the full-width layout footer's far right, below both panes, with `?` immediately to its left; the header retains ◫ and ✕. P3-17 gives the View compact **two-row top and bottom bars**: plain labels followed by a connected bottom rule. This supersedes the original three-row boxes and the subsequent filled-bar styling after the operator's screenshot review. No tab or prev/next background fills remain. Tabs use the actual filename including its extension, literal `|` separators and dim inactive text. Active/focused controls use highlighted text and a heavy `━` underline; other rule segments remain thin.
+P3-18 places ⚙ at the full-width layout footer's far right, below both panes, with `?` immediately to its left; the header retains ◫ and ✕. P3-17 gives the View **three-row top and bottom bars** (pane border, label row, seam), with complete borders and dividers. This supersedes the earlier compact two-row bars with a heavy `━` underline, which the operator rejected after a screenshot review: the heavy rule was thicker than the pane border and took the label's colour instead of the pane's. No tab or prev/next background fills remain. Labels that are selected use the focus colour, bold; everything else is muted.
 
-The layout footer reserves space for `?` / ⚙ before laying out status fields and messages. The View footer independently divides its width between prev/next. Labels truncate with `…`; unavailable links remain absent. Controls must not overlap, including at 40/60 columns and with Nav on either side. Compared with the original single border-row controls, the bars consume one additional article row at each edge (two fewer chrome rows than the initial three-row-box implementation). Collision policy: reserve the active tab first, ellipsizing its filename to the available label width (maximum 18 columns), then add other tabs in order only if each whole cell and separator fits. Hide all tabs when fewer than five interior columns are available. Prev/next each receive half the interior strip width; ellipsize labels and hide a button if its half cannot fit padding, an arrow and one label column. Hits occupy only the first row of each bar, never the underline/bottom rule. Short-terminal policy: retain the one-row layout header/footer whenever height permits; give the View's top bar up to two rows first, then its bottom bar up to two remaining rows. Draw a control only when its full two-row bar fits. Article rows are the saturating remainder after four chrome rows; partial strips have no controls or hits. P3-01 sticky headings are explicitly deferred by operator decision before this geometry change; no additional sticky row is reserved.
+The layout footer reserves space for `?` / ⚙ before laying out status fields and messages. The View footer independently divides its width between prev/next. Labels truncate with `…`; unavailable links remain absent. Controls must not overlap, including at 40/60 columns and with Nav on either side. Collision policy: reserve the active tab first, ellipsizing its filename to the available label width (maximum 18 columns), then add other tabs in order only if each whole cell and its divider fits. Hide all tabs when fewer than seven columns are available. Prev and next cells are sized to their labels, each capped so that the two cells and their dividers fit in the interior; ellipsize labels and hide a cell if its cap cannot fit padding, an arrow and one label column. Hits occupy only the label row of each bar, never the border or seam rows. Short-terminal policy: retain the one-row layout header/footer whenever height permits; give the View's top bar its three rows first, then its bottom bar three more. Draw a bar only when all of its rows fit; an edge without a bar keeps just the pane's border row, with no controls or hits. Article rows are the remainder after the edges (six chrome rows when both bars fit). P3-01 sticky headings are explicitly deferred by operator decision; no additional sticky row is reserved.
 
-The ASCII diagram documents the strip layout; screenshots will be refreshed in P3-23 after the UI settles.
+The ASCII diagram documents the bar layout; screenshots will be refreshed in P3-23 after the UI settles.
 
 ## Header (full width, 1 padded row)
 
@@ -80,7 +82,7 @@ A file tree **presented as a documentation site's side nav**. By default it dock
 - Folder rows use the herdr tab peach (the same colour as the active tab, footer links, status pill and popup border) and nested rows indent three more columns per level, so a child starts one column right of its parent's label. The list always starts right under the search bar when it fits (it scrolls only to keep the current row visible). The selected row has a full-width background highlight and a `▌` marker; it follows the current page however you got there (a link, the footer, search, history). Ancestor groups auto-expand after every navigation. A row that does not fit the pane width ends in `…`.
 - The pane is **resizable**: drag the divider on the inner edge between the nav and the viewer (clamped to 16–50 columns; the width is saved with the session and ignored below 80 columns). Nav width stays session-only; position is config.
 
-**Search entry (top of the side nav).** The first row is `/ Search…` (`/` is the key that opens search, and it renders at text height in every font), drawn as a bar in both states; when it is the focused nav stop the bar and text turn the accent color. Selecting it, clicking it, or pressing the search hotkey anywhere opens the **search overlay panel** (below). It's a nav stop for Shift+↑/↓ (see keyboard).
+**Search entry (top of the side nav).** The first row is `/ Search…` (`/` is the key that opens search, and it renders at text height in every font), drawn as a bordered bar that lines up with the View's tab bar: a label row followed by a seam rule, with no fill. The text is muted; when it is the focused nav stop it turns bold in the focus colour, like a selected tab. Selecting it, clicking it, or pressing the search hotkey anywhere opens the **search overlay panel** (below). It's a nav stop for Shift+↑/↓ (see keyboard).
 
 Future: this search row becomes a proper **side nav header**, and a **side nav footer** can hold widget actions or tabbed features (e.g. Pages / Outline).
 
@@ -130,7 +132,7 @@ Deferred (P3-01): a **sticky section header** at the top of the viewer showing t
 
 ## View footer (prev/next)
 
-Connected `‹ Prev title` and `Next title ›` controls sit on the left/right of the **View's compact two-row bottom bar**, following side nav order ([content model](content-model.md)) but always using title-mode labels, regardless of `nav.labels`. They remain pinned while the article scrolls; hits occupy the first label row only; the row below is the pane's connected bottom border. Labels are dim by default; a control reached with `Tab` or `f` uses accent text and a heavy `━` underline instead of a background fill. Each label is truncated with `…` to its half of the border so long titles cannot collide. Help / Options are not on this border; they belong to the layout footer below it. Both are clickable and bound to `[` / `]`. A side with no prev/next draws nothing in its half of the strip.
+Connected `‹ Prev title` and `Next title ›` controls sit in their own cells on the left/right of the **View's three-row bottom bar**, following side nav order ([content model](content-model.md)) but always using title-mode labels, regardless of `nav.labels`. They remain pinned while the article scrolls; hits occupy the label row only; the bar's seam is above it and the pane's bottom border below. Labels are dim by default; a control reached with `Tab` or `f` uses bold focus-colour text instead of a background fill. Each label is truncated with `…` to its cell's cap so long titles cannot collide. Help / Options are not on this bar; they belong to the layout footer below it. Both are clickable and bound to `[` / `]`. A side with no prev/next draws no cell.
 
 ## Modal viewers
 
