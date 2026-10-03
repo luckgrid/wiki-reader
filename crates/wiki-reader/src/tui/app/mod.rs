@@ -132,6 +132,8 @@ pub struct App {
     /// The collection's `.wiki-reader.toml` when it merges after the write target (no `--config`),
     /// so it can override a saved option on the next launch.
     pub(crate) config_shadow_path: Option<std::path::PathBuf>,
+    /// The theme herdr's own config names (read once at startup); what `theme = "herdr"` follows.
+    pub(crate) herdr_theme: String,
     /// Active colour preset.
     pub(crate) theme_name: wiki_reader_core::config::ThemeName,
     /// `[images] enabled`.
@@ -243,6 +245,25 @@ impl App {
                 message = format!("{message}; {diag}");
             }
         }
+        // Inside herdr the default theme is herdr's, unless a config file chose one. Tests
+        // (`skip_xdg`) never read the real environment or herdr's config.
+        let in_herdr = !skip_xdg && std::env::var("HERDR_ENV").as_deref() == Ok("1");
+        let theme_name = Theme::effective_name(config.theme, config.theme_set, in_herdr);
+        let herdr_theme = if skip_xdg {
+            None
+        } else {
+            wiki_reader_core::herdr::theme_name()
+        }
+        .unwrap_or_else(|| "vesper".to_owned());
+        if theme_name == wiki_reader_core::config::ThemeName::Herdr && !Theme::herdr(&herdr_theme).1
+        {
+            let note = format!("herdr theme \"{herdr_theme}\" is not known here; using vesper");
+            message = if message.is_empty() {
+                note
+            } else {
+                format!("{message}; {note}")
+            };
+        }
         let opener: Box<dyn Opener> = match config.opener.clone() {
             Some(cmd) => Box::new(crate::tui::opener::CommandOpener { command: cmd }),
             None => Box::new(SystemOpener),
@@ -275,7 +296,8 @@ impl App {
             viewer_geom: crate::tui::regions::viewer::ViewerGeom::default(),
             nav_viewport: 20,
             hit_map: HitMap::default(),
-            theme: Theme::from_name(config.theme),
+            theme: Theme::resolve(theme_name, &herdr_theme),
+            herdr_theme,
             quit: false,
             chord: Chord::None,
             input_mode: InputMode::Normal,
@@ -297,7 +319,7 @@ impl App {
             config_shadow_path: config_path
                 .is_none()
                 .then(|| root.join(".wiki-reader.toml")),
-            theme_name: config.theme,
+            theme_name,
             images_enabled: config.images.enabled,
             images_max_slot_rows: config.images.max_slot_rows,
             watcher,
@@ -1070,7 +1092,7 @@ impl App {
         match choice {
             OptionChoice::Theme(t) => {
                 self.theme_name = t;
-                self.theme = Theme::from_name(t);
+                self.theme = Theme::resolve(t, &self.herdr_theme);
                 self.images.diagram_sizes().clear();
                 self.relayout_after_diagram_size();
                 patch.theme = Some(t);

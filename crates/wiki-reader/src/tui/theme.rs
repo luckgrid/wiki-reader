@@ -79,20 +79,236 @@ impl Default for Theme {
     }
 }
 
+type Rgb = (u8, u8, u8);
+
+/// A preset's base colours. [`Theme::from_palette`] derives every token from these, so a preset is
+/// one table entry; surfaces are tints of `bg` toward `fg` or an accent, which keeps a palette's
+/// pairs (text on a tint, a fill under dark text) readable by construction. The contrast tests
+/// check each preset.
+#[derive(Clone, Copy)]
+struct Palette {
+    /// The palette's own background; only used to mix tints, never painted.
+    bg: Rgb,
+    /// Body-ish text; mixed into tints and the diagram card.
+    fg: Rgb,
+    muted: Rgb,
+    secondary: Rgb,
+    /// Page title (H1) and the accent token.
+    accent: Rgb,
+    /// Fill colour: selected tab or button, status pill, popup border.
+    warm: Rgb,
+    /// Text on a `warm` fill.
+    on_warm: Rgb,
+    /// Focused pane border and bold accents; must read as text on the terminal.
+    focus: Rgb,
+    link: Rgb,
+    /// H2–H4.
+    h2: Rgb,
+    /// Collapsible folder rows in the nav.
+    folder: Rgb,
+    red: Rgb,
+    green: Rgb,
+    orange: Rgb,
+    blue: Rgb,
+    purple: Rgb,
+    teal: Rgb,
+    syntax: &'static str,
+}
+
+fn mix(a: Rgb, b: Rgb, t: f32) -> Rgb {
+    let m = |x: u8, y: u8| {
+        let v = f32::from(x) + (f32::from(y) - f32::from(x)) * t;
+        // The clamp keeps the cast in range.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        {
+            v.round().clamp(0.0, 255.0) as u8
+        }
+    };
+    (m(a.0, b.0), m(a.1, b.1), m(a.2, b.2))
+}
+
+const fn col(c: Rgb) -> Color {
+    Color::Rgb(c.0, c.1, c.2)
+}
+
+/// luckgrid.net dark: neutral black and white with the site's lime accent and its terminal
+/// syntax hues (`src/styles/theme.css`, converted from OKLCH).
+const LUCKGRID_DARK: Palette = Palette {
+    bg: (0, 0, 0),
+    fg: (255, 255, 255),
+    muted: (130, 130, 130),
+    secondary: (170, 170, 170),
+    accent: (173, 245, 0),
+    warm: (173, 245, 0),
+    on_warm: (0, 0, 0),
+    focus: (173, 245, 0),
+    link: (59, 199, 255),
+    h2: (252, 159, 48),
+    folder: (252, 159, 48),
+    red: (237, 75, 67),
+    green: (128, 219, 162),
+    orange: (252, 159, 48),
+    blue: (59, 199, 255),
+    purple: (184, 158, 255),
+    teal: (67, 213, 220),
+    syntax: "base16-ocean.dark",
+};
+
+/// luckgrid.net light: white and black with the site's cyan-blue accent. Text colours are the
+/// site's hues darkened until they read on white (≥ 4.5:1); the bright cyan stays a fill.
+const LUCKGRID_LIGHT: Palette = Palette {
+    bg: (255, 255, 255),
+    fg: (0, 0, 0),
+    muted: (96, 96, 96),
+    secondary: (70, 70, 70),
+    accent: (0, 124, 154),
+    warm: (0, 199, 245),
+    on_warm: (0, 0, 0),
+    focus: (0, 124, 154),
+    link: (0, 120, 170),
+    h2: (160, 94, 0),
+    folder: (160, 94, 0),
+    red: (178, 0, 16),
+    green: (10, 118, 64),
+    orange: (160, 94, 0),
+    blue: (0, 120, 170),
+    purple: (122, 90, 196),
+    teal: (0, 124, 129),
+    syntax: "InspiredGitHub",
+};
+
 impl Theme {
-    /// Preset for a configured name.
+    /// Preset for a configured name, with herdr's default theme (vesper) for `herdr`. The app
+    /// passes the theme read from herdr's config through [`Theme::resolve`] instead.
+    #[cfg(test)]
     #[must_use]
     pub fn from_name(name: ThemeName) -> Self {
+        Self::resolve(name, "vesper")
+    }
+
+    /// Preset for a configured name; `herdr_theme` is the theme name from herdr's config, used
+    /// when `name` is [`ThemeName::Herdr`].
+    #[must_use]
+    pub fn resolve(name: ThemeName, herdr_theme: &str) -> Self {
         match name {
             ThemeName::Dark => Self::dark(),
             ThemeName::Light => Self::light(),
-            ThemeName::Herdr => Self::herdr(),
+            ThemeName::Herdr => Self::herdr(herdr_theme).0,
         }
     }
 
-    /// Tuned for dark terminals; the default.
+    /// The preset to start with: the configured one, except that inside herdr, with no config
+    /// file naming a theme, the default is `herdr` so the reader matches its host.
+    #[must_use]
+    pub fn effective_name(
+        configured: ThemeName,
+        config_sets_theme: bool,
+        in_herdr: bool,
+    ) -> ThemeName {
+        if in_herdr && !config_sets_theme {
+            ThemeName::Herdr
+        } else {
+            configured
+        }
+    }
+
+    /// luckgrid.net dark; the default.
     #[must_use]
     pub fn dark() -> Self {
+        Self::from_palette(&LUCKGRID_DARK)
+    }
+
+    /// luckgrid.net light: every text colour reads on a white terminal.
+    #[must_use]
+    pub fn light() -> Self {
+        Self::from_palette(&LUCKGRID_LIGHT)
+    }
+
+    /// The preset for one of herdr's `[theme] name` values, and whether the name was recognised
+    /// (an unknown name gets vesper). Palettes follow each theme's published colours; herdr's own
+    /// values are not exposed to other programs.
+    #[must_use]
+    pub fn herdr(herdr_theme: &str) -> (Self, bool) {
+        let name = herdr_theme.trim().to_ascii_lowercase();
+        if name == "terminal" {
+            return (Self::ansi(), true);
+        }
+        let known = herdr_palette(&name);
+        (
+            Self::from_palette(&known.unwrap_or(HERDR_VESPER)),
+            known.is_some(),
+        )
+    }
+
+    fn from_palette(p: &Palette) -> Self {
+        let tint = |c: Rgb, t: f32| mix(p.bg, c, t);
+        let neutral = |t: f32| tint(p.fg, t);
+        let risk = mix(p.red, p.purple, 0.5);
+        Self {
+            surface: Color::Reset,
+            surface_muted: col(neutral(0.10)),
+            border: col(neutral(0.30)),
+            border_focus: col(p.focus),
+            text: Color::Reset,
+            text_muted: col(p.muted),
+            text_secondary: col(p.secondary),
+            selection: col(tint(p.warm, 0.30)),
+            nav_folder: col(p.folder),
+            peach: col(p.warm),
+            on_peach: col(p.on_warm),
+            accent: col(p.accent),
+            cursor_line: col(tint(p.warm, 0.16)),
+            search_box: col(neutral(0.08)),
+            tab_active: col(tint(p.warm, 0.22)),
+            tab_inactive: col(neutral(0.08)),
+            link: col(p.link),
+            link_broken: col(p.red),
+            link_external: col(p.purple),
+            link_unsupported: col(p.muted),
+            code_bg: col(neutral(0.06)),
+            code_fg: col(p.green),
+            quote_text: col(p.fg),
+            quote_bar: col(neutral(0.12)),
+            heading: [
+                col(p.accent),
+                col(p.h2),
+                col(p.h2),
+                col(p.h2),
+                col(p.secondary),
+                col(p.muted),
+            ],
+            alert: [
+                col(p.muted),
+                col(p.blue),   // NOTE
+                col(p.green),  // TIP
+                col(p.purple), // IMPORTANT
+                col(p.orange), // WARNING
+                col(p.red),    // CAUTION
+                col(p.teal),   // GOAL
+                col(p.link),   // DECISION
+                col(risk),     // RISK
+            ],
+            status_ok: col(p.green),
+            status_warn: col(p.orange),
+            status_plan: col(p.blue),
+            syntax: p.syntax,
+            diagram: DiagramPalette {
+                bg: neutral(0.06),
+                text: tint(p.fg, 0.95),
+                line: p.secondary,
+                node_fill: neutral(0.14),
+                node_border: p.warm,
+                cluster_fill: neutral(0.10),
+                cluster_border: neutral(0.30),
+                note_fill: tint(p.warm, 0.12),
+                note_border: p.warm,
+            },
+        }
+    }
+
+    /// The terminal's own ANSI colours (herdr's `terminal` theme): no fixed palette to match.
+    #[must_use]
+    pub fn ansi() -> Self {
         Self {
             surface: Color::Reset,
             surface_muted: Color::DarkGray,
@@ -148,140 +364,197 @@ impl Theme {
             diagram: DiagramPalette::default(),
         }
     }
+}
 
-    /// Tuned for light terminals: surface and body text stay the terminal's own colours; every
-    /// accent is dark enough to read on white.
-    #[must_use]
-    pub fn light() -> Self {
-        Self {
-            surface: Color::Reset,
-            surface_muted: Color::Rgb(235, 237, 241),
-            border: Color::Rgb(160, 165, 175),
-            border_focus: Color::Rgb(0, 110, 150),
-            text: Color::Reset,
-            text_muted: Color::Rgb(100, 106, 118),
-            text_secondary: Color::Rgb(80, 86, 98),
-            selection: Color::Rgb(176, 206, 238),
-            nav_folder: Color::Rgb(150, 84, 16),
-            // A fill (dark text on top), so it can stay the herdr tab peach.
-            peach: Color::Rgb(246, 201, 159),
-            on_peach: Color::Rgb(26, 26, 26),
-            accent: Color::Rgb(0, 110, 140),
-            cursor_line: Color::Rgb(222, 228, 244),
-            search_box: Color::Rgb(230, 233, 240),
-            tab_active: Color::Rgb(196, 214, 238),
-            tab_inactive: Color::Rgb(230, 233, 240),
-            link: Color::Rgb(0, 100, 130),
-            link_broken: Color::Rgb(180, 28, 28),
-            link_external: Color::Rgb(140, 40, 150),
-            link_unsupported: Color::Rgb(110, 116, 128),
-            code_bg: Color::Rgb(238, 240, 245),
-            code_fg: Color::Rgb(24, 104, 48),
-            quote_text: Color::Rgb(44, 50, 66),
-            quote_bar: Color::Rgb(226, 230, 240),
-            heading: [
-                Color::Rgb(0, 100, 130),
-                Color::Rgb(150, 84, 16),
-                Color::Rgb(150, 84, 16),
-                Color::Rgb(150, 84, 16),
-                Color::Rgb(80, 86, 98),
-                Color::Rgb(100, 106, 118),
-            ],
-            alert: [
-                Color::Rgb(100, 106, 118), // 0 unused
-                Color::Rgb(0, 92, 170),    // NOTE
-                Color::Rgb(16, 120, 70),   // TIP
-                Color::Rgb(150, 100, 0),   // IMPORTANT
-                Color::Rgb(176, 80, 0),    // WARNING
-                Color::Rgb(190, 30, 30),   // CAUTION
-                Color::Rgb(0, 115, 100),   // GOAL
-                Color::Rgb(70, 80, 170),   // DECISION
-                Color::Rgb(190, 30, 70),   // RISK
-            ],
-            status_ok: Color::Rgb(24, 120, 52),
-            status_warn: Color::Rgb(160, 88, 0),
-            status_plan: Color::Rgb(0, 100, 150),
-            syntax: "InspiredGitHub",
-            diagram: DiagramPalette {
-                bg: (246, 247, 250),
-                text: (24, 28, 38),
-                line: (90, 98, 112),
-                node_fill: (228, 233, 243),
-                node_border: (120, 130, 150),
-                cluster_fill: (238, 241, 248),
-                cluster_border: (190, 196, 210),
-                note_fill: (255, 247, 237),
-                note_border: (240, 170, 100),
-            },
-        }
-    }
+/// herdr's default theme: peach and mint on near-black.
+const HERDR_VESPER: Palette = Palette {
+    bg: (16, 16, 16),
+    fg: (230, 230, 230),
+    muted: (140, 140, 140),
+    secondary: (160, 160, 160),
+    accent: (153, 255, 228),
+    warm: (255, 199, 153),
+    on_warm: (16, 16, 16),
+    focus: (255, 199, 153),
+    link: (153, 255, 228),
+    h2: (255, 199, 153),
+    folder: (255, 199, 153),
+    red: (255, 128, 128),
+    green: (130, 230, 160),
+    orange: (255, 170, 100),
+    blue: (130, 190, 255),
+    purple: (180, 160, 255),
+    teal: (120, 220, 200),
+    syntax: "base16-mocha.dark",
+};
 
-    /// Dark, after herdr's vesper theme: peach and mint accents on near-black.
-    #[must_use]
-    pub fn herdr() -> Self {
-        const PEACH: Color = Color::Rgb(255, 199, 153);
-        const MINT: Color = Color::Rgb(153, 255, 228);
-        Self {
-            surface: Color::Reset,
-            surface_muted: Color::Rgb(28, 28, 28),
-            border: Color::Rgb(80, 80, 80),
-            border_focus: PEACH,
-            text: Color::Reset,
-            text_muted: Color::Rgb(140, 140, 140),
-            text_secondary: Color::Rgb(160, 160, 160),
-            selection: Color::Rgb(64, 56, 46),
-            nav_folder: PEACH,
-            peach: PEACH,
-            on_peach: Color::Rgb(16, 16, 16),
-            accent: MINT,
-            cursor_line: Color::Rgb(40, 40, 40),
-            search_box: Color::Rgb(28, 28, 28),
-            tab_active: Color::Rgb(52, 46, 40),
-            tab_inactive: Color::Rgb(28, 28, 28),
-            link: MINT,
-            link_broken: Color::Rgb(255, 128, 128),
-            link_external: Color::Rgb(180, 150, 255),
-            link_unsupported: Color::Rgb(130, 130, 130),
-            code_bg: Color::Rgb(24, 24, 24),
-            code_fg: Color::Rgb(130, 220, 180),
-            quote_text: Color::Rgb(200, 200, 200),
-            quote_bar: Color::Rgb(36, 36, 36),
-            heading: [
-                MINT,
-                PEACH,
-                PEACH,
-                PEACH,
-                Color::Rgb(160, 160, 160),
-                Color::Rgb(130, 130, 130),
-            ],
-            alert: [
-                Color::Rgb(120, 120, 120), // 0 unused
-                Color::Rgb(130, 190, 255), // NOTE
-                MINT,                      // TIP
-                PEACH,                     // IMPORTANT
-                Color::Rgb(255, 170, 100), // WARNING
-                Color::Rgb(255, 128, 128), // CAUTION
-                Color::Rgb(120, 220, 200), // GOAL
-                Color::Rgb(180, 160, 255), // DECISION
-                Color::Rgb(255, 128, 150), // RISK
-            ],
-            status_ok: Color::Rgb(130, 230, 160),
-            status_warn: PEACH,
-            status_plan: Color::Rgb(130, 190, 255),
+/// Palette for a lower-case herdr theme name, if wiki-reader knows it.
+#[allow(clippy::too_many_lines)] // a table of palettes
+fn herdr_palette(name: &str) -> Option<Palette> {
+    Some(match name {
+        "vesper" => HERDR_VESPER,
+        "catppuccin" => Palette {
+            bg: (30, 30, 46),
+            fg: (205, 214, 244),
+            muted: (127, 132, 156),
+            secondary: (166, 173, 200),
+            accent: (203, 166, 247),
+            warm: (203, 166, 247),
+            on_warm: (17, 17, 27),
+            focus: (203, 166, 247),
+            link: (137, 180, 250),
+            h2: (250, 179, 135),
+            folder: (250, 179, 135),
+            red: (243, 139, 168),
+            green: (166, 227, 161),
+            orange: (250, 179, 135),
+            blue: (137, 180, 250),
+            purple: (203, 166, 247),
+            teal: (148, 226, 213),
             syntax: "base16-mocha.dark",
-            diagram: DiagramPalette {
-                bg: (24, 24, 24),
-                text: (240, 240, 240),
-                line: (160, 160, 160),
-                node_fill: (38, 38, 38),
-                node_border: (255, 199, 153),
-                cluster_fill: (30, 30, 30),
-                cluster_border: (80, 80, 80),
-                note_fill: (52, 46, 40),
-                note_border: (255, 199, 153),
-            },
-        }
-    }
+        },
+        "catppuccin-latte" => Palette {
+            bg: (239, 241, 245),
+            fg: (76, 79, 105),
+            muted: (108, 111, 133),
+            secondary: (92, 95, 119),
+            accent: (136, 57, 239),
+            warm: (136, 57, 239),
+            on_warm: (255, 255, 255),
+            focus: (136, 57, 239),
+            link: (30, 102, 245),
+            h2: (176, 66, 0),
+            folder: (176, 66, 0),
+            red: (210, 15, 57),
+            green: (28, 120, 18),
+            orange: (176, 66, 0),
+            blue: (30, 102, 245),
+            purple: (136, 57, 239),
+            teal: (14, 110, 116),
+            syntax: "InspiredGitHub",
+        },
+        "tokyo-night" => Palette {
+            bg: (26, 27, 38),
+            fg: (192, 202, 245),
+            muted: (121, 130, 169),
+            secondary: (169, 177, 214),
+            accent: (122, 162, 247),
+            warm: (122, 162, 247),
+            on_warm: (26, 27, 38),
+            focus: (122, 162, 247),
+            link: (125, 207, 255),
+            h2: (255, 158, 100),
+            folder: (255, 158, 100),
+            red: (247, 118, 142),
+            green: (158, 206, 106),
+            orange: (255, 158, 100),
+            blue: (122, 162, 247),
+            purple: (187, 154, 247),
+            teal: (115, 218, 202),
+            syntax: "base16-ocean.dark",
+        },
+        "tokyo-night-day" => Palette {
+            bg: (225, 226, 231),
+            fg: (52, 59, 88),
+            muted: (96, 100, 130),
+            secondary: (72, 80, 120),
+            accent: (36, 96, 200),
+            warm: (36, 98, 212),
+            on_warm: (255, 255, 255),
+            focus: (36, 96, 200),
+            link: (14, 110, 160),
+            h2: (150, 80, 0),
+            folder: (150, 80, 0),
+            red: (180, 40, 70),
+            green: (40, 96, 10),
+            orange: (150, 80, 0),
+            blue: (36, 96, 200),
+            purple: (110, 70, 190),
+            teal: (0, 110, 110),
+            syntax: "InspiredGitHub",
+        },
+        "gruvbox" => Palette {
+            bg: (40, 40, 40),
+            fg: (235, 219, 178),
+            muted: (146, 131, 116),
+            secondary: (168, 153, 132),
+            accent: (250, 189, 47),
+            warm: (250, 189, 47),
+            on_warm: (40, 40, 40),
+            focus: (250, 189, 47),
+            link: (131, 165, 152),
+            h2: (254, 128, 25),
+            folder: (254, 128, 25),
+            red: (251, 73, 52),
+            green: (184, 187, 38),
+            orange: (254, 128, 25),
+            blue: (131, 165, 152),
+            purple: (211, 134, 155),
+            teal: (142, 192, 124),
+            syntax: "base16-ocean.dark",
+        },
+        "gruvbox-light" => Palette {
+            bg: (251, 241, 199),
+            fg: (60, 56, 54),
+            muted: (110, 98, 88),
+            secondary: (80, 73, 69),
+            accent: (7, 102, 120),
+            warm: (250, 189, 47),
+            on_warm: (40, 40, 40),
+            focus: (7, 102, 120),
+            link: (7, 102, 120),
+            h2: (175, 58, 3),
+            folder: (175, 58, 3),
+            red: (157, 0, 6),
+            green: (90, 86, 8),
+            orange: (175, 58, 3),
+            blue: (7, 102, 120),
+            purple: (143, 63, 113),
+            teal: (50, 100, 66),
+            syntax: "InspiredGitHub",
+        },
+        "one-dark" => Palette {
+            bg: (40, 44, 52),
+            fg: (171, 178, 191),
+            muted: (130, 137, 151),
+            secondary: (160, 167, 181),
+            accent: (97, 175, 239),
+            warm: (97, 175, 239),
+            on_warm: (40, 44, 52),
+            focus: (97, 175, 239),
+            link: (86, 182, 194),
+            h2: (209, 154, 102),
+            folder: (209, 154, 102),
+            red: (224, 108, 117),
+            green: (152, 195, 121),
+            orange: (209, 154, 102),
+            blue: (97, 175, 239),
+            purple: (198, 120, 221),
+            teal: (86, 182, 194),
+            syntax: "base16-ocean.dark",
+        },
+        "kanagawa" => Palette {
+            bg: (31, 31, 40),
+            fg: (220, 215, 186),
+            muted: (138, 137, 128),
+            secondary: (170, 168, 150),
+            accent: (126, 156, 216),
+            warm: (255, 160, 102),
+            on_warm: (31, 31, 40),
+            focus: (255, 160, 102),
+            link: (127, 180, 202),
+            h2: (255, 160, 102),
+            folder: (255, 160, 102),
+            red: (228, 104, 118),
+            green: (152, 187, 108),
+            orange: (255, 160, 102),
+            blue: (126, 156, 216),
+            purple: (149, 127, 184),
+            teal: (122, 168, 159),
+            syntax: "base16-mocha.dark",
+        },
+        _ => return None,
+    })
 }
 
 impl Theme {
@@ -518,15 +791,35 @@ mod tests {
         }
     }
 
+    /// Herdr themes that draw on a light terminal background.
+    const HERDR_LIGHT: [&str; 3] = ["catppuccin-latte", "tokyo-night-day", "gruvbox-light"];
+    const HERDR_DARK: [&str; 6] = [
+        "vesper",
+        "catppuccin",
+        "tokyo-night",
+        "gruvbox",
+        "one-dark",
+        "kanagawa",
+    ];
+
     #[test]
     fn dark_presets_are_readable_on_a_dark_terminal() {
         assert_readable("dark", &Theme::dark(), (16, 16, 16));
-        assert_readable("herdr", &Theme::herdr(), (16, 16, 16));
+        for name in HERDR_DARK {
+            let (t, known) = Theme::herdr(name);
+            assert!(known, "{name}");
+            assert_readable(name, &t, (16, 16, 16));
+        }
     }
 
     #[test]
-    fn light_preset_is_readable_on_a_light_terminal() {
+    fn light_presets_are_readable_on_a_light_terminal() {
         assert_readable("light", &Theme::light(), (255, 255, 255));
+        for name in HERDR_LIGHT {
+            let (t, known) = Theme::herdr(name);
+            assert!(known, "{name}");
+            assert_readable(name, &t, (255, 255, 255));
+        }
     }
 
     #[test]
@@ -535,12 +828,19 @@ mod tests {
         assert_eq!(d.heading, dark.heading);
         assert_eq!(d.code_bg, dark.code_bg);
         assert_eq!(d.syntax, "base16-ocean.dark");
-        assert_eq!(d.diagram, DiagramPalette::default());
         assert_eq!(
             rgb(d.code_bg),
             Some(d.diagram.bg),
             "card matches the code background"
         );
+    }
+
+    #[test]
+    fn dark_and_light_use_the_luckgrid_accents() {
+        // luckgrid.net: lime on dark, cyan-blue on light (theme.css, OKLCH converted).
+        assert_eq!(Theme::dark().accent, Color::Rgb(173, 245, 0));
+        assert_eq!(Theme::dark().peach, Color::Rgb(173, 245, 0));
+        assert_eq!(Theme::light().peach, Color::Rgb(0, 199, 245));
     }
 
     #[test]
@@ -551,13 +851,55 @@ mod tests {
         assert_ne!(dark.diagram, light.diagram);
         assert_ne!(dark.diagram, herdr.diagram);
         assert_ne!(dark.link, light.link);
+        // The dark preset no longer shares herdr's peach and mint.
+        assert_ne!(dark.peach, herdr.peach);
+        assert_ne!(dark.accent, herdr.accent);
         assert_eq!(light.syntax, "InspiredGitHub");
+    }
+
+    #[test]
+    fn inside_herdr_the_default_is_herdr_unless_config_chose() {
+        use ThemeName::{Dark, Herdr, Light};
+        assert_eq!(Theme::effective_name(Dark, false, true), Herdr);
+        assert_eq!(Theme::effective_name(Dark, false, false), Dark);
+        // An explicit choice wins, even `dark` written by the options window.
+        assert_eq!(Theme::effective_name(Dark, true, true), Dark);
+        assert_eq!(Theme::effective_name(Light, true, true), Light);
+    }
+
+    #[test]
+    fn herdr_follows_the_named_theme() {
+        let (vesper, known) = Theme::herdr("vesper");
+        assert!(known);
+        assert_eq!(vesper.peach, Color::Rgb(255, 199, 153));
+        let (gruv, known) = Theme::herdr(" Gruvbox ");
+        assert!(known, "names are trimmed and case-insensitive");
+        assert_ne!(gruv.peach, vesper.peach);
+        // An unknown name is vesper, flagged so the app can say so.
+        let (other, known) = Theme::herdr("nonesuch");
+        assert!(!known);
+        assert_eq!(other.peach, vesper.peach);
+        // `terminal` is the host's ANSI palette.
+        let (term, known) = Theme::herdr("terminal");
+        assert!(known);
+        assert_eq!(term.accent, Color::Cyan);
+        assert_eq!(
+            Theme::resolve(ThemeName::Herdr, "catppuccin").peach,
+            Theme::herdr("catppuccin").0.peach
+        );
     }
 
     #[test]
     fn syntax_themes_exist_in_the_bundled_set() {
         let set = syntect::highlighting::ThemeSet::load_defaults();
-        for t in [Theme::dark(), Theme::light(), Theme::herdr()] {
+        let mut all = vec![Theme::dark(), Theme::light(), Theme::ansi()];
+        all.extend(
+            HERDR_DARK
+                .iter()
+                .chain(&HERDR_LIGHT)
+                .map(|n| Theme::herdr(n).0),
+        );
+        for t in all {
             assert!(set.themes.contains_key(t.syntax), "{}", t.syntax);
         }
     }

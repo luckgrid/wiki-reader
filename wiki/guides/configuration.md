@@ -25,7 +25,7 @@ The collection file is untrusted, since it comes with the content you are readin
 
 | Key | Values | Default | Notes |
 |-----|--------|---------|-------|
-| `theme` | `"dark"`, `"light"`, `"herdr"` | `"dark"` | See [UI spec: Theming](../product/ui-spec.md). |
+| `theme` | `"dark"`, `"light"`, `"herdr"` | `"dark"`, or `"herdr"` inside herdr | `dark` and `light` use the luckgrid.net colours; `herdr` follows the theme in herdr's config. See [UI spec: Theming](../product/ui-spec.md) and [ADR-0019](../decisions/0019-theme-presets.md). |
 | `nav.position` | `"left"`, `"right"` | `"left"` | Side nav on the left or right edge. Nav width stays session-only. |
 | `nav.labels` | `"title"`, `"filename"`, `"title+filename"` | `"title"` | How nav rows are labelled. |
 | `diagrams` | `"auto"`, `"image"`, `"text"`, `"source"` | `"auto"` | Mermaid tier; see [ADR-0004](../decisions/0004-diagram-rendering.md). tmux always uses text. |

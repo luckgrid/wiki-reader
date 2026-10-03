@@ -282,8 +282,10 @@ The `theme` config key picks a built-in preset:
 
 | `theme =` | For | Notes |
 |-----------|-----|-------|
-| `"dark"` (default) | Dark terminals | Surface and body text are the terminal's own colours. |
-| `"light"` | Light terminals | Every accent is dark enough to read on white (a test enforces ≥ 4.5:1 per token). |
-| `"herdr"` | Dark terminals inside herdr | After herdr's vesper theme (peach and mint on near-black); herdr's other themes are not followed. |
+| `"dark"` (default) | Dark terminals | The [luckgrid.net](https://luckgrid.net) dark palette: lime accent, blue links, orange H2–H4. Surface and body text are the terminal's own colours. |
+| `"light"` | Light terminals | The luckgrid.net light palette: cyan-blue accent. Every text colour is dark enough to read on white (a test enforces ≥ 4.5:1 per token). |
+| `"herdr"` | Inside herdr | Follows the theme named in herdr's own config (`[theme] name`): vesper, catppuccin, catppuccin-latte, tokyo-night, tokyo-night-day, gruvbox, gruvbox-light, one-dark, kanagawa, or terminal (ANSI colours). An unknown name uses vesper and says so. Read once at startup; see [ADR-0019](../decisions/0019-theme-presets.md). |
+
+Inside herdr (`HERDR_ENV=1`) the default is `herdr` when no config file sets `theme`; a theme chosen in the options window is written, so it wins from then on.
 
 An unknown value is ignored with a config diagnostic: the value from an earlier config file (user, then collection, then `--config`) stays, or `dark` if there is none. There is no `auto`: asking the terminal for its background would compete with the image probe for stdin (see [ADR-0004](../decisions/0004-diagram-rendering.md)). Mermaid diagrams are drawn in the preset's colours on an opaque card, so a diagram matches the page around it. Node, cluster, note, pie and git-graph colours follow the preset; a few diagram types hard-code light fills in the renderer (quadrant charts, xy-chart grids, ER key badges) and keep them, so they show as light patches on a dark card. Theme files (TOML) are a later seam, see [Integrations](../architecture/integrations.md).
