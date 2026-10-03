@@ -47,6 +47,24 @@ pub enum ThemeName {
     Herdr,
 }
 
+/// How `y` (copy page path) formats the path (`copy.path`; P2-55).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CopyPathMode {
+    /// Relative to the collection root (default).
+    #[default]
+    Relative,
+    /// Absolute filesystem path.
+    Absolute,
+}
+
+/// `[copy]` table.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+pub struct CopyConfig {
+    #[serde(default)]
+    pub path: CopyPathMode,
+}
+
 /// `[nav]` table.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
 pub struct NavConfig {
@@ -65,6 +83,7 @@ pub struct Config {
     /// Built-in colour preset. An unknown value in a later file is ignored (with a diagnostic),
     /// so the value from an earlier file, or `dark`, stays; same rule as `diagrams`.
     pub theme: ThemeName,
+    pub copy: CopyConfig,
     /// Action-name → key chord overrides (e.g. `"quit" = "Q"`).
     pub keys: BTreeMap<String, String>,
     /// Human-readable diagnostics for bad / unknown keys.
@@ -122,7 +141,7 @@ impl Config {
         for key in table.keys() {
             if !matches!(
                 key.as_str(),
-                "exclude" | "nav" | "opener" | "editor" | "diagrams" | "theme" | "keys"
+                "exclude" | "nav" | "opener" | "editor" | "diagrams" | "theme" | "copy" | "keys"
             ) {
                 self.diagnostics.push(format!("unknown config key: {key}"));
             }
@@ -183,6 +202,22 @@ impl Config {
                 Err(_) => self.diagnostics.push(format!(
                     "theme: expected \"dark\", \"light\" or \"herdr\", got {v}"
                 )),
+            }
+        }
+        if let Some(v) = table.get("copy") {
+            if let Some(copy_table) = v.as_table() {
+                // ponytail: only `path` today; unknown nested keys ignored until P3-13 grows the table
+                if let Some(path_v) = copy_table.get("path") {
+                    match path_v.clone().try_into::<CopyPathMode>() {
+                        Ok(p) => self.copy.path = p,
+                        Err(_) => self.diagnostics.push(format!(
+                            "copy.path: expected \"relative\" or \"absolute\", got {path_v}"
+                        )),
+                    }
+                }
+            } else {
+                self.diagnostics
+                    .push(format!("copy: expected table, got {v}"));
             }
         }
         if let Some(v) = table.get("keys") {
@@ -476,6 +511,65 @@ quit = "X"
             cfg.exclude,
             vec!["drafts/**".to_owned(), "secrets/**".to_owned()]
         );
+    }
+
+    #[test]
+    fn copy_path_key_selects_relative_or_absolute() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("user.toml");
+        for (value, want) in [
+            ("relative", CopyPathMode::Relative),
+            ("absolute", CopyPathMode::Absolute),
+        ] {
+            fs::write(&path, format!("[copy]\npath = \"{value}\"\n")).unwrap();
+            let cfg = Config::load_with_xdg(tmp.path(), None, Some(&path));
+            assert_eq!(cfg.copy.path, want);
+            assert!(cfg.diagnostics.is_empty(), "diags={:?}", cfg.diagnostics);
+        }
+    }
+
+    #[test]
+    fn invalid_copy_path_stays_relative_with_a_diagnostic() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("user.toml");
+        fs::write(&path, "[copy]\npath = \"bogus\"\n").unwrap();
+        let cfg = Config::load_with_xdg(tmp.path(), None, Some(&path));
+        assert_eq!(cfg.copy.path, CopyPathMode::Relative);
+        assert!(
+            cfg.diagnostics.iter().any(|d| d.starts_with("copy.path:")),
+            "diags={:?}",
+            cfg.diagnostics
+        );
+    }
+
+    #[test]
+    fn invalid_copy_path_in_a_later_file_keeps_the_earlier_value() {
+        let tmp = tempdir().unwrap();
+        let xdg = tmp.path().join("user.toml");
+        fs::write(&xdg, "[copy]\npath = \"absolute\"\n").unwrap();
+        fs::write(
+            tmp.path().join(".wiki-reader.toml"),
+            "[copy]\npath = \"bogus\"\n",
+        )
+        .unwrap();
+        let cfg = Config::load_with_xdg(tmp.path(), None, Some(&xdg));
+        assert_eq!(
+            cfg.copy.path,
+            CopyPathMode::Absolute,
+            "a typo must not flip the user's copy.path"
+        );
+        assert!(
+            cfg.diagnostics.iter().any(|d| d.starts_with("copy.path:")),
+            "diags={:?}",
+            cfg.diagnostics
+        );
+        fs::write(
+            tmp.path().join(".wiki-reader.toml"),
+            "[copy]\npath = \"relative\"\n",
+        )
+        .unwrap();
+        let cfg = Config::load_with_xdg(tmp.path(), None, Some(&xdg));
+        assert_eq!(cfg.copy.path, CopyPathMode::Relative);
     }
 
     #[test]

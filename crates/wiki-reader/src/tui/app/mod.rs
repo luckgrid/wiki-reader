@@ -151,6 +151,8 @@ pub struct App {
     pub(crate) clipboard: Box<dyn ClipboardWriter>,
     /// Diagram tier preference from config.
     diagram_mode: wiki_reader_core::config::DiagramMode,
+    /// How `y` formats the copied path (relative vs absolute).
+    copy_path: wiki_reader_core::config::CopyPathMode,
     /// Terminal graphics (startup probe result), decode worker and prepared pictures.
     pub(crate) images: crate::tui::images::ImageManager,
     /// When false, skip session load/save (tests).
@@ -280,6 +282,7 @@ impl App {
             expanded_for_page: None,
             clipboard: Box::new(Osc52Clipboard),
             diagram_mode: config.diagrams,
+            copy_path: config.copy.path,
             images: crate::tui::images::ImageManager::disabled(),
             persist_session,
             session_saved_at: None,
@@ -370,16 +373,29 @@ impl App {
     }
 
     fn copy_page_path(&mut self) {
-        let path = self
-            .navigator
-            .tab()
-            .current()
-            .page
-            .relative_path
-            .to_string_lossy()
-            .into_owned();
-        match self.clipboard.copy(&path) {
-            Ok(()) => self.message = "sent to clipboard (OSC 52)".into(),
+        use wiki_reader_core::config::CopyPathMode;
+
+        let relative = if self.focus == FocusPane::Nav {
+            match &self.navigator.nav().cursor {
+                NavStop::Node(NodeId::Page(key)) => Some(key.relative_path.clone()),
+                NavStop::Node(NodeId::Group(path)) => Some(path.clone()),
+                NavStop::Node(NodeId::OtherPages) | NavStop::Search => None,
+            }
+        } else {
+            None
+        };
+        let relative =
+            relative.unwrap_or_else(|| self.navigator.tab().current().page.relative_path.clone());
+        let text = match self.copy_path {
+            CopyPathMode::Relative => relative.to_string_lossy().into_owned(),
+            CopyPathMode::Absolute => {
+                crate::tui::editor::page_abs_path(self.provider.root(), &relative)
+                    .to_string_lossy()
+                    .into_owned()
+            }
+        };
+        match self.clipboard.copy(&text) {
+            Ok(()) => self.message = format!("copied {text}"),
             Err(err) => self.message = format!("copy failed: {err}"),
         }
     }
