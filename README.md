@@ -4,21 +4,24 @@ A terminal wiki reader for markdown collections. It browses like a documentation
 
 <!-- ui-diagram:start -->
 ```text
- Worked Example Wiki › architecture › design-system › Token Projection     ◫ ✕
-┌──────────────────────────┐┌┤ tokens × ├────────────────────────────────────┐
-│▌/ Search…                ││ ── frontmatter ▸ ──────────────────────────────│
-│                          ││                                                │
-│  Worked Example Wiki     ││▌Token Projection                               │
-│  ▾ architecture          ││ ────────────────────────────────────────       │
-│     Architecture Overview││                                                │
-│     ▾ design-system      ││ The reusable adapter stays semantic-only;      │
-│        Design System     ││ see [ADR-0003](../decisions/0003.md).          │
-│▌       Token Projection  ││                                                │
-│     ▸ wfos               ││ ┌ Linked from ─────────────────────────────┐   │
-│  ▸ decisions             ││ │ Worked Example Wiki                      │   │
-│                          ││ └──────────────────────────────────────────┘   │
-└──────────────────────────┘└┤ ‹ Design System ├────────────┤ Workflow OS › ├┘
- VIEW  · architecture/design-system/tokens.md · L3:C1 9% · draft          ? ⚙
+ Worked Example Wiki                                                        ◫ ✕
+┌────────────────────────┐┌─────────────┬─────────────┬────────────────────────┐
+│ / Search…              ││ README.md × │ tokens.md × │                        │
+├────────────────────────┤├─────────────┴─────────────┴────────────────────────┤
+│▌ Worked Example Wiki   ││▌── frontmatter ▸ ──────────────────────────────────│
+│  ▸ architecture        ││                                                    │
+│  ▸ decisions           ││ Worked Example Wiki                                │
+│                        ││ ────────────────────────────────────────           │
+│                        ││                                                    │
+│                        ││ A tiny markdown collection used as the default     │
+│                        ││ smoke-test root.                                   │
+│                        ││                                                    │
+│                        ││ Start at Architecture Overview, follow Token       │
+│                        ││ Projection, then return via back when history      │
+│                        │├────────────┬─────────────┬─────────────────────────┤
+│                        ││ ‹ Overview │             │ Architecture Overview › │
+└────────────────────────┘└────────────┴─────────────┴─────────────────────────┘
+  VIEW  · README.md · L1:C1 9% · 2026-09-28 · draft · 29w · 1m              ? ⚙
 ```
 <!-- ui-diagram:end -->
 

@@ -4,25 +4,25 @@ expression: out
 ---
  Worked Example Wiki › … › Token P… ◫ ✕ 
 ┌────────────────────────────┐─────────┐
-│▌/ Search…                  │─────────│
-│                            │         │
-│  README.md                 │         │
-│  ▾ architecture            │─────────│
+│ / Search…                  │         │
+├────────────────────────────┤─────────┤
+│  README.md                 │─────────│
+│  ▾ architecture            │         │
 │     README.md              │         │
-│     ▾ design-system        │         │
-│        README.md           │stem and │
+│     ▾ design-system        │─────────│
+│        README.md           │         │
 │▌       tokens.md           │         │
-│     ▸ wfos                 │         │
+│     ▸ wfos                 │stem and │
 │  ▸ decisions               │         │
+│                            │         │
+│                            │         │
 │                            │────────┐│
 │                            │        ││
 │                            │ for w… ││
 │                            │────────┤│
 │                            │        ││
 │                            │tectur… ││
-│                            │────────┤│
-│                            │        ││
-│                            │ing pa… ││
-│                            │────────┘│
-└────────────────────────────┘ow OS › ├┘
+│                            │─────────┤
+│                            │low OS › │
+└────────────────────────────┘─────────┘
   NAV  · architecture/design-system ? ⚙

@@ -90,6 +90,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         app.selection,
         &match_spans,
         app.focus == FocusPane::Viewer && !overlay_open,
+        overlay_open,
         focus_item.as_ref(),
         &focus_items,
         prev_label.as_deref(),

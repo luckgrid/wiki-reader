@@ -16,21 +16,24 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 
 <!-- ui-diagram:start -->
 ```text
- Worked Example Wiki › architecture › design-system › Token Projection     ◫ ✕
-┌──────────────────────────┐┌┤ tokens × ├────────────────────────────────────┐
-│▌/ Search…                ││ ── frontmatter ▸ ──────────────────────────────│
-│                          ││                                                │
-│  Worked Example Wiki     ││▌Token Projection                               │
-│  ▾ architecture          ││ ────────────────────────────────────────       │
-│     Architecture Overview││                                                │
-│     ▾ design-system      ││ The reusable adapter stays semantic-only;      │
-│        Design System     ││ see [ADR-0003](../decisions/0003.md).          │
-│▌       Token Projection  ││                                                │
-│     ▸ wfos               ││ ┌ Linked from ─────────────────────────────┐   │
-│  ▸ decisions             ││ │ Worked Example Wiki                      │   │
-│                          ││ └──────────────────────────────────────────┘   │
-└──────────────────────────┘└┤ ‹ Design System ├────────────┤ Workflow OS › ├┘
- VIEW  · architecture/design-system/tokens.md · L3:C1 9% · draft          ? ⚙
+ Worked Example Wiki                                                        ◫ ✕
+┌────────────────────────┐┌─────────────┬─────────────┬────────────────────────┐
+│ / Search…              ││ README.md × │ tokens.md × │                        │
+├────────────────────────┤├─────────────┴─────────────┴────────────────────────┤
+│▌ Worked Example Wiki   ││▌── frontmatter ▸ ──────────────────────────────────│
+│  ▸ architecture        ││                                                    │
+│  ▸ decisions           ││ Worked Example Wiki                                │
+│                        ││ ────────────────────────────────────────           │
+│                        ││                                                    │
+│                        ││ A tiny markdown collection used as the default     │
+│                        ││ smoke-test root.                                   │
+│                        ││                                                    │
+│                        ││ Start at Architecture Overview, follow Token       │
+│                        ││ Projection, then return via back when history      │
+│                        │├────────────┬─────────────┬─────────────────────────┤
+│                        ││ ‹ Overview │             │ Architecture Overview › │
+└────────────────────────┘└────────────┴─────────────┴─────────────────────────┘
+  VIEW  · README.md · L1:C1 9% · 2026-09-28 · draft · 29w · 1m              ? ⚙
 ```
 <!-- ui-diagram:end -->
 
@@ -49,19 +52,19 @@ Nav rows show page titles by default and folders show the folder name (see [Side
 Regions:
 
 - **Header:** one padded row with the breadcrumb on the left and the icon buttons on the right, directly above the panes. The last crumb is the current page and is drawn gray (read-only); the others are links.
-- **Side nav:** a bordered pane holding the search row and the page tree. Neither pane has a title tag; the status pill (`NAV` / `VIEW`) says which one has focus. Its width defaults to 26 (30 at ≥ 120 columns) and can be dragged.
-- **View:** a bordered pane whose **tabs sit on the top border** and whose **prev/next footer is drawn on the bottom border**, as outlined buttons: the tabs one group (`┤ a × │ b × ├`, a single `│` between tabs), the footer links `┤ ‹ label ├`. Its first line sits directly under the top border, level with the Nav search row, and the cursor line is marked `▌`.
+- **Side nav:** a bordered pane holding the search bar and the page tree. Neither pane has a title tag; the status pill (`NAV` / `VIEW`) says which one has focus. Its width defaults to 26 (30 at ≥ 120 columns) and can be dragged.
+- **View:** a bordered pane with a **three-row tab bar** at the top and a **three-row prev/next bar** at the bottom, both fully bordered boxes with `│` dividers between cells and no background fills. Each bar is the pane border, a label row and a seam rule. Article content starts below the top bar and ends above the bottom bar; the cursor line is marked `▌`.
 - **Status bar:** one padded row directly under the panes.
 
-**Tabs** are always shown: the current page's tab is there even when it is the only one (`┤ tokens × ├`, `×` closes). Like the footer buttons, the active tab fills peach only while the View has focus; with the Nav focused every tab stays outlined. A right-hand widget slot is reserved for Phase 4.
+**Tabs** show actual filenames including extensions (`tokens.md`, `×` closes), even for a single page whenever a complete label and close glyph fit. Each tab is its own cell, separated by `│`; the rest of the bar is an empty cell. The active tab is bold in the focus colour (peach in the herdr presets) with View focus, bold secondary text with Nav focus, and muted like the other tabs behind popups. Inactive tabs use muted text. Every bar glyph is thin and takes the border style of its pane (focus colour when focused, dim otherwise), so the bar always matches the pane frame. A right-hand widget slot is reserved for Phase 4.
 
-### Approved Batch A layout (P3-18 implemented; P3-17 planned)
+### Batch A layout (P3-18 / P3-17)
 
-P3-18 places ⚙ at the full-width layout footer's far right, below both panes, with `?` immediately to its left; the header retains ◫ and ✕. P3-17 will give the View dedicated **three-row top and bottom strips** for fully closed tab and footer-button boxes. The middle row carries labels/hit regions; the other two rows carry borders. Tabs use the actual filename including its extension. The active tab keeps a darker selected background with Nav focus, and the normal accent selection with View focus.
+P3-18 places ⚙ at the full-width layout footer's far right, below both panes, with `?` immediately to its left; the header retains ◫ and ✕. P3-17 gives the View **three-row top and bottom bars** (pane border, label row, seam), with complete borders and dividers. This supersedes the earlier compact two-row bars with a heavy `━` underline, which the operator rejected after a screenshot review: the heavy rule was thicker than the pane border and took the label's colour instead of the pane's. No tab or prev/next background fills remain. Labels that are selected use the focus colour, bold; everything else is muted.
 
-The layout footer reserves space for `?` / ⚙ before laying out status fields and messages. The View footer independently divides its width between prev/next. Labels truncate with `…`; unavailable links remain absent. Controls must not overlap, including at 40/60 columns and with Nav on either side. Compared with today's border-row controls, the strips consume two additional article rows at each edge. At insufficient height, clip empty/content rows safely without underflow; retain the header/status rows and only register visible control hits. P3-01 sticky headings are a separate row/behavior, not implemented by these boxes.
+The layout footer reserves space for `?` / ⚙ before laying out status fields and messages. The View footer independently divides its width between prev/next. Labels truncate with `…`; unavailable links remain absent. Controls must not overlap, including at 40/60 columns and with Nav on either side. Collision policy: reserve the active tab first, ellipsizing its filename to the available label width (maximum 18 columns), then add other tabs in order only if each whole cell and its divider fits. Hide all tabs when fewer than seven columns are available. Prev and next cells are sized to their labels, each capped so that the two cells and their dividers fit in the interior; ellipsize labels and hide a cell if its cap cannot fit padding, an arrow and one label column. Hits occupy only the label row of each bar, never the border or seam rows. Short-terminal policy: retain the one-row layout header/footer whenever height permits; give the View's top bar its three rows first, then its bottom bar three more. Draw a bar only when all of its rows fit; an edge without a bar keeps just the pane's border row, with no controls or hits. Article rows are the remainder after the edges (six chrome rows when both bars fit). P3-01 sticky headings are explicitly deferred by operator decision; no additional sticky row is reserved.
 
-The diagram and descriptions below document the current border-row implementation; refresh the final assets in P3-23 after P3-17 lands.
+The ASCII diagram documents the bar layout; screenshots will be refreshed in P3-23 after the UI settles.
 
 ## Header (full width, 1 padded row)
 
@@ -76,12 +79,12 @@ A file tree **presented as a documentation site's side nav**. By default it dock
 - The root entry page (root `README.md`/`index.md`) is the first item.
 - Folders always show the **on-disk folder name**, preserving case, hyphens and numeric prefixes. Pages are labelled by `nav.labels`: **`title`** (default: `nav_title` → `title` → first H1 → humanized filename) or **`filename`** (actual filename including extension, e.g. `README.md`). In title mode, landing pages show their title, falling back to the folder name (root: collection name). Legacy `title+filename` maps to `title` with one warning per config load; see [ADR-0020](../decisions/0020-nav-label-modes.md). This setting affects **only the side-nav tree**: header breadcrumbs and View footer links always retain title-mode navigation labels ([ADR-0021](../decisions/0021-side-nav-only-label-mode.md)).
 - Every folder with a README is a **collapsible group** (the folder name) whose first item is the README, labelled with its title. A folder holding only a README is still a group with that one item.
-- Folder rows use the herdr tab peach (the same colour as the active tab, footer links, status pill and popup border) and nested rows indent three more columns per level, so a child starts one column right of its parent's label. The list always starts right under the search bar when it fits (it scrolls only to keep the current row visible). The selected row has a full-width background highlight and a `▌` marker; it follows the current page however you got there (a link, the footer, search, history). Ancestor groups auto-expand after every navigation. A row that does not fit the pane width ends in `…`.
+- Folder rows use the herdr tab peach (in the herdr presets, the same colour as the selected tab and footer link labels, the focused pane border, the status pill and the popup border) and nested rows indent three more columns per level, so a child starts one column right of its parent's label. The list always starts right under the search bar when it fits (it scrolls only to keep the current row visible). The selected row has a full-width background highlight and a `▌` marker; it follows the current page however you got there (a link, the footer, search, history). Ancestor groups auto-expand after every navigation. A row that does not fit the pane width ends in `…`.
 - The pane is **resizable**: drag the divider on the inner edge between the nav and the viewer (clamped to 16–50 columns; the width is saved with the session and ignored below 80 columns). Nav width stays session-only; position is config.
 
-**Search entry (top of the side nav).** The first row is `/ Search…` (`/` is the key that opens search, and it renders at text height in every font), drawn as a bar in both states; when it is the focused nav stop the bar and text turn the accent color. Selecting it, clicking it, or pressing the search hotkey anywhere opens the **search overlay panel** (below). It's a nav stop for Shift+↑/↓ (see keyboard).
+**Search entry (top of the side nav).** The first row is `/ Search…` (`/` is the key that opens search, and it renders at text height in every font), drawn as a bordered bar that lines up with the View's tab bar: a label row followed by a seam rule, with no fill. The text is muted; when it is the focused nav stop it turns bold in the focus colour, like a selected tab. Selecting it, clicking it, or pressing the search hotkey anywhere opens the **search overlay panel** (below). It's a nav stop for Shift+↑/↓ (see keyboard).
 
-Future: this search row becomes a proper **side nav header**, and a **side nav footer** can hold widget actions or tabbed features (e.g. Pages / Outline).
+Future: this search bar becomes a proper **side nav header**, and a **side nav footer** can hold widget actions or tabbed features (e.g. Pages / Outline).
 
 ## Search overlay panel
 
@@ -125,11 +128,11 @@ After the last item, `Tab` wraps to the first. The focused item renders inverted
 
 **End of article:** "Linked from" pane (box-drawn with side borders: tag header, each entry's title and optional one-line summary as one focusable hit; Tab focus paints selection background across the entry and replaces the left `│` with a teal ▌). Summary comes from frontmatter or the first body paragraph as plain text (no markdown markup), truncated with `…` when it would wrap.
 
-Future: a **sticky section header** at the top of the viewer showing the heading of the section in view.
+Deferred (P3-01): a **sticky section header** at the top of the viewer showing the heading of the section in view. No extra row is reserved in this layout.
 
 ## View footer (prev/next)
 
-`┤ ‹ Prev title ├` on the left and `┤ Next title › ├` on the right, following side nav order ([content model](content-model.md)) but always using title-mode labels, regardless of `nav.labels`. They are outlined, padded buttons drawn on the **View pane's bottom border**, so they stay pinned while the article scrolls. The outline matches the pane border (teal when the View is focused, gray when the Nav is); a button reached with `Tab` or `f` fills peach with dark text. Each label is truncated with `…` to its half of the border so long titles cannot collide. Help / Options are not on this border; they belong to the layout footer below it. Both are clickable and bound to `[` / `]`. A side with no prev/next draws nothing, so the border runs unbroken.
+Connected `‹ Prev title` and `Next title ›` controls sit in their own cells on the left/right of the **View's three-row bottom bar**, following side nav order ([content model](content-model.md)) but always using title-mode labels, regardless of `nav.labels`. They remain pinned while the article scrolls; hits occupy the label row only; the bar's seam is above it and the pane's bottom border below. Labels are dim by default; a control reached with `Tab` or `f` uses bold focus-colour text instead of a background fill. Each label is truncated with `…` to its cell's cap so long titles cannot collide. Help / Options are not on this bar; they belong to the layout footer below it. Both are clickable and bound to `[` / `]`. A side with no prev/next draws no cell.
 
 ## Modal viewers
 
@@ -157,7 +160,7 @@ Two focusable panes: **Side nav** and **View**. The search overlay is modal whil
 - **Navigation updates cursors:**
   - Opening a page sets the viewer cursor to the anchor target, else to the remembered cursor for that history entry (back/forward), else the top.
   - If the current page changed while the side nav wasn't focused (via a link, search, or prev/next), refocusing the side nav puts its cursor on the new current page rather than its stale position. Otherwise it keeps its remembered position.
-- The focused pane gets an accent border; the other gets a dim border.
+- The focused pane gets a focus-colour border (peach in the herdr presets) and its bars and search seam follow it; the other pane gets a dim border.
 
 ## Keyboard
 
@@ -292,7 +295,7 @@ Click to focus a pane; click items, links, breadcrumbs, prev/next, header icons,
 
 ## Theming
 
-Semantic tokens only (`tui/theme.rs`): `surface`, `surface_muted`, `border`, `border_focus`, `text`, `text_muted`, `text_secondary`, `accent`, `cursor_line`, `search_box`, `tab_active`, `tab_inactive`, `peach` / `on_peach` (active tab, footer links, focused block actions), `link`, `link_broken`, `link_external`, `link_unsupported`, `code_bg` / `code_fg`, `quote_bar` / `quote_text`, `heading[1..6]`, `alert[…]`, `status_*`, plus two non-colour entries per preset: the syntect theme for the raw view and the Mermaid diagram palette.
+Semantic tokens only (`tui/theme.rs`): `surface`, `surface_muted`, `border`, `border_focus`, `text`, `text_muted`, `text_secondary`, `accent`, `cursor_line`, `peach` / `on_peach` (status pill, focused block actions, popup border; a fill, so never used as text), `border_focus` (also the selected tab and footer link label colour, because it is readable as text on every preset), `link`, `link_broken`, `link_external`, `link_unsupported`, `code_bg` / `code_fg`, `quote_bar` / `quote_text`, `heading[1..6]`, `alert[…]`, `status_*`, plus two non-colour entries per preset: the syntect theme for the raw view and the Mermaid diagram palette.
 
 The `theme` config key picks a built-in preset:
 

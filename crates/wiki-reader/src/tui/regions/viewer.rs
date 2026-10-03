@@ -8,7 +8,7 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 
 use crate::tui::highlight::HlSpan;
 use crate::tui::hit::{Hit, HitMap};
-use crate::tui::layout::{VIEWER_LEFT_PAD, VIEWER_TOP_PAD};
+use crate::tui::layout::{VIEWER_BAR_ROWS, VIEWER_LEFT_PAD, viewer_edge_rows};
 use crate::tui::selection::Selection;
 use crate::tui::text_col;
 use crate::tui::theme::Theme;
@@ -92,6 +92,7 @@ pub fn draw(
     selection: Option<Selection>,
     match_spans: &[(u32, u16, u16)],
     focused: bool,
+    chrome_muted: bool,
     focused_item: Option<&FocusItem>,
     focus_items: &[FocusItem],
     prev_label: Option<&str>,
@@ -108,33 +109,51 @@ pub fn draw(
 
     hits.push(area, Hit::FocusViewer);
 
-    let footer = crate::tui::regions::footer::titles(
-        area,
-        prev_label,
-        next_label,
-        footer_focus,
-        focused,
-        theme,
-        hits,
-    );
-
-    let tab_bar = crate::tui::regions::tabs::titles(area, tabs, active_tab, focused, theme, hits);
-
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(theme.border(focused))
-        .title(tab_bar)
-        .title_bottom(footer.left)
-        .title_bottom(footer.right);
-    let bordered = block.inner(area);
+        .border_style(theme.border(focused));
     frame.render_widget(block, area);
-    // Clamp so the pad can be flipped back to a non-zero value without a rewrite.
-    #[allow(clippy::unnecessary_min_or_max)]
-    let top_pad = VIEWER_TOP_PAD.min(bordered.height);
+    let (top_rows, bottom_rows) = viewer_edge_rows(area.height);
+    // A bar is drawn only when its full three rows fit; otherwise the pane keeps
+    // its plain border row there, with no controls or hits.
+    if top_rows == VIEWER_BAR_ROWS {
+        let top = Rect {
+            height: VIEWER_BAR_ROWS,
+            ..area
+        };
+        crate::tui::regions::tabs::draw(
+            frame,
+            top,
+            tabs,
+            active_tab,
+            focused,
+            chrome_muted,
+            theme,
+            hits,
+        );
+    }
+    if bottom_rows == VIEWER_BAR_ROWS {
+        let bottom = Rect {
+            y: area.bottom() - VIEWER_BAR_ROWS,
+            height: VIEWER_BAR_ROWS,
+            ..area
+        };
+        crate::tui::regions::footer::draw(
+            frame,
+            bottom,
+            prev_label,
+            next_label,
+            footer_focus,
+            focused,
+            theme,
+            hits,
+        );
+    }
     let inner_area = Rect {
-        y: bordered.y.saturating_add(top_pad),
-        height: bordered.height.saturating_sub(top_pad),
-        ..bordered
+        x: area.x.saturating_add(1),
+        y: area.y.saturating_add(top_rows),
+        width: area.width.saturating_sub(2),
+        height: area.height.saturating_sub(top_rows + bottom_rows),
     };
 
     // Left pad column holds the ▌ cursor marker (P2-19); text starts one col in.

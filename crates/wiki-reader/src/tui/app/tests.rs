@@ -74,10 +74,10 @@ fn narrow_nav_overlay_is_opaque_and_outside_clicks_only_dismiss() {
             app.nav_width,
             app.nav_position,
         );
-        // The blank gap beneath search must replace article cells and inherit the theme.
+        // The seam beneath the search bar must replace article cells and inherit the theme.
         for x in 1..regions.side_nav.width - 1 {
             let cell = &terminal.backend().buffer()[(x, 3)];
-            assert_eq!(cell.symbol(), " ");
+            assert_eq!(cell.symbol(), "─");
             assert_eq!(cell.bg, app.theme.base_style().bg.unwrap());
         }
         // Below the short fixture tree, no article text may survive either.
@@ -2929,7 +2929,8 @@ fn tab_bar_hit_by_coordinate() {
     };
     let tab = rect_of(&app, Hit::Tab(0)).expect("Hit::Tab(0) after NewTab");
     let close = rect_of(&app, Hit::TabClose(0)).expect("Hit::TabClose(0)");
-    // Buttons sit on the View's top border: `┤ label × ├`.
+    // Tab labels live on the middle row of the three-row bar (header is row 0).
+    assert_eq!(tab.y, 2);
     assert_eq!(tab.y, close.y);
     assert!(tab.width >= 7, "outlined button, got {}", tab.width);
     assert_eq!(app.hit_map.hit_at(tab.x, tab.y), Some(&Hit::Tab(0)));
@@ -2966,12 +2967,12 @@ fn narrow_tab_bar_keeps_the_active_tab_visible() {
 }
 
 #[test]
-fn single_tab_is_shown_and_only_highlighted_with_view_focus() {
+fn tabs_use_focus_colour_text_and_dim_inactive_labels() {
     let root = fixture();
     let mut app = App::new(&root).unwrap();
     assert_eq!(app.navigator.tab_count(), 1);
     let theme = app.theme;
-    let tab_fill = |app: &mut App| {
+    let tab_color = |app: &mut App| {
         let terminal = draw_app(app, 120, 24);
         let buf = terminal.backend().buffer();
         let y = app
@@ -2981,17 +2982,315 @@ fn single_tab_is_shown_and_only_highlighted_with_view_focus() {
             .find(|(_, h)| *h == Hit::Tab(0))
             .map(|(r, _)| (r.x, r.y))
             .expect("the current page's tab is always drawn");
-        // Label cell, one past the `┤ `.
-        buf[(y.0 + 2, y.1)].bg
+        assert_eq!(buf[(y.0 + 2, y.1)].bg, app.theme.surface);
+        buf[(y.0 + 2, y.1)].fg
     };
     app.update(Action::FocusViewer);
-    assert_eq!(tab_fill(&mut app), theme.peach, "active tab fills peach");
-    app.update(Action::FocusNav);
-    assert_ne!(
-        tab_fill(&mut app),
-        theme.peach,
-        "Nav focus: tab not highlighted"
+    assert_eq!(
+        tab_color(&mut app),
+        theme.border_focus,
+        "active tab uses the focus colour"
     );
+    app.update(Action::FocusNav);
+    assert_eq!(
+        tab_color(&mut app),
+        theme.text_secondary,
+        "Nav focus retains dimmer active text"
+    );
+    app.update(Action::OpenHelp);
+    let mut hits = HitMap::default();
+    let muted = crate::tui::regions::tabs::cells(
+        ratatui::layout::Rect::new(0, 0, 120, 3),
+        app.navigator.tabs(),
+        0,
+        false,
+        true,
+        &theme,
+        &mut hits,
+    );
+    assert!(
+        muted.iter().all(|cell| cell.line.spans.iter().all(|span| {
+            !span
+                .style
+                .add_modifier
+                .contains(ratatui::style::Modifier::BOLD)
+        })),
+        "popup mutes the active tab"
+    );
+    app.update(Action::CloseHelp);
+    app.update(Action::NewTab);
+    app.update(Action::FocusViewer);
+    let terminal = draw_app(&mut app, 120, 24);
+    let buf = terminal.backend().buffer();
+    let (rect, _) = app
+        .hit_map
+        .entries()
+        .iter()
+        .find(|(_, hit)| *hit == Hit::Tab(0))
+        .unwrap();
+    assert_eq!(buf[(rect.x + 1, rect.y)].fg, theme.text_muted);
+    assert_eq!(
+        buf[(rect.right(), rect.y)].symbol(),
+        "│",
+        "a divider separates the tab cells"
+    );
+}
+
+/// Every box-drawing glyph of the View's bars and the nav's search bar uses the
+/// border style of the pane it belongs to, and nothing is drawn heavy.
+#[test]
+fn chrome_bars_match_pane_borders_and_never_go_heavy() {
+    const THIN: &str = "─│┌┐└┘├┤┬┴";
+    const HEAVY: &str = "━┃┏┓┗┛┣┫┳┻";
+    for theme in [Theme::dark(), Theme::light(), Theme::herdr("vesper").0] {
+        for width in [40, 60, 80, 120] {
+            for view_focused in [true, false] {
+                let mut app = App::new(&fixture()).unwrap();
+                app.theme = theme;
+                app.update(if view_focused {
+                    Action::FocusViewer
+                } else {
+                    Action::FocusNav
+                });
+                app.update(Action::NewTab);
+                app.update(if view_focused {
+                    Action::FocusViewer
+                } else {
+                    Action::FocusNav
+                });
+                let terminal = draw_app(&mut app, width, 24);
+                let buf = terminal.backend().buffer();
+                let regions = crate::tui::layout::split(
+                    buf.area,
+                    app.nav_visible,
+                    app.nav_width,
+                    app.nav_position,
+                );
+                for y in 0..24 {
+                    for x in 0..width {
+                        assert!(
+                            !HEAVY.contains(buf[(x, y)].symbol()),
+                            "{width}x24 heavy glyph at {x},{y}"
+                        );
+                    }
+                }
+                let v = regions.viewer;
+                let view_border = app.theme.border(view_focused).fg;
+                for y in [v.y, v.y + 2, v.bottom() - 3, v.bottom() - 1] {
+                    for x in v.x..v.right() {
+                        let cell = &buf[(x, y)];
+                        if THIN.contains(cell.symbol()) {
+                            assert_eq!(
+                                cell.fg,
+                                view_border.unwrap(),
+                                "{width}: view bar glyph at {x},{y}"
+                            );
+                            assert_eq!(
+                                cell.modifier.contains(ratatui::style::Modifier::BOLD),
+                                view_focused,
+                                "{width}: view bar weight at {x},{y} follows the pane"
+                            );
+                        }
+                    }
+                }
+                let n = regions.side_nav;
+                if n.width > 0 {
+                    let nav_border = app.theme.border(!view_focused).fg.unwrap();
+                    for x in n.x..n.right() {
+                        let cell = &buf[(x, n.y + 2)];
+                        assert!(THIN.contains(cell.symbol()), "search seam at {x}");
+                        assert_eq!(cell.fg, nav_border, "{width}: search seam at {x}");
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn search_bar_lines_up_with_the_tab_bar() {
+    let mut app = App::new(&fixture()).unwrap();
+    let terminal = draw_app(&mut app, 120, 24);
+    let buf = terminal.backend().buffer();
+    let regions =
+        crate::tui::layout::split(buf.area, app.nav_visible, app.nav_width, app.nav_position);
+    let hits = app.hit_map.entries();
+    let tab_y = hits
+        .iter()
+        .find(|(_, h)| *h == Hit::Tab(0))
+        .map(|(r, _)| r.y)
+        .unwrap();
+    let search_y = hits
+        .iter()
+        .find(|(_, h)| *h == Hit::NavSearchRow)
+        .map(|(r, _)| r.y)
+        .unwrap();
+    assert_eq!(search_y, tab_y, "search label row = tab label row");
+    let row = |y: u16| -> String {
+        (regions.side_nav.x..regions.side_nav.right())
+            .map(|x| buf[(x, y)].symbol())
+            .collect()
+    };
+    assert!(row(search_y).contains("/ Search…"));
+    for x in [regions.side_nav.x, regions.viewer.x] {
+        assert_eq!(buf[(x, search_y + 1)].symbol(), "├", "seams share a row");
+    }
+    // No shaded search fill any more.
+    for x in regions.side_nav.x + 1..regions.side_nav.right() - 1 {
+        assert_eq!(buf[(x, search_y)].bg, app.theme.surface, "no fill at {x}");
+    }
+}
+
+#[test]
+fn chrome_bars_have_no_fills_and_only_label_rows_are_clickable() {
+    for position in [NavPosition::Left, NavPosition::Right] {
+        for width in [40, 60, 80, 120] {
+            let mut app = App::new(&fixture()).unwrap();
+            app.nav_position = position;
+            app.update(Action::GoToPage(PageKey {
+                collection_id: app.navigator.index().collection_id.clone(),
+                relative_path: "architecture/design-system/tokens.md".into(),
+            }));
+            let terminal = draw_app(&mut app, width, 24);
+            let buf = terminal.backend().buffer();
+            let regions =
+                crate::tui::layout::split(buf.area, app.nav_visible, app.nav_width, position);
+            let v = regions.viewer;
+            // Header row + three bar rows above the article.
+            assert_eq!(app.viewer_geom.top_y, v.y + 3);
+            assert_eq!(app.viewer_geom.rows, 16);
+            for (rect, hit) in app.hit_map.entries() {
+                let label_y = match hit {
+                    Hit::Tab(_) | Hit::TabClose(_) => v.y + 1,
+                    Hit::Prev | Hit::Next => v.bottom() - 2,
+                    _ => continue,
+                };
+                assert_eq!(rect.y, label_y, "{hit:?} sits on its bar's label row");
+                for y in [label_y - 1, label_y + 1] {
+                    assert!(!matches!(
+                        app.hit_map.hit_at(rect.x, y),
+                        Some(Hit::Tab(_) | Hit::TabClose(_) | Hit::Prev | Hit::Next)
+                    ));
+                }
+            }
+            for (y, glyph) in [
+                (v.y, "┌"),
+                (v.y + 2, "├"),
+                (v.bottom() - 3, "├"),
+                (v.bottom() - 1, "└"),
+            ] {
+                assert_eq!(buf[(v.x, y)].symbol(), glyph, "{width}: corner at row {y}");
+            }
+            for y in [
+                v.y,
+                v.y + 1,
+                v.y + 2,
+                v.bottom() - 3,
+                v.bottom() - 2,
+                v.bottom() - 1,
+            ] {
+                for x in v.x..v.right() {
+                    assert_eq!(
+                        buf[(x, y)].bg,
+                        app.theme.surface,
+                        "no background fills at {x},{y}"
+                    );
+                }
+            }
+            let tab_row: String = (0..width).map(|x| buf[(x, v.y + 1)].symbol()).collect();
+            assert!(tab_row.contains("tokens.md ×"));
+        }
+    }
+}
+
+#[test]
+fn tiny_chrome_widths_keep_active_tabs_and_non_overlapping_footer_hits() {
+    let mut app = App::new(&fixture()).unwrap();
+    for _ in 0..7 {
+        app.update(Action::NewTab);
+    }
+    for width in [1, 4, 8, 9, 12, 18, 40, 60, 120] {
+        let mut terminal = Terminal::new(TestBackend::new(width, 6)).unwrap();
+        let mut hits = HitMap::default();
+        terminal
+            .draw(|frame| {
+                crate::tui::regions::tabs::draw(
+                    frame,
+                    ratatui::layout::Rect::new(0, 0, width, 3),
+                    app.navigator.tabs(),
+                    app.navigator.active(),
+                    true,
+                    false,
+                    &app.theme,
+                    &mut hits,
+                );
+                crate::tui::regions::footer::draw(
+                    frame,
+                    ratatui::layout::Rect::new(0, 3, width, 3),
+                    Some("Long previous 界 title"),
+                    Some("Long next 界 title"),
+                    None,
+                    true,
+                    &app.theme,
+                    &mut hits,
+                );
+            })
+            .unwrap();
+        assert_eq!(
+            hits.entries()
+                .iter()
+                .any(|(_, hit)| *hit == Hit::Tab(app.navigator.active())),
+            width >= 7
+        );
+        for (rect, hit) in hits.entries() {
+            assert!(rect.x > 0 && rect.right() < width);
+            assert!(rect.y == 1 || rect.y == 4, "label rows only");
+            if matches!(hit, Hit::TabClose(_)) {
+                assert_eq!(terminal.backend().buffer()[(rect.x, rect.y)].symbol(), "×");
+            }
+        }
+        let footer: Vec<_> = hits
+            .entries()
+            .iter()
+            .filter(|(_, hit)| matches!(hit, Hit::Prev | Hit::Next))
+            .collect();
+        if footer.len() == 2 {
+            assert!(footer[0].0.intersection(footer[1].0).is_empty());
+            assert!(
+                footer[0].0.right() < footer[1].0.x,
+                "a divider column separates the cells"
+            );
+        }
+    }
+}
+
+#[test]
+fn short_terminals_clip_whole_chrome_bars_and_keep_layout_controls() {
+    for height in 1..=10 {
+        let mut app = App::new(&fixture()).unwrap();
+        let terminal = draw_app(&mut app, 60, height);
+        let area = terminal.backend().buffer().area;
+        let regions = crate::tui::layout::split(area, false, None, NavPosition::Left);
+        if height >= 2 {
+            assert_eq!(regions.header.height, 1);
+            assert_eq!(regions.status.height, 1);
+        }
+        assert_eq!(
+            app.viewer_geom.rows,
+            crate::tui::layout::viewer_visible_rows(regions.viewer.height)
+        );
+        for (rect, hit) in app.hit_map.entries() {
+            assert!(rect.right() <= area.right() && rect.bottom() <= area.bottom());
+            if matches!(hit, Hit::Tab(_) | Hit::TabClose(_)) {
+                assert!(regions.viewer.height >= 4, "top bar needs three rows");
+                assert_eq!(rect.y, regions.viewer.y + 1);
+            }
+            if matches!(hit, Hit::Prev | Hit::Next) {
+                assert!(regions.viewer.height >= 6, "both bars need six rows");
+                assert_eq!(rect.y, regions.viewer.bottom() - 2);
+            }
+        }
+    }
 }
 
 #[test]
@@ -3522,7 +3821,11 @@ fn help_groups_are_full_width_heading_rows() {
         !heading.contains("Back") && !heading.contains("Alt+"),
         "heading owns its row: {heading}"
     );
-    assert!(heading.trim_end().ends_with('│'), "{heading}");
+    let after = &heading[heading.find("Global").unwrap()..];
+    assert!(
+        after.contains('│'),
+        "popup border closes the row: {heading}"
+    );
     assert!(heading.contains("─────"), "rule fills the row: {heading}");
 }
 
@@ -3601,16 +3904,16 @@ fn footer_border(root: &Path, page: &str, w: u16) -> (App, String) {
     }));
     let terminal = draw_app(&mut app, w, 24);
     let buf = terminal.backend().buffer();
-    // Bottom border (Linked from may also draw └ earlier in the View).
-    let row = (0..buf.area.height)
-        .rev()
-        .map(|y| {
-            (0..buf.area.width)
-                .map(|x| buf[(x, y)].symbol())
-                .collect::<String>()
-        })
-        .find(|r| r.contains('└'))
-        .expect("bottom border row");
+    let y = app
+        .hit_map
+        .entries()
+        .iter()
+        .find(|(_, hit)| matches!(hit, Hit::Prev | Hit::Next))
+        .map(|(rect, _)| rect.y)
+        .expect("footer middle row");
+    let row = (0..buf.area.width)
+        .map(|x| buf[(x, y)].symbol())
+        .collect::<String>();
     (app, row)
 }
 
@@ -3621,7 +3924,7 @@ fn footer_missing_side_leaves_the_border_unbroken() {
     let (app, row) = footer_border(&root, "README.md", 100);
     assert!(!row.contains("‹"), "{row}");
     assert!(!row.contains('—'), "{row}");
-    assert!(row.contains("├"), "next button present: {row}");
+    assert!(row.contains(" › "), "next control present: {row}");
     assert!(
         !app.hit_map
             .entries()
@@ -3631,7 +3934,7 @@ fn footer_missing_side_leaves_the_border_unbroken() {
     );
     // Padded outline buttons.
     let (_, row) = footer_border(&root, "architecture/design-system/tokens.md", 100);
-    assert!(row.contains("┤ ‹ Design System ├"), "{row}");
+    assert!(row.contains(" ‹ Design System "), "{row}");
 }
 
 #[test]
@@ -3639,38 +3942,35 @@ fn footer_button_colours_follow_pane_focus_and_selection() {
     let root = fixture();
     let (mut app, _) = footer_border(&root, "architecture/design-system/tokens.md", 100);
     let theme = app.theme;
-    // (outline colour of the prev button, fill of the next button's label)
+    // Foreground and background of the next label.
     let find_style = |app: &mut App| {
         let terminal = draw_app(app, 100, 24);
         let buf = terminal.backend().buffer();
-        // The View tabs sit on the top border; the footer buttons on the bottom one.
-        let y = (0..buf.area.height)
-            .rev()
-            .find(|&y| (0..buf.area.width).any(|x| buf[(x, y)].symbol() == "┤"))
-            .expect("footer row");
-        let x = (0..buf.area.width)
-            .find(|&x| buf[(x, y)].symbol() == "┤")
+        let (rect, _) = app
+            .hit_map
+            .entries()
+            .iter()
+            .find(|(_, hit)| *hit == Hit::Prev)
             .expect("prev button");
-        // The header breadcrumb also uses `›`; the next button is on the border row.
+        let (x, y) = (rect.x, rect.y);
+        // The header breadcrumb also uses `›`, but on another row.
         let nx = (0..buf.area.width)
             .find(|&nx| buf[(nx, y)].symbol() == "›")
             .expect("next button");
-        (buf[(x, y)].fg, buf[(nx, y)].bg)
+        assert_eq!(buf[(x, y)].bg, theme.surface);
+        (buf[(nx, y)].fg, buf[(nx, y)].bg)
     };
-    // View focused: teal outline, no fill.
     app.update(Action::FocusViewer);
     let (fg, bg) = find_style(&mut app);
-    assert_eq!(fg, theme.border_focus);
-    assert_ne!(bg, theme.peach);
-    // Nav focused: gray outline.
+    assert_eq!(fg, theme.text_muted);
+    assert_eq!(bg, theme.surface);
     app.update(Action::FocusNav);
-    let (fg, _) = find_style(&mut app);
-    assert_eq!(fg, theme.border);
-    // Tab-selected button fills peach.
+    assert_eq!(find_style(&mut app).0, theme.text_muted);
     app.update(Action::FocusViewer);
     app.update(Action::FocusFooter);
-    let (_, bg) = find_style(&mut app);
-    assert_eq!(bg, theme.peach);
+    let (fg, bg) = find_style(&mut app);
+    assert_eq!(fg, theme.border_focus);
+    assert_eq!(bg, theme.surface);
 }
 
 #[test]
@@ -3830,7 +4130,7 @@ fn copy_dir(src: &Path, dst: &Path) {
     }
 }
 
-/// Text of the viewer's bottom border row (where prev/next are drawn).
+/// Text of the footer bar's label row (where prev/next are drawn).
 fn footer_row(root: &Path) -> String {
     let mut app = App::new(root).unwrap();
     app.update(Action::GoToPage(PageKey {
@@ -4575,7 +4875,10 @@ fn search_content_rows_end_in_an_ellipsis_and_footer_hugs_border() {
     let tail: Vec<char> = cut.chars().collect();
     let dots = tail.iter().rposition(|&c| c == '…').unwrap();
     assert!(
-        tail[dots + 1..].iter().all(|&c| c == ' ' || c == '│'),
+        tail[dots + 1..]
+            .iter()
+            .take_while(|&&c| c != '│')
+            .all(|&c| c == ' '),
         "ellipsis is the last text on the row: {cut}"
     );
     let footer = rows

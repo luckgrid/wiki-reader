@@ -4,25 +4,25 @@ expression: out
 ---
  Worked Example Wiki › … › Token Projection             ◫ ✕ 
 ┌────────────────────────────┐─────────────────────────────┐
-│▌/ Search…                  │─────────────────────────────│
-│                            │                             │
-│  README.md                 │                             │
-│  ▾ architecture            │────────────                 │
+│ / Search…                  │                             │
+├────────────────────────────┤─────────────────────────────┤
+│  README.md                 │─────────────────────────────│
+│  ▾ architecture            │                             │
 │     README.md              │                             │
-│     ▾ design-system        │emantic-only; see Design     │
+│     ▾ design-system        │────────────                 │
 │        README.md           │                             │
-│▌       tokens.md           │                             │
+│▌       tokens.md           │emantic-only; see Design     │
 │     ▸ wfos                 │                             │
-│  ▸ decisions               │────────────────────────────┐│
+│  ▸ decisions               │                             │
+│                            │                             │
+│                            │────────────────────────────┐│
 │                            │                            ││
 │                            │ for wiki-reader smoke tes… ││
 │                            │────────────────────────────┤│
 │                            │                            ││
 │                            │tecture section of the wor… ││
 │                            │────────────────────────────┤│
-│                            │                            ││
-│                            │ing page.                   ││
-│                            │────────────────────────────┘│
-│                            │                             │
-└────────────────────────────┘────────────┤ Workflow OS › ├┘
+│                            │─────────────┬───────────────┤
+│                            │             │ Workflow OS › │
+└────────────────────────────┘─────────────┴───────────────┘
   NAV  · architecture/design-system/tokens.md           ? ⚙

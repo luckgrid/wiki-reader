@@ -1,5 +1,6 @@
 //! Region draw modules.
 
+pub mod bar;
 pub mod footer;
 pub mod header;
 pub mod overlay;

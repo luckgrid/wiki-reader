@@ -1,49 +1,51 @@
-//! View tabs: one outlined group on the pane's top border, styled like the
-//! prev/next footer buttons. The active tab is filled peach while the View has
-//! focus; with the Nav focused every tab stays outlined.
+//! View tabs: bordered cells in a connected three-row bar; the active tab is bold peach.
 
-use ratatui::layout::{Alignment, Rect};
-use ratatui::style::Style;
+use ratatui::Frame;
+use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use wiki_reader_core::nav::Tab;
 
 use crate::tui::hit::{Hit, HitMap};
+use crate::tui::regions::bar::{self, BAR_ROWS, Cell};
 use crate::tui::regions::footer::{col_width, ellipsis};
 use crate::tui::theme::Theme;
 
-fn stem(tab: &Tab) -> String {
+fn filename(tab: &Tab) -> String {
     tab.current()
         .page
         .relative_path
-        .file_stem()
+        .file_name()
         .map_or_else(|| "?".into(), |s| s.to_string_lossy().into_owned())
 }
 
 /// Longest label a tab shows before it is ellipsized.
 const MAX_LABEL: usize = 18;
 
-/// Top-border title: one outlined group `┤ a × │ b × ├`, tabs separated by a
-/// single `│`. Registers [`Hit::Tab`] over each padded cell and
-/// [`Hit::TabClose`] over its `×`.
+/// One bordered cell per tab: ` name.md × `. Registers [`Hit::Tab`] over each padded
+/// cell and [`Hit::TabClose`] over its `×`, on the label row (the bar's middle row).
 ///
-/// `area` is the whole View pane. Tabs that do not fit in the border are
-/// dropped from the right (the active tab is always kept if it fits).
+/// `area` is the bar's three rows. Reserve the active tab first, truncate labels to
+/// fit, then admit whole remaining cells in order; a cell and the divider before it
+/// must fit. Partial strips have no hits.
 #[must_use]
-pub fn titles(
+#[allow(clippy::too_many_arguments)]
+pub fn cells(
     area: Rect,
     tabs: &[Tab],
     active: usize,
     pane_focused: bool,
+    muted: bool,
     theme: &Theme,
     hits: &mut HitMap,
-) -> Line<'static> {
-    // `┤` and `├` take one column each.
-    let inner_w = usize::from(area.width.saturating_sub(2)).saturating_sub(2);
-    let border = theme.border(pane_focused);
-    let fill = Style::default().bg(theme.peach).fg(theme.on_peach);
+) -> Vec<Cell> {
+    if area.height < BAR_ROWS || area.width < 7 {
+        return Vec::new();
+    }
+    let label_y = area.y + 1;
+    let inner_w = usize::from(area.width - 2);
     let labels: Vec<_> = tabs
         .iter()
-        .map(|tab| ellipsis(&stem(tab), MAX_LABEL))
+        .map(|tab| ellipsis(&filename(tab), MAX_LABEL.min(inner_w.saturating_sub(4))))
         .collect();
     let widths: Vec<_> = labels
         .iter()
@@ -64,29 +66,28 @@ pub fn titles(
         if shown[i] {
             continue;
         }
-        let sep = usize::from(used > 0);
-        if used + sep + w <= inner_w {
+        let divider = usize::from(used > 0);
+        if used + divider + w <= inner_w {
             shown[i] = true;
-            used += sep + w;
+            used += divider + w;
         }
     }
 
-    let mut x = area.x.saturating_add(2);
-    let mut cells: Vec<Span<'static>> = Vec::new();
+    let mut x = area.x.saturating_add(1);
+    let mut out: Vec<Cell> = Vec::new();
     for (i, label) in labels.into_iter().enumerate().filter(|(i, _)| shown[*i]) {
         let text = format!(" {label} × ");
-        let w = widths[i];
-        let Ok(w16) = u16::try_from(w) else {
+        let Ok(w16) = u16::try_from(widths[i]) else {
             continue;
         };
-        if !cells.is_empty() {
-            cells.push(Span::styled("│", border));
+        if !out.is_empty() {
+            // The divider between cells.
             x = x.saturating_add(1);
         }
         hits.push(
             Rect {
                 x,
-                y: area.y,
+                y: label_y,
                 width: w16,
                 height: 1,
             },
@@ -99,21 +100,38 @@ pub fn titles(
         hits.push(
             Rect {
                 x: close_x,
-                y: area.y,
+                y: label_y,
                 width: 1,
                 height: 1,
             },
             Hit::TabClose(i),
         );
-        let selected = i == active && pane_focused;
-        cells.push(Span::styled(text, if selected { fill } else { border }));
+        let selected = i == active && !muted;
+        out.push(Cell {
+            x,
+            width: w16,
+            line: Line::from(Span::styled(
+                text,
+                theme.chrome_label_style(selected, pane_focused),
+            )),
+        });
         x = x.saturating_add(w16);
     }
-    if cells.is_empty() {
-        return Line::default();
-    }
-    let mut spans = vec![Span::styled("┤", border)];
-    spans.extend(cells);
-    spans.push(Span::styled("├", border));
-    Line::from(spans).alignment(Alignment::Left)
+    out
+}
+
+/// Draw the top bar (`area` is its three rows) in the pane's border style.
+#[allow(clippy::too_many_arguments)]
+pub fn draw(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    tabs: &[Tab],
+    active: usize,
+    pane_focused: bool,
+    muted: bool,
+    theme: &Theme,
+    hits: &mut HitMap,
+) {
+    let cells = cells(area, tabs, active, pane_focused, muted, theme, hits);
+    bar::draw(frame, area, true, &cells, theme.border(pane_focused));
 }

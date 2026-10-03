@@ -4,25 +4,25 @@ expression: out
 ---
  Worked Example Wiki                                                        ◫ ✕ 
 ┌──────────┌ Help (? or Esc to close) ──────────────────────────────┐──────────┐
-│▌/ Search…│                                                        │──────────│
-│          │  ── Global ──────────────────────────────────────────  │          │
-│▌ Worked E│  Alt+← / Alt+b / Backspace  Back                       │          │
+│ / Search…│                                                        │          │
+├──────────│  ── Global ──────────────────────────────────────────  │──────────┤
+│▌ Worked E│  Alt+← / Alt+b / Backspace  Back                       │──────────│
 │  ▸ archit│  Alt+→ / Alt+f              Forward                    │          │
 │  ▸ decisi│  q / ✕                      Quit                       │          │
-│          │  b / ◫                      Toggle side nav            │fault     │
+│          │  b / ◫                      Toggle side nav            │          │
 │          │  r                          Toggle raw / rendered      │          │
-│          │  e                          Open in editor             │          │
-│          │  y                          Copy file path             │ken       │
-│          │  Y                          Copy focused link target   │tory      │
-│          │  t                          New tab                    │          │
-│          │  x                          Close tab                  │          │
+│          │  e                          Open in editor             │fault     │
+│          │  y                          Copy file path             │          │
+│          │  Y                          Copy focused link target   │          │
+│          │  t                          New tab                    │ken       │
+│          │  x                          Close tab                  │tory      │
 │          │  / / Ctrl+k                 Search                     │          │
 │          │  ? / ?                      Help                       │          │
 │          │  , / c / ⚙                  Options (toggle)           │          │
 │          │  n                          Next search match          │          │
 │          │  N                          Previous search match      │          │
 │          │  [                          Previous page              │          │
-│          │  ]                          Next page                  │          │
-│          │                                                        │          │
-└──────────└────────────────────────────────────────────────────────┘vervi… › ├┘
+│          │  ]                          Next page                  │──────────┤
+│          │                                                        │verview › │
+└──────────└────────────────────────────────────────────────────────┘──────────┘
   HELP  · README.md · L1:C1 9% · 2026-09-28 · draft · 29w · 1m              ? ⚙

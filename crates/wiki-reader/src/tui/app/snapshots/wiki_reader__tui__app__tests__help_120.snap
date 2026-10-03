@@ -4,16 +4,16 @@ expression: out
 ---
  Worked Example Wiki                                                                                                ◫ ✕ 
 ┌────────────────────────────┐┌┌ Help (? or Esc to close) ──────────────────────────────┐──────────────────────────────┐
-│▌/ Search…                  │││                                                        │──────────────────────────────│
-│                            │││  ── Global ──────────────────────────────────────────  │                              │
-│▌ Worked Example Wiki       │││  Alt+← / Alt+b / Backspace  Back                       │                              │
+│ / Search…                  │││                                                        │                              │
+├────────────────────────────┤├│  ── Global ──────────────────────────────────────────  │──────────────────────────────┤
+│▌ Worked Example Wiki       │││  Alt+← / Alt+b / Backspace  Back                       │──────────────────────────────│
 │  ▸ architecture            │││  Alt+→ / Alt+f              Forward                    │                              │
 │  ▸ decisions               │││  q / ✕                      Quit                       │                              │
-│                            │││  b / ◫                      Toggle side nav            │ root.                        │
+│                            │││  b / ◫                      Toggle side nav            │                              │
 │                            │││  r                          Toggle raw / rendered      │                              │
-│                            │││  e                          Open in editor             │then return via back when     │
+│                            │││  e                          Open in editor             │ root.                        │
 │                            │││  y                          Copy file path             │                              │
-│                            │││  Y                          Copy focused link target   │                              │
+│                            │││  Y                          Copy focused link target   │then return via back when     │
 │                            │││  t                          New tab                    │                              │
 │                            │││  x                          Close tab                  │                              │
 │                            │││  / / Ctrl+k                 Search                     │                              │
@@ -22,7 +22,7 @@ expression: out
 │                            │││  n                          Next search match          │                              │
 │                            │││  N                          Previous search match      │                              │
 │                            │││  [                          Previous page              │                              │
-│                            │││  ]                          Next page                  │                              │
-│                            │││                                                        │                              │
-└────────────────────────────┘└└────────────────────────────────────────────────────────┘───┤ Architecture Overview › ├┘
+│                            │├│  ]                          Next page                  │────┬─────────────────────────┤
+│                            │││                                                        │    │ Architecture Overview › │
+└────────────────────────────┘└└────────────────────────────────────────────────────────┘────┴─────────────────────────┘
   HELP  · README.md · L1:C1 11% · 2026-09-28 · draft · 29w · 1m                                                     ? ⚙
