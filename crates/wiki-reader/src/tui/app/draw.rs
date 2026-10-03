@@ -5,7 +5,7 @@ use ratatui::Frame;
 use super::App;
 use crate::tui::focus::FocusPane;
 use crate::tui::layout;
-use crate::tui::options_ui::{OptionRow, OptionsOverlay};
+use crate::tui::options_ui::{self, OptionLine, OptionsOverlay};
 use crate::tui::page_doc::PageDoc;
 use crate::tui::regions::status::StatusModel;
 use crate::tui::regions::{header, side_nav, status, viewer};
@@ -195,12 +195,12 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         draw_help_overlay(frame, area, help, &theme, &mut app.hit_map);
     }
     if app.options.is_some() {
-        let values: Vec<String> = OptionRow::ALL
-            .iter()
-            .map(|r| app.option_value(*r))
+        let active: Vec<bool> = options_ui::choices()
+            .into_iter()
+            .map(|c| app.option_is_selected(c))
             .collect();
         if let Some(opts) = app.options.as_mut() {
-            draw_options_overlay(frame, area, opts, &values, &theme, &mut app.hit_map);
+            draw_options_overlay(frame, area, opts, &active, &theme, &mut app.hit_map);
         }
     }
     // Last, over pictures and every other popup (ADR-0004 draw order).
@@ -583,48 +583,56 @@ fn draw_options_overlay(
     frame: &mut Frame<'_>,
     area: ratatui::layout::Rect,
     opts: &mut OptionsOverlay,
-    values: &[String],
+    active: &[bool],
     theme: &crate::tui::theme::Theme,
     hits: &mut crate::tui::hit::HitMap,
 ) {
     use crate::tui::hit::Hit;
-    use crate::tui::regions::footer::ellipsis;
     use crate::tui::regions::overlay::{
-        POPUP_PAD, centered_panel, clamp_scroll, ensure_visible, popup_accent, popup_block,
-        popup_row,
+        centered_panel, clamp_scroll, ensure_visible, popup_accent, popup_block, popup_row,
     };
-    use ratatui::style::Modifier;
     use ratatui::text::{Line, Span};
     use ratatui::widgets::{Clear, Paragraph};
 
     hits.push(area, Hit::OptionsDismiss);
 
-    let rows = OptionRow::ALL.len();
-    let h = u16::try_from(rows + 4).unwrap_or(u16::MAX);
-    let rect = centered_panel(area, 50, h, 30, 6);
+    let lines = options_ui::lines();
+    // Two colours, as in markdown-reader's settings: chrome and the cursor row use the fill
+    // colour (`peach`); group titles and the filled radio use the accent.
+    let accent_style = ratatui::style::Style::default()
+        .fg(theme.accent)
+        .add_modifier(ratatui::style::Modifier::BOLD);
+    // Two borders, a blank row on top, then the lines, a blank row and the footer.
+    let h = u16::try_from(lines.len() + 5).unwrap_or(u16::MAX);
+    let rect = centered_panel(area, 52, h, 30, 8);
     frame.render_widget(Clear, rect);
-    let title = Line::from(Span::styled(
-        " Options (←/→ change, Esc close) ",
-        popup_accent(theme),
-    ));
-    let block = popup_block(title, theme);
+    let block = popup_block(
+        Line::from(Span::styled(" Options ", popup_accent(theme))),
+        theme,
+    );
     let inner = block.inner(rect);
     frame.render_widget(block, rect);
     hits.push(rect, Hit::FocusViewer);
 
-    // One blank row top and bottom, like help.
-    let visible = usize::from(inner.height.saturating_sub(2));
+    let visible = usize::from(inner.height.saturating_sub(3));
     if inner.width == 0 || visible == 0 {
         return;
     }
     opts.list_height = visible;
-    opts.scroll = ensure_visible(opts.selected, opts.scroll, visible);
-    opts.scroll = clamp_scroll(opts.scroll, visible, rows);
+    let (top, row) = opts.selected_line();
+    // Scroll to the group heading when the first row of a group is selected.
+    let mut scroll = ensure_visible(top, opts.scroll, visible);
+    if row >= scroll + visible {
+        scroll = ensure_visible(row, scroll, visible);
+    }
+    opts.scroll = clamp_scroll(scroll, visible, lines.len());
 
-    let content_w = usize::from(inner.width.saturating_sub(POPUP_PAD * 2));
+    let mut choice_i = lines[..opts.scroll]
+        .iter()
+        .filter(|l| matches!(l, OptionLine::Choice(_)))
+        .count();
     for row_i in 0..visible {
-        let abs = opts.scroll + row_i;
-        let Some(row) = OptionRow::ALL.get(abs) else {
+        let Some(line) = lines.get(opts.scroll + row_i) else {
             break;
         };
         let row_rect = ratatui::layout::Rect {
@@ -636,30 +644,86 @@ fn draw_options_overlay(
             width: inner.width,
             height: 1,
         };
-        let selected = abs == opts.selected;
-        let label_style = if selected {
-            theme.text().add_modifier(Modifier::BOLD)
-        } else {
-            theme.text()
-        };
-        let value = ellipsis(values.get(abs).map_or("", String::as_str), content_w / 2);
-        let label = ellipsis(
-            row.label(),
-            content_w.saturating_sub(Span::raw(value.as_str()).width() + 1),
-        );
-        // Label … value, value right-aligned.
-        let gap = content_w
-            .saturating_sub(Span::raw(label.as_str()).width() + Span::raw(value.as_str()).width())
-            .max(1);
-        let spans = vec![
-            Span::styled(label, label_style),
-            Span::raw(" ".repeat(gap)),
-            Span::styled(value, popup_accent(theme)),
-        ];
-        let bg = selected.then_some(theme.cursor_line);
-        frame.render_widget(Paragraph::new(popup_row(spans, inner.width, bg)), row_rect);
-        hits.push(row_rect, Hit::OptionsRow(abs));
+        match line {
+            OptionLine::Blank => {}
+            OptionLine::Heading(title) => {
+                frame.render_widget(
+                    Paragraph::new(popup_row(
+                        vec![Span::styled(*title, accent_style)],
+                        inner.width,
+                        None,
+                    )),
+                    row_rect,
+                );
+            }
+            OptionLine::Choice(choice) => {
+                let selected = choice_i == opts.selected;
+                let on = active.get(choice_i).copied().unwrap_or(false);
+                let label_style = if selected {
+                    popup_accent(theme)
+                } else {
+                    theme.text()
+                };
+                let radio = if on {
+                    Span::styled("●", accent_style)
+                } else {
+                    Span::styled("○", theme.muted())
+                };
+                let cursor = if selected {
+                    Span::styled("> ", popup_accent(theme))
+                } else {
+                    Span::raw("  ")
+                };
+                let spans = vec![
+                    cursor,
+                    radio,
+                    Span::raw(" "),
+                    Span::styled(choice.label(), label_style),
+                ];
+                frame.render_widget(
+                    Paragraph::new(popup_row(spans, inner.width, None)),
+                    row_rect,
+                );
+                hits.push(row_rect, Hit::OptionsRow(choice_i));
+                choice_i += 1;
+            }
+        }
     }
+
+    draw_options_footer(frame, inner, theme);
+}
+
+/// Key hints on the bottom row of the options panel, like markdown-reader's settings window.
+fn draw_options_footer(
+    frame: &mut Frame<'_>,
+    inner: ratatui::layout::Rect,
+    theme: &crate::tui::theme::Theme,
+) {
+    use crate::tui::regions::overlay::{POPUP_PAD, popup_accent, popup_row};
+    use ratatui::style::Modifier;
+    use ratatui::text::Span;
+    use ratatui::widgets::Paragraph;
+
+    let key = popup_accent(theme).add_modifier(Modifier::BOLD);
+    let hint = theme.muted();
+    let footer = vec![
+        Span::styled("↑↓ / j k", key),
+        Span::styled(" Navigate  ", hint),
+        Span::styled("Enter", key),
+        Span::styled(" Apply  ", hint),
+        Span::styled("Esc / c", key),
+        Span::styled(" Close", hint),
+    ];
+    let footer_rect = ratatui::layout::Rect {
+        x: inner.x,
+        y: inner.y + inner.height.saturating_sub(1),
+        width: inner.width,
+        height: 1,
+    };
+    frame.render_widget(
+        Paragraph::new(popup_row(footer, inner.width.max(POPUP_PAD * 2), None)),
+        footer_rect,
+    );
 }
 
 fn focused_status_message(app: &App) -> String {

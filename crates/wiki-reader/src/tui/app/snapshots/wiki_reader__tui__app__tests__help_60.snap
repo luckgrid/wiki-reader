@@ -12,13 +12,13 @@ expression: out
 ││  b / ◫                      Toggle side nav            ││
 ││  r                          Toggle raw / rendered      ││
 ││  e                          Open in editor             ││
-││  y                          Copy page path             ││
+││  y                          Copy file path             ││
 ││  Y                          Copy focused link target   ││
 ││  t                          New tab                    ││
 ││  x                          Close tab                  ││
 ││  / / Ctrl+k                 Search                     ││
 ││  ?                          Help                       ││
-││  , / ⚙                      Options                    ││
+││  , / c / ⚙                  Options (toggle)           ││
 ││  n                          Next search match          ││
 ││  N                          Previous search match      ││
 ││  [                          Previous page              ││

@@ -93,6 +93,14 @@ Future: this search row becomes a proper **side nav header**, and a **side nav f
 - `↑`/`↓` / `PgUp`/`PgDn` / `g`/`G` and the mouse wheel scroll; `Enter` or a click on a row closes help and runs that action (display-only rows are not clickable).
 - `Esc` or `?` closes without an action. Click outside dismisses.
 
+## Options window
+
+Opened with `,` or `c` (or the header ⚙); the same keys close it, as does `Esc`. It floats over the panes like Help and Search.
+
+- **Grouped choices.** Each setting is a group with a title, and each value is one row with a radio mark: `●` is the active value, `○` the others. A group is one of Theme, Panels (nav position), Nav labels, Mermaid, Images, Max image rows, Copy path (`y`). Show images is an on/off row in the Images group.
+- **Navigation.** `↑` / `↓` or `j` / `k` move the `>` cursor between rows (it skips titles and wraps); `Enter`, `Space` or `→` applies the row, and a click selects and applies it. The window opens on the current theme. The footer lists the keys. It scrolls on short terminals and keeps a group's title with its first row.
+- **Live and saved.** A change applies at once and is written to the user config file (see [Configuration](../guides/configuration.md) and [ADR-0018](../decisions/0018-config-write-path.md)).
+
 ## View (center)
 
 Rendered by default (the formatted view: no `#`, fences or backticks); `r` toggles raw, which shows the markdown syntax. Both views share the **cursor line** (see Cursor model), so toggling keeps you on the same source line. The raw view **soft-wraps** long lines to the pane width: the gutter number shows on a line's first row only, and copying across wrapped rows gives the source line back exactly. The frontmatter box's rules span the full pane width. The text column is capped at ~100 cols; tables and code may use the full width.
@@ -152,13 +160,13 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 | `b` ◫ | Toggle side nav |
 | `r` | Toggle raw / rendered |
 | `e` | Open in editor |
-| `y` | Copy page path |
+| `y` | Copy file path |
 | `Y` | Copy focused link target |
 | `t` | New tab |
 | `x` | Close tab |
 | `/ / Ctrl+k` | Search |
 | `?` | Help |
-| `,` ⚙ | Options |
+| `, / c` ⚙ | Options (toggle) |
 | `n` | Next search match |
 | `N` | Previous search match |
 | `[` | Previous page |

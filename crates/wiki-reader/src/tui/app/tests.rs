@@ -3048,7 +3048,7 @@ fn help_overlay_open_close_and_activate() {
 }
 
 #[test]
-fn options_overlay_cycles_theme_and_persists() {
+fn options_overlay_applies_choices_and_persists() {
     use wiki_reader_core::config::ThemeName;
     let root = fixture();
     let tmp = tempfile::tempdir().unwrap();
@@ -3057,7 +3057,7 @@ fn options_overlay_cycles_theme_and_persists() {
     app.update(Action::OpenOptions);
     assert!(app.options.is_some());
     assert_eq!(app.input_mode, crate::tui::keymap::InputMode::Options);
-    let buf = draw_app(&mut app, 80, 24);
+    let buf = draw_app(&mut app, 80, 40);
     let text: String = buf
         .backend()
         .buffer()
@@ -3065,17 +3065,33 @@ fn options_overlay_cycles_theme_and_persists() {
         .iter()
         .map(ratatui::buffer::Cell::symbol)
         .collect();
-    assert!(text.contains("Theme") && text.contains("Max image rows"));
+    for want in [
+        "Theme",
+        "Mermaid",
+        "Max image rows",
+        "Copy path (y)",
+        "Navigate",
+        "Apply",
+    ] {
+        assert!(text.contains(want), "missing {want:?}");
+    }
+    assert!(text.contains('●') && text.contains('○'), "radios drawn");
+    // Opens on the current theme; moving does not change it until applied.
     assert_eq!(app.theme_name, ThemeName::Dark);
-    app.update(Action::OptionsCycleRight);
+    app.update(Action::OptionsDown);
+    assert_eq!(app.theme_name, ThemeName::Dark);
+    app.update(Action::OptionsApply);
     assert_eq!(app.theme_name, ThemeName::Light);
     let light = Theme::from_name(ThemeName::Light).text_secondary;
     assert_eq!(app.theme.text_secondary, light);
     assert_ne!(light, Theme::from_name(ThemeName::Dark).text_secondary);
     let saved = std::fs::read_to_string(tmp.path().join("config.toml")).unwrap();
     assert!(saved.contains("theme = \"light\""), "saved={saved}");
-    app.update(Action::OptionsDown);
-    app.update(Action::OptionsCycleRight);
+    // Light (1) -> Nav right (4).
+    for _ in 0..3 {
+        app.update(Action::OptionsDown);
+    }
+    app.update(Action::OptionsApply);
     assert_eq!(
         app.nav_position,
         wiki_reader_core::config::NavPosition::Right
@@ -3083,6 +3099,92 @@ fn options_overlay_cycles_theme_and_persists() {
     app.update(Action::CloseOptions);
     assert!(app.options.is_none());
     assert_eq!(app.input_mode, crate::tui::keymap::InputMode::Normal);
+}
+
+#[test]
+fn options_overlay_snapshot() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::OpenOptions);
+    let buf = draw_app(&mut app, 80, 40);
+    let b = buf.backend().buffer();
+    let mut out = String::new();
+    for y in 0..b.area.height {
+        for x in 0..b.area.width {
+            out.push_str(b[(x, y)].symbol());
+        }
+        out.push('\n');
+    }
+    insta::assert_snapshot!("options_80x40", out);
+}
+
+#[test]
+fn options_titles_and_cursor_use_different_colours() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::OpenOptions);
+    let buf = draw_app(&mut app, 80, 40);
+    let b = buf.backend().buffer();
+    let find = |needle: &str| {
+        for y in 0..b.area.height {
+            let row: String = (0..b.area.width).map(|x| b[(x, y)].symbol()).collect();
+            if let Some(col) = row.find(needle) {
+                let x = u16::try_from(row[..col].chars().count()).unwrap();
+                return b[(x, y)].fg;
+            }
+        }
+        panic!("{needle:?} not drawn");
+    };
+    let theme = &app.theme;
+    assert_eq!(find("Mermaid"), theme.accent, "group titles use the accent");
+    assert_eq!(find("> "), theme.peach, "cursor uses the fill colour");
+    assert_ne!(
+        theme.accent, theme.peach,
+        "the two roles are distinct in the default theme"
+    );
+}
+
+#[test]
+fn options_radios_follow_the_active_value() {
+    use crate::tui::options_ui::{OptionChoice, choices};
+    use wiki_reader_core::config::{CopyPathMode, ThemeName};
+    let root = fixture();
+    let tmp = tempfile::tempdir().unwrap();
+    let mut app = App::new(&root).unwrap();
+    app.config_write_path = Some(tmp.path().join("config.toml"));
+    assert!(app.option_is_selected(OptionChoice::Theme(ThemeName::Dark)));
+    assert!(!app.option_is_selected(OptionChoice::Theme(ThemeName::Light)));
+    app.update(Action::OpenOptions);
+    let copy_abs = choices()
+        .iter()
+        .position(|c| *c == OptionChoice::CopyPath(CopyPathMode::Absolute))
+        .unwrap();
+    app.options_activate(copy_abs);
+    assert!(app.option_is_selected(OptionChoice::CopyPath(CopyPathMode::Absolute)));
+    assert!(!app.option_is_selected(OptionChoice::CopyPath(CopyPathMode::Relative)));
+}
+
+#[test]
+fn options_scroll_keeps_the_selected_row_and_its_heading_visible() {
+    let root = fixture();
+    let tmp = tempfile::tempdir().unwrap();
+    let mut app = App::new(&root).unwrap();
+    app.config_write_path = Some(tmp.path().join("config.toml"));
+    app.update(Action::OpenOptions);
+    for _ in 0..crate::tui::options_ui::choices().len() - 1 {
+        app.update(Action::OptionsDown);
+    }
+    let buf = draw_app(&mut app, 80, 16);
+    let text: String = buf
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(ratatui::buffer::Cell::symbol)
+        .collect();
+    assert!(text.contains("Absolute path"), "last row on screen");
+    assert!(text.contains("Copy path (y)"), "its heading stays with it");
+    assert!(app.options.as_ref().unwrap().scroll > 0);
 }
 
 #[test]
@@ -3095,7 +3197,8 @@ fn options_warns_when_collection_config_overrides_saved_key() {
     app.config_write_path = Some(tmp.path().join("config.toml"));
     app.config_shadow_path = Some(shadow);
     app.update(Action::OpenOptions);
-    app.update(Action::OptionsCycleRight); // theme row
+    app.update(Action::OptionsDown); // Light (the Dark row is already the active value)
+    app.update(Action::OptionsApply);
     assert!(
         app.message.contains(".wiki-reader.toml") && app.message.contains("theme"),
         "message={}",
@@ -3103,8 +3206,10 @@ fn options_warns_when_collection_config_overrides_saved_key() {
     );
     // A row the collection file does not set stays quiet.
     app.message.clear();
-    app.update(Action::OptionsDown);
-    app.update(Action::OptionsCycleRight); // nav position row
+    for _ in 0..2 {
+        app.update(Action::OptionsDown); // Herdr, then Nav left (not set in the collection file)
+    }
+    app.update(Action::OptionsApply);
     assert!(app.message.is_empty(), "message={}", app.message);
 }
 
@@ -3116,7 +3221,7 @@ fn options_write_error_sets_status_message() {
     // A directory is not a writable file.
     app.config_write_path = Some(tmp.path().to_path_buf());
     app.update(Action::OpenOptions);
-    app.update(Action::OptionsCycleRight);
+    app.update(Action::OptionsApply);
     assert!(!app.message.is_empty());
 }
 
