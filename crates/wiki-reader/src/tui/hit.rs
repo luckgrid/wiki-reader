@@ -17,9 +17,9 @@ pub enum Hit {
     NavSearchRow,
     /// Breadcrumb segment (clickable landing).
     Breadcrumb(PageKey),
-    /// View footer ⚙.
+    /// Layout footer ⚙.
     OpenOptions,
-    /// View footer ?.
+    /// Layout footer ?.
     OpenHelp,
     /// Header ◫.
     NavToggle,

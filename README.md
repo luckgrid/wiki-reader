@@ -17,14 +17,14 @@ A terminal wiki reader for markdown collections. It browses like a documentation
 │     ▸ wfos               ││ ┌ Linked from ─────────────────────────────┐   │
 │  ▸ decisions             ││ │ Worked Example Wiki                      │   │
 │                          ││ └──────────────────────────────────────────┘   │
-└──────────────────────────┘└┤ ‹ Design System ├────────┤ Workflow OS › ├ ? ⚙┘
- VIEW  · architecture/design-system/tokens.md · L3:C1 9% · 2026-09-28 · draft
+└──────────────────────────┘└┤ ‹ Design System ├────────────┤ Workflow OS › ├┘
+ VIEW  · architecture/design-system/tokens.md · L3:C1 9% · draft          ? ⚙
 ```
 <!-- ui-diagram:end -->
 
 ![wiki-reader browsing its own wiki: side nav, rendered page, tab, Linked from pane](assets/wiki-reader.png)
 
-Help (`?`), search (`/`) and options (`,` or `c`) are popups over the same layout. Click `?` / ⚙ at the View footer's bottom right for Help / Options; the header retains ◫ / ✕ for nav / quit.
+Help (`?`), search (`/`) and options (`,` or `c`) are popups over the same layout. Click `?` / ⚙ at the full-width layout footer's bottom right, below both panes, for Help / Options; the header retains ◫ / ✕ for nav / quit.
 
 Nav rows show page titles by default (`nav.labels = "filename"` switches to filenames); folders always show the folder name. Press `?` in the app for every key.
 

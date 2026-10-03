@@ -113,30 +113,6 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         );
     }
 
-    if regions.side_nav.width > 0 {
-        if regions.nav_overlay {
-            frame.render_widget(ratatui::widgets::Clear, regions.side_nav);
-            frame.render_widget(
-                ratatui::widgets::Block::default().style(theme.base_style()),
-                regions.side_nav,
-            );
-            // Above all underlying hits, below nav hits and later modal hits.
-            app.hit_map.push(area, crate::tui::hit::Hit::NavDismiss);
-        }
-        side_nav::draw(
-            frame,
-            regions.side_nav,
-            &nav.tree,
-            &nav.expanded,
-            &nav.cursor,
-            app.nav_scroll,
-            app.focus == FocusPane::Nav && !overlay_open,
-            app.nav_position,
-            &theme,
-            &mut app.hit_map,
-        );
-    }
-
     let total = u32::try_from(app.doc.lines().len().max(1)).unwrap_or(1);
     let pct = ((app.scroll.saturating_add(1)) * 100) / total;
     let path = page.relative_path.display().to_string();
@@ -189,7 +165,33 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
             message: status_msg,
         },
         &theme,
+        &mut app.hit_map,
     );
+
+    if regions.side_nav.width > 0 {
+        if regions.nav_overlay {
+            frame.render_widget(ratatui::widgets::Clear, regions.side_nav);
+            frame.render_widget(
+                ratatui::widgets::Block::default().style(theme.base_style()),
+                regions.side_nav,
+            );
+            // Above all underlying hits, including layout-footer controls;
+            // below nav hits and later modal hits. Outside clicks dismiss only.
+            app.hit_map.push(area, crate::tui::hit::Hit::NavDismiss);
+        }
+        side_nav::draw(
+            frame,
+            regions.side_nav,
+            &nav.tree,
+            &nav.expanded,
+            &nav.cursor,
+            app.nav_scroll,
+            app.focus == FocusPane::Nav && !overlay_open,
+            app.nav_position,
+            &theme,
+            &mut app.hit_map,
+        );
+    }
 
     if let Some(overlay) = app.search.as_mut() {
         draw_search_overlay(

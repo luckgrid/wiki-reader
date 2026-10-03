@@ -1,4 +1,4 @@
-//! Status bar (F2).
+//! Full-width layout footer: status fields and Help / Options controls (F2).
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -6,6 +6,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
+use crate::tui::hit::{Hit, HitMap};
 use crate::tui::layout;
 use crate::tui::theme::Theme;
 
@@ -60,17 +61,41 @@ fn truncate_cols(s: &str, max: usize) -> String {
 type Field = (String, Style);
 
 /// Draw the status bar. When narrow, drop lower-priority fields before the message.
-pub fn draw(frame: &mut Frame<'_>, area: Rect, model: &StatusModel<'_>, theme: &Theme) {
+pub fn draw(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    model: &StatusModel<'_>,
+    theme: &Theme,
+    hits: &mut HitMap,
+) {
     let area = layout::chrome_pad(area);
-    if area.width == 0 {
+    if area.width == 0 || area.height == 0 {
         return;
+    }
+    // Reserve controls before status/message layout, matching header padding.
+    let icon_w = area.width.min(4);
+    let text_area = Rect {
+        width: area.width - icon_w,
+        ..area
+    };
+    let icons = Rect {
+        x: text_area.right(),
+        width: icon_w,
+        ..area
+    };
+    let controls: String = " ? ⚙".chars().skip(usize::from(4 - icon_w)).collect();
+    frame.render_widget(Paragraph::new(controls).style(theme.accent()), icons);
+    for (offset, hit) in [(3, Hit::OpenHelp), (1, Hit::OpenOptions)] {
+        if area.width >= offset {
+            hits.push(Rect::new(area.right() - offset, area.y, 1, 1), hit);
+        }
     }
     let reading = if model.minutes == 0 && model.words > 0 {
         "<1m".to_owned()
     } else {
         format!("{}m", model.minutes)
     };
-    let w = usize::from(area.width);
+    let w = usize::from(text_area.width);
     let msg = model.message;
     let msg_len = if msg.is_empty() {
         0
@@ -119,7 +144,7 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, model: &StatusModel<'_>, theme: &
         spans.push(Span::styled(SEP, theme.muted()));
         spans.push(Span::styled(msg.to_owned(), theme.secondary()));
     }
-    frame.render_widget(Paragraph::new(Line::from(clip_spans(spans, w))), area);
+    frame.render_widget(Paragraph::new(Line::from(clip_spans(spans, w))), text_area);
 }
 
 const SEP: &str = " · ";
@@ -156,4 +181,57 @@ pub fn reading_minutes(words: u32) -> u32 {
         return 0;
     }
     words.div_ceil(230)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::{Terminal, backend::TestBackend};
+
+    #[test]
+    fn footer_controls_stay_visible_and_hits_match_on_tiny_and_crowded_rows() {
+        let theme = Theme::default();
+        let message = "Very long message 界".repeat(20);
+        let model = StatusModel {
+            mode_label: "VIEW",
+            path: "long/path/界.md",
+            line: 10,
+            col: 2,
+            pct: 50,
+            words: 100,
+            minutes: 1,
+            updated: "2026-10-03",
+            status: Some("draft"),
+            message: &message,
+        };
+        for width in 1..=120 {
+            let mut terminal = Terminal::new(TestBackend::new(width, 1)).unwrap();
+            let mut hits = HitMap::default();
+            terminal
+                .draw(|frame| draw(frame, frame.area(), &model, &theme, &mut hits))
+                .unwrap();
+            let area = layout::chrome_pad(Rect::new(0, 0, width, 1));
+            for (rect, hit) in hits.entries() {
+                assert!(rect.x >= area.x && rect.right() <= area.right());
+                let glyph = if *hit == Hit::OpenHelp { "?" } else { "⚙" };
+                assert_eq!(
+                    terminal.backend().buffer()[(rect.x, rect.y)].symbol(),
+                    glyph
+                );
+            }
+            assert_eq!(
+                hits.entries().len(),
+                if area.width >= 3 {
+                    2
+                } else {
+                    usize::from(area.width > 0)
+                }
+            );
+            hits.clear();
+            terminal
+                .draw(|frame| draw(frame, Rect::new(0, 0, width, 0), &model, &theme, &mut hits))
+                .unwrap();
+            assert!(hits.entries().is_empty(), "hidden footer has no hits");
+        }
+    }
 }

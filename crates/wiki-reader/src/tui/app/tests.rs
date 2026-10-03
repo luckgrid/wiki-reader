@@ -85,7 +85,7 @@ fn narrow_nav_overlay_is_opaque_and_outside_clicks_only_dismiss() {
             assert_eq!(terminal.backend().buffer()[(x, 7)].symbol(), " ");
         }
         let page = app.navigator.tab().current().page.clone();
-        // The footer gear normally opens options, but only dismisses the overlay.
+        // The layout footer gear normally opens options, but only dismisses the overlay.
         let (x, y) = find_glyph(terminal.backend().buffer(), "⚙").unwrap();
         mouse_at(&mut app, MouseEventKind::Down(MouseButton::Left), x, y);
         assert!(!app.nav_visible);
@@ -267,7 +267,7 @@ fn chrome_pad_hits_header_icons_and_nav_search() {
     // Padded: icons sit one col inset from the raw edge.
     assert_eq!(qx, 120 - 2, "✕ at chrome_pad right edge");
     assert_eq!(tx, 120 - 4, "◫ two cols left of ✕");
-    assert_eq!((gx, gy), (120 - 2, 22), "⚙ at View footer right edge");
+    assert_eq!((gx, gy), (120 - 2, 23), "⚙ at layout footer right edge");
     assert_eq!(buf[(gx - 2, gy)].symbol(), "?");
     assert_eq!(app.hit_map.hit_at(gx - 2, gy), Some(&Hit::OpenHelp));
     assert!(
@@ -301,7 +301,8 @@ fn footer_buttons_open_popups_on_both_nav_sides_and_responsive_widths() {
                     .find(|(_, candidate)| *candidate == hit)
                     .expect("footer control hit");
                 let (x, y) = (rect.x, rect.y);
-                assert_eq!(y, 22);
+                assert_eq!(y, 23);
+                assert_eq!(x, width - if hit == Hit::OpenHelp { 4 } else { 2 });
                 assert_eq!(terminal.backend().buffer()[(x, y)].symbol(), glyph);
                 mouse_at(&mut app, MouseEventKind::Down(MouseButton::Left), x, y);
                 if hit == Hit::OpenHelp {
