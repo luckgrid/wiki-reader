@@ -19,6 +19,8 @@ pub enum InputMode {
     Overlay,
     /// Help overlay: scroll / activate / dismiss.
     Help,
+    /// Options overlay: select / cycle / dismiss.
+    Options,
     /// External URL open confirmation in the status bar.
     Confirm,
 }
@@ -183,6 +185,7 @@ pub struct Binding {
 pub fn binding_icon(action: &Action) -> Option<&'static str> {
     match action {
         Action::ToggleNav => Some("◫"),
+        Action::OpenOptions => Some("⚙"),
         Action::Quit => Some("✕"),
         _ => None,
     }
@@ -288,6 +291,13 @@ pub static BINDINGS: &[Binding] = &[
         action: Some(Action::OpenHelp),
         help: "Help",
         matcher: Some(Matcher::PlainChar('?')),
+    },
+    Binding {
+        keys: ",",
+        scope: BindingScope::Global,
+        action: Some(Action::OpenOptions),
+        help: "Options",
+        matcher: Some(Matcher::PlainChar(',')),
     },
     Binding {
         keys: "n",
@@ -730,6 +740,20 @@ pub fn map_with_overrides(
         };
     }
 
+    if mode == InputMode::Options {
+        return (
+            match key.code {
+                KeyCode::Esc => Some(Action::CloseOptions),
+                KeyCode::Up | KeyCode::Char('k') => Some(Action::OptionsUp),
+                KeyCode::Down | KeyCode::Char('j') => Some(Action::OptionsDown),
+                KeyCode::Left => Some(Action::OptionsCycleLeft),
+                KeyCode::Right | KeyCode::Enter => Some(Action::OptionsCycleRight),
+                _ => None,
+            },
+            Chord::None,
+        );
+    }
+
     if mode == InputMode::Overlay {
         return match key.code {
             KeyCode::Esc => (Some(Action::CloseSearch), Chord::None),
@@ -819,6 +843,7 @@ fn action_by_name(name: &str) -> Option<Action> {
         "back" => Action::Back,
         "forward" => Action::Forward,
         "toggle_view" | "toggle-view" | "raw" => Action::ToggleViewMode,
+        "open_options" | "open-options" | "options" => Action::OpenOptions,
         _ => return None,
     })
 }
@@ -1102,6 +1127,7 @@ mod tests {
             Action::Forward,
             Action::OpenSearch,
             Action::OpenHelp,
+            Action::OpenOptions,
             Action::FocusNav,
             Action::FocusViewer,
             Action::CycleFocus,
@@ -1212,6 +1238,33 @@ mod tests {
             Chord::None,
         );
         assert_eq!(close, Some(Action::CloseHelp));
+    }
+
+    #[test]
+    fn keymap_options_mode() {
+        let m = |code, mode| map(key(code), FocusPane::Viewer, mode, Chord::None).0;
+        assert_eq!(
+            m(KeyCode::Char(','), InputMode::Normal),
+            Some(Action::OpenOptions)
+        );
+        assert_eq!(
+            m(KeyCode::Esc, InputMode::Options),
+            Some(Action::CloseOptions)
+        );
+        assert_eq!(
+            m(KeyCode::Char('j'), InputMode::Options),
+            Some(Action::OptionsDown)
+        );
+        assert_eq!(m(KeyCode::Up, InputMode::Options), Some(Action::OptionsUp));
+        assert_eq!(
+            m(KeyCode::Left, InputMode::Options),
+            Some(Action::OptionsCycleLeft)
+        );
+        assert_eq!(
+            m(KeyCode::Enter, InputMode::Options),
+            Some(Action::OptionsCycleRight)
+        );
+        assert_eq!(m(KeyCode::Char('q'), InputMode::Options), None);
     }
 
     #[test]

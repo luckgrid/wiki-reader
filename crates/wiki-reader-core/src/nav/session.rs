@@ -239,6 +239,19 @@ impl Navigator {
         &self.tabs
     }
 
+    /// Switch the label mode and rebuild the tree, keeping expansion and cursor where ids survive.
+    pub fn set_label_mode(&mut self, mode: crate::config::LabelMode) {
+        self.label_mode = mode;
+        self.nav.tree = NavTree::build_with(&self.index, mode);
+        let ids = collect_node_ids(&self.nav.tree.items);
+        self.nav.expanded.retain(|id| ids.contains(id));
+        if let NavStop::Node(id) = &self.nav.cursor
+            && !ids.contains(id)
+        {
+            self.nav.cursor = NavStop::Search;
+        }
+    }
+
     /// Label mode used when building the tree.
     #[must_use]
     pub fn label_mode(&self) -> crate::config::LabelMode {

@@ -17,6 +17,8 @@ pub enum Hit {
     NavSearchRow,
     /// Breadcrumb segment (clickable landing).
     Breadcrumb(PageKey),
+    /// Header ⚙.
+    OpenOptions,
     /// Header ◫.
     NavToggle,
     /// Header ✕.
@@ -29,6 +31,10 @@ pub enum Hit {
     HelpDismiss,
     /// Help overlay row (index into [`crate::tui::help_ui::HelpOverlay::rows`]).
     HelpRow(usize),
+    /// Options overlay dismiss (click outside).
+    OptionsDismiss,
+    /// Options overlay row (index into [`crate::tui::options_ui::OptionRow::ALL`]).
+    OptionsRow(usize),
     /// Viewer body line (0-based source line index).
     ViewerLine(u32),
     /// Link segment (`LinkId.0`).
@@ -91,6 +97,9 @@ impl HitMap {
     pub fn action_for(hit: &Hit) -> Action {
         match hit {
             Hit::Quit => Action::Quit,
+            Hit::OpenOptions => Action::OpenOptions,
+            Hit::OptionsDismiss => Action::CloseOptions,
+            Hit::OptionsRow(_) => Action::OptionsCycleRight, // index applied in apply_mouse
             Hit::NavToggle => Action::ToggleNav,
             Hit::Prev => Action::PrevPage,
             Hit::Next => Action::NextPage,

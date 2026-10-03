@@ -18,6 +18,7 @@ use super::help_ui::HelpOverlay;
 use super::hit::HitMap;
 use super::keymap::{Chord, InputMode};
 use super::opener::{Opener, SystemOpener};
+use super::options_ui::{self, OptionRow, OptionsOverlay};
 use super::page_doc::PageDoc;
 use super::rendered_doc::RenderedViewerDoc;
 use super::search_ui::{SearchMode, SearchOverlay};
@@ -121,6 +122,16 @@ pub struct App {
     pub search: Option<SearchOverlay>,
     /// Help overlay (None when closed).
     pub help: Option<HelpOverlay>,
+    /// Options overlay (None when closed).
+    pub options: Option<OptionsOverlay>,
+    /// Where the options window persists changes (`--config` or the XDG file).
+    pub(crate) config_write_path: Option<std::path::PathBuf>,
+    /// Active colour preset.
+    pub(crate) theme_name: wiki_reader_core::config::ThemeName,
+    /// `[images] enabled`.
+    pub(crate) images_enabled: bool,
+    /// `[images] max_slot_rows`.
+    pub(crate) images_max_slot_rows: u16,
     /// Optional filesystem watcher (live reload).
     pub(crate) watcher: Option<wiki_reader_core::watch::Watcher>,
     /// In-flight background index rebuild.
@@ -269,6 +280,16 @@ impl App {
             key_overrides: config.keys.clone(),
             search: None,
             help: None,
+            options: None,
+            // ponytail: tests never touch the real XDG file; they set a temp path explicitly.
+            config_write_path: if skip_xdg {
+                config_path.map(Path::to_path_buf)
+            } else {
+                wiki_reader_core::config::write_target(config_path)
+            },
+            theme_name: config.theme,
+            images_enabled: config.images.enabled,
+            images_max_slot_rows: config.images.max_slot_rows,
             watcher,
             rebuild_rx: None,
             rebuild_pending: false,
@@ -425,22 +446,24 @@ impl App {
 
     fn render_opts(&self) -> RenderOpts {
         let env = wiki_reader_render::DiagramEnv::from_process();
+        let cell_px = self.images_enabled.then(|| self.images.cell_px()).flatten();
         RenderOpts {
             expanded: self.expanded_blocks.clone(),
             diagram_mode: self.diagram_mode,
             image_root: Some(self.provider.root().to_path_buf()),
-            cell_px: self.images.cell_px(),
-            graphics: self.images.cell_px().is_some(),
+            cell_px,
+            graphics: cell_px.is_some(),
             tmux: env.tmux,
             herdr: env.herdr,
             diagram_palette: self.theme.diagram,
             diagram_sizes: self.images.diagram_sizes(),
+            max_slot_rows: self.images_max_slot_rows,
         }
     }
 
-    /// `diagrams = "text" | "source"` opts out of graphics entirely, including the startup probe.
+    /// `diagrams = "text" | "source"` or `images.enabled = false` opts out of graphics, including the startup probe.
     pub(crate) fn graphics_allowed(&self) -> bool {
-        crate::tui::images::should_probe(self.diagram_mode)
+        self.images_enabled && crate::tui::images::should_probe(self.diagram_mode)
     }
 
     /// Config mode visible to the startup probe (ADR-0004 step 1).
@@ -570,6 +593,12 @@ impl App {
             Action::CloseSearch => self.close_search(false),
             Action::OpenHelp => self.open_help(),
             Action::CloseHelp => self.close_help(),
+            Action::OpenOptions => self.open_options(),
+            Action::CloseOptions => self.close_options(),
+            Action::OptionsUp => self.options_select(-1),
+            Action::OptionsDown => self.options_select(1),
+            Action::OptionsCycleLeft => self.options_cycle(-1),
+            Action::OptionsCycleRight => self.options_cycle(1),
             Action::HelpSelectDelta(d) => self.help_select(d),
             Action::HelpPageDelta(d) => self.help_page(d),
             Action::HelpHome => self.help_jump(true),
@@ -820,6 +849,9 @@ impl App {
             | Hit::SearchDismiss
             | Hit::HelpDismiss
             | Hit::HelpRow(_)
+            | Hit::OpenOptions
+            | Hit::OptionsDismiss
+            | Hit::OptionsRow(_)
             | Hit::FocusNav
             | Hit::FocusViewer
             | Hit::Tab(_)
@@ -916,6 +948,7 @@ impl App {
         if self.search.is_some() {
             self.close_search(false);
         }
+        self.options = None;
         self.help = Some(HelpOverlay::new(&self.key_overrides));
         self.input_mode = InputMode::Help;
         self.message.clear();
@@ -927,6 +960,111 @@ impl App {
             self.input_mode = InputMode::Normal;
         }
         self.message.clear();
+    }
+
+    fn open_options(&mut self) {
+        if self.search.is_some() {
+            self.close_search(false);
+        }
+        self.help = None;
+        self.options = Some(OptionsOverlay::new());
+        self.input_mode = InputMode::Options;
+        self.message.clear();
+    }
+
+    fn close_options(&mut self) {
+        self.options = None;
+        self.input_mode = InputMode::Normal;
+        self.message.clear();
+    }
+
+    fn options_select(&mut self, delta: i32) {
+        if let Some(o) = self.options.as_mut() {
+            o.select_delta(delta);
+        }
+    }
+
+    /// Mouse: select row `i` and cycle it forward.
+    pub(crate) fn options_activate(&mut self, i: usize) {
+        if let Some(o) = self.options.as_mut() {
+            o.selected = i.min(OptionRow::ALL.len() - 1);
+            self.options_cycle(1);
+        }
+    }
+
+    /// Display value for an options row.
+    pub(crate) fn option_value(&self, row: OptionRow) -> String {
+        match row {
+            OptionRow::Theme => options_ui::theme_label(self.theme_name).into(),
+            OptionRow::NavPosition => options_ui::nav_position_label(self.nav_position).into(),
+            OptionRow::NavLabels => {
+                options_ui::nav_labels_label(self.navigator.label_mode()).into()
+            }
+            OptionRow::Diagrams => options_ui::diagrams_label(self.diagram_mode).into(),
+            OptionRow::ImagesEnabled => if self.images_enabled { "on" } else { "off" }.into(),
+            OptionRow::ImagesMaxSlotRows => self.images_max_slot_rows.to_string(),
+            OptionRow::CopyPath => options_ui::copy_path_label(self.copy_path).into(),
+        }
+    }
+
+    /// Cycle the selected setting, apply it live, and persist just that field.
+    fn options_cycle(&mut self, dir: i32) {
+        use wiki_reader_core::config::ConfigPatch;
+        let Some(row) = self.options.as_ref().map(OptionsOverlay::current) else {
+            return;
+        };
+        let mut patch = ConfigPatch::default();
+        match row {
+            OptionRow::Theme => {
+                let t = options_ui::cycle_theme(self.theme_name, dir);
+                self.theme_name = t;
+                self.theme = Theme::from_name(t);
+                self.images.diagram_sizes().clear();
+                self.relayout_after_diagram_size();
+                patch.theme = Some(t);
+            }
+            OptionRow::NavPosition => {
+                self.nav_position = options_ui::cycle_nav_position(self.nav_position, dir);
+                patch.nav_position = Some(self.nav_position);
+            }
+            OptionRow::NavLabels => {
+                let m = options_ui::cycle_nav_labels(self.navigator.label_mode(), dir);
+                self.navigator.set_label_mode(m);
+                self.clamp_nav_scroll();
+                patch.nav_labels = Some(m);
+            }
+            OptionRow::Diagrams => {
+                self.diagram_mode = options_ui::cycle_diagrams(self.diagram_mode, dir);
+                self.relayout_after_diagram_size();
+                patch.diagrams = Some(self.diagram_mode);
+            }
+            OptionRow::ImagesEnabled => {
+                self.images_enabled = !self.images_enabled;
+                self.relayout_after_diagram_size();
+                patch.images_enabled = Some(self.images_enabled);
+                // Graphics are probed once at startup (stdin); a later enable needs a restart.
+                if self.images_enabled && self.images.cell_px().is_none() {
+                    self.message = "images: restart to probe terminal graphics".into();
+                }
+            }
+            OptionRow::ImagesMaxSlotRows => {
+                self.images_max_slot_rows =
+                    options_ui::cycle_max_slot_rows(self.images_max_slot_rows, dir);
+                self.relayout_after_diagram_size();
+                patch.images_max_slot_rows = Some(self.images_max_slot_rows);
+            }
+            OptionRow::CopyPath => {
+                self.copy_path = options_ui::cycle_copy_path(self.copy_path, dir);
+                patch.copy_path = Some(self.copy_path);
+            }
+        }
+        if let Some(target) = &self.config_write_path {
+            if let Err(err) = wiki_reader_core::config::write_patch(target, &patch) {
+                self.message = err;
+            }
+        } else {
+            self.message = "options not saved: no config path".into();
+        }
     }
 
     fn help_select(&mut self, delta: i32) {

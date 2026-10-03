@@ -239,8 +239,8 @@ pub fn render_mermaid(src: &str, palette: &DiagramPalette) -> Result<RasterImage
 
 /// True when fitting `px_w`×`px_h` into `max_cols` at `cell_px` keeps scale ≥ [`MIN_LEGIBLE_SCALE`].
 #[must_use]
-pub fn is_legible(px_w: u32, px_h: u32, cell_px: (u16, u16), max_cols: u16) -> bool {
-    fit_scale(px_w, px_h, cell_px, max_cols) >= MIN_LEGIBLE_SCALE
+pub fn is_legible(px_w: u32, px_h: u32, cell_px: (u16, u16), max_cols: u16, max_rows: u16) -> bool {
+    fit_scale(px_w, px_h, cell_px, max_cols, max_rows) >= MIN_LEGIBLE_SCALE
 }
 
 /// Rasterise Mermaid and reject results that would be illegible in the pane.
@@ -253,9 +253,10 @@ pub fn render_mermaid_for_pane(
     palette: &DiagramPalette,
     cell_px: (u16, u16),
     max_cols: u16,
+    max_rows: u16,
 ) -> Result<RasterImage, RasterError> {
     let rendered = render_mermaid(src, palette)?;
-    if !is_legible(rendered.px_w, rendered.px_h, cell_px, max_cols) {
+    if !is_legible(rendered.px_w, rendered.px_h, cell_px, max_cols, max_rows) {
         return Err(RasterError::TooWide);
     }
     Ok(rendered)
@@ -278,9 +279,9 @@ mod tests {
     #[test]
     fn legibility_gate_rejects_wide_natural_size() {
         // 2000 px into 80×8 = 640 px pane → scale 0.32 < 0.55.
-        assert!(!is_legible(2000, 400, (8, 17), 80));
+        assert!(!is_legible(2000, 400, (8, 17), 80, 30));
         // Compact diagram stays legible.
-        assert!(is_legible(400, 200, (8, 17), 80));
+        assert!(is_legible(400, 200, (8, 17), 80, 30));
     }
 
     #[test]
@@ -315,8 +316,9 @@ mod tests {
     #[test]
     fn wide_graph_fixture_falls_back_for_pane() {
         let md = include_str!("../../../fixtures/mermaid/wide-graph.md");
-        let err = render_mermaid_for_pane(fence_body(md), &DiagramPalette::default(), (8, 17), 80)
-            .expect_err("wide");
+        let err =
+            render_mermaid_for_pane(fence_body(md), &DiagramPalette::default(), (8, 17), 80, 30)
+                .expect_err("wide");
         assert!(matches!(err, RasterError::TooWide), "{err:?}");
     }
 
