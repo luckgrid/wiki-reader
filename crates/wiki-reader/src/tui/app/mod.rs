@@ -153,6 +153,8 @@ pub struct App {
     diagram_mode: wiki_reader_core::config::DiagramMode,
     /// How `y` formats the copied path (relative vs absolute).
     copy_path: wiki_reader_core::config::CopyPathMode,
+    /// Side nav left or right (P3-11).
+    pub(crate) nav_position: wiki_reader_core::config::NavPosition,
     /// Terminal graphics (startup probe result), decode worker and prepared pictures.
     pub(crate) images: crate::tui::images::ImageManager,
     /// When false, skip session load/save (tests).
@@ -283,6 +285,7 @@ impl App {
             clipboard: Box::new(Osc52Clipboard),
             diagram_mode: config.diagrams,
             copy_path: config.copy.path,
+            nav_position: config.nav.position,
             images: crate::tui::images::ImageManager::disabled(),
             persist_session,
             session_saved_at: None,
@@ -1654,11 +1657,16 @@ impl App {
 
     /// Set preferred nav width from a drag column (no-op when terminal &lt;80).
     pub(crate) fn resize_nav_to_column(&mut self, column: u16) {
+        use wiki_reader_core::config::NavPosition;
         if self.term_width < 80 {
             return;
         }
         let cap = crate::tui::layout::NAV_WIDTH_MAX.min(self.term_width.saturating_sub(20));
-        let w = column.saturating_add(1).clamp(
+        let raw = match self.nav_position {
+            NavPosition::Left => column.saturating_add(1),
+            NavPosition::Right => self.term_width.saturating_sub(column),
+        };
+        let w = raw.clamp(
             crate::tui::layout::NAV_WIDTH_MIN,
             cap.max(crate::tui::layout::NAV_WIDTH_MIN),
         );

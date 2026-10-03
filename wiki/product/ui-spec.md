@@ -44,7 +44,7 @@ Help (`?`) and search (`/`) open as popups over it, with both panes grayed behin
 
 ![Search overlay in Files mode with ranked results](../assets/wiki-reader-search.png)
 
-Nav rows show page titles by default and folders show the folder name (see [Side nav](#side-nav-left)). `◫` toggles the side nav (`b`), `✕` quits (`q`).
+Nav rows show page titles by default and folders show the folder name (see [Side nav](#side-nav)). `◫` toggles the side nav (`b`), `✕` quits (`q`).
 
 Regions:
 
@@ -61,15 +61,15 @@ Regions:
 - **Right:** icon buttons. `◫` toggles the side nav. `✕` quits (saves session; same as `q`). There is no syntax/formatted toggle: Rendered is always the formatted view and `r` shows the markdown syntax ([ADR-0014](../decisions/0014-remove-formatted-view-toggle.md)).
 - Future: optional back/forward buttons (`‹ ›`). Back/forward are keyboard-only in v1.
 
-## Side nav (left)
+## Side nav
 
-A file tree **presented as a documentation site's side nav**. Construction rules are in [content model](content-model.md). In short:
+A file tree **presented as a documentation site's side nav**. By default it docks on the **left**; `nav.position = "right"` puts it on the right (P3-11). Narrow terminals (&lt;80) still overlay from the left. Construction rules are in [content model](content-model.md). In short:
 
 - The root entry page (root `README.md`/`index.md`) is the first item.
 - Folders always show the **folder name**. Pages are labelled by the `nav.labels` option: **`title`** (the default: `nav_title` → `title` → first H1 → humanized filename), `filename` (humanized filename), or `title+filename` (title with a dim filename suffix). A folder's README and the root README always show their title (the root falls back to the collection name), never "Readme".
 - Every folder with a README is a **collapsible group** (the folder name) whose first item is the README, labelled with its title. A folder holding only a README is still a group with that one item.
 - Folder rows use the herdr tab peach (the same colour as the active tab, footer links, status pill and popup border) and nested rows indent three more columns per level, so a child starts one column right of its parent's label. The list always starts right under the search bar when it fits (it scrolls only to keep the current row visible). The selected row has a full-width background highlight and a `▌` marker; it follows the current page however you got there (a link, the footer, search, history). Ancestor groups auto-expand after every navigation. A row that does not fit the pane width ends in `…` (in `title+filename` mode the dim `(file)` suffix is dropped first).
-- The pane is **resizable**: drag the divider between the nav and the viewer (clamped to 16–50 columns; the width is saved with the session and ignored below 80 columns).
+- The pane is **resizable**: drag the divider on the inner edge between the nav and the viewer (clamped to 16–50 columns; the width is saved with the session and ignored below 80 columns). Nav width stays session-only; position is config.
 
 **Search entry (top of the side nav).** The first row is `/ Search…` (`/` is the key that opens search, and it renders at text height in every font), drawn as a bar in both states; when it is the focused nav stop the bar and text turn the accent color. Selecting it, clicking it, or pressing the search hotkey anywhere opens the **search overlay panel** (below). It's a nav stop for Shift+↑/↓ (see keyboard).
 
@@ -124,7 +124,7 @@ Like markdown-reader's: focused region as a highlighted pill (`NAV`/`VIEW`, or `
 Two focusable panes: **Side nav** and **View**. The search overlay is modal while open.
 
 - `Shift+←` focuses the side nav; `Shift+→` focuses the View. Mouse click also focuses a pane.
-- In the View, `←`/`→` move the cursor one **column** within the row (shown in the status bar as `L12:C5`); `←` at column 0 moves focus to the side nav, mirroring `→` in the nav, which opens the page and focuses the View. Right on the page that is already open just moves focus, keeping the View's cursor and scroll.
+- In the View, `←`/`→` move the cursor one **column** within the row (shown in the status bar as `L12:C5`); at the edge toward the nav (`←` at column 0 when the nav is left, `→` past the last column when it is right) focus moves to the side nav. Nav `→` still opens the page and focuses the View (right on the page that is already open just moves focus, keeping the View's cursor and scroll).
 - The column is *sticky*: moving up/down through short rows and back returns to the column you wanted. A hidden nav is revealed when `←` hands focus to it.
 - **Each pane remembers its cursor.** Switching returns to the last known position in that pane.
 - **Defaults when a pane has no remembered position:**
@@ -190,8 +190,8 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 | `Shift+↓ / Ctrl+↓` | Next block |
 | `k / ↑` | Cursor up |
 | `j / ↓` | Cursor down |
-| `←` | Cursor left (at column 0: focus side nav) |
-| `→` | Cursor right |
+| `←` | Cursor left (at edge toward nav: focus side nav) |
+| `→` | Cursor right (at edge toward nav: focus side nav) |
 | `PgUp / Shift+Space` | Page up |
 | `Space / PgDn` | Page down |
 | `Home` | Top of page |

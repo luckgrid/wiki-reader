@@ -27,25 +27,38 @@ impl App {
         text_col::clamp_col(&self.cursor_line_text(), self.cursor_col)
     }
 
-    /// ←/→ in the View. Left at column 0 hands focus to the side nav.
+    /// ←/→ in the View. At the edge toward the nav, hand focus over (P3-11).
     pub(crate) fn viewer_move_col(&mut self, dir: i32) {
+        use wiki_reader_core::config::NavPosition;
+
         let text = self.cursor_line_text();
         let col = text_col::clamp_col(&text, self.cursor_col);
         if dir < 0 {
             let Some(left) = text_col::step_left(&text, col) else {
-                // Reveal a hidden nav so focus has somewhere visible to land.
+                if self.nav_position == NavPosition::Left {
+                    // Reveal a hidden nav so focus has somewhere visible to land.
+                    if !self.nav_visible {
+                        self.nav_user_override = true;
+                        self.nav_visible = true;
+                    }
+                    self.update(Action::FocusNav);
+                }
+                return;
+            };
+            self.clear_item_focus();
+            self.cursor_col = left;
+        } else {
+            let right = text_col::step_right(&text, col);
+            if right == col && self.nav_position == NavPosition::Right {
                 if !self.nav_visible {
                     self.nav_user_override = true;
                     self.nav_visible = true;
                 }
                 self.update(Action::FocusNav);
                 return;
-            };
+            }
             self.clear_item_focus();
-            self.cursor_col = left;
-        } else {
-            self.clear_item_focus();
-            self.cursor_col = text_col::step_right(&text, col);
+            self.cursor_col = right;
         }
     }
 
