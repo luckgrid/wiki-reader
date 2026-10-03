@@ -125,7 +125,7 @@ pub struct App {
     pub help: Option<HelpOverlay>,
     /// Options overlay (None when closed).
     pub options: Option<OptionsOverlay>,
-    /// Modal viewer: table now, image / diagram in P3-15 (None when closed).
+    /// Modal viewer: table (P3-14) or image / diagram (P3-15); `None` when closed.
     pub(crate) modal: Option<Box<dyn ModalContent>>,
     /// Where the options window persists changes (`--config` or the XDG file).
     pub(crate) config_write_path: Option<std::path::PathBuf>,
@@ -976,6 +976,14 @@ impl App {
             return;
         };
         self.modal = Some(Box::new(super::table_viewer::TableViewer::new(table)));
+        self.input_mode = InputMode::Modal;
+        self.message.clear();
+    }
+
+    /// Open a picture or diagram in the modal viewer (source view on the text tier).
+    pub(crate) fn open_image(&mut self, source: wiki_reader_render::SlotSource, alt: &str) {
+        let viewer = super::image_viewer::ImageViewer::new(source, alt, self.images.picker());
+        self.modal = Some(Box::new(viewer));
         self.input_mode = InputMode::Modal;
         self.message.clear();
     }

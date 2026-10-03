@@ -10,6 +10,7 @@ pub mod focus;
 pub mod help_ui;
 pub mod highlight;
 pub mod hit;
+pub mod image_viewer;
 pub mod images;
 pub mod keymap;
 pub mod layout;

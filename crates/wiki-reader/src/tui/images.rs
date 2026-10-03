@@ -307,7 +307,23 @@ fn scale_and_pad(
     DynamicImage::ImageRgba8(canvas)
 }
 
-fn is_svg_path(path: &std::path::Path) -> bool {
+/// Decode a bitmap file under the ADR-0017 allocation and pixel caps.
+pub(crate) fn decode_file(path: &std::path::Path) -> Result<DynamicImage, String> {
+    let mut reader = ImageReader::open(path)
+        .map_err(|e| e.to_string())?
+        .with_guessed_format()
+        .map_err(|e| e.to_string())?;
+    let mut limits = Limits::default();
+    limits.max_alloc = Some(MAX_DECODE_ALLOC);
+    reader.limits(limits);
+    let decoded = reader.decode().map_err(|e| e.to_string())?;
+    if u64::from(decoded.width()) * u64::from(decoded.height()) > MAX_IMAGE_PIXELS {
+        return Err("image too large".into());
+    }
+    Ok(decoded)
+}
+
+pub(crate) fn is_svg_path(path: &std::path::Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
         .is_some_and(|e| e.eq_ignore_ascii_case("svg"))
@@ -328,18 +344,7 @@ fn prepare(
                 let raster = rasterise_svg(&bytes).map_err(|e| e.to_string())?;
                 DynamicImage::ImageRgba8(raster.image)
             } else {
-                let mut reader = ImageReader::open(path)
-                    .map_err(|e| e.to_string())?
-                    .with_guessed_format()
-                    .map_err(|e| e.to_string())?;
-                let mut limits = Limits::default();
-                limits.max_alloc = Some(MAX_DECODE_ALLOC);
-                reader.limits(limits);
-                let decoded = reader.decode().map_err(|e| e.to_string())?;
-                if u64::from(decoded.width()) * u64::from(decoded.height()) > MAX_IMAGE_PIXELS {
-                    return Err("image too large".into());
-                }
-                decoded
+                decode_file(path)?
             }
         }
         SlotKeySource::Mermaid { palette, .. } => {
@@ -538,6 +543,12 @@ impl ImageManager {
     #[must_use]
     pub fn diagram_sizes(&self) -> Arc<DiagramSizeCache> {
         Arc::clone(&self.diagram_sizes)
+    }
+
+    /// The graphics picker, for modal viewers that draw their own pictures (P3-15).
+    #[must_use]
+    pub fn picker(&self) -> Option<Picker> {
+        self.picker.clone()
     }
 
     /// Cell size in pixels when a protocol is active (the renderer sizes slots from it).

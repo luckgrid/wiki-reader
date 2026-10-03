@@ -156,6 +156,8 @@ pub enum BlockActionKind {
     CopyCode,
     /// Open the table in the modal viewer; `payload` is the index into [`RenderedDoc::tables`].
     ExpandTable,
+    /// Open the Mermaid diagram in the image viewer; `payload` is the fence body.
+    ExpandDiagram,
 }
 
 /// One focusable block action in document order.
@@ -167,8 +169,8 @@ pub struct BlockAction {
     pub line: u32,
     /// Display columns `[start, end)` on that line.
     pub cols: (u16, u16),
-    /// For [`BlockActionKind::CopyCode`]: code body. For [`BlockActionKind::ExpandTable`]: table
-    /// index. Else empty.
+    /// For [`BlockActionKind::CopyCode`] and [`BlockActionKind::ExpandDiagram`]: code / fence
+    /// body. For [`BlockActionKind::ExpandTable`]: table index. Else empty.
     pub payload: String,
 }
 
@@ -179,6 +181,7 @@ fn content_block_id(kind: BlockActionKind, text: &str) -> u32 {
         BlockActionKind::ToggleFrontmatter => 1,
         BlockActionKind::CopyCode => 3,
         BlockActionKind::ExpandTable => 4,
+        BlockActionKind::ExpandDiagram => 5,
     };
     h = h.wrapping_mul(0x0100_0193);
     for b in text.as_bytes().iter().take(256) {
@@ -732,7 +735,17 @@ impl<'a> LayoutState<'a> {
                 .min(usize::from(u16::MAX)),
         )
         .unwrap_or(8);
-        let id = content_block_id(BlockActionKind::CopyCode, &format!("mermaid\n{body}"));
+        // Expand first: at equal columns the stable focus sort keeps it ahead of copy, so Enter on
+        // the line expands while a click still copies (last hit wins).
+        let fingerprint = format!("mermaid\n{body}");
+        self.block_actions.push(BlockAction {
+            id: content_block_id(BlockActionKind::ExpandDiagram, &fingerprint),
+            kind: BlockActionKind::ExpandDiagram,
+            line: start_line,
+            cols: (0, end.max(1)),
+            payload: body.to_owned(),
+        });
+        let id = content_block_id(BlockActionKind::CopyCode, &fingerprint);
         self.block_actions.push(BlockAction {
             id,
             kind: BlockActionKind::CopyCode,
