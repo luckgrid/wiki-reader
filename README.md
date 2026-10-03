@@ -4,18 +4,18 @@ A terminal wiki reader for markdown collections. It browses like a documentation
 
 <!-- ui-diagram:start -->
 ```text
- Worked Example Wiki › Architecture › Design System › Token Projection   ⚙ ◫ ✕
+ Worked Example Wiki › architecture › design-system › Token Projection   ⚙ ◫ ✕
 ┌──────────────────────────┐┌┤ tokens × ├────────────────────────────────────┐
 │▌/ Search…                ││ ── frontmatter ▸ ──────────────────────────────│
 │                          ││                                                │
 │  Worked Example Wiki     ││▌Token Projection                               │
-│  ▾ Architecture          ││ ────────────────────────────────────────       │
+│  ▾ architecture          ││ ────────────────────────────────────────       │
 │     Architecture Overview││                                                │
-│     ▾ Design System      ││ The reusable adapter stays semantic-only;      │
+│     ▾ design-system      ││ The reusable adapter stays semantic-only;      │
 │        Design System     ││ see [ADR-0003](../decisions/0003.md).          │
 │▌       Token Projection  ││                                                │
-│     ▸ Wfos               ││ ┌ Linked from ─────────────────────────────┐   │
-│  ▸ Decisions             ││ │ Worked Example Wiki                      │   │
+│     ▸ wfos               ││ ┌ Linked from ─────────────────────────────┐   │
+│  ▸ decisions             ││ │ Worked Example Wiki                      │   │
 │                          ││ └──────────────────────────────────────────┘   │
 └──────────────────────────┘└┤ ‹ Design System ├────────────┤ Workflow OS › ├┘
  VIEW  · architecture/design-system/tokens.md · L3:C1 9% · 2026-09-28 · draft

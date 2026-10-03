@@ -3,13 +3,13 @@ source: crates/wiki-reader-core/src/nav/tree.rs
 expression: "tree.render_text(&expanded, Some(&root))"
 ---
 ● Worked Example Wiki
-▾ Architecture
+▾ architecture
   Architecture Overview
-  ▾ Design System
+  ▾ design-system
     Design System
     Token Projection
-  ▾ Wfos
+  ▾ wfos
     Workflow OS
-▾ Decisions
+▾ decisions
   ADR-0001 Stack
   ADR-0002 Adapters

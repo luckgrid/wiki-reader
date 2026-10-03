@@ -27,7 +27,7 @@ The collection file is untrusted, since it comes with the content you are readin
 |-----|--------|---------|-------|
 | `theme` | `"dark"`, `"light"`, `"herdr"` | `"dark"`, or `"herdr"` inside herdr | `dark` and `light` use the luckgrid.net colours and paint their own background; `herdr` follows the theme in herdr's config. See [UI spec: Theming](../product/ui-spec.md) and [ADR-0019](../decisions/0019-theme-presets.md). |
 | `nav.position` | `"left"`, `"right"` | `"left"` | Side nav on the left or right edge. Nav width stays session-only. |
-| `nav.labels` | `"title"`, `"filename"`, `"title+filename"` | `"title"` | How nav rows are labelled. |
+| `nav.labels` | `"title"`, `"filename"` | `"title"` | Side-nav page titles or actual filenames including extensions; folders keep on-disk names. Header/footer labels stay title-based. |
 | `diagrams` | `"auto"`, `"image"`, `"text"`, `"source"` | `"auto"` | Mermaid tier; see [ADR-0004](../decisions/0004-diagram-rendering.md). tmux always uses text. |
 | `images.enabled` | `true`, `false` | `true` | `false` skips the terminal graphics probe and shows text placeholders. |
 | `images.max_slot_rows` | integer `1`–`60` | `30` | Tallest picture or diagram slot, in rows. |
@@ -43,11 +43,13 @@ copy.path = "absolute"
 
 [nav]
 position = "right"
-labels = "title+filename"
+labels = "filename"
 
 [images]
 max_slot_rows = 24
 ```
+
+Legacy `nav.labels = "title+filename"` is read as `"title"` with one warning per config load, even if several config layers use it. Loading does not rewrite files; choose a supported value in Options or edit the config to stop the warning. See [ADR-0020](../decisions/0020-nav-label-modes.md).
 
 ## Options window
 

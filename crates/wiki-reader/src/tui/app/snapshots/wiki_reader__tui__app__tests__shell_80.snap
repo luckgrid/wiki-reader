@@ -7,8 +7,8 @@ expression: out
 │▌/ Search…              ││▌── frontmatter ▸ ──────────────────────────────────│
 │                        ││                                                    │
 │▌ Worked Example Wiki   ││ Worked Example Wiki                                │
-│  ▸ Architecture        ││ ────────────────────────────────────────           │
-│  ▸ Decisions           ││                                                    │
+│  ▸ architecture        ││ ────────────────────────────────────────           │
+│  ▸ decisions           ││                                                    │
 │                        ││ A tiny markdown collection used as the default     │
 │                        ││ smoke-test root.                                   │
 │                        ││                                                    │

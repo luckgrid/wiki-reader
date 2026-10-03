@@ -62,13 +62,56 @@ fn click_at(app: &mut App, x: u16, y: u16) -> Option<Action> {
 #[test]
 fn snapshots_responsive_widths() {
     let root = fixture();
-    for w in [60u16, 80, 120] {
+    for w in [40u16, 60, 80, 120] {
         let out = render_at(&root, w, 24);
         insta::assert_snapshot!(format!("shell_{w}"), out);
     }
     // Tall terminal: vertical gaps above/below header and status.
     let tall = render_at(&root, 120, 40);
     insta::assert_snapshot!("shell_120x40", tall);
+}
+
+#[test]
+fn filename_mode_only_changes_side_nav_not_header_or_footer() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: app.navigator.index().collection_id.clone(),
+        relative_path: PathBuf::from("architecture/design-system/tokens.md"),
+    }));
+    let before = screen_rows(&mut app, 120, 24);
+    app.navigator
+        .set_label_mode(wiki_reader_core::config::LabelMode::Filename);
+    let after = screen_rows(&mut app, 120, 24);
+    assert_eq!(before[0], after[0], "header labels must not change");
+    assert_eq!(before[22], after[22], "footer labels must not change");
+    assert!(after[0].contains("Worked Example Wiki"));
+    assert!(after[0].contains("Token Projection"));
+    assert!(after.iter().any(|row| row.contains("tokens.md")));
+    app.navigator
+        .set_label_mode(wiki_reader_core::config::LabelMode::Title);
+    let restored = screen_rows(&mut app, 120, 24);
+    assert_eq!(before[0], restored[0]);
+    assert_eq!(before[22], restored[22]);
+}
+
+#[test]
+fn filename_nav_snapshots_responsive_widths() {
+    let mut app = App::new(&fixture()).unwrap();
+    app.navigator
+        .set_label_mode(wiki_reader_core::config::LabelMode::Filename);
+    app.update(Action::GoToPage(PageKey {
+        collection_id: app.navigator.index().collection_id.clone(),
+        relative_path: PathBuf::from("architecture/design-system/tokens.md"),
+    }));
+    app.update(Action::FocusNav);
+    for w in [40u16, 60, 80, 120] {
+        app.sync_nav_for_width(w);
+        app.nav_visible = true;
+        app.nav_user_override = true;
+        let out = screen_rows(&mut app, w, 24).join("\n");
+        insta::assert_snapshot!(format!("filename_nav_{w}"), out);
+    }
 }
 
 #[test]
@@ -201,7 +244,7 @@ fn breadcrumb_glyph_click_navigates() {
     for x in 0..buf.area.width {
         let end = (x + 12).min(buf.area.width);
         let word: String = (x..end).map(|xx| buf[(xx, 0)].symbol()).collect();
-        if word == "Architecture"
+        if word == "architecture"
             && let Some(Hit::Breadcrumb(k)) = app.hit_map.hit_at(x, 0)
             && k.relative_path.ends_with("architecture/README.md")
         {
@@ -3711,7 +3754,7 @@ fn nested_nav_rows_sit_one_column_right_of_their_parent_label() {
     };
     assert_eq!(
         col("Architecture Overview"),
-        col("Architecture") + 1,
+        col("architecture") + 1,
         "leaf label one column right of the group label"
     );
 }

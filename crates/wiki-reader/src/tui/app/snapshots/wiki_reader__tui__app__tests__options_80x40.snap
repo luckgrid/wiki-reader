@@ -2,21 +2,21 @@
 source: crates/wiki-reader/src/tui/app/tests.rs
 expression: out
 ---
- Worked Exampl┌ Options ─────────────────────────────────────────┐        ⚙ ◫ ✕ 
-┌─────────────│                                                  │─────────────┐
-│▌/ Search…   │  Theme                                           │─────────────│
-│             │  > ● Dark (luckgrid)                             │             │
-│▌ Worked Exam│    ○ Light (luckgrid)                            │             │
-│  ▸ Architect│    ○ Herdr (follows herdr)                       │──           │
-│  ▸ Decisions│                                                  │             │
-│             │  Panels                                          │ default     │
+ Worked Example Wiki                                                      ⚙ ◫ ✕ 
+┌─────────────┌ Options ─────────────────────────────────────────┐─────────────┐
+│▌/ Search…   │                                                  │─────────────│
+│             │  Theme                                           │             │
+│▌ Worked Exam│  > ● Dark (luckgrid)                             │             │
+│  ▸ architect│    ○ Light (luckgrid)                            │──           │
+│  ▸ decisions│    ○ Herdr (follows herdr)                       │             │
+│             │                                                  │ default     │
+│             │  Panels                                          │             │
 │             │    ● Nav left                                    │             │
-│             │    ○ Nav right                                   │             │
-│             │                                                  │ Token       │
-│             │  Nav labels                                      │history      │
+│             │    ○ Nav right                                   │ Token       │
+│             │                                                  │history      │
+│             │  Nav labels                                      │             │
 │             │    ● Page titles                                 │             │
 │             │    ○ File names                                  │             │
-│             │    ○ Titles and file names                       │             │
 │             │                                                  │             │
 │             │  Mermaid                                         │             │
 │             │    ● Auto                                        │             │

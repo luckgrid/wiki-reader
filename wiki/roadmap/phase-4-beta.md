@@ -18,7 +18,7 @@ Extend the reader past a single content pane: a right-hand widget slot, a first 
 
 ## Entry criteria
 
-- Phase 3 exit: themes and layout config shipped, chrome polish done, herdr integration confirmed on a real install.
+- Phase 3 exit decision recorded against [its exit criteria](phase-3-alpha.md#exit-criteria): chrome, lite build and viewer polish shipped; herdr integration confirmed on a real install or explicitly deferred here. Deferred integration requires the API spike evidence before implementation.
 - The widget requirements are still unsettled; confirm them from the [dogfood log](dogfood-log.md) before detailing any row below.
 
 ## Seeds

@@ -16,18 +16,18 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 
 <!-- ui-diagram:start -->
 ```text
- Worked Example Wiki › Architecture › Design System › Token Projection   ⚙ ◫ ✕
+ Worked Example Wiki › architecture › design-system › Token Projection   ⚙ ◫ ✕
 ┌──────────────────────────┐┌┤ tokens × ├────────────────────────────────────┐
 │▌/ Search…                ││ ── frontmatter ▸ ──────────────────────────────│
 │                          ││                                                │
 │  Worked Example Wiki     ││▌Token Projection                               │
-│  ▾ Architecture          ││ ────────────────────────────────────────       │
+│  ▾ architecture          ││ ────────────────────────────────────────       │
 │     Architecture Overview││                                                │
-│     ▾ Design System      ││ The reusable adapter stays semantic-only;      │
+│     ▾ design-system      ││ The reusable adapter stays semantic-only;      │
 │        Design System     ││ see [ADR-0003](../decisions/0003.md).          │
 │▌       Token Projection  ││                                                │
-│     ▸ Wfos               ││ ┌ Linked from ─────────────────────────────┐   │
-│  ▸ Decisions             ││ │ Worked Example Wiki                      │   │
+│     ▸ wfos               ││ ┌ Linked from ─────────────────────────────┐   │
+│  ▸ decisions             ││ │ Worked Example Wiki                      │   │
 │                          ││ └──────────────────────────────────────────┘   │
 └──────────────────────────┘└┤ ‹ Design System ├────────────┤ Workflow OS › ├┘
  VIEW  · architecture/design-system/tokens.md · L3:C1 9% · 2026-09-28 · draft
@@ -55,9 +55,17 @@ Regions:
 
 **Tabs** are always shown: the current page's tab is there even when it is the only one (`┤ tokens × ├`, `×` closes). Like the footer buttons, the active tab fills peach only while the View has focus; with the Nav focused every tab stays outlined. A right-hand widget slot is reserved for Phase 4.
 
+### Approved Batch A layout (P3-18 / P3-17, not yet implemented)
+
+P3-18 moves ⚙ to the View footer's far right with `?` immediately to its left; the header retains ◫ and ✕. P3-17 then gives the View dedicated **three-row top and bottom strips** for fully closed tab and footer-button boxes. The middle row carries labels/hit regions; the other two rows carry borders. Tabs use the actual filename including its extension. The active tab keeps a darker selected background with Nav focus, and the normal accent selection with View focus.
+
+The footer reserves space for `?` / ⚙ before dividing the remaining width between prev/next. Labels truncate with `…`; unavailable links remain absent. Controls must not overlap, including at 40/60 columns and with Nav on either side. Compared with today's border-row controls, the strips consume two additional article rows at each edge. At insufficient height, clip empty/content rows safely without underflow; retain the header/status rows and only register visible control hits. P3-01 sticky headings are a separate row/behavior, not implemented by these boxes.
+
+The diagram and descriptions below document the current implementation until P3-18/P3-17 land; refresh the final assets in P3-23.
+
 ## Header (full width, 1 padded row)
 
-- **Left:** the root entry page's title, then the breadcrumb trail through side-nav groups to the current page. Example: `Project Wiki › Architecture › Design System › Token Projection`. Segments follow the **side nav hierarchy** (groups), not raw directories, so folded folders ([content model](content-model.md)) don't produce extra crumbs. Each segment is clickable and opens that group's landing page. The trail truncates from the middle with `…` when narrow, always keeping the root and current page.
+- **Left:** the root entry page's title, then the breadcrumb trail through side-nav groups to the current page. Example: `Project Wiki › architecture › design-system › Token Projection`. Segments follow the **side nav hierarchy** (groups), not raw directories, so folded folders ([content model](content-model.md)) don't produce extra crumbs. Each segment is clickable and opens that group's landing page. The trail truncates from the middle with `…` when narrow, always keeping the root and current page.
 - **Right:** icon buttons. `⚙` opens the options window (same as `,` / `c`). `◫` toggles the side nav. `✕` quits (saves session; same as `q`). There is no syntax/formatted toggle: Rendered is always the formatted view and `r` shows the markdown syntax ([ADR-0014](../decisions/0014-remove-formatted-view-toggle.md)). P3-18 moves ⚙ (and a `?` help button) to the View footer.
 - Future: optional back/forward buttons (`‹ ›`). Back/forward are keyboard-only in v1.
 
@@ -66,9 +74,9 @@ Regions:
 A file tree **presented as a documentation site's side nav**. By default it docks on the **left**; `nav.position = "right"` puts it on the right (P3-11). Narrow terminals (&lt;80) still overlay from the left. Construction rules are in [content model](content-model.md). In short:
 
 - The root entry page (root `README.md`/`index.md`) is the first item.
-- Folders always show the **folder name**. Pages are labelled by the `nav.labels` option: **`title`** (the default: `nav_title` → `title` → first H1 → humanized filename), `filename` (humanized filename), or `title+filename` (title with a dim filename suffix). A folder's README and the root README always show their title (the root falls back to the collection name), never "Readme".
+- Folders always show the **on-disk folder name**, preserving case, hyphens and numeric prefixes. Pages are labelled by `nav.labels`: **`title`** (default: `nav_title` → `title` → first H1 → humanized filename) or **`filename`** (actual filename including extension, e.g. `README.md`). In title mode, landing pages show their title, falling back to the folder name (root: collection name). Legacy `title+filename` maps to `title` with one warning per config load; see [ADR-0020](../decisions/0020-nav-label-modes.md). This setting affects **only the side-nav tree**: header breadcrumbs and View footer links always retain title-mode navigation labels ([ADR-0021](../decisions/0021-side-nav-only-label-mode.md)).
 - Every folder with a README is a **collapsible group** (the folder name) whose first item is the README, labelled with its title. A folder holding only a README is still a group with that one item.
-- Folder rows use the herdr tab peach (the same colour as the active tab, footer links, status pill and popup border) and nested rows indent three more columns per level, so a child starts one column right of its parent's label. The list always starts right under the search bar when it fits (it scrolls only to keep the current row visible). The selected row has a full-width background highlight and a `▌` marker; it follows the current page however you got there (a link, the footer, search, history). Ancestor groups auto-expand after every navigation. A row that does not fit the pane width ends in `…` (in `title+filename` mode the dim `(file)` suffix is dropped first).
+- Folder rows use the herdr tab peach (the same colour as the active tab, footer links, status pill and popup border) and nested rows indent three more columns per level, so a child starts one column right of its parent's label. The list always starts right under the search bar when it fits (it scrolls only to keep the current row visible). The selected row has a full-width background highlight and a `▌` marker; it follows the current page however you got there (a link, the footer, search, history). Ancestor groups auto-expand after every navigation. A row that does not fit the pane width ends in `…`.
 - The pane is **resizable**: drag the divider on the inner edge between the nav and the viewer (clamped to 16–50 columns; the width is saved with the session and ignored below 80 columns). Nav width stays session-only; position is config.
 
 **Search entry (top of the side nav).** The first row is `/ Search…` (`/` is the key that opens search, and it renders at text height in every font), drawn as a bar in both states; when it is the focused nav stop the bar and text turn the accent color. Selecting it, clicking it, or pressing the search hotkey anywhere opens the **search overlay panel** (below). It's a nav stop for Shift+↑/↓ (see keyboard).
@@ -121,7 +129,7 @@ Future: a **sticky section header** at the top of the viewer showing the heading
 
 ## View footer (prev/next)
 
-`┤ ‹ Prev title ├` on the left and `┤ Next title › ├` on the right, following side nav order ([content model](content-model.md)). They are outlined, padded buttons drawn on the **View pane's bottom border**, so they stay pinned while the article scrolls. The outline matches the pane border (teal when the View is focused, gray when the Nav is); a button reached with `Tab` or `f` fills peach with dark text. Each label is truncated with `…` to its half of the border so long titles cannot collide. Both are clickable and bound to `[` / `]`. A side with no prev/next draws nothing, so the border runs unbroken.
+`┤ ‹ Prev title ├` on the left and `┤ Next title › ├` on the right, following side nav order ([content model](content-model.md)) but always using title-mode labels, regardless of `nav.labels`. They are outlined, padded buttons drawn on the **View pane's bottom border**, so they stay pinned while the article scrolls. The outline matches the pane border (teal when the View is focused, gray when the Nav is); a button reached with `Tab` or `f` fills peach with dark text. Each label is truncated with `…` to its half of the border so long titles cannot collide. Both are clickable and bound to `[` / `]`. A side with no prev/next draws nothing, so the border runs unbroken.
 
 ## Modal viewers
 

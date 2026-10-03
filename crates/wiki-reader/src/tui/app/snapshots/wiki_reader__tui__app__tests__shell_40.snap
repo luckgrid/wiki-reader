@@ -1,0 +1,28 @@
+---
+source: crates/wiki-reader/src/tui/app/tests.rs
+expression: out
+---
+ Worked Example Wiki              ⚙ ◫ ✕ 
+┌┤ README × ├──────────────────────────┐
+│▌── frontmatter ▸ ────────────────────│
+│                                      │
+│ Worked Example Wiki                  │
+│ ─────────────────────────────────────│
+│                                      │
+│ A tiny markdown collection used as   │
+│ the default smoke-test root.         │
+│                                      │
+│ Start at Architecture Overview,      │
+│ follow Token Projection, then return │
+│ via back when history exists.        │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+└───────────────────┤ Architecture… › ├┘
+  VIEW  · README.md · L1:C1 9%

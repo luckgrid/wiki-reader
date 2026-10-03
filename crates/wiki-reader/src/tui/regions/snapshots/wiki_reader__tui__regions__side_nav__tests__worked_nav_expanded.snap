@@ -4,11 +4,11 @@ expression: "open.iter().map(|r|\nformat!(\"{}{}\", \"  \".repeat(r.depth), r.la
 ---
 [
     "Worked Example Wiki",
-    "Architecture",
+    "architecture",
     "  Architecture Overview",
-    "  Design System",
+    "  design-system",
     "    Design System",
     "    Token Projection",
-    "  Wfos",
-    "Decisions",
+    "  wfos",
+    "decisions",
 ]

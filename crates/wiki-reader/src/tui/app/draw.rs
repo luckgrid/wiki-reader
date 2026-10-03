@@ -44,7 +44,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         area,
     );
     let page = app.navigator.tab().current().page.clone();
-    let crumbs = app.navigator.nav().tree.breadcrumb(&page);
+    let crumbs = app.navigator.title_tree().breadcrumb(&page);
     let nav = app.navigator.nav();
     // A popup owns the keys: both panes behind it drop their active colours.
     let overlay_open =
@@ -64,13 +64,10 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     let prev = nav.tree.prev(&page);
     let next = nav.tree.next(&page);
     let footer_label = |k: &wiki_reader_core::provider::PageKey| {
-        nav.tree.page_display_label(k).unwrap_or_else(|| {
-            wiki_reader_core::nav::page_label_with(
-                app.navigator.index(),
-                k,
-                app.navigator.label_mode(),
-            )
-        })
+        app.navigator
+            .title_tree()
+            .page_display_label(k)
+            .unwrap_or_else(|| wiki_reader_core::nav::page_label(app.navigator.index(), k))
     };
     let prev_label = prev.as_ref().map(footer_label);
     let next_label = next.as_ref().map(footer_label);
@@ -125,7 +122,6 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
             &nav.cursor,
             app.nav_scroll,
             app.focus == FocusPane::Nav && !overlay_open,
-            app.navigator.label_mode(),
             app.nav_position,
             &theme,
             &mut app.hit_map,

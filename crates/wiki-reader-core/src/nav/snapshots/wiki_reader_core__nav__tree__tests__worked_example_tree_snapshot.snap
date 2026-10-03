@@ -3,10 +3,10 @@ source: crates/wiki-reader-core/src/nav/tree.rs
 expression: text
 ---
 ● Worked Example Wiki
-▾ Architecture
+▾ architecture
   Architecture Overview
-  ▾ Design System
+  ▾ design-system
     Design System
     Token Projection
-  ▸ Wfos
-▸ Decisions
+  ▸ wfos
+▸ decisions

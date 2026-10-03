@@ -7,8 +7,8 @@ expression: out
 │▌/ Search…                  │││                                                        │──────────────────────────────│
 │                            │││  ── Global ──────────────────────────────────────────  │                              │
 │▌ Worked Example Wiki       │││  Alt+← / Alt+b / Backspace  Back                       │                              │
-│  ▸ Architecture            │││  Alt+→ / Alt+f              Forward                    │                              │
-│  ▸ Decisions               │││  q / ✕                      Quit                       │                              │
+│  ▸ architecture            │││  Alt+→ / Alt+f              Forward                    │                              │
+│  ▸ decisions               │││  q / ✕                      Quit                       │                              │
 │                            │││  b / ◫                      Toggle side nav            │ root.                        │
 │                            │││  r                          Toggle raw / rendered      │                              │
 │                            │││  e                          Open in editor             │then return via back when     │
