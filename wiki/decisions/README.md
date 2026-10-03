@@ -23,6 +23,7 @@ Architecture decision records. Accepted ADRs are immutable — supersede, don't 
 | [0015](0015-new-tab-combos-kitty-keyboard.md) | New-tab combos via kitty keyboard disambiguation | accepted (Cmd dropped by [0016](0016-ctrl-only-new-tab-combos.md)) |
 | [0016](0016-ctrl-only-new-tab-combos.md) | New-tab combos are Ctrl-only (no Cmd) | accepted |
 | [0017](0017-static-local-images-only.md) | Images are static, local and never fetched | accepted |
+| [0018](0018-config-write-path.md) | Options window writes the operator config file | accepted |
 
 ## Related
 
