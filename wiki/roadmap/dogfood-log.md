@@ -100,7 +100,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 | 2026-10-03 | decision | Prepare v0.1.2 to put P2-56 in the installed dogfood binary, plus the docs filing from #117 (#119). Require green CI on the release merge commit before tagging. The adoption clock does not restart; Phase 2 stays on fixes-only hold until the ≈ 2026-10-13 verdict | P2-56, P2-57, P2-58, P3-08 |
 | 2026-10-03 | release | [v0.1.2](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.2) published as a prerelease from #119 merge commit `13a1d2d` after its Ubuntu/macOS CI passed. All three release builds passed; three tarballs and three checksums present. macOS arm64 download checksum and binary version verified; Cargo dogfood install upgraded from tag v0.1.1 to v0.1.2 (`~/.cargo/bin/wiki-reader`, `--version` reports 0.1.2). Operator confirmed slow/quick dark/light/herdr theme switches on merged main in standalone Ghostty and Herdr before tagging. Clock continues without restarting | P2-56, P3-08 |
 
-## Next release (unreleased)
+## v0.1.3 (preparation)
 
 | Date | Kind | Note | Task IDs |
 |------|------|------|----------|
@@ -118,6 +118,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 | 2026-10-03 | decision | P3-17 restyled to the operator's wireframe: three-row bars with complete borders and dividers, thin glyphs in each pane's own border style, bold focus-colour selected labels (no underline, gap or fill), and a bordered search bar aligned with the tab bar. The nav and View stay as two frames so each keeps its own focus colour. Selected labels use `border_focus`, not `peach`: `peach` is a fill and misses contrast as text on the light preset | P3-17 |
 | 2026-10-03 | fix | P3-17 restyle implemented (unreleased): shared bar renderer, cell-based tabs and prev/next, bordered search bar, six chrome rows when both bars fit (bars dropped whole on short terminals). Tests assert every bar and search-seam glyph matches its pane's border style across dark/light/herdr, focus states and 40/60/80/120 columns, that no heavy glyph is drawn, that hits sit on label rows only, and that the search bar lines up with the tab bar. Operator Ghostty/herdr pass pending | P3-17 |
 | 2026-10-03 | decision | Operator reviewed the P3-17 restyle in a real terminal and approved it: bordered three-row bars, peach selected labels, pane-matched thin borders and the aligned search bar. Batch A is feature complete; v0.1.3 is the next release step | P3-17 |
+| 2026-10-03 | decision | Prepare v0.1.3 to put P2-59 and Batch A (P3-16 filename labels, P3-18 footer buttons, P3-17 bordered bars) in the installed dogfood binary. Require green CI on the release merge commit before tagging. Phase 2 stays on fixes-only hold until the ≈ 2026-10-13 verdict; the adoption clock does not restart | P2-59, P3-16, P3-17, P3-18, P3-08 |
 
 ## Related
 
