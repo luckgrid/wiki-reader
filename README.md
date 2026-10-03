@@ -24,17 +24,21 @@ A terminal wiki reader for markdown collections. It browses like a documentation
 
 ![wiki-reader browsing its own wiki: side nav, rendered page, tab, Linked from pane](assets/wiki-reader.png)
 
-Help (`?`) and search (`/`) are popups over the same layout:
-
-![Help overlay listing every key, grouped by Global, Side nav, View and Chords](assets/wiki-reader-help.png)
-
-![Search overlay in Files mode with ranked results](assets/wiki-reader-search.png)
+Help (`?`), search (`/`) and options (`,` or `c`) are popups over the same layout.
 
 Nav rows show page titles by default (`nav.labels = "filename"` switches to filenames); folders always show the folder name. Press `?` in the app for every key.
 
 ## Why not an existing reader?
 
 Existing terminal markdown tools behave like editors or file browsers: opening a page spawns a tab, links are inert, and search lives in a modal. wiki-reader uses a **browser/wiki navigation model**. Every way of reaching a page replaces the current view and records history, and tabs are an opt-in secondary feature. See [ADR-0005](wiki/decisions/0005-navigation-model.md).
+
+## Credits
+
+wiki-reader exists because of [markdown-reader](https://github.com/leboiko/markdown-reader) by [leboiko](https://github.com/leboiko) (MIT), and we are grateful for it. It was the first thing tried for browsing a wiki in a terminal and the best of its kind. Much of what wiki-reader does for a page started as something markdown-reader showed was possible: the tree beside a rendered page, tables, code blocks and a frontmatter box that read well, Mermaid diagrams in the terminal, live reload, and a settings window, whose grouped radio-button layout wiki-reader's options window borrows.
+
+wiki-reader also depends directly on [`mermaid-text`](https://crates.io/crates/mermaid-text), markdown-reader's author's crate, for its text-mode diagrams. The rest of the page rendering is written fresh for wiki-reader's navigation model.
+
+Other tools that shaped it, and what each contributed, are listed in [Prior art and libraries](wiki/architecture/prior-art-and-libs.md): treemd, md-tui, Frogmouth, Glow and others. If you want an editor-style markdown browser rather than a wiki reader, markdown-reader is the one to use.
 
 ## Status
 
