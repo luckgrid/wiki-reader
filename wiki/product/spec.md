@@ -108,6 +108,9 @@ Terminal markdown tools display files but don't support wiki browsing: links are
 | U2 | Side nav header/footer | Side nav is a column of (header?, list, footer?) sub-regions from the start. |
 | U3 | Nav label options | `nav.labels = title | filename | title+filename`. |
 | U4 | Header back/forward buttons | Header right/left slots are lists of icon buttons, not hard-coded. |
+| U5 | Options window | Config is one typed struct with a single merge path; a settings popup can later read and write it without a second source of truth. |
+| U6 | Table viewer | Expose each table's cell grid from the renderer (not only styled lines), so a modal can filter, sort and scroll it. |
+| U7 | Image and diagram viewer | Image and Mermaid slots already carry their source (`SlotSource`); keep it that way so a modal can re-raster at any size and pan or zoom. |
 | W1 | Widget sidebar incl. context engine ([context engine](../architecture/context-engine.md)) | Optional right slot; widget trait gets read-only page + index. |
 | W2 | Agent CLI (`--json`) | Core stays terminal-free ([ADR-0006](../decisions/0006-reader-first.md)). |
 | W3 | External provider | `CollectionProvider` trait. |
