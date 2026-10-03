@@ -65,11 +65,24 @@ pub struct CopyConfig {
     pub path: CopyPathMode,
 }
 
+/// Where the side nav sits (`nav.position`; P3-11).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum NavPosition {
+    /// Nav column on the left (default).
+    #[default]
+    Left,
+    /// Nav column on the right.
+    Right,
+}
+
 /// `[nav]` table.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
 pub struct NavConfig {
     #[serde(default)]
     pub labels: LabelMode,
+    #[serde(default)]
+    pub position: NavPosition,
 }
 
 /// Loaded reader config plus per-key diagnostics (never a hard startup failure).
@@ -159,9 +172,24 @@ impl Config {
             }
         }
         if let Some(v) = table.get("nav") {
-            match v.clone().try_into::<NavConfig>() {
-                Ok(nav) => self.nav = nav,
-                Err(err) => self.diagnostics.push(format!("nav: {err}")),
+            if let Some(nav_table) = v.as_table() {
+                if let Some(labels) = nav_table.get("labels") {
+                    match labels.clone().try_into::<LabelMode>() {
+                        Ok(l) => self.nav.labels = l,
+                        Err(err) => self.diagnostics.push(format!("nav.labels: {err}")),
+                    }
+                }
+                if let Some(position) = nav_table.get("position") {
+                    match position.clone().try_into::<NavPosition>() {
+                        Ok(p) => self.nav.position = p,
+                        Err(_) => self.diagnostics.push(format!(
+                            "nav.position: expected \"left\" or \"right\", got {position}"
+                        )),
+                    }
+                }
+            } else {
+                self.diagnostics
+                    .push(format!("nav: expected table, got {v}"));
             }
         }
         if let Some(v) = table.get("opener") {
@@ -511,6 +539,48 @@ quit = "X"
             cfg.exclude,
             vec!["drafts/**".to_owned(), "secrets/**".to_owned()]
         );
+    }
+
+    #[test]
+    fn nav_position_key_selects_left_or_right() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("user.toml");
+        for (value, want) in [("left", NavPosition::Left), ("right", NavPosition::Right)] {
+            fs::write(&path, format!("[nav]\nposition = \"{value}\"\n")).unwrap();
+            let cfg = Config::load_with_xdg(tmp.path(), None, Some(&path));
+            assert_eq!(cfg.nav.position, want);
+            assert!(cfg.diagnostics.is_empty(), "diags={:?}", cfg.diagnostics);
+        }
+    }
+
+    #[test]
+    fn invalid_nav_position_in_a_later_file_keeps_the_earlier_value() {
+        let tmp = tempdir().unwrap();
+        let xdg = tmp.path().join("user.toml");
+        fs::write(&xdg, "[nav]\nposition = \"right\"\n").unwrap();
+        fs::write(
+            tmp.path().join(".wiki-reader.toml"),
+            "[nav]\nposition = \"top\"\n",
+        )
+        .unwrap();
+        let cfg = Config::load_with_xdg(tmp.path(), None, Some(&xdg));
+        assert_eq!(cfg.nav.position, NavPosition::Right);
+        assert!(
+            cfg.diagnostics
+                .iter()
+                .any(|d| d.starts_with("nav.position:")),
+            "diags={:?}",
+            cfg.diagnostics
+        );
+        // A later file that only sets labels must not wipe position.
+        fs::write(
+            tmp.path().join(".wiki-reader.toml"),
+            "[nav]\nlabels = \"filename\"\n",
+        )
+        .unwrap();
+        let cfg = Config::load_with_xdg(tmp.path(), None, Some(&xdg));
+        assert_eq!(cfg.nav.position, NavPosition::Right);
+        assert_eq!(cfg.nav.labels, LabelMode::Filename);
     }
 
     #[test]

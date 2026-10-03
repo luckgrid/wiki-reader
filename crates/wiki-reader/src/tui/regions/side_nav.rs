@@ -8,6 +8,7 @@ use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
+use wiki_reader_core::config::NavPosition;
 use wiki_reader_core::nav::{NavItem, NavStop, NavTree, NodeId};
 
 use crate::tui::hit::{Hit, HitMap};
@@ -48,6 +49,7 @@ pub fn draw(
     scroll: u16,
     focused: bool,
     labels: wiki_reader_core::config::LabelMode,
+    position: NavPosition,
     theme: &Theme,
     hits: &mut HitMap,
 ) {
@@ -56,11 +58,15 @@ pub fn draw(
     }
 
     hits.push(area, Hit::FocusNav);
-    // Divider: 1 col on the right border for drag-resize (P2-14).
+    // Divider on the inner edge for drag-resize (P2-14 / P3-11).
     if area.width > 0 {
+        let x = match position {
+            NavPosition::Left => area.x.saturating_add(area.width.saturating_sub(1)),
+            NavPosition::Right => area.x,
+        };
         hits.push(
             Rect {
-                x: area.x.saturating_add(area.width.saturating_sub(1)),
+                x,
                 y: area.y,
                 width: 1,
                 height: area.height,

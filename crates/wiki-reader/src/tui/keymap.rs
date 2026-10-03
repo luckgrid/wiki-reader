@@ -498,14 +498,14 @@ pub static BINDINGS: &[Binding] = &[
         keys: "←",
         scope: BindingScope::Viewer,
         action: Some(Action::ViewerLeft),
-        help: "Cursor left (at column 0: focus side nav)",
+        help: "Cursor left (at edge toward nav: focus side nav)",
         matcher: Some(Matcher::PlainCode(KeyCode::Left)),
     },
     Binding {
         keys: "→",
         scope: BindingScope::Viewer,
         action: Some(Action::ViewerRight),
-        help: "Cursor right",
+        help: "Cursor right (at edge toward nav: focus side nav)",
         matcher: Some(Matcher::PlainCode(KeyCode::Right)),
     },
     Binding {

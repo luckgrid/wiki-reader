@@ -1,6 +1,7 @@
 //! Five-region layout with responsive side-nav width and chrome insets.
 
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use wiki_reader_core::config::NavPosition;
 
 /// Rows consumed by nav pane chrome: top/bottom borders + search + gap.
 pub const NAV_CHROME_ROWS: u16 = 4;
@@ -82,8 +83,14 @@ pub fn nav_width(term_width: u16, nav_forced: bool, preferred: Option<u16>) -> O
 /// Split `area` into the regions.
 ///
 /// `nav_visible` is honored at every width: docked when ≥80, overlay when &lt;80.
+/// Docked nav follows `position`; narrow overlay always opens from the left.
 #[must_use]
-pub fn split(area: Rect, nav_visible: bool, preferred_nav: Option<u16>) -> Regions {
+pub fn split(
+    area: Rect,
+    nav_visible: bool,
+    preferred_nav: Option<u16>,
+    position: NavPosition,
+) -> Regions {
     let vert = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -113,11 +120,18 @@ pub fn split(area: Rect, nav_visible: bool, preferred_nav: Option<u16>) -> Regio
             };
             (nav, mid)
         } else {
+            let constraints = match position {
+                NavPosition::Left => [Constraint::Length(w), Constraint::Min(10)],
+                NavPosition::Right => [Constraint::Min(10), Constraint::Length(w)],
+            };
             let cols = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Length(w), Constraint::Min(10)])
+                .constraints(constraints)
                 .split(mid);
-            (cols[0], cols[1])
+            match position {
+                NavPosition::Left => (cols[0], cols[1]),
+                NavPosition::Right => (cols[1], cols[0]),
+            }
         }
     } else {
         (
@@ -200,9 +214,12 @@ mod tests {
             width: 120,
             height: 24,
         };
-        assert_eq!(split(wide, false, None).side_nav.width, 0);
-        assert!(split(wide, true, None).side_nav.width > 0);
-        assert!(!split(wide, true, None).nav_overlay);
+        assert_eq!(
+            split(wide, false, None, NavPosition::Left).side_nav.width,
+            0
+        );
+        assert!(split(wide, true, None, NavPosition::Left).side_nav.width > 0);
+        assert!(!split(wide, true, None, NavPosition::Left).nav_overlay);
 
         let narrow = Rect {
             x: 0,
@@ -210,9 +227,12 @@ mod tests {
             width: 60,
             height: 24,
         };
-        assert_eq!(split(narrow, false, None).side_nav.width, 0);
-        assert!(split(narrow, true, None).side_nav.width > 0);
-        assert!(split(narrow, true, None).nav_overlay);
+        assert_eq!(
+            split(narrow, false, None, NavPosition::Left).side_nav.width,
+            0
+        );
+        assert!(split(narrow, true, None, NavPosition::Left).side_nav.width > 0);
+        assert!(split(narrow, true, None, NavPosition::Left).nav_overlay);
     }
 
     #[test]
@@ -223,7 +243,7 @@ mod tests {
             width: 80,
             height: 40,
         };
-        let r = split(area, true, None);
+        let r = split(area, true, None, NavPosition::Left);
         assert_eq!(r.header.y, 0);
         assert_eq!(r.side_nav.y, 1);
         assert_eq!(r.status.y, 39);
@@ -238,7 +258,32 @@ mod tests {
             width: 120,
             height: 24,
         };
-        assert_eq!(split(area, true, Some(40)).side_nav.width, 40);
-        assert_eq!(split(area, true, Some(8)).side_nav.width, NAV_WIDTH_MIN);
+        assert_eq!(
+            split(area, true, Some(40), NavPosition::Left)
+                .side_nav
+                .width,
+            40
+        );
+        assert_eq!(
+            split(area, true, Some(8), NavPosition::Left).side_nav.width,
+            NAV_WIDTH_MIN
+        );
+    }
+
+    #[test]
+    fn split_puts_nav_on_the_right_when_configured() {
+        let area = Rect {
+            x: 0,
+            y: 0,
+            width: 120,
+            height: 24,
+        };
+        let left = split(area, true, Some(30), NavPosition::Left);
+        let right = split(area, true, Some(30), NavPosition::Right);
+        assert_eq!(left.side_nav.x, 0);
+        assert_eq!(left.viewer.x, 30);
+        assert_eq!(right.viewer.x, 0);
+        assert_eq!(right.side_nav.x, 90);
+        assert_eq!(right.side_nav.width, 30);
     }
 }

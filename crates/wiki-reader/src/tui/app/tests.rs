@@ -10,6 +10,7 @@ use ratatui::backend::TestBackend;
 use ratatui::crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use wiki_reader_core::config::NavPosition;
 use wiki_reader_core::nav::{NavStop, NodeId};
 use wiki_reader_core::provider::PageKey;
 
@@ -78,7 +79,7 @@ fn viewer_text_width_matches_painted_content() {
         width: 80,
         height: 24,
     };
-    let regions = layout::split(area, true, None);
+    let regions = layout::split(area, true, None, NavPosition::Left);
     let want = layout::viewer_text_width(regions.viewer);
     let inner_w = regions.viewer.width.saturating_sub(2);
     let painted = inner_w.saturating_sub(VIEWER_LEFT_PAD).min(100);
@@ -140,6 +141,7 @@ fn cursor_row_background_fills_full_viewer_width() {
             },
             true,
             None,
+            NavPosition::Left,
         );
         regions.viewer.x + 1 // after left border
     };
@@ -335,7 +337,8 @@ fn nav_divider_drag_changes_width_and_clamps() {
                 height: 24
             },
             true,
-            app.nav_width
+            app.nav_width,
+            NavPosition::Left,
         )
         .side_nav
         .width,
@@ -388,6 +391,7 @@ fn narrow_terminal_ignores_stored_nav_width() {
         },
         true,
         app.nav_width,
+        NavPosition::Left,
     );
     // Overlay uses clamp(16,30), not the stored 40.
     assert!(regions.nav_overlay);
@@ -1452,6 +1456,43 @@ fn drag_from_a_link_selects_instead_of_following() {
         "stayed on the page"
     );
     assert!(app.selection.is_some_and(|s| !s.is_empty()));
+}
+
+#[test]
+fn nav_on_the_right_draws_after_the_viewer() {
+    let (mut app, _tmp) = app_with_config("[nav]\nposition = \"right\"\n");
+    assert_eq!(app.nav_position, NavPosition::Right);
+    let _ = draw_app(&mut app, 120, 24);
+    let regions = crate::tui::layout::split(
+        ratatui::layout::Rect {
+            x: 0,
+            y: 0,
+            width: 120,
+            height: 24,
+        },
+        true,
+        app.nav_width,
+        app.nav_position,
+    );
+    assert!(regions.viewer.x < regions.side_nav.x);
+    assert_eq!(regions.viewer.x, 0);
+}
+
+#[test]
+fn viewer_right_at_end_focuses_nav_when_nav_is_right() {
+    let (mut app, _tmp) = app_with_config("[nav]\nposition = \"right\"\n");
+    let _ = draw_app(&mut app, 100, 40);
+    let line = row_of(&app, "Worked Example Wiki");
+    app.update(Action::SetCursorLine(line));
+    assert_eq!(app.focus, FocusPane::Viewer);
+    // Walk to the end of the row, then one more Right hands focus to the nav.
+    for _ in 0..200 {
+        app.update(Action::ViewerRight);
+        if app.focus == FocusPane::Nav {
+            break;
+        }
+    }
+    assert_eq!(app.focus, FocusPane::Nav);
 }
 
 #[test]

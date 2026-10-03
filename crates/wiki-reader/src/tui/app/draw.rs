@@ -16,7 +16,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     app.hit_map.clear();
     let area = frame.area();
     app.sync_nav_for_width(area.width);
-    let regions = layout::split(area, app.nav_visible, app.nav_width);
+    let regions = layout::split(area, app.nav_visible, app.nav_width, app.nav_position);
     let text_width = layout::viewer_text_width(regions.viewer);
     app.ensure_layout_width(text_width);
     // Only a drawn nav has a real viewport. While it is hidden the last value
@@ -119,6 +119,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
             app.nav_scroll,
             app.focus == FocusPane::Nav && !overlay_open,
             app.navigator.label_mode(),
+            app.nav_position,
             &theme,
             &mut app.hit_map,
         );
