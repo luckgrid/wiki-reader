@@ -4487,3 +4487,65 @@ fn copy_page_path_absolute_uses_collection_root() {
     let want = app.provider.root().join("README.md");
     assert_eq!(PathBuf::from(&copied[0]), want);
 }
+
+const GRID_MD: &str = "# T\n\n| Name | N |\n|---|---|\n| Bob | 10 |\n| alice | 9 |\n";
+
+fn modal_key(app: &mut App, keys: &str) {
+    use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    for c in keys.chars() {
+        let code = if c == '\n' {
+            KeyCode::Esc
+        } else {
+            KeyCode::Char(c)
+        };
+        app.update(Action::ModalKey(KeyEvent::new(code, KeyModifiers::NONE)));
+    }
+}
+
+fn screen(term: &Terminal<TestBackend>) -> String {
+    let buf = term.backend().buffer();
+    (0..buf.area.height)
+        .map(|y| {
+            (0..buf.area.width)
+                .map(|x| buf[(x, y)].symbol())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn expand_table_action_opens_the_modal_and_esc_closes_it() {
+    let (_d, mut app, _log) = app_with_page(GRID_MD);
+    let _ = draw_app(&mut app, 80, 24);
+    app.update(Action::FocusViewer);
+    app.focused_item = None;
+    app.cursor_line = 0;
+    app.update(Action::ViewerTab);
+    let it = app.focus_list()[app.focused_item.expect("focused")].clone();
+    assert_eq!(it.kind, FocusTarget::BlockAction);
+    assert_eq!(app.cursor_line, it.line.unwrap());
+    app.update(Action::ViewerActivate);
+    assert!(app.modal.is_some());
+    assert_eq!(app.input_mode, InputMode::Modal);
+    let term = draw_app(&mut app, 80, 24);
+    let s = screen(&term);
+    assert!(s.contains("Table (line 3)") && s.contains("alice"), "{s}");
+    modal_key(&mut app, "\n");
+    assert!(app.modal.is_none());
+    assert_eq!(app.input_mode, InputMode::Normal);
+}
+
+#[test]
+fn enter_inside_a_table_opens_it_and_modal_copies_a_row() {
+    let (_d, mut app, log) = app_with_page(GRID_MD);
+    let _ = draw_app(&mut app, 80, 24);
+    app.update(Action::FocusViewer);
+    app.focused_item = None;
+    app.cursor_line = row_of(&app, "alice");
+    app.update(Action::ViewerActivate);
+    assert!(app.modal.is_some(), "Enter on a table row opens the modal");
+    // Sort by name: alice first, then copy that row.
+    modal_key(&mut app, "sY");
+    assert_eq!(log.lock().unwrap().as_slice(), ["alice\t9"]);
+}

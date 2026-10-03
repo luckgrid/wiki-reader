@@ -86,6 +86,12 @@ impl RenderedViewerDoc {
         &self.inner.block_actions
     }
 
+    /// Cell grid of every table, document order.
+    #[must_use]
+    pub fn tables(&self) -> &[wiki_reader_render::DocTable] {
+        &self.inner.tables
+    }
+
     /// Source line (1-based) for rendered cursor line (0-based).
     #[must_use]
     pub fn source_line_for_rendered(&self, rendered_line: u32) -> u32 {

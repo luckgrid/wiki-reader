@@ -116,6 +116,8 @@ pub struct RenderedDoc {
     pub links: Vec<LinkSpan>,
     /// Focusable block actions (frontmatter / table / code), document order.
     pub block_actions: Vec<BlockAction>,
+    /// Cell grid of every table, document order (P3-14 table viewer).
+    pub tables: Vec<DocTable>,
     /// 1-based **rendered** line where each content block starts.
     pub block_starts: Vec<u32>,
     /// Rendered line (0-based) → source line (1-based), monotonic.
@@ -130,6 +132,21 @@ pub struct RenderedDoc {
     pub updated: String,
 }
 
+/// One table's cell grid (plain cell text, links flattened), for the table viewer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocTable {
+    /// Source line (1-based) of the header row.
+    pub source_line: u32,
+    /// 0-based display line of the table's first row.
+    pub line: u32,
+    /// Display rows the table occupies.
+    pub height: u32,
+    /// Header cells.
+    pub header: Vec<String>,
+    /// Body rows; every row has `header.len()` cells.
+    pub rows: Vec<Vec<String>>,
+}
+
 /// Kind of a Tab-cycle block action (BA / P2-03).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlockActionKind {
@@ -137,6 +154,8 @@ pub enum BlockActionKind {
     ToggleFrontmatter,
     /// Copy a fenced code block (OSC 52).
     CopyCode,
+    /// Open the table in the modal viewer; `payload` is the index into [`RenderedDoc::tables`].
+    ExpandTable,
 }
 
 /// One focusable block action in document order.
@@ -148,7 +167,8 @@ pub struct BlockAction {
     pub line: u32,
     /// Display columns `[start, end)` on that line.
     pub cols: (u16, u16),
-    /// For [`BlockActionKind::CopyCode`]: code body. Else empty.
+    /// For [`BlockActionKind::CopyCode`]: code body. For [`BlockActionKind::ExpandTable`]: table
+    /// index. Else empty.
     pub payload: String,
 }
 
@@ -158,6 +178,7 @@ fn content_block_id(kind: BlockActionKind, text: &str) -> u32 {
     h ^= match kind {
         BlockActionKind::ToggleFrontmatter => 1,
         BlockActionKind::CopyCode => 3,
+        BlockActionKind::ExpandTable => 4,
     };
     h = h.wrapping_mul(0x0100_0193);
     for b in text.as_bytes().iter().take(256) {
@@ -313,6 +334,7 @@ pub fn render_with(
         styled: state.styled,
         links: state.links,
         block_actions: state.block_actions,
+        tables: state.tables,
         block_starts: state.block_starts,
         source_map,
         headings: state.headings,
@@ -370,6 +392,7 @@ struct LayoutState<'a> {
     styled: Vec<StyledLine>,
     links: Vec<LinkSpan>,
     block_actions: Vec<BlockAction>,
+    tables: Vec<DocTable>,
     block_starts: Vec<u32>,
     headings: Vec<(String, u32)>,
     /// Current open line being built (spans not yet committed).
@@ -453,6 +476,7 @@ impl<'a> LayoutState<'a> {
             styled: Vec::new(),
             links: Vec::new(),
             block_actions: Vec::new(),
+            tables: Vec::new(),
             block_starts: Vec::new(),
             headings: Vec::new(),
             cur: Vec::new(),
@@ -1615,7 +1639,54 @@ impl<'a> LayoutState<'a> {
         s.trim().to_owned()
     }
 
+    /// Lay the table out, then record its cell grid and an expand action.
     fn flush_table(&mut self) {
+        let start = self.styled.len();
+        let has_header = self.table_header_done;
+        let grid = self.table_rows.clone();
+        self.layout_table();
+        let Some((source_line, first)) = grid.first().cloned() else {
+            return;
+        };
+        let cols = grid.iter().map(|(_, c)| c.len()).max().unwrap_or(1).max(1);
+        let pad = |mut row: Vec<String>| {
+            row.resize(cols, String::new());
+            row
+        };
+        let mut rows = grid.into_iter().map(|(_, c)| pad(c));
+        // ponytail: a table without a header row (can't happen with GFM) gets an empty header.
+        let header = if has_header {
+            rows.next().unwrap_or_default()
+        } else {
+            vec![String::new(); cols]
+        };
+        let rows: Vec<Vec<String>> = rows.collect();
+        let fingerprint = format!(
+            "{}\n{}",
+            first.join("\t"),
+            rows.first().map_or(String::new(), |r| r.join("\t"))
+        );
+        let line = u32::try_from(start).unwrap_or(0);
+        let width = self.styled.get(start).map_or(1, |l| {
+            u16::try_from(l.plain().width().min(usize::from(u16::MAX))).unwrap_or(1)
+        });
+        self.block_actions.push(BlockAction {
+            id: content_block_id(BlockActionKind::ExpandTable, &fingerprint),
+            kind: BlockActionKind::ExpandTable,
+            line,
+            cols: (0, width.max(1)),
+            payload: self.tables.len().to_string(),
+        });
+        self.tables.push(DocTable {
+            source_line,
+            line,
+            height: u32::try_from(self.styled.len() - start).unwrap_or(0),
+            header,
+            rows,
+        });
+    }
+
+    fn layout_table(&mut self) {
         if self.table_rows.is_empty() {
             self.table_links.clear();
             return;

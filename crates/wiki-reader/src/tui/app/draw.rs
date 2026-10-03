@@ -42,7 +42,8 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     let crumbs = app.navigator.nav().tree.breadcrumb(&page);
     let nav = app.navigator.nav();
     // A popup owns the keys: both panes behind it drop their active colours.
-    let overlay_open = app.search.is_some() || app.help.is_some() || app.options.is_some();
+    let overlay_open =
+        app.search.is_some() || app.help.is_some() || app.options.is_some() || app.modal.is_some();
 
     header::draw(frame, regions.header, &crumbs, &theme, &mut app.hit_map);
 
@@ -145,7 +146,9 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         frame,
         regions.status,
         &StatusModel {
-            mode_label: if app.search.is_some() {
+            mode_label: if app.modal.is_some() {
+                "TABLE"
+            } else if app.search.is_some() {
                 "SEARCH"
             } else if app.help.is_some() {
                 "HELP"
@@ -199,6 +202,10 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         if let Some(opts) = app.options.as_mut() {
             draw_options_overlay(frame, area, opts, &values, &theme, &mut app.hit_map);
         }
+    }
+    // Last, over pictures and every other popup (ADR-0004 draw order).
+    if let Some(modal) = app.modal.as_mut() {
+        crate::tui::modal_viewer::draw(frame, area, modal.as_mut(), &theme, &mut app.hit_map);
     }
 }
 
@@ -699,5 +706,6 @@ fn block_action_status(app: &App, target: &str) -> String {
             }
         }
         wiki_reader_render::BlockActionKind::CopyCode => "copy code".into(),
+        wiki_reader_render::BlockActionKind::ExpandTable => "expand table (Enter)".into(),
     }
 }
