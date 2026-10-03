@@ -1,7 +1,7 @@
-//! View tabs: one outlined group on the pane's top border, styled like the
-//! prev/next footer buttons. The active tab is filled peach while the View has
-//! focus; with the Nav focused every tab stays outlined.
+//! View tabs: a fully closed group in a dedicated three-row strip.
+//! Active selection uses the accent with View focus and a darker fill with Nav focus.
 
+use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
@@ -11,39 +11,50 @@ use crate::tui::hit::{Hit, HitMap};
 use crate::tui::regions::footer::{col_width, ellipsis};
 use crate::tui::theme::Theme;
 
-fn stem(tab: &Tab) -> String {
+fn filename(tab: &Tab) -> String {
     tab.current()
         .page
         .relative_path
-        .file_stem()
+        .file_name()
         .map_or_else(|| "?".into(), |s| s.to_string_lossy().into_owned())
 }
 
 /// Longest label a tab shows before it is ellipsized.
 const MAX_LABEL: usize = 18;
 
-/// Top-border title: one outlined group `┤ a × │ b × ├`, tabs separated by a
-/// single `│`. Registers [`Hit::Tab`] over each padded cell and
+/// Middle row of a closed group `│ a.md × │ b.md × │`, with shared separators.
+/// Registers [`Hit::Tab`] over each padded cell and
 /// [`Hit::TabClose`] over its `×`.
 ///
-/// `area` is the whole View pane. Tabs that do not fit in the border are
-/// dropped from the right (the active tab is always kept if it fits).
+/// `area` is the top strip. Reserve the active tab first, truncate labels to
+/// fit, then admit whole remaining cells in order. Partial strips have no hits.
 #[must_use]
+#[allow(clippy::too_many_arguments)]
 pub fn titles(
     area: Rect,
     tabs: &[Tab],
     active: usize,
     pane_focused: bool,
+    muted: bool,
     theme: &Theme,
     hits: &mut HitMap,
 ) -> Line<'static> {
-    // `┤` and `├` take one column each.
-    let inner_w = usize::from(area.width.saturating_sub(2)).saturating_sub(2);
+    if area.height < 3 || area.width < 9 {
+        return Line::default();
+    }
+    // Pane sides and the closed group's two borders.
+    let inner_w = usize::from(area.width - 4);
     let border = theme.border(pane_focused);
-    let fill = Style::default().bg(theme.peach).fg(theme.on_peach);
+    let fill = if pane_focused {
+        Style::default().bg(theme.peach).fg(theme.on_peach)
+    } else {
+        Style::default()
+            .bg(theme.tab_unfocused())
+            .fg(ratatui::style::Color::White)
+    };
     let labels: Vec<_> = tabs
         .iter()
-        .map(|tab| ellipsis(&stem(tab), MAX_LABEL))
+        .map(|tab| ellipsis(&filename(tab), MAX_LABEL.min(inner_w.saturating_sub(4))))
         .collect();
     let widths: Vec<_> = labels
         .iter()
@@ -86,7 +97,7 @@ pub fn titles(
         hits.push(
             Rect {
                 x,
-                y: area.y,
+                y: area.y + 1,
                 width: w16,
                 height: 1,
             },
@@ -99,13 +110,13 @@ pub fn titles(
         hits.push(
             Rect {
                 x: close_x,
-                y: area.y,
+                y: area.y + 1,
                 width: 1,
                 height: 1,
             },
             Hit::TabClose(i),
         );
-        let selected = i == active && pane_focused;
+        let selected = i == active && !muted;
         cells.push(Span::styled(text, if selected { fill } else { border }));
         x = x.saturating_add(w16);
     }
@@ -116,4 +127,28 @@ pub fn titles(
     spans.extend(cells);
     spans.push(Span::styled("├", border));
     Line::from(spans).alignment(Alignment::Left)
+}
+
+/// Paint the complete tab group; only middle-row labels and × have hits.
+#[allow(clippy::too_many_arguments)]
+pub fn draw(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    tabs: &[Tab],
+    active: usize,
+    pane_focused: bool,
+    muted: bool,
+    theme: &Theme,
+    hits: &mut HitMap,
+) {
+    let line = titles(area, tabs, active, pane_focused, muted, theme, hits);
+    let width = u16::try_from(line.width()).unwrap_or(0);
+    if width > 0 {
+        crate::tui::regions::footer::draw_closed(
+            frame,
+            Rect::new(area.x + 1, area.y, width, area.height),
+            line,
+            theme.border(pane_focused),
+        );
+    }
 }

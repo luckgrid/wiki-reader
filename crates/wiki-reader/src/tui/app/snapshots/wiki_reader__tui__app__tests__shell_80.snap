@@ -3,12 +3,14 @@ source: crates/wiki-reader/src/tui/app/tests.rs
 expression: out
 ---
  Worked Example Wiki                                                        ◫ ✕ 
-┌────────────────────────┐┌┤ README × ├────────────────────────────────────────┐
-│▌/ Search…              ││▌── frontmatter ▸ ──────────────────────────────────│
+┌────────────────────────┐┌┌─────────────┐─────────────────────────────────────┐
+│▌/ Search…              │││ README.md × │                                     │
+│                        ││└─────────────┘                                     │
+│▌ Worked Example Wiki   ││▌── frontmatter ▸ ──────────────────────────────────│
+│  ▸ architecture        ││                                                    │
+│  ▸ decisions           ││ Worked Example Wiki                                │
+│                        ││ ────────────────────────────────────────           │
 │                        ││                                                    │
-│▌ Worked Example Wiki   ││ Worked Example Wiki                                │
-│  ▸ architecture        ││ ────────────────────────────────────────           │
-│  ▸ decisions           ││                                                    │
 │                        ││ A tiny markdown collection used as the default     │
 │                        ││ smoke-test root.                                   │
 │                        ││                                                    │
@@ -20,9 +22,7 @@ expression: out
 │                        ││                                                    │
 │                        ││                                                    │
 │                        ││                                                    │
-│                        ││                                                    │
-│                        ││                                                    │
-│                        ││                                                    │
-│                        ││                                                    │
-└────────────────────────┘└──────────────────────────┤ Architecture Overvi… › ├┘
+│                        ││                          ┌────────────────────────┐│
+│                        ││                          │ Architecture Overvi… › ││
+└────────────────────────┘└──────────────────────────└────────────────────────┘┘
   VIEW  · README.md · L1:C1 9% · 2026-09-28 · draft · 29w · 1m              ? ⚙

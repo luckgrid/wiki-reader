@@ -16,21 +16,22 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 
 <!-- ui-diagram:start -->
 ```text
- Worked Example Wiki › architecture › design-system › Token Projection     ◫ ✕
-┌──────────────────────────┐┌┤ tokens × ├────────────────────────────────────┐
-│▌/ Search…                ││ ── frontmatter ▸ ──────────────────────────────│
-│                          ││                                                │
-│  Worked Example Wiki     ││▌Token Projection                               │
-│  ▾ architecture          ││ ────────────────────────────────────────       │
-│     Architecture Overview││                                                │
-│     ▾ design-system      ││ The reusable adapter stays semantic-only;      │
-│        Design System     ││ see [ADR-0003](../decisions/0003.md).          │
-│▌       Token Projection  ││                                                │
-│     ▸ wfos               ││ ┌ Linked from ─────────────────────────────┐   │
-│  ▸ decisions             ││ │ Worked Example Wiki                      │   │
-│                          ││ └──────────────────────────────────────────┘   │
-└──────────────────────────┘└┤ ‹ Design System ├────────────┤ Workflow OS › ├┘
- VIEW  · architecture/design-system/tokens.md · L3:C1 9% · draft          ? ⚙
+ Worked Example Wiki                                                        ◫ ✕
+┌────────────────────────┐┌┌─────────────┐─────────────────────────────────────┐
+│▌/ Search…              │││ README.md × │                                     │
+│                        ││└─────────────┘                                     │
+│▌ Worked Example Wiki   ││▌── frontmatter ▸ ──────────────────────────────────│
+│  ▸ architecture        ││                                                    │
+│  ▸ decisions           ││ Worked Example Wiki                                │
+│                        ││ ────────────────────────────────────────           │
+│                        ││                                                    │
+│                        ││ A tiny markdown collection used as the default     │
+│                        ││ smoke-test root.                                   │
+│                        ││                                                    │
+│                        ││                          ┌────────────────────────┐│
+│                        ││                          │ Architecture Overvi… › ││
+└────────────────────────┘└──────────────────────────└────────────────────────┘┘
+  VIEW  · README.md · L1:C1 9% · 2026-09-28 · draft · 29w · 1m              ? ⚙
 ```
 <!-- ui-diagram:end -->
 
@@ -50,18 +51,18 @@ Regions:
 
 - **Header:** one padded row with the breadcrumb on the left and the icon buttons on the right, directly above the panes. The last crumb is the current page and is drawn gray (read-only); the others are links.
 - **Side nav:** a bordered pane holding the search row and the page tree. Neither pane has a title tag; the status pill (`NAV` / `VIEW`) says which one has focus. Its width defaults to 26 (30 at ≥ 120 columns) and can be dragged.
-- **View:** a bordered pane whose **tabs sit on the top border** and whose **prev/next footer is drawn on the bottom border**, as outlined buttons: the tabs one group (`┤ a × │ b × ├`, a single `│` between tabs), the footer links `┤ ‹ label ├`. Its first line sits directly under the top border, level with the Nav search row, and the cursor line is marked `▌`.
+- **View:** a bordered pane with dedicated **three-row tab and prev/next strips**. Tabs form one fully closed group with shared separators; prev/next are separate fully closed boxes. Middle rows carry labels and hits; top/bottom rows close the boxes. Article content starts after the top strip and ends before the bottom strip; the cursor line is marked `▌`.
 - **Status bar:** one padded row directly under the panes.
 
-**Tabs** are always shown: the current page's tab is there even when it is the only one (`┤ tokens × ├`, `×` closes). Like the footer buttons, the active tab fills peach only while the View has focus; with the Nav focused every tab stays outlined. A right-hand widget slot is reserved for Phase 4.
+**Tabs** show actual filenames including extensions (`tokens.md`, `×` closes), even for a single page whenever a whole box fits. The active tab fills peach with View focus and retains a darker accent-derived selection with white text with Nav focus. Other tabs remain unfilled. A right-hand widget slot is reserved for Phase 4.
 
-### Approved Batch A layout (P3-18 implemented; P3-17 planned)
+### Batch A layout (P3-18 / P3-17)
 
-P3-18 places ⚙ at the full-width layout footer's far right, below both panes, with `?` immediately to its left; the header retains ◫ and ✕. P3-17 will give the View dedicated **three-row top and bottom strips** for fully closed tab and footer-button boxes. The middle row carries labels/hit regions; the other two rows carry borders. Tabs use the actual filename including its extension. The active tab keeps a darker selected background with Nav focus, and the normal accent selection with View focus.
+P3-18 places ⚙ at the full-width layout footer's far right, below both panes, with `?` immediately to its left; the header retains ◫ and ✕. P3-17 gives the View dedicated **three-row top and bottom strips** for fully closed tab and footer-button boxes. The middle row carries labels/hit regions; the other two rows carry borders. Tabs use the actual filename including its extension. The active tab keeps a darker selected background with Nav focus, and the normal accent selection with View focus.
 
-The layout footer reserves space for `?` / ⚙ before laying out status fields and messages. The View footer independently divides its width between prev/next. Labels truncate with `…`; unavailable links remain absent. Controls must not overlap, including at 40/60 columns and with Nav on either side. Compared with today's border-row controls, the strips consume two additional article rows at each edge. At insufficient height, clip empty/content rows safely without underflow; retain the header/status rows and only register visible control hits. P3-01 sticky headings are a separate row/behavior, not implemented by these boxes.
+The layout footer reserves space for `?` / ⚙ before laying out status fields and messages. The View footer independently divides its width between prev/next. Labels truncate with `…`; unavailable links remain absent. Controls must not overlap, including at 40/60 columns and with Nav on either side. Compared with today's border-row controls, the strips consume two additional article rows at each edge. Collision policy: reserve the active tab first, ellipsizing its filename to the available label width (maximum 18 columns), then add other tabs in order only if each whole cell and separator fits. Hide all tabs when fewer than seven interior columns are available. Prev/next each receive half the interior strip width; ellipsize labels and hide a button if its half cannot fit its borders, padding, arrow and one label column. Hits occupy only the middle row, never the border rows. Short-terminal policy: retain the one-row layout header/footer whenever height permits; give the View's top strip up to three rows first, then its bottom strip up to three remaining rows. Draw a control only when its full three-row strip fits. Article rows are the saturating remainder after six chrome rows; partial strips have no controls or hits. P3-01 sticky headings are explicitly deferred by operator decision before this geometry change; no additional sticky row is reserved.
 
-The diagram and descriptions below document the current border-row implementation; refresh the final assets in P3-23 after P3-17 lands.
+The ASCII diagram documents the strip layout; screenshots will be refreshed in P3-23 after the UI settles.
 
 ## Header (full width, 1 padded row)
 
@@ -125,11 +126,11 @@ After the last item, `Tab` wraps to the first. The focused item renders inverted
 
 **End of article:** "Linked from" pane (box-drawn with side borders: tag header, each entry's title and optional one-line summary as one focusable hit; Tab focus paints selection background across the entry and replaces the left `│` with a teal ▌). Summary comes from frontmatter or the first body paragraph as plain text (no markdown markup), truncated with `…` when it would wrap.
 
-Future: a **sticky section header** at the top of the viewer showing the heading of the section in view.
+Deferred (P3-01): a **sticky section header** at the top of the viewer showing the heading of the section in view. No extra row is reserved in this layout.
 
 ## View footer (prev/next)
 
-`┤ ‹ Prev title ├` on the left and `┤ Next title › ├` on the right, following side nav order ([content model](content-model.md)) but always using title-mode labels, regardless of `nav.labels`. They are outlined, padded buttons drawn on the **View pane's bottom border**, so they stay pinned while the article scrolls. The outline matches the pane border (teal when the View is focused, gray when the Nav is); a button reached with `Tab` or `f` fills peach with dark text. Each label is truncated with `…` to its half of the border so long titles cannot collide. Help / Options are not on this border; they belong to the layout footer below it. Both are clickable and bound to `[` / `]`. A side with no prev/next draws nothing, so the border runs unbroken.
+Fully closed `‹ Prev title` and `Next title ›` boxes sit on the left/right of the **View's dedicated three-row bottom strip**, following side nav order ([content model](content-model.md)) but always using title-mode labels, regardless of `nav.labels`. They remain pinned while the article scrolls; hits occupy their middle row only. The outline matches the pane border (teal when the View is focused, gray when the Nav is); a button reached with `Tab` or `f` fills peach with dark text. Each label is truncated with `…` to its half of the border so long titles cannot collide. Help / Options are not on this border; they belong to the layout footer below it. Both are clickable and bound to `[` / `]`. A side with no prev/next draws nothing in its half of the strip.
 
 ## Modal viewers
 

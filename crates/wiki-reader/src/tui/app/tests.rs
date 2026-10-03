@@ -2929,7 +2929,8 @@ fn tab_bar_hit_by_coordinate() {
     };
     let tab = rect_of(&app, Hit::Tab(0)).expect("Hit::Tab(0) after NewTab");
     let close = rect_of(&app, Hit::TabClose(0)).expect("Hit::TabClose(0)");
-    // Buttons sit on the View's top border: `┤ label × ├`.
+    // Hits occupy the middle row of the three-row tab strip.
+    assert_eq!(tab.y, 2);
     assert_eq!(tab.y, close.y);
     assert!(tab.width >= 7, "outlined button, got {}", tab.width);
     assert_eq!(app.hit_map.hit_at(tab.x, tab.y), Some(&Hit::Tab(0)));
@@ -2966,7 +2967,7 @@ fn narrow_tab_bar_keeps_the_active_tab_visible() {
 }
 
 #[test]
-fn single_tab_is_shown_and_only_highlighted_with_view_focus() {
+fn single_tab_keeps_darker_selection_with_nav_focus() {
     let root = fixture();
     let mut app = App::new(&root).unwrap();
     assert_eq!(app.navigator.tab_count(), 1);
@@ -2987,11 +2988,139 @@ fn single_tab_is_shown_and_only_highlighted_with_view_focus() {
     app.update(Action::FocusViewer);
     assert_eq!(tab_fill(&mut app), theme.peach, "active tab fills peach");
     app.update(Action::FocusNav);
+    assert_eq!(
+        tab_fill(&mut app),
+        theme.tab_unfocused(),
+        "Nav focus retains darker selection"
+    );
+    app.update(Action::OpenHelp);
     assert_ne!(
         tab_fill(&mut app),
-        theme.peach,
-        "Nav focus: tab not highlighted"
+        theme.tab_unfocused(),
+        "popup mutes tab selection"
     );
+}
+
+#[test]
+fn chrome_boxes_are_closed_and_only_middle_rows_are_clickable() {
+    for position in [NavPosition::Left, NavPosition::Right] {
+        for width in [40, 60, 80, 120] {
+            let mut app = App::new(&fixture()).unwrap();
+            app.nav_position = position;
+            app.update(Action::GoToPage(PageKey {
+                collection_id: app.navigator.index().collection_id.clone(),
+                relative_path: "architecture/design-system/tokens.md".into(),
+            }));
+            let terminal = draw_app(&mut app, width, 24);
+            let buf = terminal.backend().buffer();
+            assert_eq!(app.viewer_geom.top_y, 4);
+            assert_eq!(app.viewer_geom.rows, 16);
+            for (rect, hit) in app.hit_map.entries() {
+                let x = match hit {
+                    Hit::Tab(_) => rect.x - 1,
+                    Hit::Prev | Hit::Next => rect.x,
+                    _ => continue,
+                };
+                assert_eq!(buf[(x, rect.y - 1)].symbol(), "┌");
+                assert_eq!(buf[(x, rect.y)].symbol(), "│");
+                assert_eq!(buf[(x, rect.y + 1)].symbol(), "└");
+                for y in [rect.y - 1, rect.y + 1] {
+                    assert!(!matches!(
+                        app.hit_map.hit_at(rect.x, y),
+                        Some(Hit::Tab(_) | Hit::TabClose(_) | Hit::Prev | Hit::Next)
+                    ));
+                }
+            }
+            let tab_row: String = (0..width).map(|x| buf[(x, 2)].symbol()).collect();
+            assert!(tab_row.contains("tokens.md ×"));
+        }
+    }
+}
+
+#[test]
+fn tiny_chrome_widths_keep_active_tabs_and_non_overlapping_footer_hits() {
+    let mut app = App::new(&fixture()).unwrap();
+    for _ in 0..7 {
+        app.update(Action::NewTab);
+    }
+    for width in [1, 4, 8, 9, 12, 18, 40, 60, 120] {
+        let mut terminal = Terminal::new(TestBackend::new(width, 6)).unwrap();
+        let mut hits = HitMap::default();
+        terminal
+            .draw(|frame| {
+                crate::tui::regions::tabs::draw(
+                    frame,
+                    ratatui::layout::Rect::new(0, 0, width, 3),
+                    app.navigator.tabs(),
+                    app.navigator.active(),
+                    true,
+                    false,
+                    &app.theme,
+                    &mut hits,
+                );
+                crate::tui::regions::footer::draw(
+                    frame,
+                    ratatui::layout::Rect::new(0, 3, width, 3),
+                    Some("Long previous 界 title"),
+                    Some("Long next 界 title"),
+                    None,
+                    true,
+                    &app.theme,
+                    &mut hits,
+                );
+            })
+            .unwrap();
+        assert_eq!(
+            hits.entries()
+                .iter()
+                .any(|(_, hit)| *hit == Hit::Tab(app.navigator.active())),
+            width >= 9
+        );
+        for (rect, hit) in hits.entries() {
+            assert!(rect.x > 0 && rect.right() < width);
+            assert!(rect.y == 1 || rect.y == 4);
+            if matches!(hit, Hit::TabClose(_)) {
+                assert_eq!(terminal.backend().buffer()[(rect.x, rect.y)].symbol(), "×");
+            }
+        }
+        let footer: Vec<_> = hits
+            .entries()
+            .iter()
+            .filter(|(_, hit)| matches!(hit, Hit::Prev | Hit::Next))
+            .collect();
+        if footer.len() == 2 {
+            assert!(footer[0].0.intersection(footer[1].0).is_empty());
+        }
+    }
+}
+
+#[test]
+fn short_terminals_clip_whole_chrome_strips_and_keep_layout_controls() {
+    for height in 1..=10 {
+        let mut app = App::new(&fixture()).unwrap();
+        let terminal = draw_app(&mut app, 60, height);
+        let area = terminal.backend().buffer().area;
+        let regions = crate::tui::layout::split(area, false, None, NavPosition::Left);
+        if height >= 2 {
+            assert_eq!(regions.header.height, 1);
+            assert_eq!(regions.status.height, 1);
+        }
+        assert_eq!(
+            app.viewer_geom.rows,
+            regions.viewer.height.saturating_sub(6)
+        );
+        for (rect, hit) in app.hit_map.entries() {
+            assert!(rect.right() <= area.right() && rect.bottom() <= area.bottom());
+            if matches!(hit, Hit::Tab(_) | Hit::TabClose(_)) {
+                assert!(regions.viewer.height >= 3);
+                assert_eq!(rect.y, regions.viewer.y + 1);
+            }
+            if matches!(hit, Hit::Prev | Hit::Next) {
+                assert!(regions.viewer.height >= 6);
+                assert_eq!(rect.y, regions.viewer.bottom() - 2);
+            }
+        }
+    }
 }
 
 #[test]
@@ -3601,16 +3730,16 @@ fn footer_border(root: &Path, page: &str, w: u16) -> (App, String) {
     }));
     let terminal = draw_app(&mut app, w, 24);
     let buf = terminal.backend().buffer();
-    // Bottom border (Linked from may also draw └ earlier in the View).
-    let row = (0..buf.area.height)
-        .rev()
-        .map(|y| {
-            (0..buf.area.width)
-                .map(|x| buf[(x, y)].symbol())
-                .collect::<String>()
-        })
-        .find(|r| r.contains('└'))
-        .expect("bottom border row");
+    let y = app
+        .hit_map
+        .entries()
+        .iter()
+        .find(|(_, hit)| matches!(hit, Hit::Prev | Hit::Next))
+        .map(|(rect, _)| rect.y)
+        .expect("footer middle row");
+    let row = (0..buf.area.width)
+        .map(|x| buf[(x, y)].symbol())
+        .collect::<String>();
     (app, row)
 }
 
@@ -3621,7 +3750,7 @@ fn footer_missing_side_leaves_the_border_unbroken() {
     let (app, row) = footer_border(&root, "README.md", 100);
     assert!(!row.contains("‹"), "{row}");
     assert!(!row.contains('—'), "{row}");
-    assert!(row.contains("├"), "next button present: {row}");
+    assert!(row.contains(" › │"), "next button present: {row}");
     assert!(
         !app.hit_map
             .entries()
@@ -3631,7 +3760,7 @@ fn footer_missing_side_leaves_the_border_unbroken() {
     );
     // Padded outline buttons.
     let (_, row) = footer_border(&root, "architecture/design-system/tokens.md", 100);
-    assert!(row.contains("┤ ‹ Design System ├"), "{row}");
+    assert!(row.contains("│ ‹ Design System │"), "{row}");
 }
 
 #[test]
@@ -3643,14 +3772,13 @@ fn footer_button_colours_follow_pane_focus_and_selection() {
     let find_style = |app: &mut App| {
         let terminal = draw_app(app, 100, 24);
         let buf = terminal.backend().buffer();
-        // The View tabs sit on the top border; the footer buttons on the bottom one.
-        let y = (0..buf.area.height)
-            .rev()
-            .find(|&y| (0..buf.area.width).any(|x| buf[(x, y)].symbol() == "┤"))
-            .expect("footer row");
-        let x = (0..buf.area.width)
-            .find(|&x| buf[(x, y)].symbol() == "┤")
+        let (rect, _) = app
+            .hit_map
+            .entries()
+            .iter()
+            .find(|(_, hit)| *hit == Hit::Prev)
             .expect("prev button");
+        let (x, y) = (rect.x, rect.y);
         // The header breadcrumb also uses `›`; the next button is on the border row.
         let nx = (0..buf.area.width)
             .find(|&nx| buf[(nx, y)].symbol() == "›")
@@ -4575,7 +4703,10 @@ fn search_content_rows_end_in_an_ellipsis_and_footer_hugs_border() {
     let tail: Vec<char> = cut.chars().collect();
     let dots = tail.iter().rposition(|&c| c == '…').unwrap();
     assert!(
-        tail[dots + 1..].iter().all(|&c| c == ' ' || c == '│'),
+        tail[dots + 1..]
+            .iter()
+            .take_while(|&&c| c != '│')
+            .all(|&c| c == ' '),
         "ellipsis is the last text on the row: {cut}"
     );
     let footer = rows

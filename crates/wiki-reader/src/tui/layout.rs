@@ -9,13 +9,13 @@ pub const NAV_CHROME_ROWS: u16 = 4;
 /// Inner left padding in the viewer (cursor marker column; P2-19).
 pub const VIEWER_LEFT_PAD: u16 = 1;
 
-/// Blank rows between the View's top border and its first line.
-pub const VIEWER_TOP_PAD: u16 = 0;
+/// Dedicated rows at each edge for fully closed tab / prev-next boxes.
+pub const VIEWER_STRIP_ROWS: u16 = 3;
 
-/// Text rows visible inside a View pane of `height` (borders + top pad removed).
+/// Article rows after reserving the three-row top and bottom strips.
 #[must_use]
 pub fn viewer_visible_rows(height: u16) -> u16 {
-    height.saturating_sub(2 + VIEWER_TOP_PAD)
+    height.saturating_sub(2 * VIEWER_STRIP_ROWS)
 }
 
 /// Computed region rectangles for one frame.
@@ -25,7 +25,7 @@ pub struct Regions {
     pub header: Rect,
     /// Side nav (zero-sized when hidden).
     pub side_nav: Rect,
-    /// Viewer pane (prev/next live on the bottom border).
+    /// Viewer pane (tabs and prev/next occupy dedicated three-row strips).
     pub viewer: Rect,
     /// Status content row.
     pub status: Rect,
@@ -95,7 +95,7 @@ pub fn split(
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(1), // header
-            Constraint::Min(3),    // mid
+            Constraint::Min(0),    // mid: header/status retained on short terminals
             Constraint::Length(1), // status
         ])
         .split(area);

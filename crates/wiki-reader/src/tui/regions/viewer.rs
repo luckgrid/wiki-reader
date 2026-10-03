@@ -8,7 +8,7 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 
 use crate::tui::highlight::HlSpan;
 use crate::tui::hit::{Hit, HitMap};
-use crate::tui::layout::{VIEWER_LEFT_PAD, VIEWER_TOP_PAD};
+use crate::tui::layout::{VIEWER_LEFT_PAD, VIEWER_STRIP_ROWS};
 use crate::tui::selection::Selection;
 use crate::tui::text_col;
 use crate::tui::theme::Theme;
@@ -92,6 +92,7 @@ pub fn draw(
     selection: Option<Selection>,
     match_spans: &[(u32, u16, u16)],
     focused: bool,
+    chrome_muted: bool,
     focused_item: Option<&FocusItem>,
     focus_items: &[FocusItem],
     prev_label: Option<&str>,
@@ -108,8 +109,34 @@ pub fn draw(
 
     hits.push(area, Hit::FocusViewer);
 
-    let footer = crate::tui::regions::footer::titles(
-        area,
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(theme.border(focused));
+    frame.render_widget(block, area);
+    let top_rows = area.height.min(VIEWER_STRIP_ROWS);
+    let bottom_rows = area.height.saturating_sub(top_rows).min(VIEWER_STRIP_ROWS);
+    let top = Rect {
+        height: top_rows,
+        ..area
+    };
+    let bottom = Rect {
+        y: area.bottom() - bottom_rows,
+        height: bottom_rows,
+        ..area
+    };
+    crate::tui::regions::tabs::draw(
+        frame,
+        top,
+        tabs,
+        active_tab,
+        focused,
+        chrome_muted,
+        theme,
+        hits,
+    );
+    crate::tui::regions::footer::draw(
+        frame,
+        bottom,
         prev_label,
         next_label,
         footer_focus,
@@ -117,24 +144,11 @@ pub fn draw(
         theme,
         hits,
     );
-
-    let tab_bar = crate::tui::regions::tabs::titles(area, tabs, active_tab, focused, theme, hits);
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(theme.border(focused))
-        .title(tab_bar)
-        .title_bottom(footer.left)
-        .title_bottom(footer.right);
-    let bordered = block.inner(area);
-    frame.render_widget(block, area);
-    // Clamp so the pad can be flipped back to a non-zero value without a rewrite.
-    #[allow(clippy::unnecessary_min_or_max)]
-    let top_pad = VIEWER_TOP_PAD.min(bordered.height);
     let inner_area = Rect {
-        y: bordered.y.saturating_add(top_pad),
-        height: bordered.height.saturating_sub(top_pad),
-        ..bordered
+        x: area.x.saturating_add(1),
+        y: area.y.saturating_add(top_rows),
+        width: area.width.saturating_sub(2),
+        height: area.height.saturating_sub(top_rows + bottom_rows),
     };
 
     // Left pad column holds the ▌ cursor marker (P2-19); text starts one col in.

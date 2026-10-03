@@ -3,26 +3,26 @@ source: crates/wiki-reader/src/tui/app/tests.rs
 expression: out
 ---
  Worked Example Wiki › architecture › design-system › Token Projection      ◫ ✕ 
-┌────────────────────────┐┌┤ tokens × ├────────────────────────────────────────┐
-│▌/ Search…              ││▌── frontmatter ▸ ──────────────────────────────────│
+┌────────────────────────┐┌┌─────────────┐─────────────────────────────────────┐
+│▌/ Search…              │││ tokens.md × │                                     │
+│                        ││└─────────────┘                                     │
+│  README.md             ││▌── frontmatter ▸ ──────────────────────────────────│
+│  ▾ architecture        ││                                                    │
+│     README.md          ││ Token Projection                                   │
+│     ▾ design-system    ││ ────────────────────────────────────────           │
+│        README.md       ││                                                    │
+│▌       tokens.md       ││ The reusable adapter stays semantic-only; see      │
+│     ▸ wfos             ││ Design System and ADR-0001.                        │
+│  ▸ decisions           ││                                                    │
 │                        ││                                                    │
-│  README.md             ││ Token Projection                                   │
-│  ▾ architecture        ││ ────────────────────────────────────────           │
-│     README.md          ││                                                    │
-│     ▾ design-system    ││ The reusable adapter stays semantic-only; see      │
-│        README.md       ││ Design System and ADR-0001.                        │
-│▌       tokens.md       ││                                                    │
-│     ▸ wfos             ││                                                    │
-│  ▸ decisions           ││ ┌ Linked from ────────────────────────────────────┐│
+│                        ││ ┌ Linked from ────────────────────────────────────┐│
 │                        ││ │ Worked Example Wiki                             ││
 │                        ││ │ Minimal fixture collection for wiki-reader smo… ││
 │                        ││ ├─────────────────────────────────────────────────┤│
 │                        ││ │ Architecture Overview                           ││
 │                        ││ │ Landing page for the architecture section of t… ││
 │                        ││ ├─────────────────────────────────────────────────┤│
-│                        ││ │ Design System                                   ││
-│                        ││ │ Design-system section landing page.             ││
-│                        ││ └─────────────────────────────────────────────────┘│
-│                        ││                                                    │
-└────────────────────────┘└┤ ‹ Design System ├────────────────┤ Workflow OS › ├┘
+│                        ││┌─────────────────┐                ┌───────────────┐│
+│                        │││ ‹ Design System │                │ Workflow OS › ││
+└────────────────────────┘└└─────────────────┘────────────────└───────────────┘┘
   NAV  · architecture/design-system/tokens.md · L1:C1 5% · 2026-09-28       ? ⚙

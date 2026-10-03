@@ -3,12 +3,14 @@ source: crates/wiki-reader/src/tui/app/tests.rs
 expression: tall
 ---
  Worked Example Wiki                                                                                                ◫ ✕ 
-┌────────────────────────────┐┌┤ README × ├────────────────────────────────────────────────────────────────────────────┐
-│▌/ Search…                  ││▌── frontmatter ▸ ──────────────────────────────────────────────────────────────────────│
+┌────────────────────────────┐┌┌─────────────┐─────────────────────────────────────────────────────────────────────────┐
+│▌/ Search…                  │││ README.md × │                                                                         │
+│                            ││└─────────────┘                                                                         │
+│▌ Worked Example Wiki       ││▌── frontmatter ▸ ──────────────────────────────────────────────────────────────────────│
+│  ▸ architecture            ││                                                                                        │
+│  ▸ decisions               ││ Worked Example Wiki                                                                    │
+│                            ││ ────────────────────────────────────────                                               │
 │                            ││                                                                                        │
-│▌ Worked Example Wiki       ││ Worked Example Wiki                                                                    │
-│  ▸ architecture            ││ ────────────────────────────────────────                                               │
-│  ▸ decisions               ││                                                                                        │
 │                            ││ A tiny markdown collection used as the default smoke-test root.                        │
 │                            ││                                                                                        │
 │                            ││ Start at Architecture Overview, follow Token Projection, then return via back when     │
@@ -36,9 +38,7 @@ expression: tall
 │                            ││                                                                                        │
 │                            ││                                                                                        │
 │                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-└────────────────────────────┘└─────────────────────────────────────────────────────────────┤ Architecture Overview › ├┘
+│                            ││                                                             ┌─────────────────────────┐│
+│                            ││                                                             │ Architecture Overview › ││
+└────────────────────────────┘└─────────────────────────────────────────────────────────────└─────────────────────────┘┘
   VIEW  · README.md · L1:C1 11% · 2026-09-28 · draft · 29w · 1m                                                     ? ⚙

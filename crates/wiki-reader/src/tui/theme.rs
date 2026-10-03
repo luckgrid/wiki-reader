@@ -722,6 +722,16 @@ impl Theme {
         Style::default().fg(fg)
     }
 
+    /// Darkened accent for the active tab while focus is elsewhere.
+    /// White text remains legible in both dark and light presets.
+    #[must_use]
+    pub fn tab_unfocused(&self) -> Color {
+        match self.peach {
+            Color::Rgb(r, g, b) => Color::Rgb(r / 3, g / 3, b / 3),
+            _ => self.tab_inactive,
+        }
+    }
+
     /// Border for a pane; `focused` uses `border_focus`.
     #[must_use]
     pub fn border(&self, focused: bool) -> Style {
@@ -790,6 +800,16 @@ mod tests {
         match c {
             Color::Rgb(r, g, b) => Some((r, g, b)),
             _ => None,
+        }
+    }
+
+    #[test]
+    fn unfocused_tab_selection_is_darker_and_white_text_is_readable() {
+        for theme in [Theme::dark(), Theme::light(), Theme::herdr("vesper").0] {
+            let warm = rgb(theme.peach).unwrap();
+            let dim = rgb(theme.tab_unfocused()).unwrap();
+            assert!(luminance(dim.0, dim.1, dim.2) < luminance(warm.0, warm.1, warm.2));
+            assert!(contrast((255, 255, 255), dim) >= 4.5);
         }
     }
 
