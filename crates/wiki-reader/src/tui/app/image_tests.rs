@@ -428,6 +428,69 @@ fn mermaid_diagram_swaps_from_text_to_halfblocks_slot() {
     );
 }
 
+/// Drive the same measure / re-layout / decode cycle as the event loop, without input.
+fn settle_diagrams(term: &mut Terminal<TestBackend>, app: &mut App) {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        app.images.poll();
+        if app.images.take_diagram_relayout() {
+            app.relayout_after_diagram_size();
+        }
+        draw_to(term, app);
+        if !app.images.has_pending() {
+            return;
+        }
+        assert!(Instant::now() < deadline, "diagram worker timed out");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[test]
+fn theme_switch_requeues_visible_mermaid_slots() {
+    use crate::tui::action::Action;
+    use crate::tui::options_ui::OptionChoice;
+    use wiki_reader_core::config::ThemeName;
+
+    let mut app = graphics_app(&mermaid_fixture());
+    let key = wiki_reader_core::provider::PageKey {
+        collection_id: app.navigator.index().collection_id.clone(),
+        relative_path: PathBuf::from("themed.md"),
+    };
+    app.update(Action::GoToPage(key));
+    // Keep all three cards visible, including Pie and Git graph below Sequence.
+    let mut term = terminal(140, 80);
+    settle_diagrams(&mut term, &mut app);
+    assert_eq!(app.doc.image_slots().len(), 3);
+
+    // Measurements may finish while options input is being handled, before the next
+    // frame consumes their re-layout notification. Switching back must not lose them.
+    app.update(Action::OpenOptions);
+    app.options_set(OptionChoice::Theme(ThemeName::Light));
+    wait_for_images(&mut app);
+    app.options_set(OptionChoice::Theme(ThemeName::Dark));
+
+    for theme in [ThemeName::Light, ThemeName::Dark, ThemeName::Herdr] {
+        app.update(Action::OpenOptions);
+        app.options_set(OptionChoice::Theme(theme));
+        app.close_options();
+        draw_to(&mut term, &mut app);
+        assert!(app.images.has_pending(), "new palette queues work");
+        settle_diagrams(&mut term, &mut app);
+        assert_eq!(app.doc.image_slots().len(), 3, "slots after {theme:?}");
+        for slot in app.doc.image_slots() {
+            assert!(
+                matches!(&slot.source, SlotSource::Mermaid { palette, .. } if *palette == app.theme.diagram)
+            );
+            let row = app.viewer_geom.top_y + u16::try_from(slot.line).expect("slot line");
+            assert!(
+                has_half(term.backend().buffer(), row),
+                "{} paints after {theme:?}",
+                slot.alt
+            );
+        }
+    }
+}
+
 #[test]
 fn diagram_relayout_preserves_text_selection() {
     use crate::tui::selection::{Pos, Selection};

@@ -91,6 +91,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 | 2026-10-03 | decision | Docs audit and drift fixes; docs structure (short README Status, dogfood log, benchmarks page) | P2-57, P2-58 |
 | 2026-10-03 | decision | Phase 3 chrome / lite / viewer polish filed (nav label modes, tab/footer borders, footer ⚙/`?`, lite media crate, viewer sizing, carousel, diagram state toggle, screenshot refresh) | P3-16…P3-23 |
 | 2026-10-03 | decision | Mirrored keybindings when nav is on the right filed for Phase 4 (low priority; needs ADR) | P4-06 |
+| 2026-10-03 | fix | P2-56 implementation: preserve palette-keyed Mermaid sizes across options theme changes instead of globally clearing them. A quick switch away and back could erase completed sizes while their queue keys still said measuring. The regression fails before the fix and checks all three themed.md cards repaint, with new work queued and no scrolling or page switch. Operator verified theme switches in Ghostty and a Herdr pane; diagrams render after the switch | P2-56 |
 
 ## Related
 
