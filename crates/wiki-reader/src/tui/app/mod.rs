@@ -19,7 +19,7 @@ use super::hit::HitMap;
 use super::keymap::{Chord, InputMode};
 use super::modal_viewer::{self, ModalContent, ModalEvent};
 use super::opener::{Opener, SystemOpener};
-use super::options_ui::{self, OptionRow, OptionsOverlay};
+use super::options_ui::{OptionChoice, OptionsOverlay};
 use super::page_doc::PageDoc;
 use super::rendered_doc::RenderedViewerDoc;
 use super::search_ui::{SearchMode, SearchOverlay};
@@ -609,8 +609,7 @@ impl App {
             Action::CloseOptions => self.close_options(),
             Action::OptionsUp => self.options_select(-1),
             Action::OptionsDown => self.options_select(1),
-            Action::OptionsCycleLeft => self.options_cycle(-1),
-            Action::OptionsCycleRight => self.options_cycle(1),
+            Action::OptionsApply => self.options_apply(),
             Action::HelpSelectDelta(d) => self.help_select(d),
             Action::HelpPageDelta(d) => self.help_page(d),
             Action::HelpHome => self.help_jump(true),
@@ -1019,7 +1018,7 @@ impl App {
             self.close_search(false);
         }
         self.help = None;
-        self.options = Some(OptionsOverlay::new());
+        self.options = Some(OptionsOverlay::new(self.theme_name));
         self.input_mode = InputMode::Options;
         self.message.clear();
     }
@@ -1036,61 +1035,61 @@ impl App {
         }
     }
 
-    /// Mouse: select row `i` and cycle it forward.
+    /// Mouse: select choice `i` and apply it.
     pub(crate) fn options_activate(&mut self, i: usize) {
         if let Some(o) = self.options.as_mut() {
-            o.selected = i.min(OptionRow::ALL.len() - 1);
-            self.options_cycle(1);
+            o.selected = i.min(super::options_ui::choices().len() - 1);
+            self.options_apply();
         }
     }
 
-    /// Display value for an options row.
-    pub(crate) fn option_value(&self, row: OptionRow) -> String {
-        match row {
-            OptionRow::Theme => options_ui::theme_label(self.theme_name).into(),
-            OptionRow::NavPosition => options_ui::nav_position_label(self.nav_position).into(),
-            OptionRow::NavLabels => {
-                options_ui::nav_labels_label(self.navigator.label_mode()).into()
-            }
-            OptionRow::Diagrams => options_ui::diagrams_label(self.diagram_mode).into(),
-            OptionRow::ImagesEnabled => if self.images_enabled { "on" } else { "off" }.into(),
-            OptionRow::ImagesMaxSlotRows => self.images_max_slot_rows.to_string(),
-            OptionRow::CopyPath => options_ui::copy_path_label(self.copy_path).into(),
+    /// Whether `choice` is the active value (its radio is filled).
+    pub(crate) fn option_is_selected(&self, choice: OptionChoice) -> bool {
+        match choice {
+            OptionChoice::Theme(t) => self.theme_name == t,
+            OptionChoice::NavPosition(p) => self.nav_position == p,
+            OptionChoice::NavLabels(m) => self.navigator.label_mode() == m,
+            OptionChoice::Diagrams(d) => self.diagram_mode == d,
+            OptionChoice::ImagesEnabled => self.images_enabled,
+            OptionChoice::ImagesMaxRows(n) => self.images_max_slot_rows == n,
+            OptionChoice::CopyPath(c) => self.copy_path == c,
         }
     }
 
-    /// Cycle the selected setting, apply it live, and persist just that field.
-    fn options_cycle(&mut self, dir: i32) {
-        use wiki_reader_core::config::ConfigPatch;
-        let Some(row) = self.options.as_ref().map(OptionsOverlay::current) else {
+    /// Apply the selected choice live and persist just that field.
+    fn options_apply(&mut self) {
+        let Some(choice) = self.options.as_ref().map(OptionsOverlay::current) else {
             return;
         };
+        self.options_set(choice);
+    }
+
+    fn options_set(&mut self, choice: OptionChoice) {
+        use wiki_reader_core::config::ConfigPatch;
         let mut patch = ConfigPatch::default();
-        match row {
-            OptionRow::Theme => {
-                let t = options_ui::cycle_theme(self.theme_name, dir);
+        match choice {
+            OptionChoice::Theme(t) => {
                 self.theme_name = t;
                 self.theme = Theme::from_name(t);
                 self.images.diagram_sizes().clear();
                 self.relayout_after_diagram_size();
                 patch.theme = Some(t);
             }
-            OptionRow::NavPosition => {
-                self.nav_position = options_ui::cycle_nav_position(self.nav_position, dir);
-                patch.nav_position = Some(self.nav_position);
+            OptionChoice::NavPosition(p) => {
+                self.nav_position = p;
+                patch.nav_position = Some(p);
             }
-            OptionRow::NavLabels => {
-                let m = options_ui::cycle_nav_labels(self.navigator.label_mode(), dir);
+            OptionChoice::NavLabels(m) => {
                 self.navigator.set_label_mode(m);
                 self.clamp_nav_scroll();
                 patch.nav_labels = Some(m);
             }
-            OptionRow::Diagrams => {
-                self.diagram_mode = options_ui::cycle_diagrams(self.diagram_mode, dir);
+            OptionChoice::Diagrams(d) => {
+                self.diagram_mode = d;
                 self.relayout_after_diagram_size();
-                patch.diagrams = Some(self.diagram_mode);
+                patch.diagrams = Some(d);
             }
-            OptionRow::ImagesEnabled => {
+            OptionChoice::ImagesEnabled => {
                 self.images_enabled = !self.images_enabled;
                 self.relayout_after_diagram_size();
                 patch.images_enabled = Some(self.images_enabled);
@@ -1099,15 +1098,14 @@ impl App {
                     self.message = "images: restart to probe terminal graphics".into();
                 }
             }
-            OptionRow::ImagesMaxSlotRows => {
-                self.images_max_slot_rows =
-                    options_ui::cycle_max_slot_rows(self.images_max_slot_rows, dir);
+            OptionChoice::ImagesMaxRows(n) => {
+                self.images_max_slot_rows = n;
                 self.relayout_after_diagram_size();
-                patch.images_max_slot_rows = Some(self.images_max_slot_rows);
+                patch.images_max_slot_rows = Some(n);
             }
-            OptionRow::CopyPath => {
-                self.copy_path = options_ui::cycle_copy_path(self.copy_path, dir);
-                patch.copy_path = Some(self.copy_path);
+            OptionChoice::CopyPath(c) => {
+                self.copy_path = c;
+                patch.copy_path = Some(c);
             }
         }
         if let Some(target) = &self.config_write_path {

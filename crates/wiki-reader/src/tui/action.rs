@@ -51,10 +51,8 @@ pub enum Action {
     OptionsUp,
     /// Options: next row.
     OptionsDown,
-    /// Options: cycle selected value backward.
-    OptionsCycleLeft,
-    /// Options: cycle selected value forward.
-    OptionsCycleRight,
+    /// Options: apply the selected choice.
+    OptionsApply,
     /// A key for the open modal viewer (P3-14); the content decides what it means.
     ModalKey(KeyEvent),
     /// Close the modal viewer (click outside).

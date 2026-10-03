@@ -19,7 +19,7 @@ pub enum InputMode {
     Overlay,
     /// Help overlay: scroll / activate / dismiss.
     Help,
-    /// Options overlay: select / cycle / dismiss.
+    /// Options overlay: select / apply / dismiss.
     Options,
     /// Modal viewer (table, later image): every key goes to the modal.
     Modal,
@@ -249,7 +249,7 @@ pub static BINDINGS: &[Binding] = &[
         keys: "y",
         scope: BindingScope::Global,
         action: Some(Action::CopyPagePath),
-        help: "Copy page path",
+        help: "Copy file path",
         matcher: Some(Matcher::PlainChar('y')),
     },
     Binding {
@@ -298,8 +298,15 @@ pub static BINDINGS: &[Binding] = &[
         keys: ",",
         scope: BindingScope::Global,
         action: Some(Action::OpenOptions),
-        help: "Options",
+        help: "Options (toggle)",
         matcher: Some(Matcher::PlainChar(',')),
+    },
+    Binding {
+        keys: "c",
+        scope: BindingScope::Global,
+        action: Some(Action::OpenOptions),
+        help: "Options (toggle)",
+        matcher: Some(Matcher::PlainChar('c')),
     },
     Binding {
         keys: "n",
@@ -751,10 +758,11 @@ pub fn map_with_overrides(
         return (
             match key.code {
                 KeyCode::Esc => Some(Action::CloseOptions),
+                // The open keys also close it, so `,` / `c` toggle the window.
+                KeyCode::Char(',' | 'c') if no_ctrl_alt(key) => Some(Action::CloseOptions),
                 KeyCode::Up | KeyCode::Char('k') => Some(Action::OptionsUp),
                 KeyCode::Down | KeyCode::Char('j') => Some(Action::OptionsDown),
-                KeyCode::Left => Some(Action::OptionsCycleLeft),
-                KeyCode::Right | KeyCode::Enter => Some(Action::OptionsCycleRight),
+                KeyCode::Right | KeyCode::Enter | KeyCode::Char(' ') => Some(Action::OptionsApply),
                 _ => None,
             },
             Chord::None,
@@ -1263,13 +1271,32 @@ mod tests {
             Some(Action::OptionsDown)
         );
         assert_eq!(m(KeyCode::Up, InputMode::Options), Some(Action::OptionsUp));
+        for code in [KeyCode::Enter, KeyCode::Right, KeyCode::Char(' ')] {
+            assert_eq!(m(code, InputMode::Options), Some(Action::OptionsApply));
+        }
+        // `,` and `c` toggle: they open from Normal and close from Options.
+        for c in [',', 'c'] {
+            assert_eq!(
+                m(KeyCode::Char(c), InputMode::Normal),
+                Some(Action::OpenOptions),
+                "open {c}"
+            );
+            assert_eq!(
+                m(KeyCode::Char(c), InputMode::Options),
+                Some(Action::CloseOptions),
+                "close {c}"
+            );
+        }
+        // Ctrl+C stays quit even inside the window.
         assert_eq!(
-            m(KeyCode::Left, InputMode::Options),
-            Some(Action::OptionsCycleLeft)
-        );
-        assert_eq!(
-            m(KeyCode::Enter, InputMode::Options),
-            Some(Action::OptionsCycleRight)
+            map(
+                key_mod(KeyCode::Char('c'), KeyModifiers::CONTROL),
+                FocusPane::Viewer,
+                InputMode::Options,
+                Chord::None
+            )
+            .0,
+            Some(Action::Quit)
         );
         assert_eq!(m(KeyCode::Char('q'), InputMode::Options), None);
     }

@@ -33,7 +33,7 @@ pub enum Hit {
     HelpRow(usize),
     /// Options overlay dismiss (click outside).
     OptionsDismiss,
-    /// Options overlay row (index into [`crate::tui::options_ui::OptionRow::ALL`]).
+    /// Options overlay row (index into [`crate::tui::options_ui::choices`]).
     OptionsRow(usize),
     /// Modal viewer: click outside the panel (dismiss).
     ModalDismiss,
@@ -103,7 +103,7 @@ impl HitMap {
             Hit::Quit => Action::Quit,
             Hit::OpenOptions => Action::OpenOptions,
             Hit::OptionsDismiss => Action::CloseOptions,
-            Hit::OptionsRow(_) => Action::OptionsCycleRight, // index applied in apply_mouse
+            Hit::OptionsRow(_) => Action::OptionsApply, // index applied in apply_mouse
             Hit::ModalDismiss => Action::CloseModal,
             Hit::ModalBody => Action::None,
             Hit::NavToggle => Action::ToggleNav,

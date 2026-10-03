@@ -31,7 +31,7 @@ The collection file is untrusted, since it comes with the content you are readin
 | `diagrams` | `"auto"`, `"image"`, `"text"`, `"source"` | `"auto"` | Mermaid tier; see [ADR-0004](../decisions/0004-diagram-rendering.md). tmux always uses text. |
 | `images.enabled` | `true`, `false` | `true` | `false` skips the terminal graphics probe and shows text placeholders. |
 | `images.max_slot_rows` | integer `1`–`60` | `30` | Tallest picture or diagram slot, in rows. |
-| `copy.path` | `"relative"`, `"absolute"` | `"relative"` | What `y` copies: the path relative to the collection root, or the absolute path. |
+| `copy.path` | `"relative"`, `"absolute"` | `"relative"` | What `y` ("Copy file path" in Help) copies: with the nav focused, the selected row's file or folder path; with the viewer focused, the open page's path. Relative to the collection root, or absolute. Also a row in the options window. |
 | `exclude` | glob, or list of globs | none | Paths left out of the collection. |
 | `opener` | command string | system opener | Opens external URLs: program, then its args, then the URL. User file or `--config` only. |
 | `editor` | command string | `$EDITOR` | User file or `--config` only. |
@@ -51,7 +51,7 @@ max_slot_rows = 24
 
 ## Options window
 
-`,` or the header ⚙ opens the options window. It edits `theme`, `nav.position`, `nav.labels`, `diagrams`, `images.enabled`, `images.max_slot_rows` and `copy.path`. Each change applies at once and is saved to one key of the file, per [ADR-0018](../decisions/0018-config-write-path.md):
+`,` or `c` (or the header ⚙) opens the options window, and the same keys, or `Esc`, close it. Each setting is a group of radio rows: `↑` / `↓` move, `Enter` applies. It edits `theme`, `nav.position`, `nav.labels`, `diagrams`, `images.enabled`, `images.max_slot_rows` and `copy.path`. Each change applies at once and is saved to one key of the file, per [ADR-0018](../decisions/0018-config-write-path.md):
 
 - **Write target:** `--config PATH` if you started with it, else the user file. The collection `.wiki-reader.toml` is never written. The file and its folder are created when missing, and comments and unknown keys are kept.
 - **A collection file can win on restart.** If `.wiki-reader.toml` sets the same key, it overrides the value saved to the user file the next time you start. The status bar says so when you change such a key. Edit or remove the key in the collection file, or start with `--config` to make the saved value final.

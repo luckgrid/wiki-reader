@@ -1,0 +1,44 @@
+---
+source: crates/wiki-reader/src/tui/app/tests.rs
+expression: out
+---
+ Worked Examp┌ Options ───────────────────────────────────────────┐       ⚙ ◫ ✕ 
+┌────────────│                                                    │────────────┐
+│▌/ Search…  │  Theme                                             │────────────│
+│            │  > ● Dark                                          │            │
+│▌ Worked Exa│    ○ Light                                         │            │
+│  ▸ Architec│    ○ Herdr                                         │─           │
+│  ▸ Decision│                                                    │            │
+│            │  Panels                                            │default     │
+│            │    ● Nav left                                      │            │
+│            │    ○ Nav right                                     │            │
+│            │                                                    │Token       │
+│            │  Nav labels                                        │istory      │
+│            │    ● Page titles                                   │            │
+│            │    ○ File names                                    │            │
+│            │    ○ Titles and file names                         │            │
+│            │                                                    │            │
+│            │  Mermaid                                           │            │
+│            │    ● Auto                                          │            │
+│            │    ○ Image only                                    │            │
+│            │    ○ Text only                                     │            │
+│            │    ○ Source only                                   │            │
+│            │                                                    │            │
+│            │  Images                                            │            │
+│            │    ● Show images                                   │            │
+│            │                                                    │            │
+│            │  Max image rows                                    │            │
+│            │    ○ 10 rows                                       │            │
+│            │    ○ 20 rows                                       │            │
+│            │    ● 30 rows                                       │            │
+│            │    ○ 40 rows                                       │            │
+│            │    ○ 50 rows                                       │            │
+│            │    ○ 60 rows                                       │            │
+│            │                                                    │            │
+│            │  Copy path (y)                                     │            │
+│            │    ● Relative to the collection                    │            │
+│            │    ○ Absolute path                                 │            │
+│            │                                                    │            │
+│            │  ↑↓ / j k Navigate  Enter Apply  Esc / c Close     │            │
+└────────────└────────────────────────────────────────────────────┘ Overvi… › ├┘
+  OPTIONS  · README.md · L1:C1 9% · 2026-09-28 · draft · 29w · 1m
