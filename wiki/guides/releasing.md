@@ -9,7 +9,16 @@ related: [development]
 
 # Releasing and upgrading
 
-Two audiences: people who install wiki-reader and want a newer (or older) version, and maintainers who publish releases. Releases are built by [`.github/workflows/release.yml`](../../.github/workflows/release.yml) from `v*` tags and published under [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases). Versions containing `-` (for example `v0.1.0-alpha.5.1`) are marked as prereleases automatically.
+Two audiences: people who install wiki-reader and want a newer (or older) version, and maintainers who publish releases. Releases are built by [`.github/workflows/release.yml`](../../.github/workflows/release.yml) from `v*` tags and published under [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases). Tags named `v0.1.*` (the alpha phase, see [Versioning](#versioning)) and tags containing `-` are marked as prereleases automatically.
+
+## Versioning
+
+Release tags are `v` plus the workspace `Cargo.toml` version, and the workflow fails if the two differ.
+
+- **Alpha phase: `0.1.x`.** Every release is `v0.1.N`, and N goes up by one each time (`v0.1.1`, `v0.1.2`, …). A fix and a feature release are numbered the same way; there are no `-alpha.N` suffixes and no point-release numbers like `.4.1` any more. The first release in this scheme is `v0.1.1`.
+- **Prerelease flag.** The release workflow marks every `v0.1.*` tag as a GitHub prerelease, since the whole `0.1` line is alpha. When the project leaves the alpha phase (a `v0.2.0` or `v1.0.0` tag), drop that rule from `release.yml`.
+- **Older tags stay as they are.** `v0.1.0-alpha.1` through `v0.1.0-alpha.5.1` were published before this rule and are never renamed. Semver orders them below `0.1.1`, so `cargo install` and upgrades behave normally.
+- **Where the number is used.** `--version`, the tarball names (`wiki-reader-v0.1.N-<platform>.tar.gz`) and `cargo install --tag v0.1.N`.
 
 ## Upgrade or replace an installed version
 
@@ -31,7 +40,7 @@ Quit any running wiki-reader before replacing the binary.
 cargo install --locked --force --git https://github.com/luckgrid/wiki-reader wiki-reader
 
 # A specific release (also how you roll back)
-cargo install --locked --force --git https://github.com/luckgrid/wiki-reader --tag v0.1.0-alpha.5.1 wiki-reader
+cargo install --locked --force --git https://github.com/luckgrid/wiki-reader --tag v0.1.1 wiki-reader
 ```
 
 `--force` is what replaces the already-installed binary in `~/.cargo/bin`. Confirm with `which wiki-reader` that you are not still hitting a copy elsewhere.
@@ -72,7 +81,7 @@ To go back to an older release, repeat the steps with that release's tarball (or
 
 Cut a tag only from a commit whose CI is already green on `main`. The release workflow builds and smoke-tests `--version` but does not re-run the full test suite.
 
-1. **Prepare.** Branch `release/vX.Y.Z`, bump `version` in the workspace `Cargo.toml` and refresh `Cargo.lock`, and update the roadmap note. Run `./scripts/check.sh`, open a PR, wait for green checks, and squash-merge.
+1. **Prepare.** Branch `release/vX.Y.Z` (for example `release/v0.1.2`), bump `version` in the workspace `Cargo.toml` to the next `0.1.N` and refresh `Cargo.lock`, and update the roadmap note. Run `./scripts/check.sh`, open a PR, wait for green checks, and squash-merge.
 2. **Optional dry run.** In GitHub, Actions → Release → *Run workflow* on the branch or `main`. It builds all three targets, names the packages `dry-run`, and uploads them as workflow artifacts. It does **not** create or touch a GitHub Release (the attach step only runs on a tag push). Use this after changing `release.yml` or its pinned actions.
 3. **Tag the merge commit** as `v` plus the `Cargo.toml` version and push the tag. The workflow fails if the tag and the crate version differ.
 
@@ -94,7 +103,7 @@ Cut a tag only from a commit whose CI is already green on `main`. The release wo
 
 ## Fix or replace a published release (maintainers)
 
-Treat a published tag as immutable once anyone may have installed it, and prefer fixing forward: merge the fix and cut the next version (for example `v0.1.0-alpha.5`). Notes can always be corrected in place:
+Treat a published tag as immutable once anyone may have installed it, and prefer fixing forward: merge the fix and cut the next version (for example `v0.1.2` after a bad `v0.1.1`). Notes can always be corrected in place:
 
 ```bash
 gh release edit vX.Y.Z --notes-file notes.md
