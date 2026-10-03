@@ -5,7 +5,7 @@ summary: When and how to integrate an external index provider, design-system the
 status: draft
 updated: 2026-09-30
 related: [overview, context-engine]
-nav_order: 5
+nav_order: 6
 ---
 
 # Integration plan

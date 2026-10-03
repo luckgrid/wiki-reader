@@ -5,9 +5,9 @@ Entrypoint for wiki-reader documentation: product intent, architecture, decision
 ## Collections
 
 - [Product](product/README.md) — vision, spec, content model, UI.
-- [Architecture](architecture/README.md) — crates, rendering, prior art, integrations; deferred context engine.
+- [Architecture](architecture/README.md) — crates, rendering, prior art, benchmarks, integrations; deferred context engine.
 - [Decisions](decisions/README.md) — ADRs (immutable once accepted — supersede, don't edit; mechanical metadata or formatting fixes that don't change decision text are allowed).
-- [Roadmap](roadmap/README.md) — phases, exit criteria, and task trackers.
+- [Roadmap](roadmap/README.md) — phases, exit criteria, task trackers, and the [dogfood log](roadmap/dogfood-log.md).
 - [Guides](guides/README.md) — how to develop in this workspace.
 
 ## Reading order
@@ -19,9 +19,10 @@ Entrypoint for wiki-reader documentation: product intent, architecture, decision
 5. [UI spec](product/ui-spec.md) — layout, focus, keys, mouse.
 6. [Rendering](architecture/rendering.md) — markdown and diagrams.
 7. [Prior art & libraries](architecture/prior-art-and-libs.md) — Phase 0 findings and deps.
-8. [Roadmap](roadmap/README.md) — what to build next.
-9. [Integrations](architecture/integrations.md) — external providers, design tokens, herdr (non-blocking).
-10. [Context engine](architecture/context-engine.md) — deferred to Phase 4.
+8. [Benchmarks](architecture/benchmarks.md) — binary size, memory and start-up.
+9. [Roadmap](roadmap/README.md) — what to build next.
+10. [Integrations](architecture/integrations.md) — external providers, design tokens, herdr (non-blocking).
+11. [Context engine](architecture/context-engine.md) — deferred to Phase 4.
 
 ## Decisions (ADRs)
 

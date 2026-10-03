@@ -3,7 +3,7 @@ id: WR-GUIDE-RELEASING
 title: Releasing and upgrading
 summary: How users upgrade or replace an installed wiki-reader, and how maintainers cut, dry-run, verify and replace a release.
 status: draft
-updated: 2026-10-01
+updated: 2026-10-03
 related: [development]
 ---
 
@@ -99,7 +99,7 @@ Cut a tag only from a commit whose CI is already green on `main`. The release wo
 
    Repeat the binary caveats (unsigned, macOS quarantine, Linux glibc of `ubuntu-latest`).
 6. **Verify.** The release should list 3 tarballs and 3 checksums. Download one, check it with `shasum -a 256 -c`, install it, and run `wiki-reader --version`.
-7. **Record it.** Add a dated line to the current phase file under [roadmap](../roadmap/README.md) (dogfood notes or the relevant task row).
+7. **Record it.** Add a dated line to the [dogfood log](../roadmap/dogfood-log.md) (and update the relevant task row under [roadmap](../roadmap/README.md) when a release closes work).
 
 ## Fix or replace a published release (maintainers)
 

@@ -5,7 +5,7 @@ summary: How wiki-reader decides what is relevant right now — signals, resolut
 status: deferred
 updated: 2026-09-30
 related: [overview, integrations]
-nav_order: 2
+nav_order: 7
 ---
 
 # Context engine
