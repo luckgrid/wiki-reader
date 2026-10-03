@@ -481,6 +481,67 @@ pub fn write_patch(path: &Path, update: &ConfigPatch) -> Result<(), String> {
     Ok(())
 }
 
+/// Keys in `update` that the collection file at `path` also sets.
+///
+/// The collection `.wiki-reader.toml` merges after the user file, so a key set there wins on the
+/// next launch over a value the options window just saved to the user file. An unreadable or
+/// invalid file shadows nothing (the merge reports it separately).
+#[must_use]
+pub fn shadowed_keys(path: &Path, update: &ConfigPatch) -> Vec<&'static str> {
+    let Ok(text) = fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    let Ok(table) = toml::from_str::<toml::Table>(&text) else {
+        return Vec::new();
+    };
+    let has = |section: Option<&str>, key: &str| match section {
+        None => table.contains_key(key),
+        Some(s) => table
+            .get(s)
+            .and_then(toml::Value::as_table)
+            .is_some_and(|t| t.contains_key(key)),
+    };
+    let candidates = [
+        (update.theme.is_some(), None, "theme", "theme"),
+        (
+            update.nav_labels.is_some(),
+            Some("nav"),
+            "labels",
+            "nav.labels",
+        ),
+        (
+            update.nav_position.is_some(),
+            Some("nav"),
+            "position",
+            "nav.position",
+        ),
+        (update.diagrams.is_some(), None, "diagrams", "diagrams"),
+        (
+            update.copy_path.is_some(),
+            Some("copy"),
+            "path",
+            "copy.path",
+        ),
+        (
+            update.images_enabled.is_some(),
+            Some("images"),
+            "enabled",
+            "images.enabled",
+        ),
+        (
+            update.images_max_slot_rows.is_some(),
+            Some("images"),
+            "max_slot_rows",
+            "images.max_slot_rows",
+        ),
+    ];
+    candidates
+        .into_iter()
+        .filter(|(patched, section, key, _)| *patched && has(*section, key))
+        .map(|(_, _, _, label)| label)
+        .collect()
+}
+
 fn expect_string(v: &toml::Value, key: &str) -> Result<String, String> {
     v.as_str()
         .map(str::to_owned)
@@ -948,5 +1009,28 @@ quit = "Q"
             "diags={:?}",
             cfg.diagnostics
         );
+    }
+
+    #[test]
+    fn shadowed_keys_lists_only_patched_keys_the_collection_file_sets() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join(".wiki-reader.toml");
+        fs::write(
+            &path,
+            "theme = \"light\"\n[nav]\nposition = \"right\"\n[images]\nenabled = false\n",
+        )
+        .unwrap();
+        let update = ConfigPatch {
+            theme: Some(ThemeName::Dark),
+            nav_position: Some(NavPosition::Left),
+            nav_labels: Some(LabelMode::Filename),
+            copy_path: Some(CopyPathMode::Absolute),
+            ..ConfigPatch::default()
+        };
+        // `nav.labels` is patched but not set in the file; `images.enabled` is set but not patched.
+        assert_eq!(shadowed_keys(&path, &update), vec!["theme", "nav.position"]);
+        assert!(shadowed_keys(&tmp.path().join("missing.toml"), &update).is_empty());
+        fs::write(&path, "not = [valid").unwrap();
+        assert!(shadowed_keys(&path, &update).is_empty());
     }
 }

@@ -3,7 +3,7 @@ id: WR-ROADMAP-P3
 title: Phase 3 — Alpha polish
 summary: Diagrams and images first, then themes, sticky headers, nav chrome, and early herdr niceties.
 status: active
-updated: 2026-10-02
+updated: 2026-10-03
 related: [phase-2-mvp, phase-4-beta]
 nav_order: 3
 ---
@@ -19,10 +19,10 @@ Phase 1 is closed and Phase 2 is feature complete (dogfood hold until ≈ 2026-1
    2. **P3-12b Image slots and local images** — the renderer reserves N rows for an image, the TUI draws into them, and the text placeholder is the fallback. Policy is [ADR-0017](../decisions/0017-static-local-images-only.md): static, inside the collection, never fetched. This step builds the hard parts (scroll clipping, clearing under the Help/Search popups and on tab/page switch) with the simplest content.
    3. **P3-12c Mermaid image tier** — `mermaid-rs-renderer` → `resvg` → PNG into the same slots, off the UI thread, cached by content/background (width is a layout-time legibility check); embedded font so output is deterministic; falls back to the text tier.
    4. **P3-12d `diagrams` config and tier selection** — `auto | image | text | source`, tmux → text, never Sixel under herdr. Landed with P3-12c in the same PR.
-2. **P3-07 Themes / P3-11 Layout config** — wire the stored `theme` config key to the semantic token table in `theme.rs`; ship dark/light presets plus a herdr-matching preset; add nav placement (left/right) and related layout options. (R35 already warns when the key is set but inert.)
+2. **P3-07 Themes / P3-11 Layout config** (done) — wire the stored `theme` config key to the semantic token table in `theme.rs`; ship dark/light presets plus a herdr-matching preset; add nav placement (left/right) and related layout options. (R35 already warns when the key is set but inert.)
 3. **P3-01 / P3-02 / P3-04** — sticky section header, side nav header/footer regions, optional ‹ › header buttons.
 4. **P3-05 / P3-03** — link hover preview; nav label options (R35 already draws a dim `(filename)` suffix for `title+filename`; full “alt text below” remains here).
-5. **P3-13 / P3-14 / P3-15** — three requests from 2026-10-02 dogfood, in this order. **P3-13 Options window** needs P3-07 (theme) and P3-11 (nav position), both config-key owners, so it follows them; it is also where the light and herdr presets finally get their visual pass. **P3-14 Table viewer** and **P3-15 Image and diagram viewer** are the full-screen counterparts of the inline "expand" block actions (BA); they share one modal-viewer shell (focus, `Esc`, scroll, the image → `Clear` → popup draw order from [ADR-0004](../decisions/0004-diagram-rendering.md)), so build the shell once in P3-14 and reuse it in P3-15.
+5. **P3-13 / P3-14 / P3-15** (done) — three requests from 2026-10-02 dogfood, in this order. **P3-13 Options window** needs P3-07 (theme) and P3-11 (nav position), both config-key owners, so it follows them; it is also where the light and herdr presets finally get their visual pass. **P3-14 Table viewer** and **P3-15 Image and diagram viewer** are the full-screen counterparts of the inline "expand" block actions (BA); they share one modal-viewer shell (focus, `Esc`, scroll, the image → `Clear` → popup draw order from [ADR-0004](../decisions/0004-diagram-rendering.md)), so build the shell once in P3-14 and reuse it in P3-15.
 6. **P3-09 / P3-10** — herdr integration (plugin pane; publish current page to herdr sidebar) after the herdr API is confirmed on a real install.
 
 Detail each row into spikes/acceptance only when it is next up. Dogfood bites recorded in [phase-2-mvp.md](phase-2-mvp.md) still feed this list.

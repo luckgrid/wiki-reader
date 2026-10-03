@@ -3086,6 +3086,29 @@ fn options_overlay_cycles_theme_and_persists() {
 }
 
 #[test]
+fn options_warns_when_collection_config_overrides_saved_key() {
+    let root = fixture();
+    let tmp = tempfile::tempdir().unwrap();
+    let shadow = tmp.path().join(".wiki-reader.toml");
+    std::fs::write(&shadow, "theme = \"herdr\"\n").unwrap();
+    let mut app = App::new(&root).unwrap();
+    app.config_write_path = Some(tmp.path().join("config.toml"));
+    app.config_shadow_path = Some(shadow);
+    app.update(Action::OpenOptions);
+    app.update(Action::OptionsCycleRight); // theme row
+    assert!(
+        app.message.contains(".wiki-reader.toml") && app.message.contains("theme"),
+        "message={}",
+        app.message
+    );
+    // A row the collection file does not set stays quiet.
+    app.message.clear();
+    app.update(Action::OptionsDown);
+    app.update(Action::OptionsCycleRight); // nav position row
+    assert!(app.message.is_empty(), "message={}", app.message);
+}
+
+#[test]
 fn options_write_error_sets_status_message() {
     let root = fixture();
     let tmp = tempfile::tempdir().unwrap();
