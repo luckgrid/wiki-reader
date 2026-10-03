@@ -2,7 +2,7 @@
 source: crates/wiki-reader/src/tui/app/tests.rs
 expression: out
 ---
- Worked Example Wiki › … › Token… ⚙ ◫ ✕ 
+ Worked Example Wiki › … › Token P… ◫ ✕ 
 ┌────────────────────────────┐─────────┐
 │▌/ Search…                  │─────────│
 │                            │         │
@@ -25,4 +25,4 @@ expression: out
 │                            │ing pa… ││
 │                            │────────┘│
 └────────────────────────────┘ow OS › ├┘
-  NAV  · architecture/design-system/tok
+  NAV  · architecture/design-system ? ⚙

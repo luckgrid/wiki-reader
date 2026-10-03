@@ -16,7 +16,7 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 
 <!-- ui-diagram:start -->
 ```text
- Worked Example Wiki › architecture › design-system › Token Projection   ⚙ ◫ ✕
+ Worked Example Wiki › architecture › design-system › Token Projection     ◫ ✕
 ┌──────────────────────────┐┌┤ tokens × ├────────────────────────────────────┐
 │▌/ Search…                ││ ── frontmatter ▸ ──────────────────────────────│
 │                          ││                                                │
@@ -30,7 +30,7 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 │  ▸ decisions             ││ │ Worked Example Wiki                      │   │
 │                          ││ └──────────────────────────────────────────┘   │
 └──────────────────────────┘└┤ ‹ Design System ├────────────┤ Workflow OS › ├┘
- VIEW  · architecture/design-system/tokens.md · L3:C1 9% · 2026-09-28 · draft
+ VIEW  · architecture/design-system/tokens.md · L3:C1 9% · draft          ? ⚙
 ```
 <!-- ui-diagram:end -->
 
@@ -44,7 +44,7 @@ Help (`?`) and search (`/`) open as popups over it, with both panes grayed behin
 
 ![Search overlay in Files mode with ranked results](../assets/wiki-reader-search.png)
 
-Nav rows show page titles by default and folders show the folder name (see [Side nav](#side-nav)). `⚙` opens Options (`,` / `c`), `◫` toggles the side nav (`b`), `✕` quits (`q`).
+Nav rows show page titles by default and folders show the folder name (see [Side nav](#side-nav)). The layout footer's `?` opens Help and `⚙` opens Options (`,` / `c`); the header's `◫` toggles the side nav (`b`) and `✕` quits (`q`).
 
 Regions:
 
@@ -55,18 +55,18 @@ Regions:
 
 **Tabs** are always shown: the current page's tab is there even when it is the only one (`┤ tokens × ├`, `×` closes). Like the footer buttons, the active tab fills peach only while the View has focus; with the Nav focused every tab stays outlined. A right-hand widget slot is reserved for Phase 4.
 
-### Approved Batch A layout (P3-18 / P3-17, not yet implemented)
+### Approved Batch A layout (P3-18 implemented; P3-17 planned)
 
-P3-18 moves ⚙ to the View footer's far right with `?` immediately to its left; the header retains ◫ and ✕. P3-17 then gives the View dedicated **three-row top and bottom strips** for fully closed tab and footer-button boxes. The middle row carries labels/hit regions; the other two rows carry borders. Tabs use the actual filename including its extension. The active tab keeps a darker selected background with Nav focus, and the normal accent selection with View focus.
+P3-18 places ⚙ at the full-width layout footer's far right, below both panes, with `?` immediately to its left; the header retains ◫ and ✕. P3-17 will give the View dedicated **three-row top and bottom strips** for fully closed tab and footer-button boxes. The middle row carries labels/hit regions; the other two rows carry borders. Tabs use the actual filename including its extension. The active tab keeps a darker selected background with Nav focus, and the normal accent selection with View focus.
 
-The footer reserves space for `?` / ⚙ before dividing the remaining width between prev/next. Labels truncate with `…`; unavailable links remain absent. Controls must not overlap, including at 40/60 columns and with Nav on either side. Compared with today's border-row controls, the strips consume two additional article rows at each edge. At insufficient height, clip empty/content rows safely without underflow; retain the header/status rows and only register visible control hits. P3-01 sticky headings are a separate row/behavior, not implemented by these boxes.
+The layout footer reserves space for `?` / ⚙ before laying out status fields and messages. The View footer independently divides its width between prev/next. Labels truncate with `…`; unavailable links remain absent. Controls must not overlap, including at 40/60 columns and with Nav on either side. Compared with today's border-row controls, the strips consume two additional article rows at each edge. At insufficient height, clip empty/content rows safely without underflow; retain the header/status rows and only register visible control hits. P3-01 sticky headings are a separate row/behavior, not implemented by these boxes.
 
-The diagram and descriptions below document the current implementation until P3-18/P3-17 land; refresh the final assets in P3-23.
+The diagram and descriptions below document the current border-row implementation; refresh the final assets in P3-23 after P3-17 lands.
 
 ## Header (full width, 1 padded row)
 
 - **Left:** the root entry page's title, then the breadcrumb trail through side-nav groups to the current page. Example: `Project Wiki › architecture › design-system › Token Projection`. Segments follow the **side nav hierarchy** (groups), not raw directories, so folded folders ([content model](content-model.md)) don't produce extra crumbs. Each segment is clickable and opens that group's landing page. The trail drops middle segments with `…` when narrow, preferring the root and current page. Header icons reserve their right-hand columns first; any labels that still exceed the remaining space are ellipsized, and breadcrumb hit areas stop before the controls.
-- **Right:** icon buttons. `⚙` opens the options window (same as `,` / `c`). `◫` toggles the side nav. `✕` quits (saves session; same as `q`). There is no syntax/formatted toggle: Rendered is always the formatted view and `r` shows the markdown syntax ([ADR-0014](../decisions/0014-remove-formatted-view-toggle.md)). P3-18 moves ⚙ (and a `?` help button) to the View footer.
+- **Right:** icon buttons. `◫` toggles the side nav. `✕` quits (saves session; same as `q`). There is no syntax/formatted toggle: Rendered is always the formatted view and `r` shows the markdown syntax ([ADR-0014](../decisions/0014-remove-formatted-view-toggle.md)). Help (`?`) and Options (⚙) live in the layout footer below both panes.
 - Future: optional back/forward buttons (`‹ ›`). Back/forward are keyboard-only in v1.
 
 ## Side nav
@@ -97,13 +97,13 @@ Future: this search row becomes a proper **side nav header**, and a **side nav f
 ## Help overlay panel
 
 - Opens with `?` from Normal mode. Generated from the binding table in `keymap.rs` (same source as the live map).
-- Sections: Global, Side nav, View, Chords, Search overlay. Each section is a full-width divider row. Keys that do the same thing share one row, joined with ` / ` (`↑ / Shift+Tab`); alternates sit next to each other in the table so they merge. A header icon that also triggers an action is joined to its key with ` / ` like any alternate key (`b / ◫`, `q / ✕`). The panel is tall and thin (up to 58 columns wide, nearly full height), peach-bordered like the search popup, with the same side padding, a blank row at the top and bottom, a blank row above each group divider and none below, a full-width selected row, and both panes behind it grayed. Key labels show config overrides when set.
+- Sections: Global, Side nav, View, Chords, Search overlay. Each section is a full-width divider row. Keys that do the same thing share one row, joined with ` / ` (`↑ / Shift+Tab`); alternates sit next to each other in the table so they merge. A chrome icon that also triggers an action is joined to its key with ` / ` like any alternate key (`b / ◫`, `q / ✕`, `? / ?` for the Help key and footer button). The panel is tall and thin (up to 58 columns wide, nearly full height), peach-bordered like the search popup, with the same side padding, a blank row at the top and bottom, a blank row above each group divider and none below, a full-width selected row, and both panes behind it grayed. Key labels show config overrides when set.
 - `↑`/`↓` / `PgUp`/`PgDn` / `g`/`G` and the mouse wheel scroll; `Enter` or a click on a row closes help and runs that action (display-only rows are not clickable).
 - `Esc` or `?` closes without an action. Click outside dismisses.
 
 ## Options window
 
-Opened with `,` or `c` (or the header ⚙); the same keys close it, as does `Esc`. It floats over the panes like Help and Search.
+Opened with `,` or `c` (or the layout footer ⚙); the same keys close it, as does `Esc`. It floats over the panes like Help and Search.
 
 - **Grouped choices.** Each setting is a group with a title, and each value is one row with a radio mark: `●` is the active value, `○` the others. A group is one of Theme, Panels (nav position), Nav labels, Mermaid, Images, Max image rows, Copy path (`y`). Show images is an on/off row in the Images group.
 - **Navigation.** `↑` / `↓` or `j` / `k` move the `>` cursor between rows (it skips titles and wraps); `Enter`, `Space` or `→` applies the row, and a click selects and applies it. The window opens on the current theme. The footer lists the keys. It scrolls on short terminals and keeps a group's title with its first row.
@@ -129,7 +129,7 @@ Future: a **sticky section header** at the top of the viewer showing the heading
 
 ## View footer (prev/next)
 
-`┤ ‹ Prev title ├` on the left and `┤ Next title › ├` on the right, following side nav order ([content model](content-model.md)) but always using title-mode labels, regardless of `nav.labels`. They are outlined, padded buttons drawn on the **View pane's bottom border**, so they stay pinned while the article scrolls. The outline matches the pane border (teal when the View is focused, gray when the Nav is); a button reached with `Tab` or `f` fills peach with dark text. Each label is truncated with `…` to its half of the border so long titles cannot collide. Both are clickable and bound to `[` / `]`. A side with no prev/next draws nothing, so the border runs unbroken.
+`┤ ‹ Prev title ├` on the left and `┤ Next title › ├` on the right, following side nav order ([content model](content-model.md)) but always using title-mode labels, regardless of `nav.labels`. They are outlined, padded buttons drawn on the **View pane's bottom border**, so they stay pinned while the article scrolls. The outline matches the pane border (teal when the View is focused, gray when the Nav is); a button reached with `Tab` or `f` fills peach with dark text. Each label is truncated with `…` to its half of the border so long titles cannot collide. Help / Options are not on this border; they belong to the layout footer below it. Both are clickable and bound to `[` / `]`. A side with no prev/next draws nothing, so the border runs unbroken.
 
 ## Modal viewers
 
@@ -139,9 +139,9 @@ Table and image/diagram viewers share one modal shell (`Esc` dismisses, wheel sc
 
 **Image and diagram viewer.** Opens from the expand-diagram block action (`Enter` on the Mermaid fence line) or `Enter` on any row of a picture slot. Keys: arrows / `hjkl` pan by an eighth of the window; `PgUp` / `PgDn` and `g` / `G` as in the table viewer; `+` / `-` zoom (100–800 % of fit); `0` resets to fit. The wheel pans vertically. SVG and Mermaid re-rasterise at the zoomed size; raster files scale from the decoded bitmap. Text-tier Mermaid opens as a scrollable source view. Planned: fit / actual-size toggle and content-sized windows (P3-20); Tab / Shift+Tab carousel (P3-21); diagram image / text / source cycle (P3-22).
 
-## Status bar (full width, 1 row)
+## Layout footer / status bar (full width, 1 row)
 
-Like markdown-reader's: focused region as a highlighted pill (`NAV`/`VIEW`, or `SEARCH`/`HELP` while a popup is open; peach, like the tabs and footer links), relative path, cursor line:column (`L12:C5`) and scroll %, updated date and the page's frontmatter `status` (colored by value), word count, reading time, and a **message area** for link targets, notices ("not found"), confirmations, and search match `n/m`. Lower-priority items drop first when narrow.
+Like markdown-reader's: focused region as a highlighted pill (`NAV`/`VIEW`, or `SEARCH`/`HELP` while a popup is open; peach, like the tabs and footer links), relative path, cursor line:column (`L12:C5`) and scroll %, updated date and the page's frontmatter `status` (colored by value), word count, reading time, and a **message area** for link targets, notices ("not found"), confirmations, and search match `n/m`. Help `?` and Options ⚙ are right-aligned on this row, one column inset from the terminal edge, with `?` two columns left of ⚙. Reserve their four columns before laying out status fields or messages so text cannot overwrite them. Lower-priority items drop first when narrow. On tiny widths draw and register only visible icon glyphs; a hidden footer has no hits.
 
 ## Focus & cursor model
 
@@ -181,7 +181,7 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 | `t` | New tab |
 | `x` | Close tab |
 | `/ / Ctrl+k` | Search |
-| `?` | Help |
+| `?` ? | Help |
 | `, / c` ⚙ | Options (toggle) |
 | `n` | Next search match |
 | `N` | Previous search match |

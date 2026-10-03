@@ -17,8 +17,10 @@ pub enum Hit {
     NavSearchRow,
     /// Breadcrumb segment (clickable landing).
     Breadcrumb(PageKey),
-    /// Header ⚙.
+    /// Layout footer ⚙.
     OpenOptions,
+    /// Layout footer ?.
+    OpenHelp,
     /// Header ◫.
     NavToggle,
     /// Click outside the narrow nav overlay (dismiss, never click through).
@@ -104,6 +106,7 @@ impl HitMap {
         match hit {
             Hit::Quit => Action::Quit,
             Hit::OpenOptions => Action::OpenOptions,
+            Hit::OpenHelp => Action::OpenHelp,
             Hit::OptionsDismiss => Action::CloseOptions,
             Hit::OptionsRow(_) => Action::OptionsApply, // index applied in apply_mouse
             Hit::ModalDismiss => Action::CloseModal,

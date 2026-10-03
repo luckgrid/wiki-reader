@@ -1,4 +1,4 @@
-//! Header region (H1): breadcrumb + ⚙ / ◫ / ✕.
+//! Header region (H1): breadcrumb + ◫ / ✕.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -19,12 +19,12 @@ fn col_width(s: &str) -> u16 {
 /// Draw the header and register breadcrumb / icon hits.
 pub fn draw(frame: &mut Frame<'_>, area: Rect, crumbs: &[Crumb], theme: &Theme, hits: &mut HitMap) {
     let area = layout::chrome_pad(area);
-    if area.width == 0 {
+    if area.width == 0 || area.height == 0 {
         return;
     }
 
-    // Trailer: " ⚙ ◫ ✕" → 6 columns.
-    let icon_w: u16 = 6;
+    // Trailer: " ◫ ✕" → 4 columns.
+    let icon_w: u16 = 4;
     let trail_w = area.width.saturating_sub(icon_w);
     let trail = truncate_crumbs(crumbs, usize::from(trail_w));
 
@@ -81,8 +81,8 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, crumbs: &[Crumb], theme: &Theme, 
         }
     }
 
-    // Glyph columns within padded area (right-aligned): ⚙ ◫ ✕
-    for (offset, hit) in [(5, Hit::OpenOptions), (3, Hit::NavToggle), (1, Hit::Quit)] {
+    // Glyph columns within padded area (right-aligned): ◫ ✕
+    for (offset, hit) in [(3, Hit::NavToggle), (1, Hit::Quit)] {
         if area.width >= offset {
             hits.push(
                 Rect {
@@ -109,7 +109,7 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, crumbs: &[Crumb], theme: &Theme, 
         width: area.width.min(icon_w),
         ..area
     };
-    let controls: String = " ⚙ ◫ ✕"
+    let controls: String = " ◫ ✕"
         .chars()
         .skip(usize::from(icon_w - icons.width))
         .collect();

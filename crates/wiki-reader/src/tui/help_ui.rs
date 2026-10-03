@@ -12,7 +12,7 @@ pub struct HelpRow {
     pub spacer: bool,
     /// Key chord label (effective after overrides), or the heading title.
     pub keys: String,
-    /// Header icon that also triggers the action (e.g. `◫`).
+    /// Chrome icon that also triggers the action (e.g. `◫` or `?`).
     pub icon: Option<&'static str>,
     /// Description.
     pub help: &'static str,
