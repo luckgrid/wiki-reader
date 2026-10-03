@@ -81,7 +81,7 @@ impl DiagramSizeCache {
         self.inner.lock().ok()?.get(&(hash, palette)).cloned()
     }
 
-    /// Drop every cached size (e.g. after a theme change).
+    /// Drop every cached size. Theme changes need no invalidation: keys include the palette.
     pub fn clear(&self) {
         if let Ok(mut map) = self.inner.lock() {
             map.clear();

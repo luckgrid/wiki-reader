@@ -1093,7 +1093,8 @@ impl App {
             OptionChoice::Theme(t) => {
                 self.theme_name = t;
                 self.theme = Theme::resolve(t, &self.herdr_theme);
-                self.images.diagram_sizes().clear();
+                // Sizes are keyed by palette. Clearing them can erase a completed
+                // measure before its notification is consumed and strand its queue key.
                 self.relayout_after_diagram_size();
                 patch.theme = Some(t);
             }
