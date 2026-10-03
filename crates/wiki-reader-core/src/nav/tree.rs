@@ -103,8 +103,8 @@ impl NavTree {
         order.get(i + 1).cloned()
     }
 
-    /// Label for `page` as shown outside the tree (prev/next footer); `None` if the
-    /// page is not in the tree.
+    /// Label for `page` in this tree's label mode; `None` if it is not in the tree.
+    /// For View footer labels, use the navigator's title-labelled tree.
     #[must_use]
     pub fn page_display_label(&self, page: &PageKey) -> Option<String> {
         find_display_label(&self.items, page)
@@ -189,7 +189,7 @@ fn find_parent_group(
     None
 }
 
-/// Label to show for `page` outside the tree (prev/next footer): its nav row label.
+/// Find the page's row label in this tree's label mode.
 fn find_display_label(items: &[NavItem], page: &PageKey) -> Option<String> {
     for item in items {
         match item {
@@ -307,6 +307,12 @@ pub fn page_label(index: &Index, key: &PageKey) -> String {
 /// Label with an explicit [`crate::config::LabelMode`].
 #[must_use]
 pub fn page_label_with(index: &Index, key: &PageKey, mode: crate::config::LabelMode) -> String {
+    if mode == crate::config::LabelMode::Filename {
+        return key.relative_path.file_name().map_or_else(
+            || key.relative_path.display().to_string(),
+            |name| name.to_string_lossy().into_owned(),
+        );
+    }
     let file = humanize_filename(&key.relative_path);
     let Some(page) = index.pages.get(key) else {
         return file;
@@ -318,12 +324,7 @@ pub fn page_label_with(index: &Index, key: &PageKey, mode: crate::config::LabelM
         .clone()
         .or_else(|| page.parsed.frontmatter.title.clone())
         .or_else(|| page.parsed.h1.clone());
-    match mode {
-        crate::config::LabelMode::Filename => file,
-        crate::config::LabelMode::Title | crate::config::LabelMode::TitleFilename => {
-            title.unwrap_or(file)
-        }
-    }
+    title.unwrap_or(file)
 }
 
 /// Humanize a filename or folder segment (`02-token-projection` → `Token Projection`).
@@ -479,11 +480,15 @@ fn fold_dir(
         (None, false) => Vec::new(), // hidden
         (Some(land), has_children) => {
             // Folder group (named after the folder) whose first child is the
-            // landing page, labelled with its title.
+            // landing page, labelled according to the chosen mode.
             let key = page_key(collection_id, land);
             let mut children = vec![NavItem::Page {
                 id: NodeId::Page(key.clone()),
-                label: landing_label(dir_path, index, &key),
+                label: if labels == crate::config::LabelMode::Filename {
+                    page_label_with(index, &key, labels)
+                } else {
+                    landing_label(dir_path, index, &key)
+                },
                 key,
             }];
             if has_children {
@@ -502,7 +507,7 @@ fn fold_dir(
             }]
         }
         (None, true) => {
-            // Group without README — humanized folder name
+            // Group without README — on-disk folder name
             let label = folder_label(dir_path);
             let children =
                 sorted_siblings(collection_id, other_pages, child_dir_items, index, labels);
@@ -528,7 +533,11 @@ fn fold_root(
         let key = page_key(collection_id, &land);
         items.push(NavItem::Page {
             id: NodeId::Page(key.clone()),
-            label: root_label(index, &key),
+            label: if labels == crate::config::LabelMode::Filename {
+                page_label_with(index, &key, labels)
+            } else {
+                root_label(index, &key)
+            },
             key,
         });
     }
@@ -542,13 +551,12 @@ fn fold_root(
     items
 }
 
-/// Humanized name of a folder (`design-system` → "Design System").
+/// On-disk name of a folder, without humanization.
 fn folder_label(dir_path: &Path) -> String {
-    let folder_name = dir_path.file_name().map_or_else(
+    dir_path.file_name().map_or_else(
         || dir_path.display().to_string(),
         |s| s.to_string_lossy().into_owned(),
-    );
-    humanize_stem(&folder_name)
+    )
 }
 
 /// Title of a page (`nav_title` → `title` → H1), regardless of label mode.
@@ -563,7 +571,7 @@ fn page_title(index: &Index, key: &PageKey) -> Option<String> {
 }
 
 /// Label for a folder's landing page (README / index): its title, else the folder
-/// name. Never "Readme", whatever the label mode.
+/// name. Used only in title mode, never "Readme".
 fn landing_label(dir_path: &Path, index: &Index, key: &PageKey) -> String {
     page_title(index, key).unwrap_or_else(|| folder_label(dir_path))
 }
@@ -785,7 +793,11 @@ fn build_from_summary(index: &Index, labels: crate::config::LabelMode) -> Option
     if index.pages.contains_key(&root_readme) {
         root_items.push(NavItem::Page {
             id: NodeId::Page(root_readme.clone()),
-            label: root_label(index, &root_readme),
+            label: if labels == crate::config::LabelMode::Filename {
+                page_label_with(index, &root_readme, labels)
+            } else {
+                root_label(index, &root_readme)
+            },
             key: root_readme.clone(),
         });
         listed.insert(root_readme);
@@ -829,7 +841,7 @@ fn build_from_summary(index: &Index, labels: crate::config::LabelMode) -> Option
                     continue;
                 }
                 listed.insert(key.clone());
-                let label = if text.is_empty() {
+                let label = if text.is_empty() || labels == crate::config::LabelMode::Filename {
                     page_label_with(index, &key, labels)
                 } else {
                     text
@@ -1050,6 +1062,56 @@ mod tests {
     }
 
     #[test]
+    fn summary_filename_mode_ignores_curated_page_titles() {
+        let index = index_at("../../fixtures/summary-md");
+        let tree = NavTree::build_with(&index, crate::config::LabelMode::Filename);
+        for key in tree.page_order() {
+            assert_eq!(
+                tree.page_display_label(&key),
+                key.relative_path
+                    .file_name()
+                    .map(|s| s.to_string_lossy().into_owned())
+            );
+        }
+    }
+
+    #[test]
+    fn literal_names_preserve_case_prefixes_and_index_landing() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("02-API_docs")).unwrap();
+        std::fs::write(dir.path().join("index.md"), "# Root title\n").unwrap();
+        std::fs::write(dir.path().join("02-API_docs/index.md"), "# Landing title\n").unwrap();
+        std::fs::write(
+            dir.path().join("02-API_docs/03-HTTP_api.md"),
+            "# Page title\n",
+        )
+        .unwrap();
+        let index = Index::build(&FsProvider::open(dir.path()).unwrap()).unwrap();
+        for mode in [
+            crate::config::LabelMode::Title,
+            crate::config::LabelMode::Filename,
+        ] {
+            let tree = NavTree::build_with(&index, mode);
+            assert!(
+                matches!(&tree.items[1], NavItem::Group { label, .. } if label == "02-API_docs")
+            );
+            for (rel, title) in [
+                ("index.md", "Root title"),
+                ("02-API_docs/index.md", "Landing title"),
+                ("02-API_docs/03-HTTP_api.md", "Page title"),
+            ] {
+                let key = page_key(&index.collection_id, Path::new(rel));
+                let expected = if mode == crate::config::LabelMode::Filename {
+                    Path::new(rel).file_name().unwrap().to_str().unwrap()
+                } else {
+                    title
+                };
+                assert_eq!(tree.page_display_label(&key).as_deref(), Some(expected));
+            }
+        }
+    }
+
+    #[test]
     fn summary_md_nested_snapshot() {
         let index = index_at("../../fixtures/summary-md");
         let tree = NavTree::build(&index);
@@ -1115,17 +1177,19 @@ mod tests {
         let mut labels = Vec::new();
         group_and_leaf_labels(&tree.items, &mut labels);
         for want in [
-            "group:Architecture",
-            "group:Design System",
-            "group:Decisions",
-            "group:Wfos",
+            "group:architecture",
+            "group:design-system",
+            "group:decisions",
+            "group:wfos",
+            "README.md",
+            "tokens.md",
         ] {
             assert!(
                 labels.iter().any(|l| l == want),
                 "missing {want}: {labels:?}"
             );
         }
-        // Landing pages read as their title, never "Readme" / "Overview".
+        // Filename mode retains README.md rather than humanizing it.
         assert!(
             !labels
                 .iter()
@@ -1143,7 +1207,7 @@ mod tests {
             .collect();
         assert_eq!(
             crumbs[1..3],
-            ["Architecture", "Design System"],
+            ["architecture", "design-system"],
             "{crumbs:?}"
         );
     }
@@ -1155,7 +1219,7 @@ mod tests {
         let mut labels = Vec::new();
         group_and_leaf_labels(&tree.items, &mut labels);
         assert!(
-            labels.iter().any(|l| l == "group:Architecture"),
+            labels.iter().any(|l| l == "group:architecture"),
             "{labels:?}"
         );
         assert!(
@@ -1183,7 +1247,14 @@ mod tests {
                 relative_path: PathBuf::from("architecture/design-system/README.md"),
             };
             let label = tree.page_display_label(&landing).expect("in tree");
-            assert_eq!(label, "Design System", "{mode:?}");
+            assert_eq!(
+                label,
+                match mode {
+                    crate::config::LabelMode::Filename => "README.md",
+                    crate::config::LabelMode::Title => "Design System",
+                },
+                "{mode:?}"
+            );
             let tokens = PageKey {
                 collection_id: index.collection_id.clone(),
                 relative_path: PathBuf::from("architecture/design-system/tokens.md"),
@@ -1191,8 +1262,8 @@ mod tests {
             assert_eq!(
                 tree.page_display_label(&tokens).as_deref(),
                 Some(match mode {
-                    crate::config::LabelMode::Filename => "Tokens",
-                    _ => "Token Projection",
+                    crate::config::LabelMode::Filename => "tokens.md",
+                    crate::config::LabelMode::Title => "Token Projection",
                 })
             );
         }
@@ -1220,15 +1291,14 @@ mod tests {
             collection_id: index.collection_id.clone(),
             relative_path: PathBuf::from(rel),
         };
-        // The landing row reads as its title; a page that is merely named
-        // "overview" keeps its own label.
+        // Landing and ordinary pages both retain their on-disk filenames.
         assert_eq!(
             tree.page_display_label(&key("grp/README.md")).as_deref(),
-            Some("Group")
+            Some("README.md")
         );
         assert_eq!(
             tree.page_display_label(&key("grp/overview.md")).as_deref(),
-            Some("Overview")
+            Some("overview.md")
         );
     }
 
@@ -1245,6 +1315,10 @@ mod tests {
         assert_eq!(page_label(&index, &key), "Token Projection");
         // Page.title keeps raw stem for search/index.
         assert_eq!(index.pages[&key].title, "02-token-projection");
+        assert_eq!(
+            page_label_with(&index, &key, crate::config::LabelMode::Filename),
+            "02-token-projection.md"
+        );
     }
 
     #[test]
@@ -1259,13 +1333,7 @@ mod tests {
             page_label(&index, &key)
         );
         let file = page_label_with(&index, &key, crate::config::LabelMode::Filename);
-        assert_eq!(file, "Tokens");
-        let both = page_label_with(&index, &key, crate::config::LabelMode::TitleFilename);
-        assert_eq!(
-            both,
-            page_label_with(&index, &key, crate::config::LabelMode::Title)
-        );
-        assert!(!both.contains('('), "{both}");
+        assert_eq!(file, "tokens.md");
     }
 
     #[test]
@@ -1299,8 +1367,8 @@ mod tests {
             labels,
             vec![
                 "Worked Example Wiki",
-                "Architecture",
-                "Design System",
+                "architecture",
+                "design-system",
                 "Token Projection"
             ]
         );
@@ -1350,7 +1418,7 @@ mod tests {
         let tree = NavTree::build(&index);
         let mut labels = Vec::new();
         group_and_leaf_labels(&tree.items, &mut labels);
-        assert_eq!(labels, ["Root", "group:Solo", "Only Page"]);
+        assert_eq!(labels, ["Root", "group:solo", "Only Page"]);
     }
 
     #[test]

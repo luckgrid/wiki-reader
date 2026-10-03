@@ -100,6 +100,15 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 | 2026-10-03 | decision | Prepare v0.1.2 to put P2-56 in the installed dogfood binary, plus the docs filing from #117 (#119). Require green CI on the release merge commit before tagging. The adoption clock does not restart; Phase 2 stays on fixes-only hold until the ≈ 2026-10-13 verdict | P2-56, P2-57, P2-58, P3-08 |
 | 2026-10-03 | release | [v0.1.2](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.2) published as a prerelease from #119 merge commit `13a1d2d` after its Ubuntu/macOS CI passed. All three release builds passed; three tarballs and three checksums present. macOS arm64 download checksum and binary version verified; Cargo dogfood install upgraded from tag v0.1.1 to v0.1.2 (`~/.cargo/bin/wiki-reader`, `--version` reports 0.1.2). Operator confirmed slow/quick dark/light/herdr theme switches on merged main in standalone Ghostty and Herdr before tagging. Clock continues without restarting | P2-56, P3-08 |
 
+## Next release (unreleased)
+
+| Date | Kind | Note | Task IDs |
+|------|------|------|----------|
+| 2026-10-03 | decision | Phase 3 execution order: nav labels → footer buttons → closed-box chrome → lite build → viewers → final assets. Three-row tab/footer strips approved. herdr API spike follows chrome alongside lite work; exit criteria recorded, with explicit deferral allowed. No release cut or installed-binary upgrade yet | P3-16…P3-23 |
+| 2026-10-03 | fix | P3-16 implementation: title/filename only, literal filesystem folder names, filenames including README/index and extensions, legacy title+filename → title with one diagnostic per config load. Regression coverage includes config layers, curated navigation, index landings, footer/breadcrumb hits and 40/60/80/120-column snapshots. Automated checks recorded in the task row; operator Ghostty/herdr pass still pending | P3-16 |
+| 2026-10-03 | bite | Automated 40/60-column nav-overlay snapshots show article text bleeding through blank nav cells. Needs baseline confirmation and a separate small Phase 2 fix if reproduced; not changed as part of P3-16 | |
+| 2026-10-03 | decision | P3-16 scope corrected by operator: nav.labels affects only the side-nav file tree, never header breadcrumbs or View footer labels. ADR-0021 supersedes ADR-0020's chrome-label rule; cached title navigation and regression coverage keep chrome stable through switches and reindex | P3-16 |
+
 ## Related
 
 - [Phase 2](phase-2-mvp.md)

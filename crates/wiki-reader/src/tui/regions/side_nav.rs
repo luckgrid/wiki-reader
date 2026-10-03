@@ -48,7 +48,6 @@ pub fn draw(
     cursor: &NavStop,
     scroll: u16,
     focused: bool,
-    labels: wiki_reader_core::config::LabelMode,
     position: NavPosition,
     theme: &Theme,
     hits: &mut HitMap,
@@ -166,25 +165,8 @@ pub fn draw(
             spans.push(Span::styled(tri, label_style));
         }
         spans.push(Span::styled(row.label.clone(), label_style));
-        let suffix = if labels == wiki_reader_core::config::LabelMode::TitleFilename
-            && let NodeId::Page(key) = &row.id
-        {
-            let file = wiki_reader_core::nav::humanize_filename(&key.relative_path);
-            if row.label == file {
-                None
-            } else {
-                Some(Span::styled(format!(" ({file})"), row_bg(theme.muted())))
-            }
-        } else {
-            None
-        };
         let max = usize::from(inner.width);
         let span_w = |sp: &Span<'_>| Span::raw(sp.content.as_ref()).width();
-        let total = spans.iter().map(span_w).sum::<usize>() + suffix.as_ref().map_or(0, span_w);
-        // Prefer dropping the muted (file) suffix over cutting the title.
-        if let Some(suf) = suffix.filter(|_| total <= max) {
-            spans.push(suf);
-        }
         let mut used = 0usize;
         let mut clipped = Vec::new();
         for sp in spans {

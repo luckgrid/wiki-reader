@@ -124,6 +124,8 @@ pub struct Navigator {
     tabs: Vec<Tab>,
     active: usize,
     nav: NavState,
+    /// Title-labelled hierarchy for breadcrumbs and view footer, independent of nav.labels.
+    title_tree: NavTree,
     notice: Option<String>,
     label_mode: crate::config::LabelMode,
 }
@@ -153,7 +155,12 @@ impl Navigator {
         if index.pages.is_empty() {
             return Err(Error::EmptyCollection);
         }
-        let tree = NavTree::build_with(&index, labels);
+        let title_tree = NavTree::build(&index);
+        let tree = if labels == crate::config::LabelMode::Title {
+            title_tree.clone()
+        } else {
+            NavTree::build_with(&index, labels)
+        };
         let start = match start {
             Some(key) if index.pages.contains_key(&key) => key,
             Some(key) => return Err(Error::PageNotFound(key)),
@@ -185,9 +192,17 @@ impl Navigator {
                 cursor: NavStop::Node(NodeId::Page(start.clone())),
                 seen_page: Some(start),
             },
+            title_tree,
             notice: None,
             label_mode: labels,
         })
+    }
+
+    /// Title-labelled navigation for breadcrumbs and view footer.
+    /// Cached until reindex; changing side-nav labels does not affect it.
+    #[must_use]
+    pub fn title_tree(&self) -> &NavTree {
+        &self.title_tree
     }
 
     /// Collection index.
@@ -207,7 +222,12 @@ impl Navigator {
         self.save_view(view);
         let cur = self.tab().current().page.clone();
         self.index = index;
-        self.nav.tree = NavTree::build_with(&self.index, self.label_mode);
+        self.title_tree = NavTree::build(&self.index);
+        self.nav.tree = if self.label_mode == crate::config::LabelMode::Title {
+            self.title_tree.clone()
+        } else {
+            NavTree::build_with(&self.index, self.label_mode)
+        };
 
         let ids = collect_node_ids(&self.nav.tree.items);
         self.nav.expanded.retain(|id| ids.contains(id));
@@ -611,6 +631,66 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/worked-example");
         let index = Index::build(&FsProvider::open(root).unwrap()).unwrap();
         Navigator::new(index, None).unwrap()
+    }
+
+    #[test]
+    fn side_nav_label_changes_leave_title_chrome_unchanged() {
+        let mut nav = worked();
+        let tokens = key("architecture/design-system/tokens.md");
+        let crumbs = nav.title_tree().breadcrumb(&tokens);
+        let order = nav.title_tree().page_order();
+        let labels: Vec<_> = order
+            .iter()
+            .map(|k| nav.title_tree().page_display_label(k))
+            .collect();
+        nav.set_label_mode(crate::config::LabelMode::Filename);
+        assert_eq!(
+            nav.nav().tree.page_display_label(&tokens).as_deref(),
+            Some("tokens.md")
+        );
+        assert_eq!(nav.title_tree().breadcrumb(&tokens), crumbs);
+        assert_eq!(nav.nav().tree.page_order(), order);
+        assert_eq!(
+            order
+                .iter()
+                .map(|k| nav.title_tree().page_display_label(k))
+                .collect::<Vec<_>>(),
+            labels
+        );
+        let _ = nav.reindex(nav.index().clone(), ViewState::default());
+        assert_eq!(nav.title_tree().breadcrumb(&tokens), crumbs);
+        assert_eq!(
+            nav.nav().tree.page_display_label(&tokens).as_deref(),
+            Some("tokens.md")
+        );
+        nav.set_label_mode(crate::config::LabelMode::Title);
+        assert_eq!(nav.title_tree(), &nav.nav().tree);
+    }
+
+    #[test]
+    fn reindex_refreshes_title_chrome_in_filename_mode() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("README.md");
+        std::fs::write(&path, "# Before\n").unwrap();
+        let provider = FsProvider::open(dir.path()).unwrap();
+        let index = Index::build(&provider).unwrap();
+        let mut nav =
+            Navigator::new_with_labels(index, None, crate::config::LabelMode::Filename).unwrap();
+        let page = nav.tab().current().page.clone();
+        assert_eq!(
+            nav.title_tree().page_display_label(&page).as_deref(),
+            Some("Before")
+        );
+        std::fs::write(&path, "# After\n").unwrap();
+        let _ = nav.reindex(Index::build(&provider).unwrap(), ViewState::default());
+        assert_eq!(
+            nav.title_tree().page_display_label(&page).as_deref(),
+            Some("After")
+        );
+        assert_eq!(
+            nav.nav().tree.page_display_label(&page).as_deref(),
+            Some("README.md")
+        );
     }
 
     fn key(path: &str) -> PageKey {

@@ -9,18 +9,15 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-/// How side-nav (and footer) page labels are built.
+/// How side-nav page labels are built; breadcrumbs and view footer always use titles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum LabelMode {
     /// `nav_title` → `title` → H1 → humanized filename.
     #[default]
     Title,
-    /// Always the humanized filename / stem.
+    /// On-disk filename, including its extension.
     Filename,
-    /// Title with dim filename suffix at draw time (label itself is title-only).
-    #[serde(rename = "title+filename")]
-    TitleFilename,
 }
 
 impl LabelMode {
@@ -29,7 +26,6 @@ impl LabelMode {
         match self {
             Self::Title => "title",
             Self::Filename => "filename",
-            Self::TitleFilename => "title+filename",
         }
     }
 }
@@ -280,9 +276,17 @@ impl Config {
         if let Some(v) = table.get("nav") {
             if let Some(nav_table) = v.as_table() {
                 if let Some(labels) = nav_table.get("labels") {
-                    match labels.clone().try_into::<LabelMode>() {
-                        Ok(l) => self.nav.labels = l,
-                        Err(err) => self.diagnostics.push(format!("nav.labels: {err}")),
+                    if labels.as_str() == Some("title+filename") {
+                        self.nav.labels = LabelMode::Title;
+                        let warning = "nav.labels: title+filename is deprecated; using title";
+                        if !self.diagnostics.iter().any(|d| d == warning) {
+                            self.diagnostics.push(warning.into());
+                        }
+                    } else {
+                        match labels.clone().try_into::<LabelMode>() {
+                            Ok(l) => self.nav.labels = l,
+                            Err(err) => self.diagnostics.push(format!("nav.labels: {err}")),
+                        }
                     }
                 }
                 if let Some(position) = nav_table.get("position") {
@@ -644,6 +648,24 @@ mod tests {
         assert!(cfg.exclude.is_empty());
         assert_eq!(cfg.nav.labels, LabelMode::Title);
         assert!(cfg.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn legacy_labels_migrate_once_across_config_layers() {
+        let tmp = tempdir().unwrap();
+        let user = tmp.path().join("user.toml");
+        let explicit = tmp.path().join("explicit.toml");
+        for path in [&user, &explicit, &tmp.path().join(".wiki-reader.toml")] {
+            fs::write(path, "[nav]\nlabels = \"title+filename\"\n").unwrap();
+        }
+        let cfg = Config::load_with_xdg(tmp.path(), Some(&explicit), Some(&user));
+        assert_eq!(cfg.nav.labels, LabelMode::Title);
+        assert_eq!(cfg.diagnostics.len(), 1);
+        assert!(cfg.diagnostics[0].contains("deprecated; using title"));
+        fs::write(&explicit, "[nav]\nlabels = \"filename\"\n").unwrap();
+        let cfg = Config::load_with_xdg(tmp.path(), Some(&explicit), Some(&user));
+        assert_eq!(cfg.nav.labels, LabelMode::Filename);
+        assert_eq!(cfg.diagnostics.len(), 1);
     }
 
     #[test]

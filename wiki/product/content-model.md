@@ -83,17 +83,19 @@ Anchors that don't exist resolve to the page with a footer notice. The link isn'
 
 ## Side nav tree construction
 
-The side nav is built from the filesystem but **presented as a documentation site's navigation**. The same tree defines breadcrumbs ([UI spec](ui-spec.md)) and prev/next order.
+The side nav is built from the filesystem but **presented as a documentation site's navigation**. The same hierarchy and page order define breadcrumbs ([UI spec](ui-spec.md)) and prev/next. Their labels always use title-mode navigation, independently of the side-nav label setting ([ADR-0021](../decisions/0021-side-nav-only-label-mode.md)).
 
 ### Labels
 
-The label depends on `nav.labels`. With `title` (the default) or `title+filename` it is the first match of: frontmatter `nav_title` → `title` → first H1 → humanized filename. With `filename` it is always the humanized filename (`02-token-projection.md` → "Token Projection"; numeric prefixes are stripped for display but still used for sorting). Folder rows always use the folder name, and a folder's README (and the root README) always uses its title whatever the mode; the root falls back to the collection name, never "Readme".
+The side-nav page label depends on `nav.labels`; header breadcrumbs and View footer links are unaffected. With `title` (default), use frontmatter `nav_title` → `title` → first H1 → humanized filename. With `filename`, use the actual file-system name including its extension (`02-token-projection.md` stays `02-token-projection.md`), including landing pages (`README.md` / `index.md`). Folder rows preserve on-disk case, hyphens and numeric prefixes in both modes. In title mode, a folder's landing page falls back to the folder name and the root landing page to the collection name. Legacy `title+filename` maps to `title` with one warning per config load ([ADR-0020](../decisions/0020-nav-label-modes.md)).
+
+For curated `SUMMARY.md` / `_sidebar.md` navigation, title mode preserves explicit link labels; filename mode uses actual page filenames. Synthetic part/group headings retain their curated labels: they are not filesystem folder rows.
 
 Config (P1/P2):
 
 ```toml
 [nav]
-labels = "title"            # default; "title" | "filename" | "title+filename" (title with a dim filename suffix)
+labels = "title"            # default; "title" | "filename"
 ```
 
 ### Folding rules (applied bottom-up, recursively)
@@ -103,11 +105,11 @@ Let a folder's **pages** be its markdown files, and its **children** be its page
 | Folder contains | Rendered as |
 |-----------------|-------------|
 | Nothing (after excludes) | Hidden |
-| Only a README (`README.md` / `index.md`) | **Collapsible group**: label = the humanized folder name; its only item is the README, labeled with its title |
-| README + other children | **Collapsible group**: label = the humanized folder name; first item = the README (landing page), labeled with its title; then the other children |
-| Other children, no README | **Collapsible group**: label = humanized folder name; no landing page |
+| Only a README (`README.md` / `index.md`) | **Collapsible group**: label = on-disk folder name; its only item is the README, labeled by `nav.labels` |
+| README + other children | **Collapsible group**: label = on-disk folder name; first item = the README (landing page), labeled by `nav.labels`; then the other children |
+| Other children, no README | **Collapsible group**: label = on-disk folder name; no landing page |
 
-The root folder is special: the root README is always the **first top-level item** (the wiki entry), and its title is the header's root breadcrumb.
+The root folder is special: the root README is always the **first top-level item** (the wiki entry), and its title-mode label is always the header's root breadcrumb, even when the side nav shows `README.md`.
 
 **Worked example**
 
@@ -130,13 +132,13 @@ renders as (annotated; `render_text` omits the ← markers)
 
 ```text
 ● Worked Example Wiki          ← landing / root entry
-▾ Architecture                 ← group (folder name)
+▾ architecture                 ← group (on-disk folder name)
   Architecture Overview        ← landing page (its title)
-  ▾ Design System              ← group
+  ▾ design-system              ← group
     Design System              ← landing page
     Token Projection           ← leaf
-  ▸ Wfos                       ← group (folder with only a README)
-▸ Decisions                    ← group (collapsed)
+  ▸ wfos                       ← group (folder with only a README)
+▸ decisions                    ← group (collapsed)
 ```
 
 > [!NOTE]

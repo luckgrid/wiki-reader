@@ -106,7 +106,7 @@ Terminal markdown tools display files but don't support wiki browsing: links are
 |----|---------------|------------------------|
 | U1 | Sticky viewer section header | Renderer keeps a heading index by line; the viewer layout reserves an optional top row. |
 | U2 | Side nav header/footer | Side nav is a column of (header?, list, footer?) sub-regions from the start. |
-| U3 | Nav label options | `nav.labels = title \| filename`. Folders keep on-disk names; `filename` shows real file-system names (including the extension). Drop `title+filename`; map an existing `title+filename` config value to `title` with a one-time warning (ADR when P3-16 starts). |
+| U3 | Nav label options | `nav.labels = title \| filename` affects only the side-nav file tree; breadcrumbs and View footer links remain title-based ([ADR-0021](../decisions/0021-side-nav-only-label-mode.md)). Folders keep on-disk names; `filename` shows real file-system names (including the extension). Drop `title+filename`; map an existing `title+filename` config value to `title` with one warning per config load ([ADR-0020](../decisions/0020-nav-label-modes.md)). |
 | U4 | Header back/forward buttons | Header right/left slots are lists of icon buttons, not hard-coded. |
 | U5 | Options window | Config is one typed struct with a single merge path; a settings popup can later read and write it without a second source of truth. |
 | U6 | Table viewer | Expose each table's cell grid from the renderer (not only styled lines), so a modal can filter, sort and scroll it. Size the window to content (capped at today's size); keep in-view table styles (bold header, borders, link colour). |

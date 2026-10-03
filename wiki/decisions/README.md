@@ -13,18 +13,20 @@ Architecture decision records. Accepted ADRs are immutable — supersede, don't 
 | [0005](0005-navigation-model.md) | Wiki navigation model | accepted |
 | [0006](0006-reader-first.md) | Reader first; core stays terminal-free | accepted |
 | [0007](0007-input-focus-model.md) | Input & focus model | accepted |
-| [0008](0008-side-nav-as-site-nav.md) | Side nav as site navigation | accepted |
+| [0008](0008-side-nav-as-site-nav.md) | Side nav as site navigation | accepted (label choices superseded by [0020](0020-nav-label-modes.md)) |
 | [0009](0009-tui-tree-widget.md) | Adopt tui-tree-widget for side nav | superseded |
 | [0010](0010-flat-side-nav-rows.md) | Flat visible rows for side nav | accepted |
 | [0011](0011-renderer-source.md) | Keep the current renderer; port patterns not modules | accepted |
 | [0012](0012-syntax-vs-formatted.md) | Syntax vs formatted rendered view | superseded by [0014](0014-remove-formatted-view-toggle.md) |
-| [0013](0013-nav-labels-folder-names-and-titles.md) | Nav shows folder names and page titles, no Overview | accepted |
+| [0013](0013-nav-labels-folder-names-and-titles.md) | Nav shows folder names and page titles, no Overview | accepted (label rules superseded by [0020](0020-nav-label-modes.md)) |
 | [0014](0014-remove-formatted-view-toggle.md) | Remove the syntax/formatted view toggle | accepted |
 | [0015](0015-new-tab-combos-kitty-keyboard.md) | New-tab combos via kitty keyboard disambiguation | accepted (Cmd dropped by [0016](0016-ctrl-only-new-tab-combos.md)) |
 | [0016](0016-ctrl-only-new-tab-combos.md) | New-tab combos are Ctrl-only (no Cmd) | accepted |
 | [0017](0017-static-local-images-only.md) | Images are static, local and never fetched | accepted |
 | [0018](0018-config-write-path.md) | Options window writes the operator config file | accepted |
 | [0019](0019-theme-presets.md) | luckgrid presets, and `herdr` follows herdr's config | accepted |
+| [0020](0020-nav-label-modes.md) | Titles or actual filesystem names | accepted (chrome label scope superseded by [0021](0021-side-nav-only-label-mode.md)) |
+| [0021](0021-side-nav-only-label-mode.md) | Nav label mode applies only to the side nav | accepted |
 
 ## Related
 

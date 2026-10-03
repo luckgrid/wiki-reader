@@ -29,7 +29,6 @@ impl OptionChoice {
             Self::NavPosition(NavPosition::Right) => "Nav right".into(),
             Self::NavLabels(LabelMode::Title) => "Page titles".into(),
             Self::NavLabels(LabelMode::Filename) => "File names".into(),
-            Self::NavLabels(LabelMode::TitleFilename) => "Titles and file names".into(),
             Self::Diagrams(DiagramMode::Auto) => "Auto".into(),
             Self::Diagrams(DiagramMode::Image) => "Image only".into(),
             Self::Diagrams(DiagramMode::Text) => "Text only".into(),
@@ -75,13 +74,9 @@ pub fn lines() -> Vec<OptionLine> {
     );
     group(
         "Nav labels",
-        [
-            LabelMode::Title,
-            LabelMode::Filename,
-            LabelMode::TitleFilename,
-        ]
-        .map(OptionChoice::NavLabels)
-        .into(),
+        [LabelMode::Title, LabelMode::Filename]
+            .map(OptionChoice::NavLabels)
+            .into(),
     );
     group(
         "Mermaid",
@@ -191,7 +186,7 @@ mod tests {
     #[test]
     fn choices_cover_every_value_once() {
         let all = choices();
-        assert_eq!(all.len(), 3 + 2 + 3 + 4 + 1 + MAX_ROW_STEPS.len() + 2);
+        assert_eq!(all.len(), 3 + 2 + 2 + 4 + 1 + MAX_ROW_STEPS.len() + 2);
         for (i, a) in all.iter().enumerate() {
             assert!(!all[i + 1..].contains(a), "duplicate {a:?}");
         }
