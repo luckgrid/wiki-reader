@@ -102,7 +102,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     );
 
     // Pictures go over the viewer text and under popups (their `Clear` covers them). A narrow
-    // terminal's nav overlay has no `Clear` of its own, so pictures wait until it closes.
+    // terminal's nav overlay hides pictures until it closes (terminal protocols are not cells).
     if !regions.nav_overlay {
         app.images.draw(
             frame,
@@ -114,6 +114,15 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     }
 
     if regions.side_nav.width > 0 {
+        if regions.nav_overlay {
+            frame.render_widget(ratatui::widgets::Clear, regions.side_nav);
+            frame.render_widget(
+                ratatui::widgets::Block::default().style(theme.base_style()),
+                regions.side_nav,
+            );
+            // Above all underlying hits, below nav hits and later modal hits.
+            app.hit_map.push(area, crate::tui::hit::Hit::NavDismiss);
+        }
         side_nav::draw(
             frame,
             regions.side_nav,

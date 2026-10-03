@@ -65,7 +65,7 @@ The diagram and descriptions below document the current implementation until P3-
 
 ## Header (full width, 1 padded row)
 
-- **Left:** the root entry page's title, then the breadcrumb trail through side-nav groups to the current page. Example: `Project Wiki › architecture › design-system › Token Projection`. Segments follow the **side nav hierarchy** (groups), not raw directories, so folded folders ([content model](content-model.md)) don't produce extra crumbs. Each segment is clickable and opens that group's landing page. The trail truncates from the middle with `…` when narrow, always keeping the root and current page.
+- **Left:** the root entry page's title, then the breadcrumb trail through side-nav groups to the current page. Example: `Project Wiki › architecture › design-system › Token Projection`. Segments follow the **side nav hierarchy** (groups), not raw directories, so folded folders ([content model](content-model.md)) don't produce extra crumbs. Each segment is clickable and opens that group's landing page. The trail drops middle segments with `…` when narrow, preferring the root and current page. Header icons reserve their right-hand columns first; any labels that still exceed the remaining space are ellipsized, and breadcrumb hit areas stop before the controls.
 - **Right:** icon buttons. `⚙` opens the options window (same as `,` / `c`). `◫` toggles the side nav. `✕` quits (saves session; same as `q`). There is no syntax/formatted toggle: Rendered is always the formatted view and `r` shows the markdown syntax ([ADR-0014](../decisions/0014-remove-formatted-view-toggle.md)). P3-18 moves ⚙ (and a `?` help button) to the View footer.
 - Future: optional back/forward buttons (`‹ ›`). Back/forward are keyboard-only in v1.
 
@@ -278,7 +278,7 @@ Click to focus a pane; click items, links, breadcrumbs, prev/next, header icons,
 |-------|--------|
 | ≥ 120 | Side nav 30 (draggable, 16–50) · Viewer flex |
 | 80–119 | Side nav 26 (draggable, 16–50) · Viewer flex |
-| < 80 | Side nav hidden; `◫`/`b` shows it as an overlay that closes after navigation |
+| < 80 | Side nav hidden; `◫`/`b` shows an opaque overlay using the inherited theme background. It closes after navigation or an outside click; that click only dismisses, never activates the underlying target |
 
 ## Future UI slots (designed for, not built)
 

@@ -1,0 +1,28 @@
+---
+source: crates/wiki-reader/src/tui/app/tests.rs
+expression: "rows.join(\"\\n\")"
+---
+ Worked Example Wiki              ⚙ ◫ ✕ 
+┌────────────────────────────┐─────────┐
+│▌/ Search…                  │─────────│
+│                            │         │
+│▌ Worked Example Wiki       │         │
+│  ▸ architecture            │─────────│
+│  ▸ decisions               │         │
+│                            │sed as   │
+│                            │         │
+│                            │         │
+│                            │ew,      │
+│                            │n return │
+│                            │.        │
+│                            │         │
+│                            │         │
+│                            │         │
+│                            │         │
+│                            │         │
+│                            │         │
+│                            │         │
+│                            │         │
+│                            │         │
+└────────────────────────────┘ture… › ├┘
+  VIEW  · README.md · L1:C1 9%

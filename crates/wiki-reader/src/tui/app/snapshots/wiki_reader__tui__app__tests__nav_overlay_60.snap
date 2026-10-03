@@ -1,0 +1,28 @@
+---
+source: crates/wiki-reader/src/tui/app/tests.rs
+expression: "rows.join(\"\\n\")"
+---
+ Worked Example Wiki                                  ⚙ ◫ ✕ 
+┌────────────────────────────┐─────────────────────────────┐
+│▌/ Search…                  │─────────────────────────────│
+│                            │                             │
+│▌ Worked Example Wiki       │                             │
+│  ▸ architecture            │────────────                 │
+│  ▸ decisions               │                             │
+│                            │sed as the default           │
+│                            │                             │
+│                            │                             │
+│                            │ew, follow Token Projection, │
+│                            │story exists.                │
+│                            │                             │
+│                            │                             │
+│                            │                             │
+│                            │                             │
+│                            │                             │
+│                            │                             │
+│                            │                             │
+│                            │                             │
+│                            │                             │
+│                            │                             │
+└────────────────────────────┘──┤ Architecture Overview › ├┘
+  VIEW  · README.md · L1:C1 10% · 2026-09-28 · draft · 29w

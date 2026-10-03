@@ -60,6 +60,128 @@ fn click_at(app: &mut App, x: u16, y: u16) -> Option<Action> {
 }
 
 #[test]
+fn narrow_nav_overlay_is_opaque_and_outside_clicks_only_dismiss() {
+    for width in [40, 60] {
+        let mut app = App::new(&fixture()).unwrap();
+        let _ = draw_app(&mut app, width, 24);
+        app.update(Action::ToggleNav);
+        let terminal = draw_app(&mut app, width, 24);
+        let rows = screen_rows(&mut app, width, 24);
+        insta::assert_snapshot!(format!("nav_overlay_{width}"), rows.join("\n"));
+        let regions = crate::tui::layout::split(
+            terminal.backend().buffer().area,
+            true,
+            app.nav_width,
+            app.nav_position,
+        );
+        // The blank gap beneath search must replace article cells and inherit the theme.
+        for x in 1..regions.side_nav.width - 1 {
+            let cell = &terminal.backend().buffer()[(x, 3)];
+            assert_eq!(cell.symbol(), " ");
+            assert_eq!(cell.bg, app.theme.base_style().bg.unwrap());
+        }
+        // Below the short fixture tree, no article text may survive either.
+        for x in 1..regions.side_nav.width - 1 {
+            assert_eq!(terminal.backend().buffer()[(x, 7)].symbol(), " ");
+        }
+        let page = app.navigator.tab().current().page.clone();
+        // The header gear normally opens options, but now only dismisses the nav.
+        let (x, y) = find_glyph(terminal.backend().buffer(), "⚙").unwrap();
+        mouse_at(&mut app, MouseEventKind::Down(MouseButton::Left), x, y);
+        assert!(!app.nav_visible);
+        assert!(app.options.is_none());
+        // A queued second press using the stale hit map must not reopen the nav.
+        mouse_at(&mut app, MouseEventKind::Down(MouseButton::Left), x, y);
+        mouse_at(&mut app, MouseEventKind::Up(MouseButton::Left), x, y);
+        assert!(!app.nav_visible);
+        assert_eq!(app.navigator.tab().current().page, page);
+        assert!(!app.selecting);
+
+        app.update(Action::ToggleNav);
+        let _ = draw_app(&mut app, width, 24);
+        mouse_at(
+            &mut app,
+            MouseEventKind::Down(MouseButton::Left),
+            width - 3,
+            8,
+        );
+        assert!(!app.nav_visible);
+        assert!(!app.selecting);
+        assert!(app.pending_link.is_none());
+    }
+}
+
+#[test]
+fn narrow_nav_inherits_theme_and_popups_keep_mouse_precedence() {
+    for theme in [Theme::dark(), Theme::light(), Theme::herdr("vesper").0] {
+        let mut app = App::new(&fixture()).unwrap();
+        app.theme = theme;
+        let _ = draw_app(&mut app, 60, 24);
+        app.update(Action::ToggleNav);
+        let terminal = draw_app(&mut app, 60, 24);
+        assert_eq!(terminal.backend().buffer()[(2, 7)].symbol(), " ");
+        assert_eq!(
+            terminal.backend().buffer()[(2, 7)].bg,
+            theme.base_style().bg.unwrap()
+        );
+        app.update(Action::OpenHelp);
+        let _ = draw_app(&mut app, 60, 24);
+        mouse_at(&mut app, MouseEventKind::Down(MouseButton::Left), 59, 0);
+        assert!(app.help.is_none());
+        assert!(app.nav_visible, "popup dismissal must not also dismiss nav");
+        let _ = draw_app(&mut app, 60, 24);
+        mouse_at(&mut app, MouseEventKind::Down(MouseButton::Middle), 59, 8);
+        assert!(!app.nav_visible);
+        assert_eq!(app.navigator.tabs().len(), 1);
+    }
+}
+
+#[test]
+fn long_breadcrumbs_keep_header_controls_visible_and_hits_clipped() {
+    use wiki_reader_core::nav::Crumb;
+    for width in [40, 60, 80, 120] {
+        let mut terminal = Terminal::new(TestBackend::new(width, 1)).unwrap();
+        let mut hits = HitMap::default();
+        let key = PageKey {
+            collection_id: "test".into(),
+            relative_path: "README.md".into(),
+        };
+        let crumbs = vec![
+            Crumb {
+                label: "Root".into(),
+                target: Some(key),
+            },
+            Crumb {
+                label: "Very long current title 界".repeat(10),
+                target: None,
+            },
+        ];
+        terminal
+            .draw(|frame| {
+                crate::tui::regions::header::draw(
+                    frame,
+                    frame.area(),
+                    &crumbs,
+                    &Theme::dark(),
+                    &mut hits,
+                );
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        assert_eq!(buf[(width - 6, 0)].symbol(), "⚙");
+        assert_eq!(buf[(width - 4, 0)].symbol(), "◫");
+        assert_eq!(buf[(width - 2, 0)].symbol(), "✕");
+        assert!(find_glyph(buf, "…").is_some());
+        assert!(matches!(hits.hit_at(width - 4, 0), Some(Hit::NavToggle)));
+        for (rect, hit) in hits.entries() {
+            if matches!(hit, Hit::Breadcrumb(_)) {
+                assert!(rect.right() <= width - 7);
+            }
+        }
+    }
+}
+
+#[test]
 fn snapshots_responsive_widths() {
     let root = fixture();
     for w in [40u16, 60, 80, 120] {

@@ -8,6 +8,7 @@ use wiki_reader_core::nav::Crumb;
 
 use crate::tui::hit::{Hit, HitMap};
 use crate::tui::layout;
+use crate::tui::regions::footer::ellipsis;
 use crate::tui::theme::Theme;
 
 /// Display columns for `s` (CJK/emoji-safe; matches ratatui cell width).
@@ -29,9 +30,18 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, crumbs: &[Crumb], theme: &Theme, 
 
     let mut spans = Vec::new();
     let mut x = area.x;
+    let trail_end = area.x.saturating_add(trail_w);
     for (i, crumb) in trail.iter().enumerate() {
+        let remaining = trail_end.saturating_sub(x);
+        if remaining == 0 {
+            break;
+        }
         if i > 0 {
             let sep = " › ";
+            if remaining <= col_width(sep) {
+                spans.push(Span::styled("…", theme.muted()));
+                break;
+            }
             spans.push(Span::styled(sep, theme.muted()));
             x = x.saturating_add(col_width(sep));
         }
@@ -43,8 +53,16 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, crumbs: &[Crumb], theme: &Theme, 
         } else {
             theme.muted()
         };
-        let label = &crumb.label;
-        let w = col_width(label).max(1);
+        let remaining = trail_end.saturating_sub(x);
+        // Reserve an ellipsis when more crumbs cannot fit after this label.
+        let clipped = col_width(&crumb.label) > remaining
+            || (i + 1 < trail.len() && col_width(&crumb.label) >= remaining);
+        let label = if clipped {
+            ellipsis(&format!("{}…", crumb.label), usize::from(remaining))
+        } else {
+            crumb.label.clone()
+        };
+        let w = col_width(&label);
         if let Some(key) = &crumb.target {
             hits.push(
                 Rect {
@@ -56,53 +74,46 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, crumbs: &[Crumb], theme: &Theme, 
                 Hit::Breadcrumb(key.clone()),
             );
         }
-        spans.push(Span::styled(label.to_owned(), style));
+        spans.push(Span::styled(label, style));
         x = x.saturating_add(w);
+        if clipped {
+            break;
+        }
     }
 
     // Glyph columns within padded area (right-aligned): ⚙ ◫ ✕
-    let gear_x = area.x.saturating_add(area.width.saturating_sub(5));
-    let toggle_x = area.x.saturating_add(area.width.saturating_sub(3));
-    let quit_x = area.x.saturating_add(area.width.saturating_sub(1));
-    hits.push(
-        Rect {
-            x: gear_x,
-            y: area.y,
-            width: 1,
-            height: 1,
-        },
-        Hit::OpenOptions,
-    );
-    hits.push(
-        Rect {
-            x: toggle_x,
-            y: area.y,
-            width: 1,
-            height: 1,
-        },
-        Hit::NavToggle,
-    );
-    hits.push(
-        Rect {
-            x: quit_x,
-            y: area.y,
-            width: 1,
-            height: 1,
-        },
-        Hit::Quit,
-    );
-
-    let mut line_spans = spans;
-    let trail_cols: u16 = line_spans.iter().map(|s| col_width(&s.content)).sum();
-    let pad = area.width.saturating_sub(trail_cols.saturating_add(icon_w));
-    if pad > 0 {
-        line_spans.push(Span::raw(" ".repeat(usize::from(pad))));
+    for (offset, hit) in [(5, Hit::OpenOptions), (3, Hit::NavToggle), (1, Hit::Quit)] {
+        if area.width >= offset {
+            hits.push(
+                Rect {
+                    x: area.right() - offset,
+                    y: area.y,
+                    width: 1,
+                    height: 1,
+                },
+                hit,
+            );
+        }
     }
-    line_spans.push(Span::styled(" ⚙", theme.accent()));
-    line_spans.push(Span::styled(" ◫", theme.accent()));
-    line_spans.push(Span::styled(" ✕", theme.accent()));
 
-    frame.render_widget(Paragraph::new(Line::from(line_spans)), area);
+    frame.render_widget(
+        Paragraph::new(Line::from(spans)),
+        Rect {
+            width: trail_w,
+            ..area
+        },
+    );
+    // Render independently: no breadcrumb can push controls off-screen.
+    let icons = Rect {
+        x: area.x.saturating_add(trail_w),
+        width: area.width.min(icon_w),
+        ..area
+    };
+    let controls: String = " ⚙ ◫ ✕"
+        .chars()
+        .skip(usize::from(icon_w - icons.width))
+        .collect();
+    frame.render_widget(Paragraph::new(controls).style(theme.accent()), icons);
 }
 
 /// Keep root and current; drop middle crumbs with `…` when over width.

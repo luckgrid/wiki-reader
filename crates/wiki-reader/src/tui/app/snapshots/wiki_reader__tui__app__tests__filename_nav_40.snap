@@ -2,27 +2,27 @@
 source: crates/wiki-reader/src/tui/app/tests.rs
 expression: out
 ---
- Worked Example Wiki › … › Token Projec 
+ Worked Example Wiki › … › Token… ⚙ ◫ ✕ 
 ┌────────────────────────────┐─────────┐
 │▌/ Search…                  │─────────│
 │                            │         │
-│  README.mdection           │         │
-│  ▾ architecture────────────│─────────│
+│  README.md                 │         │
+│  ▾ architecture            │─────────│
 │     README.md              │         │
-│     ▾ design-systemr stays │         │
-│        README.mdee Design S│stem and │
+│     ▾ design-system        │         │
+│        README.md           │stem and │
 │▌       tokens.md           │         │
 │     ▸ wfos                 │         │
 │  ▸ decisions               │         │
-│ ┌ Linked from ─────────────│────────┐│
-│ │ Worked Example Wiki      │        ││
-│ │ Minimal fixture collectio│ for w… ││
-│ ├──────────────────────────│────────┤│
-│ │ Architecture Overview    │        ││
-│ │ Landing page for the arch│tectur… ││
-│ ├──────────────────────────│────────┤│
-│ │ Design System            │        ││
-│ │ Design-system section lan│ing pa… ││
-│ └──────────────────────────│────────┘│
+│                            │────────┐│
+│                            │        ││
+│                            │ for w… ││
+│                            │────────┤│
+│                            │        ││
+│                            │tectur… ││
+│                            │────────┤│
+│                            │        ││
+│                            │ing pa… ││
+│                            │────────┘│
 └────────────────────────────┘ow OS › ├┘
   NAV  · architecture/design-system/tok

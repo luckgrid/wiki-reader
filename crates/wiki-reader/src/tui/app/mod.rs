@@ -876,6 +876,7 @@ impl App {
             | Hit::NavGroupToggle(_)
             | Hit::NavSearchRow
             | Hit::NavToggle
+            | Hit::NavDismiss
             | Hit::Quit
             | Hit::Block(_)
             | Hit::ViewerLine(_)
