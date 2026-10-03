@@ -38,7 +38,7 @@ Existing terminal markdown tools behave like editors or file browsers: opening a
 
 ## Status
 
-Phase 1 (reader shell) is closed. Phase 2 (wiki navigation MVP) is feature-complete and in its dogfood window (clock started 2026-09-29, ending about 2026-10-13); Phase 3 alpha polish follows. Shipped: side nav with breadcrumbs, working links, back/forward and prev/next, backlinks, heading jumps, tabs, search (files and content), a help overlay (`?`), a column cursor with mouse drag-select and copy, a soft-wrapped raw view (`r`; Rendered is the formatted view), `$EDITOR` support, config, and session restore. Prereleases and binaries are on [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases). Start at [wiki/README.md](wiki/README.md) and see the [roadmap](wiki/roadmap/README.md) for the next tasks.
+Phase 1 (reader shell) is closed. Phase 2 (wiki navigation MVP) is feature-complete and in its dogfood window (clock started 2026-09-29, ending about 2026-10-13); Phase 3 alpha polish follows. Shipped: side nav with breadcrumbs, working links, back/forward and prev/next, backlinks, heading jumps, tabs, search (files and content), a help overlay (`?`), a column cursor with mouse drag-select and copy, a soft-wrapped raw view (`r`; Rendered is the formatted view), `$EDITOR` support, light/dark/herdr themes, an options window (`,`), full-screen table and image/diagram viewers, [config](wiki/guides/configuration.md), and session restore. Prereleases and binaries are on [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases). Start at [wiki/README.md](wiki/README.md) and see the [roadmap](wiki/roadmap/README.md) for the next tasks.
 
 ## Install
 

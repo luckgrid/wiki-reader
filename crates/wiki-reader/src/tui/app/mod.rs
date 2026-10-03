@@ -129,6 +129,9 @@ pub struct App {
     pub(crate) modal: Option<Box<dyn ModalContent>>,
     /// Where the options window persists changes (`--config` or the XDG file).
     pub(crate) config_write_path: Option<std::path::PathBuf>,
+    /// The collection's `.wiki-reader.toml` when it merges after the write target (no `--config`),
+    /// so it can override a saved option on the next launch.
+    pub(crate) config_shadow_path: Option<std::path::PathBuf>,
     /// Active colour preset.
     pub(crate) theme_name: wiki_reader_core::config::ThemeName,
     /// `[images] enabled`.
@@ -291,6 +294,9 @@ impl App {
             } else {
                 wiki_reader_core::config::write_target(config_path)
             },
+            config_shadow_path: config_path
+                .is_none()
+                .then(|| root.join(".wiki-reader.toml")),
             theme_name: config.theme,
             images_enabled: config.images.enabled,
             images_max_slot_rows: config.images.max_slot_rows,
@@ -1107,6 +1113,14 @@ impl App {
         if let Some(target) = &self.config_write_path {
             if let Err(err) = wiki_reader_core::config::write_patch(target, &patch) {
                 self.message = err;
+            } else if let Some(shadow) = &self.config_shadow_path {
+                let keys = wiki_reader_core::config::shadowed_keys(shadow, &patch);
+                if !keys.is_empty() {
+                    self.message = format!(
+                        "saved, but .wiki-reader.toml also sets {} and wins on restart",
+                        keys.join(", ")
+                    );
+                }
             }
         } else {
             self.message = "options not saved: no config path".into();
