@@ -28,8 +28,17 @@ pub enum ModalEvent {
     Copy(String),
 }
 
-/// Body of a modal viewer. Implemented by the table viewer; P3-15 adds the picture viewer.
+/// Body of a modal viewer: the table viewer (P3-14) and the image / diagram viewer (P3-15).
+///
+/// Pictures are drawn from [`Self::draw`]: the shell calls it after the panel's `Clear`, so a
+/// content-owned image lands over the cleared cells (image → `Clear` → popup order holds).
 pub trait ModalContent {
+    /// Status-bar mode label.
+    fn label(&self) -> &'static str;
+    /// True while background work is pending, so the event loop polls fast and redraws.
+    fn busy(&self) -> bool {
+        false
+    }
     /// Text on the top border.
     fn title(&self) -> String;
     /// Footer line: key hints, or a prompt while [`Self::editing`].
@@ -103,6 +112,9 @@ mod tests {
 
     struct Typing(bool);
     impl ModalContent for Typing {
+        fn label(&self) -> &'static str {
+            "TEST"
+        }
         fn title(&self) -> String {
             String::new()
         }

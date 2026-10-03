@@ -146,8 +146,8 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         frame,
         regions.status,
         &StatusModel {
-            mode_label: if app.modal.is_some() {
-                "TABLE"
+            mode_label: if let Some(modal) = &app.modal {
+                modal.label()
             } else if app.search.is_some() {
                 "SEARCH"
             } else if app.help.is_some() {
@@ -707,5 +707,6 @@ fn block_action_status(app: &App, target: &str) -> String {
         }
         wiki_reader_render::BlockActionKind::CopyCode => "copy code".into(),
         wiki_reader_render::BlockActionKind::ExpandTable => "expand table (Enter)".into(),
+        wiki_reader_render::BlockActionKind::ExpandDiagram => "expand diagram (Enter)".into(),
     }
 }

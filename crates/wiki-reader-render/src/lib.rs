@@ -16,8 +16,9 @@ pub use images::{
 };
 pub use link_span::{LinkClass, LinkId, LinkSpan};
 pub use mermaid_raster::{
-    DiagramPalette, MIN_LEGIBLE_SCALE, RasterError, RasterImage, is_legible, mermaid_to_svg,
-    rasterise_svg, render_mermaid, render_mermaid_for_pane, svg_natural_size,
+    DiagramPalette, MIN_LEGIBLE_SCALE, RasterError, RasterImage, is_legible, mermaid_svg_bytes,
+    mermaid_to_svg, rasterise_svg, rasterise_svg_scaled, render_mermaid, render_mermaid_for_pane,
+    svg_natural_size,
 };
 pub use render::{
     BlockAction, BlockActionKind, DocTable, RenderOpts, RenderedDoc, StyleKind, StyledLine,
@@ -1482,6 +1483,17 @@ mod tests {
             }
             insta::assert_snapshot!(format!("images_{w}"), out);
         }
+    }
+
+    #[test]
+    fn mermaid_fence_registers_expand_before_copy() {
+        let doc = render_src("```mermaid\nflowchart LR\n  A --> B\n```\n", 60);
+        let kinds: Vec<_> = doc.block_actions.iter().map(|a| a.kind).collect();
+        assert_eq!(
+            kinds,
+            [BlockActionKind::ExpandDiagram, BlockActionKind::CopyCode]
+        );
+        assert!(doc.block_actions[0].payload.contains("A --> B"));
     }
 
     #[test]

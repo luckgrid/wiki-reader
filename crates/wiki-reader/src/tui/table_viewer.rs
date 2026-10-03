@@ -179,6 +179,10 @@ impl TableViewer {
 }
 
 impl ModalContent for TableViewer {
+    fn label(&self) -> &'static str {
+        "TABLE"
+    }
+
     fn title(&self) -> String {
         format!(
             "Table (line {}) · row {}/{} · col {}/{}",
