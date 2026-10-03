@@ -3,7 +3,7 @@ members = ["crates/*"]
 resolver = "3"
 
 [workspace.package]
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.98.1"
@@ -37,8 +37,8 @@ mermaid-text = "0.56.1"
 mermaid-rs-renderer = { version = "0.3.1", default-features = false }
 resvg = { version = "0.48.1", default-features = false, features = ["text"] }
 signal-hook = "0.3.18"
-wiki-reader-core = { path = "crates/wiki-reader-core", version = "0.1.2" }
-wiki-reader-render = { path = "crates/wiki-reader-render", version = "0.1.2" }
+wiki-reader-core = { path = "crates/wiki-reader-core", version = "0.1.3" }
+wiki-reader-render = { path = "crates/wiki-reader-render", version = "0.1.3" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
