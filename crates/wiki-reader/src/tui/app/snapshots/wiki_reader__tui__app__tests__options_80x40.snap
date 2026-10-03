@@ -4,18 +4,18 @@ expression: out
 ---
  Worked Example Wiki                                                        ◫ ✕ 
 ┌─────────────┌ Options ─────────────────────────────────────────┐─────────────┐
-│▌/ Search…   │                                                  │             │
-│             │  Theme                                           │             │
-│▌ Worked Exam│  > ● Dark (luckgrid)                             │─────────────│
+│▌/ Search…   │                                                  │─────────────┤
+│             │  Theme                                           │─────────────│
+│▌ Worked Exam│  > ● Dark (luckgrid)                             │             │
 │  ▸ architect│    ○ Light (luckgrid)                            │             │
-│  ▸ decisions│    ○ Herdr (follows herdr)                       │             │
-│             │                                                  │──           │
-│             │  Panels                                          │             │
-│             │    ● Nav left                                    │ default     │
-│             │    ○ Nav right                                   │             │
+│  ▸ decisions│    ○ Herdr (follows herdr)                       │──           │
 │             │                                                  │             │
-│             │  Nav labels                                      │ Token       │
-│             │    ● Page titles                                 │history      │
+│             │  Panels                                          │ default     │
+│             │    ● Nav left                                    │             │
+│             │    ○ Nav right                                   │             │
+│             │                                                  │ Token       │
+│             │  Nav labels                                      │history      │
+│             │    ● Page titles                                 │             │
 │             │    ○ File names                                  │             │
 │             │                                                  │             │
 │             │  Mermaid                                         │             │
@@ -38,7 +38,7 @@ expression: out
 │             │  Copy path (y)                                   │             │
 │             │    ● Relative to the collection                  │             │
 │             │    ○ Absolute path                               │             │
-│             │                                                  │────────────┐│
-│             │  ↑↓ / j k Navigate  Enter Apply  Esc / c Close   │e Overvi… › ││
-└─────────────└──────────────────────────────────────────────────┘────────────┘┘
+│             │                                                  │             │
+│             │  ↑↓ / j k Navigate  Enter Apply  Esc / c Close   │────────────┬┤
+└─────────────└──────────────────────────────────────────────────┘e Overvi… › ├┘
   OPTIONS  · README.md · L1:C1 9% · 2026-09-28 · draft · 29w · 1m           ? ⚙

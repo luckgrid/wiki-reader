@@ -5,10 +5,10 @@ A terminal wiki reader for markdown collections. It browses like a documentation
 <!-- ui-diagram:start -->
 ```text
  Worked Example Wiki                                                        ◫ ✕
-┌────────────────────────┐┌┌─────────────┐─────────────────────────────────────┐
-│▌/ Search…              │││ README.md × │                                     │
-│                        ││└─────────────┘                                     │
-│▌ Worked Example Wiki   ││▌── frontmatter ▸ ──────────────────────────────────│
+┌────────────────────────┐┌┤ README.md × ├─────────────────────────────────────┐
+│▌/ Search…              │├┴─────────────┴─────────────────────────────────────┤
+│                        ││▌── frontmatter ▸ ──────────────────────────────────│
+│▌ Worked Example Wiki   ││                                                    │
 │  ▸ architecture        ││                                                    │
 │  ▸ decisions           ││ Worked Example Wiki                                │
 │                        ││ ────────────────────────────────────────           │
@@ -16,9 +16,9 @@ A terminal wiki reader for markdown collections. It browses like a documentation
 │                        ││ A tiny markdown collection used as the default     │
 │                        ││ smoke-test root.                                   │
 │                        ││                                                    │
-│                        ││                          ┌────────────────────────┐│
-│                        ││                          │ Architecture Overvi… › ││
-└────────────────────────┘└──────────────────────────└────────────────────────┘┘
+│                        ││                                                    │
+│                        │├──────────────────────────┬────────────────────────┬┤
+└────────────────────────┘└──────────────────────────┤ Architecture Overvi… › ├┘
   VIEW  · README.md · L1:C1 9% · 2026-09-28 · draft · 29w · 1m              ? ⚙
 ```
 <!-- ui-diagram:end -->

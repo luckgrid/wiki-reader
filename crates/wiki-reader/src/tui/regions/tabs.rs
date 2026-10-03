@@ -1,4 +1,4 @@
-//! View tabs: a fully closed group in a dedicated three-row strip.
+//! View tabs: connected compact title/separator rows with a solid background.
 //! Active selection uses the accent with View focus and a darker fill with Nav focus.
 
 use ratatui::Frame;
@@ -22,7 +22,7 @@ fn filename(tab: &Tab) -> String {
 /// Longest label a tab shows before it is ellipsized.
 const MAX_LABEL: usize = 18;
 
-/// Middle row of a closed group `│ a.md × │ b.md × │`, with shared separators.
+/// Pane-edge labels `┤ a.md × │ b.md × ├`, with shared separators.
 /// Registers [`Hit::Tab`] over each padded cell and
 /// [`Hit::TabClose`] over its `×`.
 ///
@@ -39,12 +39,12 @@ pub fn titles(
     theme: &Theme,
     hits: &mut HitMap,
 ) -> Line<'static> {
-    if area.height < 3 || area.width < 9 {
+    if area.height < 2 || area.width < 9 {
         return Line::default();
     }
     // Pane sides and the closed group's two borders.
     let inner_w = usize::from(area.width - 4);
-    let border = theme.border(pane_focused);
+    let border = theme.border(pane_focused).bg(theme.surface_muted);
     let fill = if pane_focused {
         Style::default().bg(theme.peach).fg(theme.on_peach)
     } else {
@@ -97,7 +97,7 @@ pub fn titles(
         hits.push(
             Rect {
                 x,
-                y: area.y + 1,
+                y: area.y,
                 width: w16,
                 height: 1,
             },
@@ -110,7 +110,7 @@ pub fn titles(
         hits.push(
             Rect {
                 x: close_x,
-                y: area.y + 1,
+                y: area.y,
                 width: 1,
                 height: 1,
             },
@@ -129,7 +129,7 @@ pub fn titles(
     Line::from(spans).alignment(Alignment::Left)
 }
 
-/// Paint the complete tab group; only middle-row labels and × have hits.
+/// Paint the connected top strip; only edge-row labels and × have hits.
 #[allow(clippy::too_many_arguments)]
 pub fn draw(
     frame: &mut Frame<'_>,
@@ -142,13 +142,16 @@ pub fn draw(
     hits: &mut HitMap,
 ) {
     let line = titles(area, tabs, active, pane_focused, muted, theme, hits);
-    let width = u16::try_from(line.width()).unwrap_or(0);
-    if width > 0 {
-        crate::tui::regions::footer::draw_closed(
-            frame,
-            Rect::new(area.x + 1, area.y, width, area.height),
-            line,
-            theme.border(pane_focused),
-        );
-    }
+    let labels = if line.width() > 0 {
+        vec![(area.x + 1, line)]
+    } else {
+        Vec::new()
+    };
+    crate::tui::regions::footer::draw_strip(
+        frame,
+        area,
+        labels,
+        true,
+        theme.border(pane_focused).bg(theme.surface_muted),
+    );
 }

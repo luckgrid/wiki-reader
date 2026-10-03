@@ -4,12 +4,11 @@ expression: "rows.join(\"\\n\")"
 ---
  Worked Example Wiki                ◫ ✕ 
 ┌────────────────────────────┐─────────┐
-│▌/ Search…                  │         │
-│                            │         │
-│▌ Worked Example Wiki       │─────────│
-│  ▸ architecture            │         │
-│  ▸ decisions               │         │
+│▌/ Search…                  │─────────┤
 │                            │─────────│
+│▌ Worked Example Wiki       │         │
+│  ▸ architecture            │         │
+│  ▸ decisions               │─────────│
 │                            │         │
 │                            │sed as   │
 │                            │         │
@@ -22,7 +21,8 @@ expression: "rows.join(\"\\n\")"
 │                            │         │
 │                            │         │
 │                            │         │
-│                            │────────┐│
-│                            │ture… › ││
-└────────────────────────────┘────────┘┘
+│                            │         │
+│                            │         │
+│                            │────────┬┤
+└────────────────────────────┘ture… › ├┘
   VIEW  · README.md · L1:C1 9%      ? ⚙

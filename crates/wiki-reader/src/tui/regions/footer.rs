@@ -1,4 +1,4 @@
-//! Three-row View footer strip: fully closed ‹ prev / next › buttons.
+//! Compact View footer: connected two-row ‹ prev / next › controls.
 
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
@@ -10,7 +10,7 @@ use crate::tui::hit::{Hit, HitMap};
 use crate::tui::theme::Theme;
 use crate::tui::viewer_doc::FocusTarget;
 
-/// Truncated button middle rows and hit geometry for the View bottom strip.
+/// Truncated button label rows and hit geometry for the View bottom bar.
 pub struct FooterTitles {
     /// Left-aligned prev title.
     pub left: Line<'static>,
@@ -53,7 +53,7 @@ pub(crate) fn ellipsis(s: &str, max: usize) -> String {
 /// Columns a button adds around its text: `┤ ` … ` ├`.
 pub(crate) const BUTTON_CHROME: usize = 4;
 
-/// Button middle row; `draw_closed` replaces end glyphs with vertical sides.
+/// Label row embedded in the pane edge; the strip adds its connected separator.
 /// Selected (Tab-focused) labels fill the inside peach.
 pub(crate) fn button(text: &str, selected: bool, border: Style, theme: &Theme) -> Line<'static> {
     let inner = if selected {
@@ -68,7 +68,7 @@ pub(crate) fn button(text: &str, selected: bool, border: Style, theme: &Theme) -
     ])
 }
 
-/// Build left/right middle rows, each capped to half the strip (never overlap).
+/// Build left/right label rows, each capped to half the bar (never overlap).
 ///
 /// `pane_focused` is whether the View pane has focus; the button outline follows
 /// the pane border colour. A missing side yields an empty title, so the border
@@ -83,7 +83,7 @@ pub fn titles(
     theme: &Theme,
     hits: &mut HitMap,
 ) -> FooterTitles {
-    if area.height < 3 || area.width < 3 {
+    if area.height < 2 || area.width < 3 {
         return FooterTitles {
             left: Line::default(),
             right: Line::default(),
@@ -95,7 +95,7 @@ pub fn titles(
     let half = (inner_w / 2).max(1);
     let left_x = area.x.saturating_add(1);
     let budget = usize::from(half).saturating_sub(BUTTON_CHROME);
-    let border = theme.border(pane_focused);
+    let border = theme.border(pane_focused).bg(theme.surface_muted);
 
     let left = prev_label.filter(|_| half >= 7).map(|l| {
         let text = format!("‹ {}", ellipsis(l, budget.saturating_sub(2)));
@@ -149,48 +149,65 @@ pub fn titles(
     }
 }
 
-/// Paint a closed three-row box/group. The middle line supplies cell styles;
-/// separator spans become shared top/bottom junctions.
-pub(crate) fn draw_closed(
+/// Two connected rows, like a table title/separator: labels on the pane edge,
+/// a shared horizontal rule toward the article, and a solid background throughout.
+/// Each `(x, line)` uses an absolute column inside the pane's corner glyphs.
+pub(crate) fn draw_strip(
     frame: &mut Frame<'_>,
     area: Rect,
-    mut middle: Line<'static>,
+    labels: Vec<(u16, Line<'static>)>,
+    top: bool,
     border: Style,
 ) {
-    if area.height < 3 || middle.width() == 0 {
+    if area.height < 2 || area.width < 2 {
         return;
     }
-    let last = middle.spans.len() - 1;
-    let mut top = String::new();
-    let mut bottom = String::new();
-    for (i, span) in middle.spans.iter_mut().enumerate() {
-        if i == 0 {
-            top.push('┌');
-            bottom.push('└');
-            span.content = "│".into();
-        } else if i == last {
-            top.push('┐');
-            bottom.push('┘');
-            span.content = "│".into();
-        } else if span.content == "│" {
-            top.push('┬');
-            bottom.push('┴');
-        } else {
-            top.push_str(&"─".repeat(span.width()));
-            bottom.push_str(&"─".repeat(span.width()));
+    let rule = "─".repeat(usize::from(area.width - 2));
+    let edge = if top {
+        format!("┌{rule}┐")
+    } else {
+        format!("└{rule}┘")
+    };
+    let seam = format!("├{rule}┤");
+    let rows = if top {
+        vec![edge, seam]
+    } else {
+        vec![seam, edge]
+    };
+    frame.render_widget(Paragraph::new(rows.join("\n")).style(border), area);
+    for (x, mut label) in labels {
+        if label.width() == 0 {
+            continue;
         }
+        let last = label.spans.len() - 1;
+        let mut separator = Vec::new();
+        for (i, span) in label.spans.iter_mut().enumerate() {
+            let junction = i == 0 || i == last || span.content == "│";
+            separator.push(Span::styled(
+                if junction {
+                    if top { "┴".into() } else { "┬".into() }
+                } else {
+                    "─".repeat(span.width())
+                },
+                border.patch(span.style),
+            ));
+        }
+        let width = u16::try_from(label.width()).unwrap_or(0);
+        label = label.alignment(Alignment::Left);
+        let label_y = area.y + u16::from(!top);
+        let seam_y = area.y + u16::from(top);
+        frame.render_widget(
+            Paragraph::new(label).style(border),
+            Rect::new(x, label_y, width, 1),
+        );
+        frame.render_widget(
+            Paragraph::new(Line::from(separator)),
+            Rect::new(x, seam_y, width, 1),
+        );
     }
-    frame.render_widget(
-        Paragraph::new(vec![
-            Line::styled(top, border),
-            middle.alignment(Alignment::Left),
-            Line::styled(bottom, border),
-        ]),
-        area,
-    );
 }
 
-/// Draw prev/next in a dedicated strip, with hits on the middle row only.
+/// Draw prev/next on the bottom edge with a shared separator toward the article.
 #[allow(clippy::too_many_arguments)]
 pub fn draw(
     frame: &mut Frame<'_>,
@@ -203,6 +220,7 @@ pub fn draw(
     hits: &mut HitMap,
 ) {
     let titles = titles(area, prev, next, focused, pane_focused, theme, hits);
+    let mut labels = Vec::new();
     for (line, right) in [(titles.left, false), (titles.right, true)] {
         let width = u16::try_from(line.width()).unwrap_or(0);
         if width == 0 {
@@ -213,13 +231,15 @@ pub fn draw(
         } else {
             area.x + 1
         };
-        draw_closed(
-            frame,
-            Rect::new(x, area.y, width, area.height),
-            line,
-            theme.border(pane_focused),
-        );
+        labels.push((x, line));
     }
+    draw_strip(
+        frame,
+        area,
+        labels,
+        false,
+        theme.border(pane_focused).bg(theme.surface_muted),
+    );
 }
 
 #[cfg(test)]

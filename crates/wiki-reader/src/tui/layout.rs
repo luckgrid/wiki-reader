@@ -9,10 +9,10 @@ pub const NAV_CHROME_ROWS: u16 = 4;
 /// Inner left padding in the viewer (cursor marker column; P2-19).
 pub const VIEWER_LEFT_PAD: u16 = 1;
 
-/// Dedicated rows at each edge for fully closed tab / prev-next boxes.
-pub const VIEWER_STRIP_ROWS: u16 = 3;
+/// Compact title/separator rows at each edge for connected tab / prev-next bars.
+pub const VIEWER_STRIP_ROWS: u16 = 2;
 
-/// Article rows after reserving the three-row top and bottom strips.
+/// Article rows after reserving the two-row top and bottom bars.
 #[must_use]
 pub fn viewer_visible_rows(height: u16) -> u16 {
     height.saturating_sub(2 * VIEWER_STRIP_ROWS)
@@ -25,7 +25,7 @@ pub struct Regions {
     pub header: Rect,
     /// Side nav (zero-sized when hidden).
     pub side_nav: Rect,
-    /// Viewer pane (tabs and prev/next occupy dedicated three-row strips).
+    /// Viewer pane (tabs and prev/next occupy connected two-row bars).
     pub viewer: Rect,
     /// Status content row.
     pub status: Rect,
