@@ -93,6 +93,12 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 | 2026-10-03 | decision | Mirrored keybindings when nav is on the right filed for Phase 4 (low priority; needs ADR) | P4-06 |
 | 2026-10-03 | fix | P2-56 implementation: preserve palette-keyed Mermaid sizes across options theme changes instead of globally clearing them. A quick switch away and back could erase completed sizes while their queue keys still said measuring. The regression fails before the fix and checks all three themed.md cards repaint, with new work queued and no scrolling or page switch. Operator verified theme switches in Ghostty and a Herdr pane; diagrams render after the switch | P2-56 |
 
+## v0.1.2 (preparation)
+
+| Date | Kind | Note | Task IDs |
+|------|------|------|----------|
+| 2026-10-03 | decision | v0.1.2 prepared to put P2-56 in the installed dogfood binary, plus the docs filing from #117. Tag/publication pending green CI on the release merge commit. The adoption clock does not restart; Phase 2 stays on fixes-only hold until the ≈ 2026-10-13 verdict | P2-56, P2-57, P2-58, P3-08 |
+
 ## Related
 
 - [Phase 2](phase-2-mvp.md)
