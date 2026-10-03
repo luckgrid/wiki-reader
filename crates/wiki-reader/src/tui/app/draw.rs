@@ -597,9 +597,14 @@ fn draw_options_overlay(
     hits.push(area, Hit::OptionsDismiss);
 
     let lines = options_ui::lines();
+    // Two colours, as in markdown-reader's settings: chrome and the cursor row use the fill
+    // colour (`peach`); group titles and the filled radio use the accent.
+    let accent_style = ratatui::style::Style::default()
+        .fg(theme.accent)
+        .add_modifier(ratatui::style::Modifier::BOLD);
     // Two borders, a blank row on top, then the lines, a blank row and the footer.
     let h = u16::try_from(lines.len() + 5).unwrap_or(u16::MAX);
-    let rect = centered_panel(area, 54, h, 30, 8);
+    let rect = centered_panel(area, 52, h, 30, 8);
     frame.render_widget(Clear, rect);
     let block = popup_block(
         Line::from(Span::styled(" Options ", popup_accent(theme))),
@@ -644,7 +649,7 @@ fn draw_options_overlay(
             OptionLine::Heading(title) => {
                 frame.render_widget(
                     Paragraph::new(popup_row(
-                        vec![Span::styled(*title, popup_accent(theme))],
+                        vec![Span::styled(*title, accent_style)],
                         inner.width,
                         None,
                     )),
@@ -660,7 +665,7 @@ fn draw_options_overlay(
                     theme.text()
                 };
                 let radio = if on {
-                    Span::styled("●", popup_accent(theme))
+                    Span::styled("●", accent_style)
                 } else {
                     Span::styled("○", theme.muted())
                 };

@@ -3119,6 +3119,32 @@ fn options_overlay_snapshot() {
 }
 
 #[test]
+fn options_titles_and_cursor_use_different_colours() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.update(Action::OpenOptions);
+    let buf = draw_app(&mut app, 80, 40);
+    let b = buf.backend().buffer();
+    let find = |needle: &str| {
+        for y in 0..b.area.height {
+            let row: String = (0..b.area.width).map(|x| b[(x, y)].symbol()).collect();
+            if let Some(col) = row.find(needle) {
+                let x = u16::try_from(row[..col].chars().count()).unwrap();
+                return b[(x, y)].fg;
+            }
+        }
+        panic!("{needle:?} not drawn");
+    };
+    let theme = &app.theme;
+    assert_eq!(find("Mermaid"), theme.accent, "group titles use the accent");
+    assert_eq!(find("> "), theme.peach, "cursor uses the fill colour");
+    assert_ne!(
+        theme.accent, theme.peach,
+        "the two roles are distinct in the default theme"
+    );
+}
+
+#[test]
 fn options_radios_follow_the_active_value() {
     use crate::tui::options_ui::{OptionChoice, choices};
     use wiki_reader_core::config::{CopyPathMode, ThemeName};
