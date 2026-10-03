@@ -4310,3 +4310,85 @@ fn unknown_theme_keeps_the_dark_preset() {
     assert_eq!(app.theme.link, dark.link);
     assert_eq!(app.render_opts().diagram_palette, dark.diagram);
 }
+
+#[test]
+fn copy_page_path_from_nav_page_row() {
+    use crate::tui::clipboard::RecordingClipboard;
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let rec = RecordingClipboard::default();
+    let log = Arc::clone(&rec.copied);
+    app.clipboard = Box::new(rec);
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/design-system/tokens.md"),
+    }));
+    app.update(Action::FocusNav);
+    app.update(Action::CopyPagePath);
+    let copied = log.lock().unwrap().clone();
+    assert_eq!(copied, ["architecture/design-system/tokens.md"]);
+    assert!(app.message.contains("architecture/design-system/tokens.md"));
+}
+
+#[test]
+fn copy_page_path_from_nav_folder_row() {
+    use crate::tui::clipboard::RecordingClipboard;
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let rec = RecordingClipboard::default();
+    let log = Arc::clone(&rec.copied);
+    app.clipboard = Box::new(rec);
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/design-system/tokens.md"),
+    }));
+    app.update(Action::FocusNav);
+    app.update(Action::NavCollapse);
+    assert_eq!(
+        app.navigator.nav().cursor,
+        NavStop::Node(NodeId::Group(PathBuf::from("architecture/design-system")))
+    );
+    app.update(Action::CopyPagePath);
+    let copied = log.lock().unwrap().clone();
+    assert_eq!(copied, ["architecture/design-system"]);
+    assert!(app.message.contains("architecture/design-system"));
+}
+
+#[test]
+fn copy_page_path_from_view_keeps_viewed_page() {
+    use crate::tui::clipboard::RecordingClipboard;
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let rec = RecordingClipboard::default();
+    let log = Arc::clone(&rec.copied);
+    app.clipboard = Box::new(rec);
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("architecture/design-system/tokens.md"),
+    }));
+    // Nav cursor on a different row; View focus still copies the viewed page.
+    app.update(Action::FocusNav);
+    app.update(Action::NavCollapse);
+    app.update(Action::FocusViewer);
+    app.update(Action::CopyPagePath);
+    let copied = log.lock().unwrap().clone();
+    assert_eq!(copied, ["architecture/design-system/tokens.md"]);
+}
+
+#[test]
+fn copy_page_path_absolute_uses_collection_root() {
+    use crate::tui::clipboard::RecordingClipboard;
+    let (mut app, _tmp) = app_with_config("[copy]\npath = \"absolute\"\n");
+    let rec = RecordingClipboard::default();
+    let log = Arc::clone(&rec.copied);
+    app.clipboard = Box::new(rec);
+    app.update(Action::GoToPage(PageKey {
+        collection_id: "worked-example".into(),
+        relative_path: PathBuf::from("README.md"),
+    }));
+    app.update(Action::CopyPagePath);
+    let copied = log.lock().unwrap().clone();
+    assert_eq!(copied.len(), 1);
+    let want = app.provider.root().join("README.md");
+    assert_eq!(PathBuf::from(&copied[0]), want);
+}
