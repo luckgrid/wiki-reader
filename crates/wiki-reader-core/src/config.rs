@@ -23,6 +23,17 @@ pub enum LabelMode {
     TitleFilename,
 }
 
+impl LabelMode {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Title => "title",
+            Self::Filename => "filename",
+            Self::TitleFilename => "title+filename",
+        }
+    }
+}
+
 /// Diagram render preference (ADR-0004 / P3-12).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -32,6 +43,18 @@ pub enum DiagramMode {
     Image,
     Text,
     Source,
+}
+
+impl DiagramMode {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Image => "image",
+            Self::Text => "text",
+            Self::Source => "source",
+        }
+    }
 }
 
 /// Built-in colour preset (`theme = "dark" | "light" | "herdr"`; P3-07).
@@ -47,6 +70,17 @@ pub enum ThemeName {
     Herdr,
 }
 
+impl ThemeName {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Dark => "dark",
+            Self::Light => "light",
+            Self::Herdr => "herdr",
+        }
+    }
+}
+
 /// How `y` (copy page path) formats the path (`copy.path`; P2-55).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -56,6 +90,16 @@ pub enum CopyPathMode {
     Relative,
     /// Absolute filesystem path.
     Absolute,
+}
+
+impl CopyPathMode {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Relative => "relative",
+            Self::Absolute => "absolute",
+        }
+    }
 }
 
 /// `[copy]` table.
@@ -74,6 +118,26 @@ pub enum NavPosition {
     Left,
     /// Nav column on the right.
     Right,
+}
+
+impl NavPosition {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Left => "left",
+            Self::Right => "right",
+        }
+    }
+}
+
+/// Typed fields the options window can persist ([ADR-0018](../../../wiki/decisions/0018-config-write-path.md)).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ConfigPatch {
+    pub theme: Option<ThemeName>,
+    pub nav_labels: Option<LabelMode>,
+    pub nav_position: Option<NavPosition>,
+    pub diagrams: Option<DiagramMode>,
+    pub copy_path: Option<CopyPathMode>,
 }
 
 /// `[nav]` table.
@@ -272,6 +336,72 @@ impl Config {
     pub fn status_message(&self) -> Option<String> {
         self.diagnostics.first().cloned()
     }
+}
+
+/// File the options window should write ([ADR-0018](../../../wiki/decisions/0018-config-write-path.md)).
+///
+/// Explicit `--config` wins; otherwise the XDG user config path. Never the
+/// collection `.wiki-reader.toml`.
+#[must_use]
+pub fn write_target(explicit_config: Option<&Path>) -> Option<PathBuf> {
+    if let Some(path) = explicit_config {
+        return Some(path.to_path_buf());
+    }
+    xdg_config_path()
+}
+
+/// Apply `update` to `path`, preserving comments and unknown keys.
+///
+/// Creates the parent directory and the file when missing.
+///
+/// # Errors
+///
+/// Returns a human-readable message on I/O or parse failure.
+pub fn write_patch(path: &Path, update: &ConfigPatch) -> Result<(), String> {
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent)
+            .map_err(|err| format!("could not create {}: {err}", parent.display()))?;
+    }
+    let mut doc = if path.is_file() {
+        let text = fs::read_to_string(path)
+            .map_err(|err| format!("could not read {}: {err}", path.display()))?;
+        text.parse::<toml_edit::DocumentMut>()
+            .map_err(|err| format!("invalid TOML ({}): {err}", path.display()))?
+    } else {
+        toml_edit::DocumentMut::new()
+    };
+
+    if let Some(theme) = update.theme {
+        doc["theme"] = toml_edit::value(theme.as_str());
+    }
+    if update.nav_labels.is_some() || update.nav_position.is_some() {
+        let nav = doc["nav"].or_insert(toml_edit::Item::Table(toml_edit::Table::new()));
+        let table = nav
+            .as_table_mut()
+            .ok_or_else(|| "nav: expected table".to_owned())?;
+        if let Some(labels) = update.nav_labels {
+            table["labels"] = toml_edit::value(labels.as_str());
+        }
+        if let Some(position) = update.nav_position {
+            table["position"] = toml_edit::value(position.as_str());
+        }
+    }
+    if let Some(diagrams) = update.diagrams {
+        doc["diagrams"] = toml_edit::value(diagrams.as_str());
+    }
+    if let Some(copy_path) = update.copy_path {
+        let copy = doc["copy"].or_insert(toml_edit::Item::Table(toml_edit::Table::new()));
+        let table = copy
+            .as_table_mut()
+            .ok_or_else(|| "copy: expected table".to_owned())?;
+        table["path"] = toml_edit::value(copy_path.as_str());
+    }
+
+    fs::write(path, doc.to_string())
+        .map_err(|err| format!("could not write {}: {err}", path.display()))?;
+    Ok(())
 }
 
 fn expect_string(v: &toml::Value, key: &str) -> Result<String, String> {
@@ -672,5 +802,70 @@ quit = "Q"
     fn load_isolated(root: &Path, explicit: Option<&Path>) -> Config {
         // Skip the developer's real XDG config.
         Config::load_with_xdg(root, explicit, None)
+    }
+
+    #[test]
+    fn write_target_prefers_explicit_config() {
+        let path = PathBuf::from("/tmp/explicit.toml");
+        assert_eq!(write_target(Some(&path)), Some(path));
+    }
+
+    #[test]
+    fn write_patch_creates_file_and_round_trips() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("nested/config.toml");
+        write_patch(
+            &path,
+            &ConfigPatch {
+                theme: Some(ThemeName::Light),
+                nav_position: Some(NavPosition::Right),
+                nav_labels: Some(LabelMode::Filename),
+                diagrams: Some(DiagramMode::Text),
+                copy_path: Some(CopyPathMode::Absolute),
+            },
+        )
+        .unwrap();
+        let cfg = Config::load_with_xdg(tmp.path(), Some(&path), None);
+        assert_eq!(cfg.theme, ThemeName::Light);
+        assert_eq!(cfg.nav.position, NavPosition::Right);
+        assert_eq!(cfg.nav.labels, LabelMode::Filename);
+        assert_eq!(cfg.diagrams, DiagramMode::Text);
+        assert_eq!(cfg.copy.path, CopyPathMode::Absolute);
+        assert!(cfg.diagnostics.is_empty(), "diags={:?}", cfg.diagnostics);
+    }
+
+    #[test]
+    fn write_patch_keeps_comments_and_unknown_keys() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("config.toml");
+        fs::write(
+            &path,
+            "# keep me\ntheme = \"dark\"\nunknown_thing = 1\n[nav]\n# labels note\nlabels = \"title\"\n",
+        )
+        .unwrap();
+        write_patch(
+            &path,
+            &ConfigPatch {
+                theme: Some(ThemeName::Herdr),
+                nav_position: Some(NavPosition::Right),
+                ..ConfigPatch::default()
+            },
+        )
+        .unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(text.contains("# keep me"), "text={text}");
+        assert!(text.contains("# labels note"), "text={text}");
+        assert!(text.contains("unknown_thing"), "text={text}");
+        assert!(text.contains("herdr"), "text={text}");
+        assert!(text.contains("right"), "text={text}");
+        let cfg = Config::load_with_xdg(tmp.path(), Some(&path), None);
+        assert_eq!(cfg.theme, ThemeName::Herdr);
+        assert_eq!(cfg.nav.position, NavPosition::Right);
+        assert_eq!(cfg.nav.labels, LabelMode::Title);
+        assert!(
+            cfg.diagnostics.iter().any(|d| d.contains("unknown_thing")),
+            "diags={:?}",
+            cfg.diagnostics
+        );
     }
 }
