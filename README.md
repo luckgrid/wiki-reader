@@ -4,7 +4,7 @@ A terminal wiki reader for markdown collections. It browses like a documentation
 
 <!-- ui-diagram:start -->
 ```text
- Worked Example Wiki › Architecture › Design System › Token Projection     ◫ ✕
+ Worked Example Wiki › Architecture › Design System › Token Projection   ⚙ ◫ ✕
 ┌──────────────────────────┐┌┤ tokens × ├────────────────────────────────────┐
 │▌/ Search…                ││ ── frontmatter ▸ ──────────────────────────────│
 │                          ││                                                │
@@ -42,7 +42,7 @@ Other tools that shaped it, and what each contributed, are listed in [Prior art 
 
 ## Status
 
-Phase 1 (reader shell) is closed. Phase 2 (wiki navigation MVP) is feature-complete and in its dogfood window (clock started 2026-09-29, ending about 2026-10-13); Phase 3 alpha polish follows. Shipped: side nav with breadcrumbs, working links, back/forward and prev/next, backlinks, heading jumps, tabs, search (files and content), a help overlay (`?`), a column cursor with mouse drag-select and copy, a soft-wrapped raw view (`r`; Rendered is the formatted view), `$EDITOR` support, light/dark/herdr themes, an options window (`,`), full-screen table and image/diagram viewers, [config](wiki/guides/configuration.md), and session restore. Prereleases and binaries are on [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases). Start at [wiki/README.md](wiki/README.md) and see the [roadmap](wiki/roadmap/README.md) for the next tasks.
+Phase 2 is feature-complete on a dogfood hold (clock 2026-09-29 → ≈ 2026-10-13); Phase 3 alpha polish is active. See the [roadmap](wiki/roadmap/README.md) for what shipped and what's next, and the [dogfood log](wiki/roadmap/dogfood-log.md) for dated bites. Prereleases and binaries are on [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases).
 
 ## Install
 

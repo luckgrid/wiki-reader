@@ -3,8 +3,8 @@ id: WR-ROADMAP-P2
 title: Phase 2 — Wiki navigation MVP
 summary: Custom nav order, backlinks, tabs, diagrams, config, and session restore.
 status: active
-updated: 2026-10-01
-related: [phase-1-reader-shell, phase-3-alpha]
+updated: 2026-10-03
+related: [phase-1-reader-shell, phase-3-alpha, dogfood-log]
 nav_order: 2
 ---
 
@@ -12,7 +12,7 @@ nav_order: 2
 
 Time box: ≈ 2 weeks.
 
-**Status (2026-10-01): feature complete, dogfood hold.** [Phase 3](phase-3-alpha.md) is active. Phase 2 now accepts only fixes for things the dogfood clock turns up (a small PR with a test or snapshot and a dated line below) until the ≈ 2026-10-13 verdict.
+**Status (2026-10-03): feature complete, dogfood hold.** [Phase 3](phase-3-alpha.md) is active. Phase 2 now accepts only fixes for things the dogfood clock turns up (a small PR with a test or snapshot and a dated line in the [dogfood log](dogfood-log.md)) until the ≈ 2026-10-13 verdict.
 
 ## Exit criteria
 
@@ -20,46 +20,9 @@ All P0/P1 acceptance criteria in [product spec](../product/spec.md) pass; two we
 
 The dogfood polish batch (P2-11…P2-24a) should land before the clock is judged, but the two weeks do **not** restart or extend. Clock started 2026-09-29; exit remains ≈ 2026-10-13. P2-24b (image diagrams) may slip to Phase 3 without blocking exit.
 
-## Dogfood notes (operator)
+## Dogfood log
 
-Phase 2 stays `active` through two weeks of real use on a real collection. The two-week clock starts when you say so. Record anything that bites here (date + one line); feed that into Phase 3 scoping.
-
-- 2026-09-29: clock started on a real collection
-- 2026-09-29: v0.1.0-alpha.1 released (macOS arm64/x86_64, Linux x86_64); dogfood from the installed binary
-- 2026-09-30: side-by-side review vs markdown-reader; UI/UX polish batch filed as P2-11…P2-22
-- 2026-09-30: markdown element rendering (Mermaid text tier garbled, truncated tables, mid-word wrapping, raw syntax markers) filed as P2-23; formatted-text view and eye toggle as P2-24a; image diagrams as P2-24b (may slip to Phase 3)
-- 2026-09-30: dogfood polish batch landed — P2-22 (#70), P2-20 (#71), P2-21 (#72), P2-24a (#73). P2-24b deferred to Phase 3. v0.1.0-alpha.2 gated on operator go-ahead after overlays.
-- 2026-09-30: **Phase 2 feature exit** — all P2 tasks except P2-24b done; status stays `active` through the dogfood clock (≈ 2026-10-13), then flip to `done`.
-- 2026-09-30: formatted-view heading hierarchy papercut — H2 rule + H3–H6 spacing (#75)
-- 2026-09-30: dogfood QA after polish batch — P2-22/20/24a pass; herdr keys (`?`/`f`/PageUp/Down/Home/End) pass; headings pass; Linked from backlinks heading ignored formatted mode — fixed in #75 (heading→list colour-match follow-up reverted as misdiagnosis)
-- 2026-09-30: `scripts/check.sh` green on main tip after #75 (`d7cc560`); no new bites
-- 2026-09-30: **feature freeze** through ≈ 2026-10-13 — bug fixes / papercuts only; each small PR with a snapshot or test + dated dogfood line. Watch: heading hierarchy, light-terminal contrast (P3-07), nav labels / resize persistence, search ergonomics, herdr key delivery, formatted-mode checkbox/`[NOTE]`/quote-bar markers (known deviation)
-- 2026-09-30: v0.1.0-alpha.2 cut (#76); clock continues on alpha.2
-- 2026-09-30: interim P0/P1 acceptance walk recorded below (code + tests + dogfood); **status stays `active`** until ≈ 2026-10-13 for the two-weeks-without-GUI verdict, then flip to `done`
-- 2026-09-30: nav showed `Readme › Readme › Readme` and `Readme` rows with the `filename` default (P2-13), and the footer prev/next ignored `nav.labels`; folders now use their folder name and the footer follows the label mode (P2-R36, #82)
-- 2026-09-30: Linked-from formatted underline uses dim `Rule` (same as H1/H2), not Heading colour
-- 2026-09-30: dogfood round 2 (PR 1): nav shows folder names and titles with no `Overview`/`●` ([ADR-0013](../decisions/0013-nav-labels-folder-names-and-titles.md)); nav highlight follows every navigation; search bar readable; frontmatter toggle works on first load (`▼` when open, YAML colored); outlined prev/next buttons; status pill + page status; `v` toggles formatted view; Help dividers/icons; wheel scrolls popups; header/status gaps removed. Column cursor and drag-select are PR 2 (below)
-- 2026-09-30: dogfood round 2 (PR 2): `←`/`→` move a sticky column cursor in the View (`L12:C5` in the status bar; `←` at column 0 focuses the nav); mouse drag selects text and copies it via OSC 52 (wrapped rows rejoined, gutters/borders dropped, tables tab-separated)
-- 2026-09-30: dogfood round 3 (PR 3, from live-terminal notes + herdr/markdown-reader screenshots): tabs become outlined buttons on the View's top border (P2-25); `Nav`/`View` title tags dropped and yellow/peach re-sampled from herdr (P2-26); the eye toggle is removed and Rendered is the formatted view (P2-27, ADR-0014); Search and Help popups restyled after markdown-reader (P2-28); Shift+click / Shift+Enter open a new tab (P2-29); raw view soft-wraps (P2-30); nav indent and `/` search icon (P2-31); frontmatter rules full width and colour fixed (P2-32). Found while testing: a table cell wider than the pane leaked above the table (P2-R37)
-- 2026-10-01: dogfood round 4 (PR 3): reopened nav no longer starts mid-list (P2-R39); content-search results land in place with the phrase highlighted, `…` on cut-off result rows and bottom padding in Search, tighter Help dividers (P2-33)
-- 2026-10-01: final review before alpha.3: manual pass in a real terminal found no visual bugs in rounds 2–4 (tabs, popups, content-search landing, raw wrap, hide/show nav, drag-select and paste). A code review then fixed: Help on a terminal under 22 columns panicked; a trailing space in a Content query lost the phrase highlight; clicking in the View left the search highlight; a resize or reload kept a stale selection; a raw-view resize re-read the file and dropped the syntax colours (now re-wraps in place); the raw status bar column restarted on each wrapped row
-- 2026-10-01: dogfood rounds 2–4 merged to main (#83, #84, #85); v0.1.0-alpha.3 cut; clock continues on alpha.3
-- 2026-10-01: dogfood round 5 (PR 1): numbered/bulleted items that start with code or a link keep their marker first and no longer paint as one code band (P2-34); ADR ➕/➖ render as ASCII `+`/`-` so they take the text colour (P2-35); H1 teal, H2 peach, H3–H5 light gray, links teal; status pills keep their own colours (P2-36)
-- 2026-10-01: dogfood round 5 (PR 2): Linked from is a box-drawn pane with a tag header, teal title links, optional summaries and dividers (P2-37)
-- 2026-10-01: dogfood round 5 (PR 3): narrow nav rows end in `…` (drop the `(file)` suffix first in title+filename); Search query sits under the top border with no blank row (P2-38, P2-39)
-- 2026-10-01: dogfood round 5 (PR 4): Cmd/Ctrl+Enter and Cmd/Ctrl+→ (nav) open a new tab via kitty `DISAMBIGUATE_ESCAPE_CODES`; Ctrl+click joins Shift+click ([ADR-0015](../decisions/0015-new-tab-combos-kitty-keyboard.md), P2-40). Ghostty QA: Cmd+Enter is full screen, Ctrl+Enter works, so the combos are Ctrl-only: `Ctrl+Enter` (nav and view) and `Ctrl+→` (nav) ([ADR-0016](../decisions/0016-ctrl-only-new-tab-combos.md)).
-- 2026-10-01: dogfood round 5 brief deltas: leading ➕/➖ → `+`/U+2212 only at item/paragraph start (P2-41); viewer asserts inline code is not full-row shaded (P2-42); Linked from whole-entry hit/focus with selection bg, teal ▌ replacing left `│`, side borders, plain first-paragraph summary (P2-43)
-- 2026-10-01: dogfood round 5 follow-ups: Tab focus on a Linked-from entry paints selection + teal ▌ with no reverse-video column cursor, and the Tab cursor column follows the focused item (P2-44); summaries are one line ending in `…` (P2-45); bold/inline styles inside quotes and alerts keep the quote bg (P2-46); table links are remapped onto laid-out cells, including after a soft wrap, so Tab walks them row by row (P2-47); table headers are bold text, not link-teal (P2-48); links in the too-narrow unwrapped table dump have no hit targets yet (P2-49)
-- 2026-10-01: dogfood round 5 follow-ups (2, from Ghostty QA): focused block actions (frontmatter, code titles, expand/copy) use the active-tab/footer colours, dark text on peach, instead of yellow with white text (P2-50); H3 and under have two blank rows above and one below, not the reverse (P2-51)
-- 2026-10-01: dogfood round 5 merged to main (#92, #93, #94; the stacked #88–#91 were closed as superseded by #92); v0.1.0-alpha.4 cut; clock continues on alpha.4
-- 2026-10-01: dogfood round 6: help window merges alternate keys onto one row and nav `Ctrl+→` opens the new tab and focuses its View (P2-52); mouse-wheel flicks no longer back up the event queue (P2-53); H3/H4 take H2's peach and H2 gets two blank rows above (P2-54). Not reproduced on demand: the runaway scroll, which the user saw once and which the fix targets by design (one redraw per batch, not per event)
-- 2026-10-01: **Phase 2 feature complete; Phase 3 activated.** Nothing in scope is left: P2-24b (image diagrams) is P3-12 and P2-49 stays deferred. The adoption clock keeps running in the background and the formal exit verdict is still ≈ 2026-10-13; until then Phase 2 takes dogfood fixes only, and new features go to Phase 3
-- 2026-10-01: dogfood round 6 merged to main (#96); v0.1.0-alpha.4.1 cut (a point release, not alpha.5, since Phase 2 only takes fixes now); clock continues on alpha.4.1
-- 2026-10-02: P3-12c/d (Mermaid image tier + diagrams config) cut as v0.1.0-alpha.5; Phase 2 dogfood clock continues on alpha.5
-- 2026-10-02: P2-55 (copy path follows focus + `copy.path` config) merged (#104); v0.1.0-alpha.5.1 cut (a point release, not alpha.6, since Phase 2 only takes fixes now); clock continues on alpha.5.1
-- 2026-10-03: release tags now use `v0.1.N` for the whole alpha phase (next is `v0.1.1`); the `-alpha.N` and point-release forms (alpha.4.1, alpha.5.1) stop with alpha.5.1, and every `v0.1.*` tag is a GitHub prerelease. See [Releasing: Versioning](../guides/releasing.md#versioning)
-- 2026-10-03: **v0.1.1** cut, the first release under the `v0.1.N` scheme: P2-55 was already out; this adds the options window (P3-13), table and image viewers (P3-14/15), nav position (P3-11), luckgrid dark/light and herdr-following themes (P3-07, ADR-0019), `,` / `c` toggle and Help copy-path label. Phase 2 dogfood clock continues on v0.1.1
-- 2026-10-02: dogfood request filed as P2-55: the copy-path key (`y`) should copy what has focus, including a nav folder, and work from either pane. Same day, three larger requests went to Phase 3 (P3-13 options window, P3-14 table viewer, P3-15 image and diagram viewer)
+Phase 2 stays `active` through two weeks of real use on a real collection. Clock started 2026-09-29; exit remains ≈ 2026-10-13. Dated bites, fixes, releases and decisions live in the [dogfood log](dogfood-log.md).
 
 ## Interim acceptance walk (2026-09-30)
 
@@ -171,6 +134,9 @@ Judged from tests, dogfood QA, and code — not a full interactive sweep of ever
 | P2-53 | Event loop applies every queued event (cap 256) before one redraw, and discards unread input when the terminal is restored; a wheel flick no longer lags behind the pointer or leaks mouse reports into the shell | K1 | done | round 6; found when the wheel kept scrolling after the user stopped |
 | P2-54 | Heading colour and spacing: H3 and H4 share H2's peach (H5/H6 stay gray); H2 gets two blank rows above like H3–H6 (H1 unchanged) | D1 / U3 | done | round 6; supersedes the H3–H5 gray in P2-36 and widens P2-51 to H2–H6 |
 | P2-55 | Copy path follows focus: with the nav focused, `y` copies the selected row (page file path or folder path for a group); with the View focused it copies the viewed page. Status line says what was copied. Default path is relative to the collection root; `copy.path = "relative" \| "absolute"` in config (options UI waits for P3-13) | K4 | done | dogfood request 2026-10-02; help label unchanged |
+| P2-56 | Pie and Git graph diagrams (`fixtures/mermaid` themed.md) vanish after a theme change and reappear on scroll or page switch | D1 | todo | dogfood 2026-10; theme change leaves those slots un-redrawn or un-requeued; needs a regression test (theme switch re-queues visible slots) |
+| P2-57 | Docs audit and drift fixes | — | done | dogfood 2026-10; README/ui-spec ⚙, spec U3/U6–U9, modal viewers section, date drift, P3-07 Notes |
+| P2-58 | Docs structure: short README Status, dogfood log as its own file, benchmarks as their own page | — | done | dogfood 2026-10; [dogfood-log.md](dogfood-log.md), [benchmarks.md](../architecture/benchmarks.md) |
 | P2-R38 | Copy fixes: empty table cells kept, wrapped cells rejoined, OSC 52 cap on the encoded payload (75 KB of text), held drag keeps scrolling | CP | done | round 2 follow-ups (PR 2) |
 | P2-24b | Image diagrams and images | D1 | moved | slipped to Phase 3 as P3-12 (2026-09-30), now split into P3-12a…d; images follow [ADR-0017](../decisions/0017-static-local-images-only.md) |
 

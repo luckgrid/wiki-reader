@@ -3,7 +3,7 @@ id: WR-GUIDE-DEV
 title: Development
 summary: Toolchain, checks, crate boundaries, dependency policy, docs conventions, and task workflow.
 status: draft
-updated: 2026-09-30
+updated: 2026-10-03
 related: []
 ---
 

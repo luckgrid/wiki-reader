@@ -3,7 +3,7 @@ id: WR-SPEC
 title: Product spec
 summary: User stories, prioritized requirements with acceptance criteria, and success measures for the wiki-reader reader.
 status: draft
-updated: 2026-10-01
+updated: 2026-10-03
 related: [vision, content-model, ui-spec]
 nav_order: 2
 ---
@@ -106,11 +106,13 @@ Terminal markdown tools display files but don't support wiki browsing: links are
 |----|---------------|------------------------|
 | U1 | Sticky viewer section header | Renderer keeps a heading index by line; the viewer layout reserves an optional top row. |
 | U2 | Side nav header/footer | Side nav is a column of (header?, list, footer?) sub-regions from the start. |
-| U3 | Nav label options | `nav.labels = title | filename | title+filename`. |
+| U3 | Nav label options | `nav.labels = title \| filename`. Folders keep on-disk names; `filename` shows real file-system names (including the extension). Drop `title+filename`; map an existing `title+filename` config value to `title` with a one-time warning (ADR when P3-16 starts). |
 | U4 | Header back/forward buttons | Header right/left slots are lists of icon buttons, not hard-coded. |
 | U5 | Options window | Config is one typed struct with a single merge path; a settings popup can later read and write it without a second source of truth. |
-| U6 | Table viewer | Expose each table's cell grid from the renderer (not only styled lines), so a modal can filter, sort and scroll it. |
-| U7 | Image and diagram viewer | Image and Mermaid slots already carry their source (`SlotSource`); keep it that way so a modal can re-raster at any size and pan or zoom. |
+| U6 | Table viewer | Expose each table's cell grid from the renderer (not only styled lines), so a modal can filter, sort and scroll it. Size the window to content (capped at today's size); keep in-view table styles (bold header, borders, link colour). |
+| U7 | Image and diagram viewer | Image and Mermaid slots already carry their source (`SlotSource`); keep it that way so a modal can re-raster at any size and pan or zoom. Size to content (capped; wide pictures keep today's width); fit / actual-size toggle on top of zoom; opening a picture shows it larger than its inline slot. Tab / Shift+Tab carousel through every image and diagram in the document; a key cycles image / text / source for an open diagram (session-only). |
+| U8 | Footer icon buttons | Options (⚙) is a header button today; Help is opened with `?`, not a header button. P3-18 moves ⚙ to the View footer's bottom right and adds a `?` Help icon button to its left. |
+| U9 | Lite install | Image, SVG and Mermaid-raster code behind a default-on cargo feature so `cargo install --no-default-features` is a smaller build; diagrams fall back to text. |
 | W1 | Widget sidebar incl. context engine ([context engine](../architecture/context-engine.md)) | Optional right slot; widget trait gets read-only page + index. |
 | W2 | Agent CLI (`--json`) | Core stays terminal-free ([ADR-0006](../decisions/0006-reader-first.md)). |
 | W3 | External provider | `CollectionProvider` trait. |

@@ -3,7 +3,7 @@ id: WR-UI
 title: UI spec
 summary: Layout, side nav, header/footers, focus and cursor model, keyboard and mouse behavior for the wiki-reader reader.
 status: draft
-updated: 2026-10-01
+updated: 2026-10-03
 related: [spec, content-model]
 nav_order: 4
 ---
@@ -16,7 +16,7 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 
 <!-- ui-diagram:start -->
 ```text
- Worked Example Wiki › Architecture › Design System › Token Projection     ◫ ✕
+ Worked Example Wiki › Architecture › Design System › Token Projection   ⚙ ◫ ✕
 ┌──────────────────────────┐┌┤ tokens × ├────────────────────────────────────┐
 │▌/ Search…                ││ ── frontmatter ▸ ──────────────────────────────│
 │                          ││                                                │
@@ -44,7 +44,7 @@ Help (`?`) and search (`/`) open as popups over it, with both panes grayed behin
 
 ![Search overlay in Files mode with ranked results](../assets/wiki-reader-search.png)
 
-Nav rows show page titles by default and folders show the folder name (see [Side nav](#side-nav)). `◫` toggles the side nav (`b`), `✕` quits (`q`).
+Nav rows show page titles by default and folders show the folder name (see [Side nav](#side-nav)). `⚙` opens Options (`,` / `c`), `◫` toggles the side nav (`b`), `✕` quits (`q`).
 
 Regions:
 
@@ -58,7 +58,7 @@ Regions:
 ## Header (full width, 1 padded row)
 
 - **Left:** the root entry page's title, then the breadcrumb trail through side-nav groups to the current page. Example: `Project Wiki › Architecture › Design System › Token Projection`. Segments follow the **side nav hierarchy** (groups), not raw directories, so folded folders ([content model](content-model.md)) don't produce extra crumbs. Each segment is clickable and opens that group's landing page. The trail truncates from the middle with `…` when narrow, always keeping the root and current page.
-- **Right:** icon buttons. `◫` toggles the side nav. `✕` quits (saves session; same as `q`). There is no syntax/formatted toggle: Rendered is always the formatted view and `r` shows the markdown syntax ([ADR-0014](../decisions/0014-remove-formatted-view-toggle.md)).
+- **Right:** icon buttons. `⚙` opens the options window (same as `,` / `c`). `◫` toggles the side nav. `✕` quits (saves session; same as `q`). There is no syntax/formatted toggle: Rendered is always the formatted view and `r` shows the markdown syntax ([ADR-0014](../decisions/0014-remove-formatted-view-toggle.md)). P3-18 moves ⚙ (and a `?` help button) to the View footer.
 - Future: optional back/forward buttons (`‹ ›`). Back/forward are keyboard-only in v1.
 
 ## Side nav
@@ -122,6 +122,14 @@ Future: a **sticky section header** at the top of the viewer showing the heading
 ## View footer (prev/next)
 
 `┤ ‹ Prev title ├` on the left and `┤ Next title › ├` on the right, following side nav order ([content model](content-model.md)). They are outlined, padded buttons drawn on the **View pane's bottom border**, so they stay pinned while the article scrolls. The outline matches the pane border (teal when the View is focused, gray when the Nav is); a button reached with `Tab` or `f` fills peach with dark text. Each label is truncated with `…` to its half of the border so long titles cannot collide. Both are clickable and bound to `[` / `]`. A side with no prev/next draws nothing, so the border runs unbroken.
+
+## Modal viewers
+
+Table and image/diagram viewers share one modal shell (`Esc` dismisses, wheel scrolls, click outside dismisses, drawn after a `Clear` so they sit above Kitty pictures). Entry points are block actions in the View Tab cycle plus `Enter` on the focused table or image slot.
+
+**Table viewer.** Opens from the expand-table block action or `Enter` on any row of a table. Keys: arrows / `hjkl` move the cell cursor; `PgUp` / `PgDn` page; `g` / `G` top / bottom; `/` filter rows (`Enter` keep, `Esc` clear); `s` cycles sort asc / desc / off on the current column; `y` copies the cell; `Y` copies the row (tab-separated). The header row and first column stay fixed while the body scrolls.
+
+**Image and diagram viewer.** Opens from the expand-diagram block action (`Enter` on the Mermaid fence line) or `Enter` on any row of a picture slot. Keys: arrows / `hjkl` pan by an eighth of the window; `PgUp` / `PgDn` and `g` / `G` as in the table viewer; `+` / `-` zoom (100–800 % of fit); `0` resets to fit. The wheel pans vertically. SVG and Mermaid re-rasterise at the zoomed size; raster files scale from the decoded bitmap. Text-tier Mermaid opens as a scrollable source view. Planned: fit / actual-size toggle and content-sized windows (P3-20); Tab / Shift+Tab carousel (P3-21); diagram image / text / source cycle (P3-22).
 
 ## Status bar (full width, 1 row)
 
