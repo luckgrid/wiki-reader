@@ -451,3 +451,100 @@ fn diagram_relayout_preserves_text_selection() {
         "drag must survive a measure-driven re-layout"
     );
 }
+
+fn modal_press(app: &mut App, code: ratatui::crossterm::event::KeyCode) {
+    use crate::tui::action::Action;
+    use ratatui::crossterm::event::{KeyEvent, KeyModifiers};
+    app.update(Action::ModalKey(KeyEvent::new(code, KeyModifiers::NONE)));
+}
+
+/// Draw until the open modal has nothing pending.
+fn settle_modal(term: &mut Terminal<TestBackend>, app: &mut App) {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        draw_to(term, app);
+        if !app.modal.as_ref().expect("modal").busy() {
+            return;
+        }
+        assert!(Instant::now() < deadline, "modal worker timed out");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[test]
+fn enter_on_a_picture_opens_it_zooms_within_caps_and_esc_closes() {
+    use crate::tui::action::Action;
+    use ratatui::crossterm::event::KeyCode;
+
+    let mut app = graphics_app(&images_fixture());
+    let mut term = terminal(100, 40);
+    draw_to(&mut term, &mut app);
+    let slot = app.doc.image_slots()[0].clone();
+    app.update(Action::FocusViewer);
+    app.focused_item = None;
+    app.cursor_line = slot.line + 1;
+    app.update(Action::ViewerActivate);
+    assert!(app.modal.is_some(), "Enter inside a slot opens the viewer");
+    assert_eq!(app.input_mode, crate::tui::keymap::InputMode::Modal);
+    settle_modal(&mut term, &mut app);
+    let buf = term.backend().buffer();
+    assert!(
+        (0..buf.area.height).any(|y| has_half(buf, y)),
+        "picture in the modal"
+    );
+    assert!(any_text(&term, "100%") && any_text(&term, "IMAGE"));
+
+    // Zoom clamps at both ends; the picture is still within the pixel cap at the top step.
+    for _ in 0..20 {
+        modal_press(&mut app, KeyCode::Char('+'));
+    }
+    settle_modal(&mut term, &mut app);
+    assert!(any_text(&term, "800%"));
+    for _ in 0..20 {
+        modal_press(&mut app, KeyCode::Char('-'));
+    }
+    settle_modal(&mut term, &mut app);
+    assert!(any_text(&term, "100%"));
+    // Panning never panics at the edges.
+    modal_press(&mut app, KeyCode::Right);
+    modal_press(&mut app, KeyCode::Down);
+    settle_modal(&mut term, &mut app);
+
+    modal_press(&mut app, KeyCode::Esc);
+    assert!(app.modal.is_none(), "Esc closes and drops the viewer");
+    assert_eq!(app.input_mode, crate::tui::keymap::InputMode::Normal);
+}
+
+#[test]
+fn text_tier_expand_diagram_shows_the_source() {
+    use crate::tui::action::Action;
+    use ratatui::crossterm::event::KeyCode;
+
+    let mut app = App::for_tests(&mermaid_fixture()).expect("app");
+    let key = wiki_reader_core::provider::PageKey {
+        collection_id: app.navigator.index().collection_id.clone(),
+        relative_path: PathBuf::from("common-types.md"),
+    };
+    app.load_page(&key);
+    let mut term = terminal(120, 40);
+    draw_to(&mut term, &mut app);
+    let crate::tui::page_doc::PageDoc::Rendered(doc) = &app.doc else {
+        panic!("rendered page");
+    };
+    let line = doc
+        .block_actions()
+        .iter()
+        .find(|a| a.kind == wiki_reader_render::BlockActionKind::ExpandDiagram)
+        .expect("a diagram action")
+        .line;
+    app.update(Action::FocusViewer);
+    app.focused_item = None;
+    app.cursor_line = line;
+    app.update(Action::ViewerActivate);
+    assert!(app.modal.is_some());
+    draw_to(&mut term, &mut app);
+    assert!(any_text(&term, "source view") && any_text(&term, "DIAGRAM"));
+    assert!(any_text(&term, "-->"), "the Mermaid source is listed");
+    modal_press(&mut app, KeyCode::Esc);
+    assert!(app.modal.is_none());
+}

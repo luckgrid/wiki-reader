@@ -166,10 +166,24 @@ fn usvg_options() -> usvg::Options<'static> {
 ///
 /// Returns [`RasterError::Raster`] or [`RasterError::TooManyPixels`].
 pub fn rasterise_svg(svg: &[u8]) -> Result<RasterImage, RasterError> {
+    rasterise_svg_scaled(svg, 1.0)
+}
+
+/// [`rasterise_svg`] at `scale` times the natural size (sharp zoom, P3-15). The ADR-0017 pixel
+/// cap applies to the *output*, so no zoom level can exceed it.
+///
+/// # Errors
+///
+/// Returns [`RasterError::Raster`] or [`RasterError::TooManyPixels`].
+pub fn rasterise_svg_scaled(svg: &[u8], scale: f32) -> Result<RasterImage, RasterError> {
     let options = usvg_options();
     let tree =
         usvg::Tree::from_data(svg, &options).map_err(|e| RasterError::Raster(e.to_string()))?;
-    let size = tree.size().to_int_size();
+    let size = tree
+        .size()
+        .to_int_size()
+        .scale_by(scale)
+        .ok_or_else(|| RasterError::Raster("diagram dimensions cannot be rasterised".into()))?;
     let px_w = size.width();
     let px_h = size.height();
     if u64::from(px_w) * u64::from(px_h) > wiki_reader_core::images::MAX_IMAGE_PIXELS {
@@ -226,15 +240,26 @@ pub fn mermaid_to_svg(src: &str, palette: &DiagramPalette) -> Result<String, Ras
     render_with_options(src, options).map_err(|e| RasterError::Parse(e.to_string()))
 }
 
+/// Mermaid source → SVG bytes with the private layout family rewritten to the embedded font's
+/// real name, ready for [`rasterise_svg`] / [`rasterise_svg_scaled`].
+///
+/// # Errors
+///
+/// Returns [`RasterError::Parse`] when the renderer rejects the source.
+pub fn mermaid_svg_bytes(src: &str, palette: &DiagramPalette) -> Result<Vec<u8>, RasterError> {
+    let svg = mermaid_to_svg(src, palette)?;
+    Ok(svg
+        .replace(LAYOUT_FONT_FAMILY, RASTER_FONT_FAMILY)
+        .into_bytes())
+}
+
 /// Rewrite the private layout family to the embedded font's real name, then rasterise.
 ///
 /// # Errors
 ///
 /// Propagates parse/raster errors from [`mermaid_to_svg`] / [`rasterise_svg`].
 pub fn render_mermaid(src: &str, palette: &DiagramPalette) -> Result<RasterImage, RasterError> {
-    let svg = mermaid_to_svg(src, palette)?;
-    let raster_svg = svg.replace(LAYOUT_FONT_FAMILY, RASTER_FONT_FAMILY);
-    rasterise_svg(raster_svg.as_bytes())
+    rasterise_svg(&mermaid_svg_bytes(src, palette)?)
 }
 
 /// True when fitting `px_w`×`px_h` into `max_cols` at `cell_px` keeps scale ≥ [`MIN_LEGIBLE_SCALE`].

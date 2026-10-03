@@ -341,6 +341,27 @@ impl App {
             .find(|it| it.kind == FocusTarget::BlockAction && it.line == Some(line))
         {
             self.activate_block(&it.target);
+            return;
+        }
+        // Enter anywhere in a table opens it.
+        if let Some(i) = self
+            .doc
+            .tables()
+            .iter()
+            .position(|t| (t.line..t.line + t.height).contains(&line))
+        {
+            self.open_table(i);
+            return;
+        }
+        // Enter on a picture's rows opens it full size.
+        if let Some(slot) = self
+            .doc
+            .image_slots()
+            .iter()
+            .find(|s| (s.line..s.line + u32::from(s.rows)).contains(&line))
+            .cloned()
+        {
+            self.open_image(slot.source, &slot.alt);
         }
     }
 
@@ -363,6 +384,19 @@ impl App {
                     Ok(()) => self.message = "sent to clipboard (OSC 52)".into(),
                     Err(err) => self.message = format!("copy failed: {err}"),
                 }
+            }
+            wiki_reader_render::BlockActionKind::ExpandTable => {
+                if let Ok(i) = action.payload.parse() {
+                    self.open_table(i);
+                }
+            }
+            wiki_reader_render::BlockActionKind::ExpandDiagram => {
+                let source = wiki_reader_render::SlotSource::Mermaid {
+                    hash: wiki_reader_render::content_hash(&action.payload),
+                    palette: self.theme.diagram,
+                    source: action.payload,
+                };
+                self.open_image(source, "diagram");
             }
             wiki_reader_render::BlockActionKind::ToggleFrontmatter => {
                 if !self.expanded_blocks.remove(&id) {

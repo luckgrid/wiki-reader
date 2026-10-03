@@ -16,12 +16,13 @@ pub use images::{
 };
 pub use link_span::{LinkClass, LinkId, LinkSpan};
 pub use mermaid_raster::{
-    DiagramPalette, MIN_LEGIBLE_SCALE, RasterError, RasterImage, is_legible, mermaid_to_svg,
-    rasterise_svg, render_mermaid, render_mermaid_for_pane, svg_natural_size,
+    DiagramPalette, MIN_LEGIBLE_SCALE, RasterError, RasterImage, is_legible, mermaid_svg_bytes,
+    mermaid_to_svg, rasterise_svg, rasterise_svg_scaled, render_mermaid, render_mermaid_for_pane,
+    svg_natural_size,
 };
 pub use render::{
-    BlockAction, BlockActionKind, RenderOpts, RenderedDoc, StyleKind, StyledLine, StyledSpan,
-    render, render_with,
+    BlockAction, BlockActionKind, DocTable, RenderOpts, RenderedDoc, StyleKind, StyledLine,
+    StyledSpan, render, render_with,
 };
 
 #[cfg(test)]
@@ -816,11 +817,33 @@ mod tests {
         );
         let joined = doc.lines.join("\n");
         assert!(joined.contains('5'), "all rows visible: {joined}");
-        assert!(
-            doc.block_actions.is_empty(),
-            "tables no longer register block actions: {:?}",
-            doc.block_actions
+        assert_eq!(doc.block_actions.len(), 1, "one expand action per table");
+        assert_eq!(doc.block_actions[0].kind, BlockActionKind::ExpandTable);
+    }
+
+    #[test]
+    fn table_grid_is_exposed_with_header_rows_and_lines() {
+        let src = "# T\n\n| Name | Note |\n|---|---|\n| a | [x](x.md) |\n| b |\n";
+        let doc = render_src(src, 40);
+        assert_eq!(doc.tables.len(), 1);
+        let t = &doc.tables[0];
+        assert_eq!(t.header, ["Name", "Note"]);
+        assert_eq!(
+            t.rows,
+            [["a", "x"], ["b", ""]],
+            "links flattened, short rows padded"
         );
+        assert_eq!(t.source_line, 3);
+        let top = usize::try_from(t.line).unwrap();
+        assert!(doc.lines[top].starts_with('┌'), "{:?}", doc.lines[top]);
+        assert_eq!(
+            doc.lines[top + usize::try_from(t.height).unwrap() - 1]
+                .chars()
+                .next(),
+            Some('└')
+        );
+        let ba = &doc.block_actions[0];
+        assert_eq!((ba.line, ba.payload.as_str()), (t.line, "0"));
     }
 
     #[test]
@@ -1460,6 +1483,17 @@ mod tests {
             }
             insta::assert_snapshot!(format!("images_{w}"), out);
         }
+    }
+
+    #[test]
+    fn mermaid_fence_registers_expand_before_copy() {
+        let doc = render_src("```mermaid\nflowchart LR\n  A --> B\n```\n", 60);
+        let kinds: Vec<_> = doc.block_actions.iter().map(|a| a.kind).collect();
+        assert_eq!(
+            kinds,
+            [BlockActionKind::ExpandDiagram, BlockActionKind::CopyCode]
+        );
+        assert!(doc.block_actions[0].payload.contains("A --> B"));
     }
 
     #[test]

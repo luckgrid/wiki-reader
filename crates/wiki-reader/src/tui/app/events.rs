@@ -137,11 +137,8 @@ fn run_loop(
         app.flush_session(false);
         // Poll fast mid-drag so a held pointer keeps scrolling the View, and while a picture is
         // still decoding so it appears promptly.
-        let idle = std::time::Duration::from_millis(if app.selecting || app.images.has_pending() {
-            40
-        } else {
-            250
-        });
+        let busy = app.images.has_pending() || app.modal.as_ref().is_some_and(|m| m.busy());
+        let idle = std::time::Duration::from_millis(if app.selecting || busy { 40 } else { 250 });
         if event::poll(idle)? {
             // Apply everything already queued before redrawing: a wheel flick or mouse move
             // sends dozens of events, and one full redraw per event lags behind the pointer.
@@ -348,6 +345,12 @@ pub(crate) fn apply_mouse(
         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
             // Popups own the wheel: it never falls through to the panes behind.
             let up = matches!(mouse.kind, MouseEventKind::ScrollUp);
+            if app.modal.is_some() {
+                use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+                let code = if up { KeyCode::Up } else { KeyCode::Down };
+                app.update(Action::ModalKey(KeyEvent::new(code, KeyModifiers::NONE)));
+                return None;
+            }
             if app.search.is_some() {
                 app.update(Action::SearchSelectDelta(if up { -1 } else { 1 }));
                 return None;
