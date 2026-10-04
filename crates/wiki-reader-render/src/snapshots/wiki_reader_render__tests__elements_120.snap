@@ -65,6 +65,7 @@ Code
 ── rust ──
 │ fn main() {
 │     println!("hello");
+│     let long = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 │ }
 
 ── python ──

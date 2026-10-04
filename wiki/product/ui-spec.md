@@ -120,10 +120,10 @@ Rendered by default (the formatted view: no `#`, fences or backticks); `r` toggl
 **Focusable items ("actions")** are what `Tab` cycles through, in document order:
 
 1. Links (internal, anchor, external, broken)
-2. Block actions: expand/collapse frontmatter (`▸`/`▾`, key-reachable and clickable from the first frame), copy a code block (OSC 52)
+2. Block actions: expand/collapse frontmatter (`▸`/`▾`, key-reachable and clickable from the first frame), expand then copy a code block (OSC 52; two Tab stops on the label), expand a table or diagram
 3. The View footer's ‹ Prev / Next › buttons (last in the cycle)
 
-After the last item, `Tab` wraps to the first. The focused item renders inverted, and the status bar shows its target or action (`→ decisions/0003.md#context`, `↗ https://…`, `? not found: foo.md`, `copy code`).
+After the last item, `Tab` wraps to the first. The focused item renders inverted, and the status bar shows its target or action (`→ decisions/0003.md#context`, `↗ https://…`, `? not found: foo.md`, `expand code (Enter)`, `copy code`).
 
 **Links:** underlined; broken links in the error color with `?`; external links with `↗`. `Enter` or left-click follows. Middle-click, Shift/Ctrl+click, or `t` opens in a new tab (`Ctrl+Enter` on a focused link does too where the kitty protocol reports it). External links ask `open https://… ? [y/N]` in the status bar, then use the system opener. Hovering (if the terminal reports motion) highlights the link and shows its target in the status bar.
 
@@ -137,9 +137,11 @@ Connected `‹ Prev title` and `Next title ›` controls sit in their own cells 
 
 ## Modal viewers
 
-Table and image/diagram viewers share one modal shell (`Esc` dismisses, wheel scrolls, click outside dismisses, drawn after a `Clear` so they sit above Kitty pictures). Entry points are block actions in the View Tab cycle plus `Enter` on the focused table or image slot. The panel is **content-sized**: it wraps its content (at least 40 body columns), is centred, and never exceeds the full-size panel (the area inset by two columns and one row; tiny terminals get all of it). A wide table or picture therefore keeps today's width. The modal's keys are listed in Help under *Table and image viewers*, and the hint bar along the panel's bottom edge shows the ones that apply.
+Table, image/diagram and code viewers share one modal shell (`Esc` dismisses, wheel scrolls, Shift+wheel pans horizontally where the viewer supports it, click outside dismisses, drawn after a `Clear` so they sit above Kitty pictures). Entry points are block actions in the View Tab cycle plus `Enter` on the focused table, image slot or code block. The panel is **content-sized**: it wraps its content (at least 40 body columns), is centred, and never exceeds the full-size panel (the area inset by two columns and one row; tiny terminals get all of it). A wide table, picture or code line therefore keeps today's width. The modal's keys are listed in Help under *Table, image and code viewers*, and the hint bar along the panel's bottom edge shows the ones that apply.
 
 **Table viewer.** Opens from the expand-table block action or `Enter` on any row of a table. Keys: arrows / `hjkl` move the cell cursor; `PgUp` / `PgDn` page; `g` / `G` top / bottom; `/` filter rows (`Enter` keep, `Esc` clear); `s` cycles sort asc / desc / off on the current column; `y` copies the cell; `Y` copies the row (tab-separated). The header row and first column stay fixed while the body scrolls. Cells keep their inline styling (bold, link colour, code) and the header stays bold; filter, sort and copy use the plain text. The panel is as wide as all columns and as tall as all rows, up to the cap.
+
+**Code viewer.** Opens from the expand-code block action or `Enter` on any row of a fenced code block. Inline fences paint one display row per source line and truncate with `…` instead of wrapping. Keys: arrows / `hjkl` scroll; `PgUp` / `PgDn` page; `g` / `G` top / bottom; `Home` / `End` / `0` / `$` jump horizontally; `y` copies the full source (OSC 52). The panel is as wide as the longest line (plus a gutter) and as tall as the line count, up to the cap.
 
 **Image and diagram viewer.** Opens from the expand-diagram block action (`Enter` on the Mermaid fence line) or `Enter` on any row of a picture slot. Keys: arrows / `hjkl` pan by an eighth of the window; `PgUp` / `PgDn` and `g` / `G` as in the table viewer; `+` / `-` zoom (100–800 % of the base size); `0` fits the window and resets zoom; `a` toggles **fit** and **actual size**; `Tab` / `Shift+Tab` step to the next / previous image or diagram of the page, wrapping; `v` cycles a diagram's views. The wheel pans vertically. SVG and Mermaid re-rasterise at the zoomed size; raster files scale from the decoded bitmap.
 
@@ -147,6 +149,8 @@ Table and image/diagram viewers share one modal shell (`Esc` dismisses, wheel sc
 - **Carousel.** The inventory is every block image and Mermaid fence of the page in document order, whatever tier the page painted it with. A picture that could not be loaded (remote, missing, too large) is an entry that shows why. The one opened shows first; each item starts at fit, zoom 100 %. Arrows stay pan.
 - **Diagram views.** `v` cycles *image* → *text* (terminal text art at the panel width) → *source*, for the open diagram only; nothing is saved. *Image* is skipped when the terminal has no graphics protocol (the viewer then opens on *source*, as the inline tier did). The lite build has no image viewer at all (`image viewer is not in this lite build`).
 - **Hint bar.** `←↑↓→ pan  +/- zoom  0 fit  a actual  g/G top/end  Tab/⇧Tab item  v image/text/source  Esc close`; `Tab/⇧Tab` shows only with more than one item, `v` only with more than one view, and the text views show `↑↓ scroll … (source view)`.
+
+**Known limits (code).** Drag-selecting a truncated row copies the visible text including `…`; the block's copy action and the viewer's `y` give the full source. Tab visits two stops on a code label (expand, then copy), the same pattern as diagrams.
 
 ## Layout footer / status bar (full width, 1 row)
 
@@ -257,14 +261,15 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 | `Home / End` | Jump to first / last result |
 | `PgUp / PgDn` | Page results |
 
-### Table and image viewers
+### Table, image and code viewers
 
 | Key | Action |
 |-----|--------|
-| `↑↓←→ / hjkl` | Move the table cell cursor, or pan a picture |
+| `↑↓←→ / hjkl` | Move the table cell cursor, pan a picture, or scroll code |
 | `/` | Table: filter rows |
 | `s` | Table: sort by the current column |
-| `y / Y` | Table: copy cell / row |
+| `y / Y` | Table: copy cell / row; code: copy the block (y) |
+| `Home / End / 0 / $` | Code: jump to the start / end of the line |
 | `+ / -` | Picture: zoom in / out |
 | `0` | Picture: fit the window, reset zoom |
 | `a` | Picture: toggle fit / actual size |

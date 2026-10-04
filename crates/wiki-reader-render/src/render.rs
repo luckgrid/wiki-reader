@@ -9,7 +9,7 @@ use std::sync::Arc;
 use pulldown_cmark::{
     BlockQuoteKind, CodeBlockKind, CowStr, Event, HeadingLevel, Options, Parser, Tag, TagEnd,
 };
-use unicode_width::UnicodeWidthStr;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 use wiki_reader_core::Index;
 use wiki_reader_core::images::ImageReject;
 use wiki_reader_core::index::Page;
@@ -120,6 +120,8 @@ pub struct RenderedDoc {
     pub block_actions: Vec<BlockAction>,
     /// Cell grid of every table, document order (P3-14 table viewer).
     pub tables: Vec<DocTable>,
+    /// Fenced code blocks, document order (code viewer).
+    pub code_blocks: Vec<DocCodeBlock>,
     /// 1-based **rendered** line where each content block starts.
     pub block_starts: Vec<u32>,
     /// Rendered line (0-based) → source line (1-based), monotonic.
@@ -195,11 +197,29 @@ pub struct DocTable {
     pub rows: Vec<Vec<DocCell>>,
 }
 
+/// One fenced code block, for the code viewer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocCodeBlock {
+    /// Source line (1-based) of the opening fence.
+    pub source_line: u32,
+    /// 0-based display line of the label row.
+    pub line: u32,
+    /// Display rows the block occupies (label + body).
+    pub height: u32,
+    /// Fence language tag (empty for plain ` ``` `).
+    pub lang: String,
+    /// Full source lines (no truncation).
+    pub lines: Vec<String>,
+}
+
 /// Kind of a Tab-cycle block action (BA / P2-03).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlockActionKind {
     /// Expand / collapse the frontmatter box.
     ToggleFrontmatter,
+    /// Open a fenced code block in the modal viewer; `payload` is the index into
+    /// [`RenderedDoc::code_blocks`].
+    ExpandCode,
     /// Copy a fenced code block (OSC 52).
     CopyCode,
     /// Open the table in the modal viewer; `payload` is the index into [`RenderedDoc::tables`].
@@ -218,7 +238,8 @@ pub struct BlockAction {
     /// Display columns `[start, end)` on that line.
     pub cols: (u16, u16),
     /// For [`BlockActionKind::CopyCode`] and [`BlockActionKind::ExpandDiagram`]: code / fence
-    /// body. For [`BlockActionKind::ExpandTable`]: table index. Else empty.
+    /// body. For [`BlockActionKind::ExpandTable`] / [`BlockActionKind::ExpandCode`]: index.
+    /// Else empty.
     pub payload: String,
 }
 
@@ -227,6 +248,7 @@ fn content_block_id(kind: BlockActionKind, text: &str) -> u32 {
     let mut h: u32 = 0x811c_9dc5;
     h ^= match kind {
         BlockActionKind::ToggleFrontmatter => 1,
+        BlockActionKind::ExpandCode => 2,
         BlockActionKind::CopyCode => 3,
         BlockActionKind::ExpandTable => 4,
         BlockActionKind::ExpandDiagram => 5,
@@ -392,6 +414,7 @@ pub fn render_with(
         links: state.links,
         block_actions: state.block_actions,
         tables: state.tables,
+        code_blocks: state.code_blocks,
         block_starts: state.block_starts,
         source_map,
         headings: state.headings,
@@ -451,6 +474,7 @@ struct LayoutState<'a> {
     links: Vec<LinkSpan>,
     block_actions: Vec<BlockAction>,
     tables: Vec<DocTable>,
+    code_blocks: Vec<DocCodeBlock>,
     block_starts: Vec<u32>,
     headings: Vec<(String, u32)>,
     /// Current open line being built (spans not yet committed).
@@ -540,6 +564,7 @@ impl<'a> LayoutState<'a> {
             links: Vec::new(),
             block_actions: Vec::new(),
             tables: Vec::new(),
+            code_blocks: Vec::new(),
             block_starts: Vec::new(),
             headings: Vec::new(),
             cur: Vec::new(),
@@ -993,10 +1018,17 @@ impl<'a> LayoutState<'a> {
                 let line = u32::try_from(self.styled.len()).unwrap_or(0);
                 self.push_span(label, StyleKind::CodeLang, src);
                 let end = u16::try_from(self.cur_width().min(usize::from(u16::MAX))).unwrap_or(1);
-                // Provisional id from lang; rewritten when body is known.
-                let id = content_block_id(BlockActionKind::CopyCode, &self.code_fence_lang);
+                // Expand first (Enter); copy second (click wins). Provisional ids rewritten on close.
+                let fp = self.code_fence_lang.clone();
                 self.block_actions.push(BlockAction {
-                    id,
+                    id: content_block_id(BlockActionKind::ExpandCode, &fp),
+                    kind: BlockActionKind::ExpandCode,
+                    line,
+                    cols: (0, end.max(1)),
+                    payload: String::new(),
+                });
+                self.block_actions.push(BlockAction {
+                    id: content_block_id(BlockActionKind::CopyCode, &fp),
                     kind: BlockActionKind::CopyCode,
                     line,
                     cols: (0, end.max(1)),
@@ -1100,17 +1132,54 @@ impl<'a> LayoutState<'a> {
                     return;
                 }
                 // No closing fence line: the label above frames the block.
-                if let Some(action) = self
+                let body = std::mem::take(&mut self.code_body);
+                let fp = format!("{}\n{body}", self.code_fence_lang);
+                let lines: Vec<String> = if body.is_empty() {
+                    Vec::new()
+                } else {
+                    body.lines().map(str::to_owned).collect()
+                };
+                let label_line = self
                     .block_actions
-                    .iter_mut()
+                    .iter()
                     .rev()
-                    .find(|a| a.kind == BlockActionKind::CopyCode && a.payload.is_empty())
-                {
-                    let body = std::mem::take(&mut self.code_body);
-                    let fp = format!("{}\n{body}", self.code_fence_lang);
-                    action.id = content_block_id(BlockActionKind::CopyCode, &fp);
-                    action.payload = body;
+                    .find(|a| a.kind == BlockActionKind::ExpandCode && a.payload.is_empty())
+                    .map_or(0, |a| a.line);
+                let height = u32::try_from(self.styled.len()).unwrap_or(0) - label_line;
+                let idx = self.code_blocks.len();
+                self.code_blocks.push(DocCodeBlock {
+                    source_line: self
+                        .code_line_src
+                        .saturating_sub(u32::try_from(lines.len()).unwrap_or(0).saturating_add(1)),
+                    line: label_line,
+                    height,
+                    lang: self.code_fence_lang.clone(),
+                    lines,
+                });
+                // Walk newest-first; rewrite both provisional actions for this fence.
+                let mut saw_copy = false;
+                let mut saw_expand = false;
+                for action in self.block_actions.iter_mut().rev() {
+                    if !saw_expand
+                        && action.kind == BlockActionKind::ExpandCode
+                        && action.payload.is_empty()
+                    {
+                        action.id = content_block_id(BlockActionKind::ExpandCode, &fp);
+                        action.payload = idx.to_string();
+                        saw_expand = true;
+                    } else if !saw_copy
+                        && action.kind == BlockActionKind::CopyCode
+                        && action.payload.is_empty()
+                    {
+                        action.id = content_block_id(BlockActionKind::CopyCode, &fp);
+                        action.payload.clone_from(&body);
+                        saw_copy = true;
+                    }
+                    if saw_copy && saw_expand {
+                        break;
+                    }
                 }
+                self.code_fence_lang.clear();
             }
             TagEnd::List(_) => {
                 self.list_stack.pop();
@@ -1216,8 +1285,14 @@ impl<'a> LayoutState<'a> {
             }
             for line in body.split('\n') {
                 let line_src = self.code_line_src;
-                self.push_span("│ ".into(), StyleKind::CodeBlock, line_src);
-                self.push_span(line.to_owned(), StyleKind::CodeBlock, line_src);
+                // One display row per source line: truncate with …, never wrap.
+                self.push_span_piece("│ ", StyleKind::CodeBlock, line_src);
+                let avail = self.width.saturating_sub(self.cur_width());
+                self.push_span_piece(
+                    &truncate_code_line(line, avail),
+                    StyleKind::CodeBlock,
+                    line_src,
+                );
                 self.commit_line(line_src);
                 self.code_line_src = self.code_line_src.saturating_add(1);
             }
@@ -2047,6 +2122,29 @@ fn split_at_width(s: &str, max: usize) -> (String, String) {
 }
 
 /// Prefer breaking at the last whitespace that fits; empty take means "no break in avail".
+/// Cut `s` to `max` display columns, ending with `…` when trimmed.
+fn truncate_code_line(s: &str, max: usize) -> String {
+    if max == 0 {
+        return String::new();
+    }
+    if s.width() <= max {
+        return s.to_owned();
+    }
+    let room = max.saturating_sub(1);
+    let mut out = String::new();
+    let mut used = 0;
+    for ch in s.chars() {
+        let w = ch.width().unwrap_or(1);
+        if used + w > room {
+            break;
+        }
+        out.push(ch);
+        used += w;
+    }
+    out.push('…');
+    out
+}
+
 fn split_at_word_boundary(s: &str, max: usize) -> (String, String) {
     if max == 0 {
         return (String::new(), s.to_owned());

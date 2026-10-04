@@ -2837,9 +2837,11 @@ fn block_action_copy_code_via_clipboard() {
     app.clipboard = Box::new(rec);
 
     let items = app.focus_list();
+    // ExpandCode is first on the label; select CopyCode explicitly.
     let copy = items
         .iter()
-        .position(|it| {
+        .enumerate()
+        .filter(|(_, it)| {
             it.kind == FocusTarget::BlockAction
                 && app
                     .doc
@@ -2847,6 +2849,8 @@ fn block_action_copy_code_via_clipboard() {
                     .get(it.line.unwrap_or(0) as usize)
                     .is_some_and(|l| l.contains("── code ──"))
         })
+        .nth(1)
+        .map(|(i, _)| i)
         .expect("copy code action");
     app.focused_item = Some(copy);
     app.update(Action::ViewerActivate);
@@ -5225,6 +5229,53 @@ fn enter_inside_a_table_opens_it_and_modal_copies_a_row() {
     // Sort by name: alice first, then copy that row.
     modal_key(&mut app, "sY");
     assert_eq!(log.lock().unwrap().as_slice(), ["alice\t9"]);
+}
+
+#[test]
+fn expand_code_opens_modal_with_full_line_scroll_and_copy() {
+    const LONG: &str = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let md = format!("# T\n\n```rust\nfn main() {{\n    let long = \"{LONG}\";\n}}\n```\n");
+    let (_d, mut app, log) = app_with_page(&md);
+    let _ = draw_app(&mut app, 40, 24);
+    let inline = app
+        .doc
+        .lines()
+        .iter()
+        .find(|l| l.contains("let long"))
+        .cloned()
+        .expect("truncated code row");
+    assert!(inline.ends_with('…'), "{inline}");
+    assert!(!inline.contains(LONG), "{inline}");
+
+    app.update(Action::FocusViewer);
+    app.focused_item = None;
+    app.cursor_line = row_of(&app, "let long");
+    app.update(Action::ViewerActivate);
+    assert!(app.modal.is_some(), "Enter on a code row opens the modal");
+    assert_eq!(app.input_mode, InputMode::Modal);
+
+    let term = draw_app(&mut app, 40, 24);
+    let s = screen(&term);
+    assert!(s.contains("Code (line") && s.contains("rust"), "{s}");
+    assert!(!s.contains(LONG), "{s}");
+    modal_key(&mut app, "$");
+    let term = draw_app(&mut app, 40, 24);
+    let s = screen(&term);
+    assert!(
+        s.contains(';'),
+        "End shows the right edge of the long line:\n{s}"
+    );
+    assert!(
+        !s.contains("let long"),
+        "start of the line should be scrolled away:\n{s}"
+    );
+    modal_key(&mut app, "y");
+    let copied = log.lock().unwrap().clone();
+    assert_eq!(copied.len(), 1);
+    assert!(copied[0].contains(LONG), "{}", copied[0]);
+    assert!(app.modal.is_some(), "y copies without closing");
+    modal_key(&mut app, "\n");
+    assert!(app.modal.is_none());
 }
 
 #[test]

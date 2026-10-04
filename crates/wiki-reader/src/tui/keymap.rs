@@ -50,7 +50,7 @@ pub enum BindingScope {
     Overlay,
     /// Multi-key chords (display-only in help; special-cased in map).
     Chord,
-    /// Table and image / diagram viewers (display-only in help; the modal reads its own keys).
+    /// Table, image / diagram, and code viewers (display-only in help; the modal reads its own keys).
     Viewers,
 }
 
@@ -64,7 +64,7 @@ impl BindingScope {
             Self::Viewer => "View",
             Self::Chord => "Chords",
             Self::Overlay => "Search overlay",
-            Self::Viewers => "Table and image viewers",
+            Self::Viewers => "Table, image and code viewers",
         }
     }
 }
@@ -684,7 +684,7 @@ pub static BINDINGS: &[Binding] = &[
         keys: "↑↓←→ / hjkl",
         scope: BindingScope::Viewers,
         action: None,
-        help: "Move the table cell cursor, or pan a picture",
+        help: "Move the table cell cursor, pan a picture, or scroll code",
         matcher: None,
     },
     Binding {
@@ -705,7 +705,14 @@ pub static BINDINGS: &[Binding] = &[
         keys: "y / Y",
         scope: BindingScope::Viewers,
         action: None,
-        help: "Table: copy cell / row",
+        help: "Table: copy cell / row; code: copy the block (y)",
+        matcher: None,
+    },
+    Binding {
+        keys: "Home / End / 0 / $",
+        scope: BindingScope::Viewers,
+        action: None,
+        help: "Code: jump to the start / end of the line",
         matcher: None,
     },
     Binding {
