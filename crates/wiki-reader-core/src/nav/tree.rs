@@ -651,7 +651,7 @@ fn sorted_siblings(
     }
 
     entries.sort_by(|a, b| match (a.nav_order, b.nav_order) {
-        (Some(x), Some(y)) => x.partial_cmp(&y).unwrap_or(std::cmp::Ordering::Equal),
+        (Some(x), Some(y)) => x.total_cmp(&y),
         (Some(_), None) => std::cmp::Ordering::Less,
         (None, Some(_)) => std::cmp::Ordering::Greater,
         (None, None) => nat_cmp(&a.sort_name, &b.sort_name),

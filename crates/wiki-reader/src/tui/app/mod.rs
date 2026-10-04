@@ -26,6 +26,7 @@ use super::search_ui::{SearchMode, SearchOverlay};
 use super::text_col;
 use super::theme::Theme;
 use super::viewer_doc::{RawDoc, ViewerDoc};
+use super::worker::guarded;
 use wiki_reader_core::nav::ViewMode;
 use wiki_reader_core::search;
 
@@ -118,6 +119,9 @@ pub struct App {
     pub(crate) editor: Box<dyn EditorLauncher>,
     /// Configured editor command (overrides env when set).
     pub(crate) config_editor: Option<String>,
+    /// `OpenInEditor` was requested; the event loop suspends the terminal and launches it
+    /// (running `$EDITOR` from `update` would draw over the live TUI).
+    editor_requested: bool,
     /// Key overrides: action name → chord string (e.g. `"quit" = "Q"`).
     pub(crate) key_overrides: std::collections::BTreeMap<String, String>,
     /// Search overlay (None when closed).
@@ -190,6 +194,8 @@ pub struct App {
     persist_session: bool,
     /// Last successful session save (debounce).
     session_saved_at: Option<Instant>,
+    /// The last save failed (one status message per failure streak).
+    session_save_failed: bool,
     /// Session dirty since last save.
     session_dirty: bool,
 }
@@ -316,6 +322,7 @@ impl App {
             opener,
             editor: Box::new(SystemEditor),
             config_editor: config.editor.clone(),
+            editor_requested: false,
             key_overrides: config.keys.clone(),
             search: None,
             help: None,
@@ -356,6 +363,7 @@ impl App {
             images: crate::tui::images::ImageManager::disabled(),
             persist_session,
             session_saved_at: None,
+            session_save_failed: false,
             session_dirty: false,
         };
         if persist_session
@@ -408,9 +416,19 @@ impl App {
             Some(self.nav_visible),
             self.nav_width,
         );
-        if wiki_reader_core::session::save(self.provider.root(), &state).is_ok() {
-            self.session_saved_at = Some(Instant::now());
-            self.session_dirty = false;
+        // Success or failure, wait out the debounce before the next try: a read-only state
+        // dir must not re-serialise and write the whole history on every loop tick.
+        self.session_saved_at = Some(Instant::now());
+        match wiki_reader_core::session::save(self.provider.root(), &state) {
+            Ok(()) => {
+                self.session_dirty = false;
+                self.session_save_failed = false;
+            }
+            Err(err) if !self.session_save_failed => {
+                self.session_save_failed = true;
+                self.message = format!("session not saved: {err}");
+            }
+            Err(_) => {}
         }
     }
 
@@ -428,7 +446,6 @@ impl App {
         }
     }
 
-    /// Flush a pending save (`force` ignores the 2s debounce).
     /// Hand the current page to the herdr publisher when it changed. Cheap: the title is only
     /// looked up on a page change.
     pub(crate) fn sync_herdr(&mut self) {
@@ -448,6 +465,7 @@ impl App {
         self.herdr_page = Some(page);
     }
 
+    /// Flush a pending save (`force` ignores the 2s debounce).
     pub(crate) fn flush_session(&mut self, force: bool) {
         if !self.session_dirty {
             return;
@@ -774,7 +792,7 @@ impl App {
                 self.message.clear();
             }
             Action::ToggleViewMode => self.toggle_view_mode(),
-            Action::OpenInEditor => self.open_in_editor(),
+            Action::OpenInEditor => self.editor_requested = true,
             Action::CopyPagePath => self.copy_page_path(),
             Action::CopyLinkTarget => self.copy_link_target(),
             Action::NewTab => self.open_new_tab(),
@@ -1584,6 +1602,11 @@ impl App {
     /// Callers that own the terminal must suspend/restore around this (see
     /// `events`); tests inject a recording launcher and call
     /// [`Self::open_in_editor_with`].
+    /// Take the pending "open in editor" request, if any (see [`Self::editor_requested`]).
+    pub(crate) fn take_editor_request(&mut self) -> bool {
+        std::mem::take(&mut self.editor_requested)
+    }
+
     pub(crate) fn open_in_editor(&mut self) {
         self.open_in_editor_with(crate::tui::editor::resolve_editor_with_config(
             self.config_editor.as_deref(),
@@ -1684,8 +1707,12 @@ impl App {
         self.highlight_rx = Some((token, rx));
         let syntax = self.theme.syntax;
         std::thread::spawn(move || {
-            let hl = crate::tui::highlight::highlight_markdown(&source, syntax);
-            let _ = tx.send(hl);
+            // A panic leaves the page plain: dropping `tx` reports "no highlights".
+            if let Ok(hl) = guarded("syntax highlight", || {
+                crate::tui::highlight::highlight_markdown(&source, syntax)
+            }) {
+                let _ = tx.send(hl);
+            }
         });
     }
 
@@ -1710,6 +1737,7 @@ impl App {
             Err(TryRecvError::Empty) => false,
             Err(TryRecvError::Disconnected) => {
                 self.rebuild_rx = None;
+                self.message = "reindex worker stopped".into();
                 true
             }
         }
@@ -1732,7 +1760,10 @@ impl App {
         let (tx, rx) = mpsc::channel();
         self.rebuild_rx = Some(rx);
         std::thread::spawn(move || {
-            let result = Index::build(&provider).map_err(|e| e.to_string());
+            let result = guarded("reindex", || {
+                Index::build(&provider).map_err(|e| e.to_string())
+            })
+            .unwrap_or_else(Err);
             let _ = tx.send(result);
         });
     }

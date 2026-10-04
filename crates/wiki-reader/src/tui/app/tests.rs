@@ -2390,6 +2390,30 @@ fn dirty_during_rebuild_queues_second() {
 }
 
 #[test]
+fn search_overlay_survives_case_folding_that_changes_byte_lengths() {
+    let (dir, mut app, _) =
+        app_with_page("# İstanbul guide\n\nİstanbul guide has a stanbul line.\n");
+    let _ = &dir;
+    app.update(Action::OpenSearch);
+    for c in "stanbul".chars() {
+        app.update(Action::SearchChar(c));
+    }
+    // Drawing used to slice the original text with lowercased byte offsets and panic.
+    let terminal = draw_app(&mut app, 100, 30);
+    let buf = terminal.backend().buffer();
+    let text: String = (0..buf.area.height)
+        .flat_map(|y| (0..buf.area.width).map(move |x| (x, y)))
+        .map(|(x, y)| buf[(x, y)].symbol().to_owned())
+        .collect();
+    assert!(text.contains("stanbul"), "overlay drawn");
+    app.update(Action::SearchToggleMode);
+    for c in "guide".chars() {
+        app.update(Action::SearchChar(c));
+    }
+    let _ = draw_app(&mut app, 100, 30);
+}
+
+#[test]
 fn search_matches_survive_toggle_and_resize() {
     let root = fixture();
     let mut app = App::new(&root).unwrap();
@@ -3558,6 +3582,35 @@ fn help_overlay_open_close_and_activate() {
     app.update(Action::HelpActivate);
     assert!(app.quit);
     assert!(app.help.is_none());
+}
+
+#[test]
+fn help_open_in_editor_row_defers_to_the_event_loop() {
+    use crate::tui::editor::RecordingEditor;
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let recorder = RecordingEditor::default();
+    let log = recorder.launched.clone();
+    app.editor = Box::new(recorder);
+    app.config_editor = Some("nvim".into());
+    app.update(Action::OpenHelp);
+    if let Some(help) = app.help.as_mut() {
+        help.selected = help
+            .rows
+            .iter()
+            .position(|r| matches!(r.action, Some(Action::OpenInEditor)))
+            .expect("open-in-editor row");
+    }
+    app.update(Action::HelpActivate);
+    assert!(
+        log.lock().expect("lock").is_empty(),
+        "the editor must not run on top of the live TUI"
+    );
+    assert!(
+        app.take_editor_request(),
+        "the event loop is asked to suspend the terminal"
+    );
+    assert!(!app.take_editor_request(), "request is consumed once");
 }
 
 #[test]

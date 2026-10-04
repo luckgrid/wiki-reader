@@ -181,8 +181,11 @@ pub fn save_to_path(path: &Path, state: &SessionState) -> std::io::Result<()> {
             .duration_since(UNIX_EPOCH)
             .map_or(0, |d| d.as_nanos())
     ));
-    fs::write(&tmp, text)?;
-    fs::rename(&tmp, path)?;
+    // A failed write or rename must not leave `<hash>.tmp-<nanos>` files behind.
+    if let Err(err) = fs::write(&tmp, text).and_then(|()| fs::rename(&tmp, path)) {
+        let _ = fs::remove_file(&tmp);
+        return Err(err);
+    }
     Ok(())
 }
 
@@ -322,6 +325,26 @@ mod tests {
     use crate::nav::{Disposition, Target, ViewState};
     use crate::provider::FsProvider;
     use tempfile::tempdir;
+
+    #[test]
+    fn a_failed_save_leaves_no_tmp_files_behind() {
+        let wiki = tempdir().unwrap();
+        fs::write(wiki.path().join("README.md"), "# Hi\n").unwrap();
+        let provider = FsProvider::open(wiki.path()).unwrap();
+        let nav = Navigator::new(Index::build(&provider).unwrap(), None).unwrap();
+        let state = SessionState::from_navigator(&nav, FocusPaneState::Viewer, None, None);
+        let dir = tempdir().unwrap();
+        let target = dir.path().join("session.toml");
+        // Renaming a file onto a directory fails after the temp file was written.
+        fs::create_dir(&target).unwrap();
+        assert!(save_to_path(&target, &state).is_err());
+        let leftovers = fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|e| e.file_name().to_string_lossy().contains("tmp-"))
+            .count();
+        assert_eq!(leftovers, 0, "tmp file removed after a failed save");
+    }
 
     #[test]
     fn session_round_trip_temp_state_dir() {

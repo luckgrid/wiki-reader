@@ -468,26 +468,23 @@ fn search_result_spans(
 
 fn highlight_spans(
     text: &str,
-    query_lower: &str,
+    query: &str,
     normal: ratatui::style::Style,
     match_style: ratatui::style::Style,
 ) -> Vec<ratatui::text::Span<'static>> {
     use ratatui::text::Span;
-    if query_lower.is_empty() {
+    if query.is_empty() {
         return vec![Span::styled(text.to_owned(), normal)];
     }
-    let lower = text.to_lowercase();
     let mut spans = Vec::new();
     let mut rest = text;
-    let mut rest_lower = lower.as_str();
-    while let Some(pos) = rest_lower.find(query_lower) {
-        if pos > 0 {
-            spans.push(Span::styled(rest[..pos].to_owned(), normal));
+    // Offsets come from the original text (folding can change byte lengths).
+    while let Some(found) = wiki_reader_core::search::find_case_insensitive(rest, query) {
+        if found.start > 0 {
+            spans.push(Span::styled(rest[..found.start].to_owned(), normal));
         }
-        let end = pos + query_lower.len();
-        spans.push(Span::styled(rest[pos..end].to_owned(), match_style));
-        rest = &rest[end..];
-        rest_lower = &rest_lower[end..];
+        spans.push(Span::styled(rest[found.clone()].to_owned(), match_style));
+        rest = &rest[found.end..];
     }
     if !rest.is_empty() {
         spans.push(Span::styled(rest.to_owned(), normal));
@@ -811,5 +808,32 @@ fn block_action_status(app: &App, target: &str) -> String {
         wiki_reader_render::BlockActionKind::ExpandCode => "expand code (Enter)".into(),
         wiki_reader_render::BlockActionKind::ExpandTable => "expand table (Enter)".into(),
         wiki_reader_render::BlockActionKind::ExpandDiagram => "expand diagram (Enter)".into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ratatui::style::Style;
+
+    use super::highlight_spans;
+
+    fn joined(spans: &[ratatui::text::Span<'static>]) -> String {
+        spans.iter().map(|s| s.content.as_ref()).collect()
+    }
+
+    #[test]
+    fn highlight_never_slices_at_folded_offsets() {
+        for (text, query) in [
+            ("İstanbul guide", "stanbul"),
+            ("İstanbul guide", "guide"),
+            ("\u{212A}elvin and more", "elvin"),
+            ("日本語のTEXT text", "text"),
+        ] {
+            let spans = highlight_spans(text, query, Style::default(), Style::default());
+            assert_eq!(joined(&spans), text, "{text} / {query}");
+        }
+        let long = format!("{}needle", "İ".repeat(200));
+        let spans = highlight_spans(&long, "needle", Style::default(), Style::default());
+        assert_eq!(joined(&spans), long);
     }
 }

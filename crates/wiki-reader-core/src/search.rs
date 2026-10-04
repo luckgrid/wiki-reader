@@ -130,6 +130,44 @@ fn fuzzy_score(query: &str, hay: &str) -> Option<u32> {
     None
 }
 
+/// Case-insensitive find of `needle` in `text`, as a byte range of the **original** `text`.
+///
+/// Folding can change a character's byte length (`İ` grows, the Kelvin sign shrinks), so offsets
+/// found in a lowercased copy must never be reused on the original. This folds char by char and
+/// keeps each folded char's original byte span; a match that starts or ends inside one
+/// character's expansion widens to that whole character.
+#[must_use]
+pub fn find_case_insensitive(text: &str, needle: &str) -> Option<std::ops::Range<usize>> {
+    if needle.is_empty() {
+        return None;
+    }
+    if text.is_ascii() && needle.is_ascii() {
+        let n = needle.as_bytes();
+        return text
+            .as_bytes()
+            .windows(n.len())
+            .position(|w| w.eq_ignore_ascii_case(n))
+            .map(|start| start..start + n.len());
+    }
+    let want: Vec<char> = needle.chars().flat_map(char::to_lowercase).collect();
+    let mut folded: Vec<(char, usize, usize)> = Vec::new();
+    for (start, ch) in text.char_indices() {
+        let end = start + ch.len_utf8();
+        folded.extend(ch.to_lowercase().map(|c| (c, start, end)));
+    }
+    if want.is_empty() || want.len() > folded.len() {
+        return None;
+    }
+    (0..=folded.len() - want.len())
+        .find(|&i| {
+            folded[i..i + want.len()]
+                .iter()
+                .map(|f| f.0)
+                .eq(want.iter().copied())
+        })
+        .map(|i| folded[i].1..folded[i + want.len() - 1].2)
+}
+
 /// Case-insensitive scan of indexed page bodies (deterministic grouping).
 #[must_use]
 pub fn search_text(query: &str, index: &Index) -> Vec<TextHit> {
@@ -137,14 +175,13 @@ pub fn search_text(query: &str, index: &Index) -> Vec<TextHit> {
     if q.is_empty() {
         return Vec::new();
     }
-    let q_lower = q.to_lowercase();
     let mut hits: Vec<TextHit> = Vec::new();
     let mut pages: Vec<_> = index.pages.values().collect();
     pages.sort_by(|a, b| a.key.relative_path.cmp(&b.key.relative_path));
     for page in pages {
         let offset = page.parsed.body_line_offset;
         for (i, line) in page.parsed.body.lines().enumerate() {
-            if line.to_lowercase().contains(&q_lower) {
+            if find_case_insensitive(line, q).is_some() {
                 let line_no = offset.saturating_add(u32::try_from(i).unwrap_or(0));
                 hits.push(TextHit {
                     page: page.key.clone(),
@@ -177,11 +214,10 @@ pub fn group_text_hits(hits: &[TextHit]) -> Vec<TextPageGroup> {
 }
 
 fn snippet_line(line: &str, query: &str) -> String {
-    let lower = line.to_lowercase();
-    let q = query.to_lowercase();
-    let Some(byte_at) = lower.find(&q) else {
+    let Some(found) = find_case_insensitive(line, query) else {
         return line.chars().take(60).collect();
     };
+    let byte_at = found.start;
     // Work in char indices so CJK never panics on mid-char slices (U5).
     let char_starts: Vec<usize> = line
         .char_indices()
@@ -191,7 +227,7 @@ fn snippet_line(line: &str, query: &str) -> String {
     let match_char = char_starts
         .partition_point(|&b| b < byte_at)
         .saturating_sub(1);
-    let q_chars = q.chars().count();
+    let q_chars = line[found].chars().count();
     let start_char = match_char.saturating_sub(20);
     let end_char = (match_char + q_chars + 40).min(char_starts.len().saturating_sub(1));
     let start = char_starts[start_char];
@@ -209,6 +245,36 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/worked-example");
         let provider = FsProvider::open(&root).unwrap();
         Index::build(&provider).unwrap()
+    }
+
+    #[test]
+    fn case_insensitive_find_maps_back_to_original_bytes() {
+        // ASCII fast path.
+        assert_eq!(find_case_insensitive("Hello World", "WORLD"), Some(6..11));
+        assert_eq!(find_case_insensitive("abc", "abcd"), None);
+        assert_eq!(find_case_insensitive("abc", ""), None);
+        // `İ` lowercases to two chars and three bytes; offsets must stay in the original.
+        let text = "İstanbul guide";
+        let r = find_case_insensitive(text, "stanbul").unwrap();
+        assert_eq!(&text[r], "stanbul");
+        let r = find_case_insensitive(text, "guide").unwrap();
+        assert_eq!(&text[r], "guide");
+        // The Kelvin sign shrinks from three bytes to one when folded.
+        let text = "\u{212A}elvin and more";
+        let r = find_case_insensitive(text, "elvin").unwrap();
+        assert_eq!(&text[r], "elvin");
+        let r = find_case_insensitive(text, "kelvin").unwrap();
+        assert_eq!(&text[r], "\u{212A}elvin");
+        // CJK and mixed text never split a character.
+        let r = find_case_insensitive("日本語のTEXT", "text").unwrap();
+        assert_eq!(&"日本語のTEXT"[r], "TEXT");
+    }
+
+    #[test]
+    fn snippet_keeps_the_match_after_many_expanding_chars() {
+        let line = format!("{}needle tail", "İ".repeat(200));
+        let snip = snippet_line(&line, "needle");
+        assert!(snip.contains("needle"), "{snip}");
     }
 
     #[test]

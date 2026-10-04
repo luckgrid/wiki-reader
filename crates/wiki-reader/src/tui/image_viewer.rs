@@ -20,7 +20,7 @@
 )]
 
 use std::fmt::Write as _;
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 
 use image::imageops::FilterType;
 use image::{DynamicImage, RgbaImage};
@@ -41,6 +41,7 @@ use wiki_reader_render::{
 use super::modal_viewer::{ModalContent, ModalEvent};
 use super::text_col::line_width;
 use super::theme::Theme;
+use super::worker::guarded;
 
 /// Zoom steps, percent of the base size (100 = the fit size, or natural pixels in actual mode).
 const ZOOMS: [u32; 7] = [100, 150, 200, 300, 400, 600, 800];
@@ -141,9 +142,12 @@ fn work(source: &SlotSource, reqs: &Receiver<ReqKey>, out: &Sender<Result<Zoomed
         while let Ok(newer) = reqs.try_recv() {
             key = newer;
         }
-        let nat = natural.get_or_insert_with(|| load(source));
+        let nat = natural
+            .get_or_insert_with(|| guarded("picture decode", || load(source)).unwrap_or_else(Err));
         let result = match nat {
-            Ok(nat) => zoom_to(nat, key).map(|img| Zoomed { img, key }),
+            Ok(nat) => guarded("picture zoom", || zoom_to(nat, key))
+                .unwrap_or_else(Err)
+                .map(|img| Zoomed { img, key }),
             Err(e) => Err(e.clone()),
         };
         if out.send(result).is_err() {
@@ -233,22 +237,50 @@ impl Gfx {
         self.zoom = zoom.min(ZOOMS.len() - 1);
     }
 
+    /// Zoom, actual-size and fit keys. True when `code` was one of them.
+    fn zoom_key(&mut self, code: KeyCode) -> bool {
+        match code {
+            KeyCode::Char('+' | '=') => self.set_zoom(self.zoom + 1),
+            KeyCode::Char('-' | '_') => self.set_zoom(self.zoom.saturating_sub(1)),
+            KeyCode::Char('a') => {
+                self.actual = !self.actual;
+                self.centre = (0.5, 0.5);
+            }
+            KeyCode::Char('0') => {
+                self.set_zoom(0);
+                self.actual = false;
+                self.centre = (0.5, 0.5);
+            }
+            _ => return false,
+        }
+        true
+    }
+
     /// Ask for the zoomed picture if the zoom, mode or window `vp` (pixels) changed, and take
     /// finished ones.
     fn sync(&mut self, vp: (u32, u32)) {
         let key = (ZOOMS[self.zoom], vp, self.actual);
         if self.asked != Some(key) {
             self.asked = Some(key);
-            // A closed worker shows up as an error on the next read; nothing to do here.
+            // A dead worker is noticed when the results channel disconnects, below.
             let _ = self.reqs.send(key);
         }
-        while let Ok(result) = self.results.try_recv() {
-            match result {
-                Ok(z) => {
+        loop {
+            match self.results.try_recv() {
+                Ok(Ok(z)) => {
                     self.zoomed = Some(z);
                     self.error = None;
                 }
-                Err(e) => self.error = Some(e),
+                Ok(Err(e)) => self.error = Some(e),
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => {
+                    // The worker is gone: report it rather than showing "rendering…" forever.
+                    if self.zoomed.as_ref().map(|z| z.key) != self.asked {
+                        self.error
+                            .get_or_insert_with(|| "render worker stopped".to_owned());
+                    }
+                    break;
+                }
             }
         }
     }
@@ -385,8 +417,19 @@ impl ImageViewer {
 
     /// Everything but item / view switching: pan and zoom the picture, or scroll the text.
     fn pan_or_scroll(&mut self, code: KeyCode) {
+        // A failure after an earlier successful render keeps that picture: a zoom key retries
+        // (new request key, error cleared) instead of leaving the viewer stuck on the note.
+        if let Some(g) = self
+            .gfx
+            .as_mut()
+            .filter(|g| g.error.is_some() && g.zoomed.is_some())
+            && g.zoom_key(code)
+        {
+            g.error = None;
+            return;
+        }
         // No picture, or a failed one: arrows scroll the source / error note.
-        if self.gfx.as_ref().is_none_or(|g| g.error.is_some()) {
+        let Some(g) = self.gfx.as_mut().filter(|g| g.error.is_none()) else {
             match code {
                 KeyCode::Up | KeyCode::Char('k') => self.scroll_text(-1),
                 KeyCode::Down | KeyCode::Char('j') => self.scroll_text(1),
@@ -397,8 +440,7 @@ impl ImageViewer {
                 _ => {}
             }
             return;
-        }
-        let g = self.gfx.as_mut().expect("checked above");
+        };
         // ponytail: keys only; mouse is the wheel (pans vertically). Upgrade: drag to pan.
         let (step_x, step_y) = (i64::from(g.vp.0 / 8).max(1), i64::from(g.vp.1 / 8).max(1));
         match code {
@@ -410,18 +452,9 @@ impl ImageViewer {
             KeyCode::PageDown => g.pan(0, step_y * 7),
             KeyCode::Home | KeyCode::Char('g') => g.centre.1 = 0.0,
             KeyCode::End | KeyCode::Char('G') => g.centre.1 = 1.0,
-            KeyCode::Char('+' | '=') => g.set_zoom(g.zoom + 1),
-            KeyCode::Char('-' | '_') => g.set_zoom(g.zoom.saturating_sub(1)),
-            KeyCode::Char('a') => {
-                g.actual = !g.actual;
-                g.centre = (0.5, 0.5);
+            _ => {
+                g.zoom_key(code);
             }
-            KeyCode::Char('0') => {
-                g.set_zoom(0);
-                g.actual = false;
-                g.centre = (0.5, 0.5);
-            }
-            _ => {}
         }
     }
 
@@ -773,6 +806,46 @@ mod tests {
         // Arrows scroll the source, they do not pan a missing picture.
         press(&mut v, KeyCode::Down);
         assert_eq!(v.scroll, 1);
+    }
+
+    #[test]
+    fn a_zoom_key_retries_after_a_failure_that_follows_a_good_render() {
+        let mut v = ImageViewer::new(
+            vec![item(1, Some(mermaid()))],
+            0,
+            Some(Picker::halfblocks()),
+        );
+        let g = v.gfx.as_mut().unwrap();
+        let vp = (4000, 4000);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while g.zoomed.is_none() {
+            assert!(Instant::now() < deadline, "worker timed out");
+            g.sync(vp);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        // A later zoom request failed: the old picture stays, and the note shows.
+        g.error = Some("render crashed: boom".into());
+        press(&mut v, KeyCode::Char('+'));
+        let g = v.gfx.as_ref().unwrap();
+        assert!(g.error.is_none(), "a zoom key clears the failure");
+        assert_eq!(g.zoom, 1, "and moves the zoom, which asks for a new render");
+    }
+
+    #[test]
+    fn a_dead_worker_is_reported_instead_of_rendering_forever() {
+        let mut v = ImageViewer::new(
+            vec![item(1, Some(mermaid()))],
+            0,
+            Some(Picker::halfblocks()),
+        );
+        let g = v.gfx.as_mut().unwrap();
+        // Simulate a worker that died: its result sender is gone.
+        let (tx, rx) = mpsc::channel();
+        drop(tx);
+        g.results = rx;
+        g.sync((4000, 4000));
+        assert_eq!(g.error.as_deref(), Some("render worker stopped"));
+        assert!(!v.busy(), "no endless busy redraw");
     }
 
     #[test]

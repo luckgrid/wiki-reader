@@ -55,17 +55,3 @@ impl Opener for CommandOpener {
         Ok(())
     }
 }
-
-/// Test double: records opens without spawning.
-#[derive(Debug, Default)]
-#[allow(dead_code)]
-pub struct RecordingOpener {
-    pub opened: std::sync::Mutex<Vec<String>>,
-}
-
-impl Opener for RecordingOpener {
-    fn open(&self, url: &str) -> io::Result<()> {
-        self.opened.lock().expect("lock").push(url.to_owned());
-        Ok(())
-    }
-}

@@ -24,6 +24,7 @@ use wiki_reader_render::{
 };
 
 use crate::tui::theme::Theme;
+use crate::tui::worker::guarded;
 
 /// Query timeout. Answers arrive in single-digit milliseconds; the timeout only bounds a
 /// terminal that never answers (see the P3-S1 spike for why unknown terminals are not probed).
@@ -371,7 +372,17 @@ fn run_job(
     sizes: &DiagramSizeCache,
 ) -> Outcome {
     match job {
-        Job::Measure(req) => run_measure(req, sizes),
+        Job::Measure(req) => {
+            guarded("diagram measure", || run_measure(req, sizes)).unwrap_or_else(|reason| {
+                // Cache the failure so layout falls back to text instead of asking again.
+                sizes.insert(
+                    req.hash,
+                    req.palette,
+                    DiagramSize::Text(DiagramTextReason::Failed(reason)),
+                );
+                Outcome::DiagramSized
+            })
+        }
         Job::Decode(DecodeJob {
             key,
             mermaid_source,
@@ -385,9 +396,11 @@ fn run_job(
             {
                 return Outcome::Skipped;
             }
-            match prepare(key, font, mermaid_source.as_deref(), *cell_px, *max_cols) {
-                Ok(img) => Outcome::Ready(Box::new(picker.new_resize_protocol(img))),
-                Err(reason) => Outcome::Failed(reason),
+            match guarded("image decode", || {
+                prepare(key, font, mermaid_source.as_deref(), *cell_px, *max_cols)
+            }) {
+                Ok(Ok(img)) => Outcome::Ready(Box::new(picker.new_resize_protocol(img))),
+                Ok(Err(reason)) | Err(reason) => Outcome::Failed(reason),
             }
         }
     }
@@ -573,7 +586,16 @@ impl ImageManager {
         };
         let font = self.cell_px().unwrap_or((0, 0));
         let mut changed = false;
-        while let Ok(Done { key, outcome }) = done.try_recv() {
+        let mut worker_lost = false;
+        loop {
+            let Done { key, outcome } = match done.try_recv() {
+                Ok(done) => done,
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    worker_lost = true;
+                    break;
+                }
+            };
             match outcome {
                 Outcome::DiagramSized => {
                     self.diagram_relayout = true;
@@ -617,7 +639,26 @@ impl ImageManager {
                 }
             }
         }
+        if worker_lost {
+            self.worker_lost();
+            changed = true;
+        }
         changed
+    }
+
+    /// The decode worker is gone (it can only die from a panic outside a guarded job). Fail what
+    /// was waiting on it and stop queueing, so nothing stays "pending" and busy-redraws forever.
+    fn worker_lost(&mut self) {
+        self.done = None;
+        self.decode_jobs = None;
+        self.measure_jobs = None;
+        for entry in self.entries.values_mut() {
+            if matches!(entry, Entry::Pending) {
+                *entry = Entry::Failed("image worker stopped".into());
+            }
+        }
+        self.measuring.clear();
+        self.measure_inflight = 0;
     }
 
     /// True while a decode or measure is queued or running.
@@ -859,6 +900,44 @@ fn draw_placeholder(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_lost_worker_clears_pending_work_instead_of_busy_redrawing() {
+        let mut m = ImageManager::enabled_with_sizes(
+            Picker::halfblocks(),
+            Arc::new(DiagramSizeCache::new()),
+        );
+        // A worker that died: its result sender is gone.
+        let (tx, rx) = mpsc::channel::<Done>();
+        drop(tx);
+        m.done = Some(rx);
+        m.measure_inflight = 2;
+        assert!(m.has_pending());
+        assert!(m.poll(), "the frame is redrawn once");
+        assert!(!m.has_pending(), "nothing stays pending");
+        assert!(m.done.is_none() && m.measure_jobs.is_none());
+    }
+
+    #[test]
+    fn a_panicking_job_becomes_a_failure_not_a_dead_worker() {
+        let sizes = DiagramSizeCache::new();
+        let palette = DiagramPalette::default();
+        // The same mapping `run_job` applies to a measure job that panics.
+        let outcome = guarded("diagram measure", || -> Outcome { panic!("renderer bug") })
+            .unwrap_or_else(|reason| {
+                sizes.insert(
+                    9,
+                    palette,
+                    DiagramSize::Text(DiagramTextReason::Failed(reason)),
+                );
+                Outcome::DiagramSized
+            });
+        assert!(matches!(outcome, Outcome::DiagramSized));
+        assert!(matches!(
+            sizes.get(9, palette),
+            Some(DiagramSize::Text(DiagramTextReason::Failed(r))) if r.contains("renderer bug")
+        ));
+    }
 
     fn slot(line: u32, rows: u16) -> ImageSlot {
         ImageSlot {

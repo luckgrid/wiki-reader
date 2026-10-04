@@ -49,8 +49,8 @@ impl EditorLauncher for SystemEditor {
 }
 
 /// Test double: records launches, never spawns.
+#[cfg(test)]
 #[derive(Debug, Default)]
-#[allow(dead_code)]
 pub struct RecordingEditor {
     /// Captured commands (shared so tests can keep a handle after boxing).
     pub launched: std::sync::Arc<std::sync::Mutex<Vec<EditorCmd>>>,
@@ -58,6 +58,7 @@ pub struct RecordingEditor {
     pub exit_ok: bool,
 }
 
+#[cfg(test)]
 impl EditorLauncher for RecordingEditor {
     fn launch(&self, cmd: &EditorCmd) -> io::Result<EditorExit> {
         self.launched.lock().expect("lock").push(cmd.clone());

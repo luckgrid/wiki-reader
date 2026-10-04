@@ -808,7 +808,10 @@ pub fn map_with_overrides(
         return (Some(Action::ModalKey(key)), Chord::None);
     }
 
-    if let Some(over) = overrides
+    // Overrides remap reader keys only. Overlays (search text, Help, Options, the open-link
+    // confirm) own their keys, so `quit = "q"` must not fire while typing a query.
+    if mode == InputMode::Normal
+        && let Some(over) = overrides
         && let Some(action) = override_action(key, over)
     {
         return (Some(action), Chord::None);
@@ -921,7 +924,8 @@ fn override_action(
     }
     for (name, chord) in overrides {
         let chord = chord.trim();
-        if chord.len() == 1 && chord.starts_with(c) {
+        let mut chars = chord.chars();
+        if chars.next() == Some(c) && chars.next().is_none() {
             return action_by_name(name);
         }
     }
@@ -1291,6 +1295,54 @@ mod tests {
         );
         // Override steals Q; plain q still matches the table binding.
         assert_eq!(old, Some(Action::Quit));
+    }
+
+    #[test]
+    fn overrides_apply_only_in_normal_mode() {
+        let mut over = std::collections::BTreeMap::new();
+        over.insert("quit".into(), "q".into());
+        over.insert("open_search".into(), "y".into());
+        let go = |mode, c| {
+            map_with_overrides(
+                key(KeyCode::Char(c)),
+                FocusPane::Viewer,
+                mode,
+                Chord::None,
+                Some(&over),
+            )
+            .0
+        };
+        // Typing into the search box is typing, not quitting or re-opening search.
+        assert_eq!(go(InputMode::Overlay, 'q'), Some(Action::SearchChar('q')));
+        assert_eq!(go(InputMode::Overlay, 'y'), Some(Action::SearchChar('y')));
+        // The open-link confirm keeps `y` for yes.
+        assert_ne!(go(InputMode::Confirm, 'y'), Some(Action::OpenSearch));
+        // The reader still honours them.
+        assert_eq!(go(InputMode::Normal, 'y'), Some(Action::OpenSearch));
+    }
+
+    #[test]
+    fn a_non_ascii_override_matches_by_character_not_byte_length() {
+        let mut over = std::collections::BTreeMap::new();
+        over.insert("quit".into(), "é".into());
+        let (got, _) = map_with_overrides(
+            key(KeyCode::Char('é')),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+            Some(&over),
+        );
+        assert_eq!(got, Some(Action::Quit));
+        // Two characters are not a single-key override.
+        over.insert("quit".into(), "éé".into());
+        let (none, _) = map_with_overrides(
+            key(KeyCode::Char('é')),
+            FocusPane::Viewer,
+            InputMode::Normal,
+            Chord::None,
+            Some(&over),
+        );
+        assert_ne!(none, Some(Action::Quit));
     }
 
     #[test]

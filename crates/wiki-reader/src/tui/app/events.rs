@@ -48,8 +48,9 @@ pub fn run(root: &Path, config: Option<&Path>) -> io::Result<()> {
     })?;
 
     app.publisher = crate::herdr::Publisher::from_env(app.herdr_publish);
-    install_panic_hook();
     let mut terminal = ratatui::try_init()?;
+    // After `try_init`, so this hook is the outermost and decides who may restore the terminal.
+    install_panic_hook();
     // Armed after try_init: Drop always restores alt-screen/raw; mouse/keys if enabled.
     let mut guard = TerminalGuard {
         mouse: false,
@@ -75,7 +76,10 @@ pub fn run(root: &Path, config: Option<&Path>) -> io::Result<()> {
         guard.keyboard_enhancement = true;
     }
     let result = run_loop(&mut terminal, &mut app, &mut guard);
+    // A terminal error (closed tty after SIGHUP) must not lose the session.
+    app.flush_session(true);
     drop(guard);
+    report_background_panics();
     result
 }
 
@@ -104,9 +108,49 @@ impl Drop for TerminalGuard {
     }
 }
 
+/// Panics from worker threads, kept to print after the terminal is restored.
+static BACKGROUND_PANICS: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+/// Most background panic messages kept (a crash loop must not grow this without bound).
+const MAX_BACKGROUND_PANICS: usize = 8;
+
+fn record_background_panic(message: String) {
+    let mut log = BACKGROUND_PANICS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if log.len() < MAX_BACKGROUND_PANICS {
+        log.push(message);
+    }
+}
+
+fn take_background_panics() -> Vec<String> {
+    std::mem::take(
+        &mut *BACKGROUND_PANICS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner),
+    )
+}
+
+/// Print worker panics to stderr once the alternate screen is gone.
+fn report_background_panics() {
+    for message in take_background_panics() {
+        eprintln!("{message}");
+    }
+}
+
+/// Restore the terminal when the **main** thread panics. A worker panic leaves the screen alone:
+/// the worker's own guard turns it into an error shown in the UI, and tearing down raw mode
+/// while the main loop keeps running would corrupt the display. Its message is kept for exit.
 fn install_panic_hook() {
+    let main = std::thread::current().id();
     let prev = panic::take_hook();
     panic::set_hook(Box::new(move |info| {
+        let current = std::thread::current();
+        if current.id() != main {
+            let name = current.name().unwrap_or("worker").to_owned();
+            record_background_panic(format!("thread '{name}' panicked: {info}"));
+            return;
+        }
         let _ = execute!(stdout(), PopKeyboardEnhancementFlags);
         let _ = execute!(stdout(), DisableMouseCapture);
         ratatui::restore();
@@ -177,9 +221,7 @@ fn handle_event(
                 Some(&app.key_overrides),
             );
             app.chord = next_chord;
-            if let Some(Action::OpenInEditor) = action {
-                suspend_run_editor(terminal, app, guard)?;
-            } else if let Some(action) = action {
+            if let Some(action) = action {
                 app.update(action);
             }
         }
@@ -189,6 +231,11 @@ fn handle_event(
             }
         }
         _ => {}
+    }
+    // Every path (key, mouse, Help row) asks for the editor the same way, so it always
+    // runs with the terminal suspended.
+    if app.take_editor_request() {
+        suspend_run_editor(terminal, app, guard)?;
     }
     Ok(())
 }
@@ -423,5 +470,23 @@ pub(crate) fn apply_mouse(
             None
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod panic_log_tests {
+    use super::{MAX_BACKGROUND_PANICS, record_background_panic, take_background_panics};
+
+    #[test]
+    fn background_panics_are_kept_for_exit_and_bounded() {
+        // Other tests never record, so the log starts empty.
+        assert!(take_background_panics().is_empty());
+        for i in 0..MAX_BACKGROUND_PANICS + 5 {
+            record_background_panic(format!("thread 'w' panicked: {i}"));
+        }
+        let kept = take_background_panics();
+        assert_eq!(kept.len(), MAX_BACKGROUND_PANICS, "bounded");
+        assert_eq!(kept[0], "thread 'w' panicked: 0", "oldest first");
+        assert!(take_background_panics().is_empty(), "taken once");
     }
 }
