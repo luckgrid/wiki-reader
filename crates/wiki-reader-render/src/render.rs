@@ -212,9 +212,9 @@ pub struct RenderOpts {
     pub tmux: bool,
     /// `HERDR_ENV=1` — Kitty-only image preference when graphics are confirmed.
     pub herdr: bool,
-    /// Running in a herdr plugin popup (no pane id): only changes the wording of the
+    /// Running in a herdr plugin pane (any placement): only changes the wording of the
     /// "no graphics" fallback reason, never what is drawn.
-    pub herdr_popup: bool,
+    pub herdr_plugin_pane: bool,
     /// Mermaid colours (part of the size/slot cache key), filled from the active theme.
     pub diagram_palette: DiagramPalette,
     /// Shared Mermaid natural-size cache filled by the image worker.
@@ -233,7 +233,7 @@ impl Default for RenderOpts {
             graphics: false,
             tmux: false,
             herdr: false,
-            herdr_popup: false,
+            herdr_plugin_pane: false,
             diagram_palette: DiagramPalette::default(),
             diagram_sizes: empty_diagram_size_cache(),
             max_slot_rows: crate::MAX_SLOT_ROWS,
@@ -284,7 +284,7 @@ pub fn render_with(
     state.graphics = opts.graphics;
     state.tmux = opts.tmux;
     state.herdr = opts.herdr;
-    state.herdr_popup = opts.herdr_popup;
+    state.herdr_plugin_pane = opts.herdr_plugin_pane;
     state.diagram_palette = opts.diagram_palette;
     state.diagram_sizes = Arc::clone(&opts.diagram_sizes);
     state.max_slot_rows = opts.max_slot_rows;
@@ -444,7 +444,7 @@ struct LayoutState<'a> {
     graphics: bool,
     tmux: bool,
     herdr: bool,
-    herdr_popup: bool,
+    herdr_plugin_pane: bool,
     diagram_palette: DiagramPalette,
     diagram_sizes: Arc<DiagramSizeCache>,
     max_slot_rows: u16,
@@ -520,7 +520,7 @@ impl<'a> LayoutState<'a> {
             graphics: false,
             tmux: false,
             herdr: false,
-            herdr_popup: false,
+            herdr_plugin_pane: false,
             diagram_palette: DiagramPalette::default(),
             diagram_sizes: empty_diagram_size_cache(),
             max_slot_rows: crate::MAX_SLOT_ROWS,
@@ -587,8 +587,8 @@ impl<'a> LayoutState<'a> {
             self.max_slot_rows,
         );
         let plan = match plan {
-            ImagePlan::Placeholder(ImageReject::NoGraphics) if self.herdr_popup => {
-                ImagePlan::Placeholder(ImageReject::NoGraphicsHerdrPopup)
+            ImagePlan::Placeholder(ImageReject::NoGraphics) if self.herdr_plugin_pane => {
+                ImagePlan::Placeholder(ImageReject::NoGraphicsHerdrPlugin)
             }
             other => other,
         };
@@ -734,8 +734,8 @@ impl<'a> LayoutState<'a> {
                     ) && !env.tmux =>
                 {
                     Some(
-                        if self.herdr_popup {
-                            ImageReject::NoGraphicsHerdrPopup
+                        if self.herdr_plugin_pane {
+                            ImageReject::NoGraphicsHerdrPlugin
                         } else {
                             ImageReject::NoGraphics
                         }

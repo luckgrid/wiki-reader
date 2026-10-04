@@ -1435,22 +1435,22 @@ mod tests {
     }
 
     #[test]
-    fn herdr_popup_names_itself_in_the_no_graphics_reason() {
-        let popup = render_images_fixture_with(
+    fn herdr_plugin_pane_names_itself_in_the_no_graphics_reason() {
+        let plugin = render_images_fixture_with(
             RenderOpts {
                 herdr: true,
-                herdr_popup: true,
+                herdr_plugin_pane: true,
                 ..RenderOpts::default()
             },
             200,
         );
         assert!(
-            popup.lines.iter().any(|l| l
-                == "[image: Small grid] img/small.png — no graphics protocol; herdr popups report no cell size, use an overlay pane"),
+            plugin.lines.iter().any(|l| l
+                == "[image: Small grid] img/small.png — no graphics protocol; herdr plugin panes report no cell size, open the reader in a normal pane"),
             "{}",
-            popup.lines.join("\n")
+            plugin.lines.join("\n")
         );
-        // The same fixture outside a popup keeps the plain wording.
+        // The same fixture outside a plugin pane keeps the plain wording.
         let plain = render_images_fixture_with(
             RenderOpts {
                 herdr: true,
@@ -1468,7 +1468,7 @@ mod tests {
         let ok = render_images_fixture_with(
             RenderOpts {
                 herdr: true,
-                herdr_popup: true,
+                herdr_plugin_pane: true,
                 cell_px: Some((8, 17)),
                 graphics: true,
                 ..RenderOpts::default()
@@ -1480,7 +1480,7 @@ mod tests {
     }
 
     #[test]
-    fn herdr_popup_names_itself_in_the_diagram_tier_reason() {
+    fn herdr_plugin_pane_names_itself_in_the_diagram_tier_reason() {
         let src = "```mermaid\nflowchart LR\n  A --> B\n```\n";
         let key = empty_key();
         let index = wiki_reader_core::Index {
@@ -1493,23 +1493,23 @@ mod tests {
             by_path: HashMap::default(),
             diagnostics: vec![],
         };
-        for (popup, expected) in [
+        for (plugin, expected) in [
             (
                 true,
-                "diagram (text; no graphics protocol; herdr popups report no cell size, use an overlay pane)",
+                "diagram (text; no graphics protocol; herdr plugin panes report no cell size, open the reader in a normal pane)",
             ),
             (false, "diagram (text; no graphics protocol)"),
         ] {
             let opts = RenderOpts {
                 diagram_mode: wiki_reader_core::config::DiagramMode::Image,
                 herdr: true,
-                herdr_popup: popup,
+                herdr_plugin_pane: plugin,
                 ..RenderOpts::default()
             };
             let doc = render_with(src, None, &key, &index, 200, &opts);
             assert!(
                 doc.lines.iter().any(|l| l.contains(expected)),
-                "popup={popup}:\n{}",
+                "plugin={plugin}:\n{}",
                 doc.lines.join("\n")
             );
         }

@@ -2,6 +2,7 @@
 //!
 //! See [architecture overview](../../wiki/architecture/overview.md).
 
+mod herdr;
 mod tui;
 
 use std::path::{Path, PathBuf};
@@ -21,6 +22,10 @@ struct Args {
     /// Use Herdr's focused pane or workspace cwd when no root is supplied.
     #[arg(long)]
     herdr_context: bool,
+    /// From a herdr plugin action: open the reader in a new ordinary split pane (which, unlike
+    /// plugin panes, can draw images) next to the focused pane, then exit.
+    #[arg(long, conflicts_with_all = ["root", "herdr_context", "config"])]
+    herdr_split: bool,
     /// Optional config TOML (overrides XDG and `<root>/.wiki-reader.toml`).
     #[arg(long = "config", value_name = "PATH")]
     config: Option<PathBuf>,
@@ -49,6 +54,15 @@ fn resolve_root(args: &Args, context: Option<&str>) -> PathBuf {
 fn main() -> ExitCode {
     let args = Args::parse();
     let context = std::env::var("HERDR_PLUGIN_CONTEXT_JSON").ok();
+    if args.herdr_split {
+        return match herdr::open_split(&herdr::HerdrCli::from_env(), context.as_deref()) {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(msg) => {
+                eprintln!("wiki-reader: {msg}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     let root = resolve_root(&args, context.as_deref());
     if let Err(msg) = check_root(&root) {
         eprintln!("wiki-reader: {msg}");
@@ -124,6 +138,18 @@ mod tests {
             Some(file_context.as_str()),
         ] {
             assert_eq!(resolve_root(&args, context), PathBuf::from("."));
+        }
+    }
+
+    #[test]
+    fn herdr_split_is_exclusive_with_the_reader_arguments() {
+        assert!(Args::try_parse_from(["wiki-reader", "--herdr-split"]).is_ok());
+        for other in [
+            vec!["wiki-reader", "--herdr-split", "docs"],
+            vec!["wiki-reader", "--herdr-split", "--herdr-context"],
+            vec!["wiki-reader", "--herdr-split", "--config", "c.toml"],
+        ] {
+            assert!(Args::try_parse_from(other).is_err());
         }
     }
 

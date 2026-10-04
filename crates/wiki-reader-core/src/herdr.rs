@@ -6,36 +6,73 @@
 
 use std::path::{Path, PathBuf};
 
+/// What the launcher needs from herdr's plugin context (`HERDR_PLUGIN_CONTEXT_JSON`).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct PluginContext {
+    /// The pane that had focus when the plugin ran, if known.
+    pub focused_pane_id: Option<String>,
+    /// Collection cwd: the focused pane's cwd first, then the workspace's.
+    pub cwd: Option<PathBuf>,
+}
+
+/// Parse the plugin context. `None` for text that is not a JSON object; absent or empty
+/// fields are left unset. This only parses: callers check that the cwd is a directory.
+#[must_use]
+pub fn parse_context(text: &str) -> Option<PluginContext> {
+    let context: serde_json::Value = serde_json::from_str(text).ok()?;
+    let object = context.as_object()?;
+    let string = |key: &str| {
+        object
+            .get(key)?
+            .as_str()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+    };
+    Some(PluginContext {
+        focused_pane_id: string("focused_pane_id").map(str::to_owned),
+        cwd: string("focused_pane_cwd")
+            .or_else(|| string("workspace_cwd"))
+            .map(PathBuf::from),
+    })
+}
+
 /// Collection cwd from Herdr's plugin context: focused pane first, then workspace.
 ///
-/// Missing, malformed or empty fields return `None`. This only parses the context;
-/// the launcher checks that the selected path is a directory before using it.
+/// Missing, malformed or empty fields return `None`.
 #[must_use]
 pub fn parse_context_cwd(text: &str) -> Option<PathBuf> {
-    let context: serde_json::Value = serde_json::from_str(text).ok()?;
-    ["focused_pane_cwd", "workspace_cwd"]
-        .iter()
-        .filter_map(|key| context.get(*key)?.as_str())
-        .find(|cwd| !cwd.trim().is_empty())
-        .map(PathBuf::from)
+    parse_context(text)?.cwd
 }
 
-/// Whether this process looks like it runs in a herdr plugin popup: inside herdr
-/// (`HERDR_ENV=1`) but without a pane of its own (`HERDR_PANE_ID` unset or empty).
+/// The new pane's id from a `herdr pane split` JSON response (`.result.pane.pane_id`).
+#[must_use]
+pub fn parse_split_pane_id(text: &str) -> Option<String> {
+    let response: serde_json::Value = serde_json::from_str(text).ok()?;
+    let id = response
+        .get("result")?
+        .get("pane")?
+        .get("pane_id")?
+        .as_str()?
+        .trim();
+    (!id.is_empty()).then(|| id.to_owned())
+}
+
+/// Whether this process was started by a herdr plugin pane entrypoint of any placement:
+/// inside herdr (`HERDR_ENV=1`) with `HERDR_PLUGIN_ENTRYPOINT_ID` set.
 ///
-/// herdr 0.9.x starts popups without pixel metrics, so terminal graphics cannot be sized
-/// there. Overlay, split and tab panes carry their own `HERDR_PANE_ID`.
+/// herdr 0.9.x starts those panes without pixel metrics and never answers the terminal's
+/// cell-size query, so graphics cannot be sized there. Ordinary shell panes answer.
 #[must_use]
-pub fn is_plugin_popup(herdr_env: Option<&str>, pane_id: Option<&str>) -> bool {
-    herdr_env == Some("1") && pane_id.is_none_or(|id| id.trim().is_empty())
+pub fn is_plugin_pane(herdr_env: Option<&str>, entrypoint_id: Option<&str>) -> bool {
+    herdr_env == Some("1") && entrypoint_id.is_some_and(|id| !id.trim().is_empty())
 }
 
-/// [`is_plugin_popup`] for this process's environment.
+/// [`is_plugin_pane`] for this process's environment.
 #[must_use]
-pub fn running_in_plugin_popup() -> bool {
+pub fn running_in_plugin_pane() -> bool {
     let env = std::env::var("HERDR_ENV").ok();
-    let pane = std::env::var("HERDR_PANE_ID").ok();
-    is_plugin_popup(env.as_deref(), pane.as_deref())
+    let entrypoint = std::env::var("HERDR_PLUGIN_ENTRYPOINT_ID").ok();
+    is_plugin_pane(env.as_deref(), entrypoint.as_deref())
 }
 
 /// herdr's config file: `$XDG_CONFIG_HOME/herdr/config.toml`, else `~/.config/herdr/config.toml`.
@@ -79,12 +116,49 @@ mod tests {
     use super::*;
 
     #[test]
-    fn popup_is_herdr_without_its_own_pane() {
-        assert!(is_plugin_popup(Some("1"), None));
-        assert!(is_plugin_popup(Some("1"), Some("  ")));
-        assert!(!is_plugin_popup(Some("1"), Some("w1:p2")));
-        assert!(!is_plugin_popup(None, None), "outside herdr");
-        assert!(!is_plugin_popup(Some("0"), None));
+    fn plugin_pane_is_herdr_with_an_entrypoint_id() {
+        assert!(is_plugin_pane(Some("1"), Some("reader-popup")));
+        assert!(is_plugin_pane(Some("1"), Some("overlay")));
+        assert!(!is_plugin_pane(Some("1"), None), "an ordinary herdr pane");
+        assert!(!is_plugin_pane(Some("1"), Some("  ")));
+        assert!(!is_plugin_pane(None, Some("overlay")), "outside herdr");
+        assert!(!is_plugin_pane(Some("0"), Some("overlay")));
+    }
+
+    #[test]
+    fn context_reads_the_focused_pane_and_cwd() {
+        let context = parse_context(
+            r#"{"focused_pane_id":" w1:p2 ","focused_pane_cwd":"/a b","workspace_cwd":"/w","x":1}"#,
+        )
+        .unwrap();
+        assert_eq!(context.focused_pane_id.as_deref(), Some("w1:p2"));
+        assert_eq!(context.cwd, Some(PathBuf::from("/a b")));
+        let partial = parse_context(r#"{"workspace_cwd":"/w"}"#).unwrap();
+        assert_eq!(partial.focused_pane_id, None);
+        assert_eq!(partial.cwd, Some(PathBuf::from("/w")));
+        assert_eq!(parse_context("{}"), Some(PluginContext::default()));
+        for text in ["", "not json", "null", "[]", "42"] {
+            assert_eq!(parse_context(text), None, "{text}");
+        }
+    }
+
+    #[test]
+    fn split_response_yields_the_new_pane_id() {
+        assert_eq!(
+            parse_split_pane_id(r#"{"id":"cli:pane:split","result":{"pane":{"pane_id":"w30:pZ"},"type":"pane_info"}}"#)
+                .as_deref(),
+            Some("w30:pZ")
+        );
+        for text in [
+            "",
+            "{}",
+            r#"{"result":{}}"#,
+            r#"{"result":{"pane":{"pane_id":""}}}"#,
+            r#"{"result":{"pane":{"pane_id":7}}}"#,
+            r#"{"error":{"code":"x"}}"#,
+        ] {
+            assert_eq!(parse_split_pane_id(text), None, "{text}");
+        }
     }
 
     #[test]

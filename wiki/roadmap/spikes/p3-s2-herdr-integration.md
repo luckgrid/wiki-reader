@@ -36,7 +36,7 @@ No user or collection config was changed. Temporary context logs and the bundled
 
 ### P3-09 — plugin pane
 
-**Decision: confirm feasibility; implement the popup path.** The operator verified popup images, key delivery and clean dismissal on the real install. This is spike evidence, not completion of the shipping plugin task.
+**Decision (revised after the retests below): plugin panes are viable for text, but not for images on herdr 0.9.x. Ship an ordinary-pane split launcher as the default and keep overlay and popup as text-only options.** The first spike pass reported real popup images; the shipping-plugin retest and the overlay and control runs below show that plugin panes of every placement get no cell metrics. Do not rely on the first popup image pass.
 
 Manifest fields `id`, `name`, `version`, `min_herdr_version`, `platforms` and `[[panes]]` command argv are accepted. The 0.9.0 CLI help omits popup from `--placement`, but a manifest with `placement = "popup"`, `width = "80%"`, `height = "80%"` links and opens successfully. Do not infer lack of server support from that incomplete help.
 
@@ -132,11 +132,10 @@ gap before completing P3-09; the initial feasibility verdict is not shipping pro
 ### Local host patch — 2026-10-03
 
 At the operator's request, prepared an uncommitted patch against upstream master
-`5da0a01e1eedda054db0c81dd3a780000c40d9f0` (package 0.9.3), in the isolated checkout
-`/tmp/wiki-reader-herdr-geometry`. Exported to
-`/tmp/wiki-reader-herdr-popup-geometry.patch`; validation notes are in
-`/tmp/wiki-reader-herdr-popup-geometry-validation.md`. These are local scratch
-artifacts, not distributed wiki-reader code.
+`5da0a01e1eedda054db0c81dd3a780000c40d9f0` (package 0.9.3), in an isolated scratch
+checkout outside this repository. The patch and its validation notes are local
+scratch artifacts: they are not part of wiki-reader, are not distributed and may no
+longer exist. This section is the durable summary.
 
 The patch initialises popup virtual-terminal and PTY pixel geometry before the
 child starts, keeps size bookkeeping consistent, and classifies plugin pane
@@ -158,24 +157,60 @@ run `just --dry-run`), and Windows cross-validation was not run. No SDK/license
 downloads, install, restart or patched-client connection to the stable server
 were performed. The patch remains uncommitted and unpublished; the authenticated
 account is not on Herdr's approved-contributor list, so no upstream implementation
-PR was opened. **P3-09 still needs real graphics acceptance on a fixed host.**
+PR was opened. wiki-reader does not depend on this patch.
+
+## P3-09 overlay and control retest — 2026-10-03
+
+The operator repeated the check with the context-aware launcher in an **overlay**, and
+ran the repository's `image-protocol` example (it prints the probe result on screen) in
+an ordinary pane and in an overlay and a popup of a scratch plugin. herdr 0.9.0, Ghostty.
+
+| Where it ran | `detected` / `selected` | Font | Capabilities | Picture |
+|--------------|-------------------------|------|--------------|---------|
+| Ordinary herdr pane (control) | Kitty / Kitty | 8×17 | Kitty, CellSize(8, 17) | drawn |
+| Plugin overlay | Halfblocks / Halfblocks | 10×20 (library default) | none | halfblock fallback only |
+| Plugin popup | Halfblocks / Halfblocks | 10×20 (library default) | none | halfblock fallback only |
+
+Findings:
+
+- The reader is not regressed: the same probe works in an ordinary pane.
+- **Overlay is no better than popup.** The reader in the overlay showed the plain "no
+  graphics protocol" reason and rendered Mermaid as text, as in the popup. Every pane
+  that herdr starts for a plugin command lacks the terminal replies, whatever its placement.
+  The local patch notes agree: ordinary command panes start with zero pixel metrics.
+- Both plugin panes carry `HERDR_PLUGIN_ENTRYPOINT_ID` (checked in the spike's logged
+  environments); only the overlay has `HERDR_PANE_ID`. wiki-reader therefore detects a plugin
+  pane from `HERDR_ENV=1` plus `HERDR_PLUGIN_ENTRYPOINT_ID`, not from the missing pane id,
+  and its "no graphics" placeholders and diagram headers now say plugin panes report no cell
+  size and suggest a normal pane. Cell size is still never guessed.
+- herdr's CLI can open an ordinary shell pane: `herdr pane split <pane> --direction right
+  --cwd <dir> --focus` returns the new pane id (`.result.pane.pane_id`), and
+  `herdr pane run <pane> <command>` submits a command to it. Both are documented in the 0.9.3
+  CLI reference. The control run shows such panes answer the queries.
+
+**Decision:** the plugin's default action (`open`) runs `wiki-reader --herdr-split`, which
+splits the focused pane, sets the new pane's cwd to the focused pane's, and runs
+`exec wiki-reader` in it (so quitting closes the pane). Overlay and popup stay as
+`open-overlay` and `open-popup`, documented as text-only until herdr starts plugin panes
+with cell metrics. The ordinary-pane route has its own pane id, so P3-10 publishing works there.
 
 ## Matrix
 
 | Placement / surface | Launch and context | Keys | Kitty images / cleanup | Status |
 |---------------------|--------------------|------|------------------------|--------|
-| Popup, 80% × 80% | logged caller cwd; no pane ID | operator: Help, Esc, Ctrl+Enter, q pass | operator: real images, no fragments after Help or exit | verified |
-| Overlay | logged caller cwd; own pane ID; focus restored on close | automated: Help appears, Esc dismisses, Ctrl+Enter adds a tab | operator could not verify this placement now | partial; no graphics claim |
-| Split | logged caller cwd; own pane ID; socket target workaround | automated: Help appears, Esc dismisses, Ctrl+Enter adds tabs | explicit-image split not visually checked | partial; no graphics claim |
+| Popup, 80% × 80% | logged caller cwd; no pane ID | operator: Help, Esc, Ctrl+Enter, q pass | first pass reported images; the shipping-plugin retest and the example both show no cell metrics, so no images | keys verified; images fail |
+| Overlay | logged caller cwd; own pane ID; focus restored on close | operator: all keys pass | retest: no cell metrics, no images, Mermaid as text | keys verified; images fail |
+| Plugin split | logged caller cwd; own pane ID; socket target workaround | automated: Help appears, Esc dismisses, Ctrl+Enter adds tabs | not visually checked; expected to match overlay | partial; no graphics claim |
+| Ordinary shell pane (control, and the `open` action's target) | caller cwd via `pane split --cwd` | normal | example: Kitty, 8×17, picture drawn | verified for the probe; the `open` action itself is checked in the P3-09 manual pass |
 | Plain-pane metadata | API stores title and page token without agent registration | not applicable | operator: title or token visible in sidebar | display feasibility verified |
 
-The earlier [P3-S1](p3-s1-image-protocol.md) verified Kitty in ordinary Herdr panes. It does not substitute for the outstanding placement-specific visual checks here. Direct Ghostty, iTerm2 and tmux were not re-tested in this spike.
+The earlier [P3-S1](p3-s1-image-protocol.md) verified Kitty in ordinary Herdr panes, which the control run reconfirms. Direct Ghostty, iTerm2 and tmux were not re-tested in this spike.
 
 ## Cleanup and implementation handoff
 
 All test panes created by the spike were closed (the operator exited the verified popup); the scratch plugin was unlinked. `herdr plugin list` returned **No plugins installed**, matching the pre-spike state. Herdr retains plugin config/state directories after unlink by design; the scratch plugin stored no durable state there.
 
-- P3-09: ship a small manifest/launcher using context cwd; use popup as the verified default. Test missing/malformed context and command failure. Document the 0.9.0 help mismatch; do not promise unverified overlay/split media behavior.
+- P3-09: the default action opens an ordinary split pane (`wiki-reader --herdr-split`); overlay and popup are text-only options. Test missing/malformed context and command failure. Document the 0.9.0 `--placement` help omitting popup and the plugin-pane graphics limit. The `/tmp` evidence files from the investigation are scratch and not preserved.
 - P3-10: publish from ordinary reader panes only; popup omission must be explicit in docs. Confirm title versus token display, update/renew/clear behavior and unsupported-server fallback before closing the row.
 - P4-05: config-watch seam is feasible independently of the plugin. Keep appearance/custom-palette limitations explicit.
 - No task row is marked done by this spike, no release is cut, and the Phase 2 adoption clock remains unchanged.
