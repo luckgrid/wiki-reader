@@ -169,13 +169,14 @@ fn long_breadcrumbs_keep_header_controls_visible_and_hits_clipped() {
             .unwrap();
         let buf = terminal.backend().buffer();
         assert!(find_glyph(buf, "⚙").is_none(), "options moved to footer");
-        assert_eq!(buf[(width - 4, 0)].symbol(), "◫");
-        assert_eq!(buf[(width - 2, 0)].symbol(), "✕");
+        // Chrome pad inset 1; each icon button is 3 cells with the glyph centred.
+        assert_eq!(buf[(width - 6, 0)].symbol(), "◫");
+        assert_eq!(buf[(width - 3, 0)].symbol(), "✕");
         assert!(find_glyph(buf, "…").is_some());
-        assert!(matches!(hits.hit_at(width - 4, 0), Some(Hit::NavToggle)));
+        assert!(matches!(hits.hit_at(width - 6, 0), Some(Hit::NavToggle)));
         for (rect, hit) in hits.entries() {
             if matches!(hit, Hit::Breadcrumb(_)) {
-                assert!(rect.right() <= width - 5);
+                assert!(rect.right() <= width - 7);
             }
         }
     }
@@ -264,12 +265,16 @@ fn chrome_pad_hits_header_icons_and_nav_search() {
     assert_eq!(app.hit_map.hit_at(tx, ty), Some(&Hit::NavToggle));
     assert_eq!(app.hit_map.hit_at(qx, qy), Some(&Hit::Quit));
     assert_eq!(app.hit_map.hit_at(gx, gy), Some(&Hit::OpenOptions));
-    // Padded: icons sit one col inset from the raw edge.
-    assert_eq!(qx, 120 - 2, "✕ at chrome_pad right edge");
-    assert_eq!(tx, 120 - 4, "◫ two cols left of ✕");
-    assert_eq!((gx, gy), (120 - 2, 23), "⚙ at layout footer right edge");
-    assert_eq!(buf[(gx - 2, gy)].symbol(), "?");
-    assert_eq!(app.hit_map.hit_at(gx - 2, gy), Some(&Hit::OpenHelp));
+    // Padded: each button is 3 cells, glyph centred; trail is 6 cols inside chrome_pad.
+    assert_eq!(qx, 120 - 3, "✕ centred in the right button");
+    assert_eq!(tx, 120 - 6, "◫ centred in the left button");
+    assert_eq!(
+        (gx, gy),
+        (120 - 3, 23),
+        "⚙ centred in the footer right button"
+    );
+    assert_eq!(buf[(gx - 3, gy)].symbol(), "?");
+    assert_eq!(app.hit_map.hit_at(gx - 3, gy), Some(&Hit::OpenHelp));
     assert!(
         find_glyph(buf, "○").is_none(),
         "no eye toggle in the header"
@@ -302,9 +307,12 @@ fn footer_buttons_open_popups_on_both_nav_sides_and_responsive_widths() {
                     .expect("footer control hit");
                 let (x, y) = (rect.x, rect.y);
                 assert_eq!(y, 23);
-                assert_eq!(x, width - if hit == Hit::OpenHelp { 4 } else { 2 });
-                assert_eq!(terminal.backend().buffer()[(x, y)].symbol(), glyph);
-                mouse_at(&mut app, MouseEventKind::Down(MouseButton::Left), x, y);
+                assert_eq!(rect.width, 3);
+                // Button origin: Help at trail-6, Options at trail-3 (chrome_pad right = width-1).
+                assert_eq!(x, width - if hit == Hit::OpenHelp { 7 } else { 4 });
+                let gx = x + 1;
+                assert_eq!(terminal.backend().buffer()[(gx, y)].symbol(), glyph);
+                mouse_at(&mut app, MouseEventKind::Down(MouseButton::Left), gx, y);
                 if hit == Hit::OpenHelp {
                     let help = app.help.as_ref().expect("help opens");
                     let row = help

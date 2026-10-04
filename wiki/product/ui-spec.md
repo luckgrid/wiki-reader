@@ -16,7 +16,7 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 
 <!-- ui-diagram:start -->
 ```text
- Worked Example Wiki                                                        ◫ ✕
+ Worked Example Wiki                                                      ◫  ✕ 
 ┌────────────────────────┐┌─────────────┬─────────────┬────────────────────────┐
 │ / Search…              ││ README.md × │ tokens.md × │                        │
 ├────────────────────────┤├─────────────┴─────────────┴────────────────────────┤
@@ -34,7 +34,7 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 │                        │├────────────┬─────────────┬─────────────────────────┤
 │                        ││ ‹ Overview │             │ Architecture Overview › │
 └────────────────────────┘└────────────┴─────────────┴─────────────────────────┘
-  VIEW  · README.md · L1:C1 9% · 2026-09-28 · draft · 29w · 1m              ? ⚙
+  VIEW  · README.md · L1:C1 9% · 2026-09-28 · draft · 29w · 1m            ?  ⚙ 
 ```
 <!-- ui-diagram:end -->
 
@@ -150,7 +150,7 @@ Table and image/diagram viewers share one modal shell (`Esc` dismisses, wheel sc
 
 ## Layout footer / status bar (full width, 1 row)
 
-Like markdown-reader's: focused region as a highlighted pill (`NAV`/`VIEW`, or `SEARCH`/`HELP` while a popup is open; peach, like the tabs and footer links), relative path, cursor line:column (`L12:C5`) and scroll %, updated date and the page's frontmatter `status` (colored by value), word count, reading time, and a **message area** for link targets, notices ("not found"), confirmations, and search match `n/m`. Help `?` and Options ⚙ are right-aligned on this row, one column inset from the terminal edge, with `?` two columns left of ⚙. Reserve their four columns before laying out status fields or messages so text cannot overwrite them. Lower-priority items drop first when narrow. On tiny widths draw and register only visible icon glyphs; a hidden footer has no hits.
+Like markdown-reader's: focused region as a highlighted pill (`NAV`/`VIEW`, or `SEARCH`/`HELP` while a popup is open; peach, like the tabs and footer links), relative path, cursor line:column (`L12:C5`) and scroll %, updated date and the page's frontmatter `status` (colored by value), word count, reading time, and a **message area** for link targets, notices ("not found"), confirmations, and search match `n/m`. Help `?` and Options ⚙ are right-aligned on this row, one column inset from the terminal edge. Each is a three-cell button with the glyph centred and no gap between buttons (six columns reserved); hits cover the full button. Reserve those six columns before laying out status fields or messages so text cannot overwrite them. Lower-priority items drop first when narrow. On tiny widths draw and register only visible icon glyphs; a hidden footer has no hits.
 
 Frontmatter `status` colours (`tui/theme.rs`): `draft` → `status_warn` (orange); `proposed` → `status_plan` (blue); `accepted` / `active` / `done` → `status_ok` (green); `deferred` / `superseded` / `historical` → muted. Unknown values keep the plain text colour so user collections can keep a private vocabulary.
 
