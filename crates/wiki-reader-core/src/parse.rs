@@ -2,7 +2,7 @@
 //!
 //! See [content model](../../../wiki/product/content-model.md).
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Range;
 
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
@@ -545,7 +545,7 @@ fn walk_markdown(
     let mut headings = Vec::new();
     let mut links = Vec::new();
     let mut blocks = Vec::new();
-    let mut used_slugs: HashSet<String> = HashSet::new();
+    let mut used_slugs = SlugAllocator::default();
     let mut in_code_block = false;
     let mut list_depth: u32 = 0;
     let mut block_depth: u32 = 0;
@@ -663,7 +663,7 @@ fn handle_block_end(
     in_heading: &mut Option<(u8, u32, String)>,
     h1: &mut Option<String>,
     headings: &mut Vec<Heading>,
-    used_slugs: &mut HashSet<String>,
+    used_slugs: &mut SlugAllocator,
     in_link: &mut Option<(String, String, u32)>,
     links: &mut Vec<MdLink>,
 ) {
@@ -683,7 +683,7 @@ fn handle_block_end(
                 if level == 1 && h1.is_none() {
                     *h1 = Some(text.clone());
                 }
-                let slug = unique_slug(&github_slug(&text), used_slugs);
+                let slug = used_slugs.unique(&github_slug(&text));
                 headings.push(Heading {
                     level,
                     text,
@@ -763,17 +763,30 @@ fn line_start_offsets(text: &str) -> Vec<usize> {
     starts
 }
 
-fn unique_slug(base: &str, used: &mut HashSet<String>) -> String {
-    if used.insert(base.to_owned()) {
-        return base.to_owned();
-    }
-    let mut n = 1u32;
-    loop {
-        let candidate = format!("{base}-{n}");
-        if used.insert(candidate.clone()) {
-            return candidate;
+/// Hands out unique heading slugs (`dup`, `dup-1`, `dup-2`, …).
+///
+/// `next` remembers where each base left off, so a page with n identical headings does O(n)
+/// work instead of rescanning `dup-1..dup-k` for every new one. `used` still catches a heading
+/// whose natural slug is already a generated one (`## Dup-1` after two `## Dup`).
+#[derive(Default)]
+struct SlugAllocator {
+    used: HashSet<String>,
+    next: HashMap<String, u32>,
+}
+
+impl SlugAllocator {
+    fn unique(&mut self, base: &str) -> String {
+        if self.used.insert(base.to_owned()) {
+            return base.to_owned();
         }
-        n += 1;
+        let n = self.next.entry(base.to_owned()).or_insert(1);
+        loop {
+            let candidate = format!("{base}-{n}");
+            *n += 1;
+            if self.used.insert(candidate.clone()) {
+                return candidate;
+            }
+        }
     }
 }
 
@@ -874,6 +887,25 @@ mod tests {
         let slugs: Vec<_> = page.headings.iter().map(|h| h.slug.as_str()).collect();
         // Collision-safe: natural "dup-1" forces the 4th Dup to "dup-2", 5th to "dup-3".
         assert_eq!(slugs, vec!["dup", "dup-1", "dup-2", "dup-1-1", "dup-3"]);
+    }
+
+    #[test]
+    fn many_identical_headings_get_unique_slugs_in_linear_time() {
+        let mut slugs = SlugAllocator::default();
+        let start = std::time::Instant::now();
+        let all: Vec<String> = (0..50_000).map(|_| slugs.unique("dup")).collect();
+        // The old per-heading rescan took minutes for this; linear work takes milliseconds.
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(5),
+            "took {:?}",
+            start.elapsed()
+        );
+        assert_eq!(&all[..3], ["dup", "dup-1", "dup-2"]);
+        assert_eq!(all[49_999], "dup-49999");
+        let unique: HashSet<&String> = all.iter().collect();
+        assert_eq!(unique.len(), all.len(), "all slugs distinct");
+        // An explicit heading that collides with a generated slug still gets its own.
+        assert_eq!(slugs.unique("dup-7"), "dup-7-1");
     }
 
     #[test]

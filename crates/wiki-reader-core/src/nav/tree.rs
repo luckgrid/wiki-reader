@@ -3,7 +3,7 @@
 //! See [content model](../../../../../wiki/product/content-model.md) and
 //! [ADR-0008](../../../../../wiki/decisions/0008-side-nav-as-site-nav.md).
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use crate::index::Index;
@@ -54,11 +54,33 @@ pub struct Crumb {
     pub target: Option<PageKey>,
 }
 
+/// Depth-first page order with an index, built once per tree so prev/next are O(1).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct PageOrder {
+    keys: Vec<PageKey>,
+    /// First position of each page (a page listed twice keeps its first slot).
+    index: HashMap<PageKey, usize>,
+}
+
+impl PageOrder {
+    fn of(items: &[NavItem]) -> Self {
+        let mut keys = Vec::new();
+        collect_pages(items, &mut keys);
+        let mut index = HashMap::with_capacity(keys.len());
+        for (i, key) in keys.iter().enumerate() {
+            index.entry(key.clone()).or_insert(i);
+        }
+        Self { keys, index }
+    }
+}
+
 /// Site-style navigation tree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NavTree {
     /// Top-level items (root README first when present).
     pub items: Vec<NavItem>,
+    /// Derived from `items` at build time; `items` is only read after that.
+    order: PageOrder,
 }
 
 impl NavTree {
@@ -71,36 +93,30 @@ impl NavTree {
     /// Build the nav tree with an explicit label mode.
     #[must_use]
     pub fn build_with(index: &Index, labels: crate::config::LabelMode) -> Self {
-        if let Some(items) = build_from_summary(index, labels) {
-            return Self { items };
-        }
-        Self {
-            items: build_from_filesystem(index, labels),
-        }
+        let items = build_from_summary(index, labels)
+            .unwrap_or_else(|| build_from_filesystem(index, labels));
+        let order = PageOrder::of(&items);
+        Self { items, order }
     }
 
     /// Depth-first page keys only (group headers skipped).
     #[must_use]
     pub fn page_order(&self) -> Vec<PageKey> {
-        let mut out = Vec::new();
-        collect_pages(&self.items, &mut out);
-        out
+        self.order.keys.clone()
     }
 
     /// Previous page in tree order, if any.
     #[must_use]
     pub fn prev(&self, key: &PageKey) -> Option<PageKey> {
-        let order = self.page_order();
-        let i = order.iter().position(|k| k == key)?;
-        i.checked_sub(1).map(|j| order[j].clone())
+        let i = *self.order.index.get(key)?;
+        i.checked_sub(1).map(|j| self.order.keys[j].clone())
     }
 
     /// Next page in tree order, if any.
     #[must_use]
     pub fn next(&self, key: &PageKey) -> Option<PageKey> {
-        let order = self.page_order();
-        let i = order.iter().position(|k| k == key)?;
-        order.get(i + 1).cloned()
+        let i = *self.order.index.get(key)?;
+        self.order.keys.get(i + 1).cloned()
     }
 
     /// Label for `page` in this tree's label mode; `None` if it is not in the tree.
@@ -1023,6 +1039,52 @@ mod tests {
         assert_eq!(
             prev.relative_path,
             PathBuf::from("architecture/design-system/README.md")
+        );
+    }
+
+    #[test]
+    fn prev_and_next_agree_with_the_tree_order_for_every_page() {
+        let index = index_at("../../fixtures/worked-example");
+        let tree = NavTree::build(&index);
+        let order = tree.page_order();
+        assert!(order.len() > 3);
+        for (i, key) in order.iter().enumerate() {
+            assert_eq!(tree.prev(key).as_ref(), i.checked_sub(1).map(|j| &order[j]));
+            assert_eq!(tree.next(key).as_ref(), order.get(i + 1));
+        }
+        let missing = PageKey {
+            collection_id: "worked-example".into(),
+            relative_path: PathBuf::from("nope.md"),
+        };
+        assert_eq!((tree.prev(&missing), tree.next(&missing)), (None, None));
+    }
+
+    #[test]
+    fn prev_next_stay_fast_on_a_large_collection() {
+        use crate::provider::FsProvider;
+        let dir = tempfile::tempdir().unwrap();
+        for i in 0..3000 {
+            std::fs::write(
+                dir.path().join(format!("p{i:04}.md")),
+                format!("# Page {i}\n"),
+            )
+            .unwrap();
+        }
+        let index = Index::build(&FsProvider::open(dir.path()).unwrap()).unwrap();
+        let tree = NavTree::build(&index);
+        let order = tree.page_order();
+        let start = std::time::Instant::now();
+        // The per-frame calls of the TUI: prev and next for the current page, many frames.
+        for _ in 0..20 {
+            for key in order.iter().step_by(100) {
+                let _ = (tree.prev(key), tree.next(key));
+            }
+        }
+        // Rebuilding the order per call took ~10^9 key comparisons for this; an index takes µs.
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(1),
+            "took {:?}",
+            start.elapsed()
         );
     }
 

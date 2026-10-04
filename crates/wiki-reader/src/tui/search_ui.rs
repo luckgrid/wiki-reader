@@ -33,6 +33,8 @@ pub struct SearchOverlay {
     pub page_hits: Vec<PageHit>,
     /// Text hits (when mode is Content).
     pub text_hits: Vec<TextHit>,
+    /// Distinct pages in `text_hits`, counted once per refresh (not per frame).
+    pub text_files: usize,
     /// Focus before open (restored on Esc).
     pub prev_focus: FocusPane,
     /// Viewer cursor before open.

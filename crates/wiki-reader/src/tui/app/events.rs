@@ -48,6 +48,7 @@ pub fn run(root: &Path, config: Option<&Path>) -> io::Result<()> {
     })?;
 
     app.publisher = crate::herdr::Publisher::from_env(app.herdr_publish);
+    app.search_batching = true;
     let mut terminal = ratatui::try_init()?;
     // After `try_init`, so this hook is the outermost and decides who may restore the terminal.
     install_panic_hook();
