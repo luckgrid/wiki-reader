@@ -125,7 +125,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 | 2026-10-03 | decision | #126 publication record merged as `731d43f`; main synced and installed binary reports 0.1.3. Phase 2 remains on fixes-only hold until the ≈ 2026-10-13 adoption verdict; no phase exit or release authorised by this housekeeping | P3-08 |
 | 2026-10-03 | decision | [P3-S2 herdr spike](spikes/p3-s2-herdr-integration.md): 0.9.0 popup launches with context cwd; operator confirmed real images, Help/Esc/Ctrl+Enter/q and no leftover fragments. Plain non-agent split metadata stored; operator confirmed title or token visible in the sidebar. Confirm feasibility for P3-09 popup and P3-10 ordinary-pane publishing; no metadata from popups (no pane ID). Overlay/split keys passed automation, graphics checks remain unverified. Scratch panes closed and global plugin unlinked; P4-05 theme-name following can use a config watcher without a plugin | P3-09, P3-10, P4-05 |
 
-## Next release (unreleased)
+## v0.1.4 (preparation)
 
 | Date | Kind | Note | Task IDs |
 |------|------|------|----------|
@@ -143,6 +143,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 | 2026-10-03 | bite | Operator P3-10 test in a plain pane (`target/debug/wiki-reader wiki`, pane `w30:p18`): `herdr pane get` showed no title or token, so nothing was published. Cause: herdr's CLI rejects `--title=value` ("unknown option"), and the publisher passed options that way; every report failed and, by design, it went quiet after three failures. The fake herdr in the unit tests could not catch it | P3-10 |
 | 2026-10-03 | fix | P3-10: options and values now go as separate arguments (`--title T --token page=P`); herdr accepts a value that starts with `-` that way, has no `--` terminator. Added an opt-in contract test against the real CLI (`WIKI_READER_TEST_HERDR_PANE=<idle pane> cargo test -p wiki-reader real_herdr -- --ignored`): it publishes a dash-leading title and the `page` token, sees both in `pane get` with `agent_status` still `unknown`, and sees them cleared on drop. Sidebar appearance still needs the operator's eyes | P3-10 |
 | 2026-10-03 | decision | P3-10 operator retest on herdr 0.9.0 (plain pane `w30:p18`, `target/debug/wiki-reader wiki`): `pane get` shows the page title and `tokens.page` following each page change (Decisions, ADR-0005, ADR-0006, ADR-0007), an unchanged page is not re-sent, `agent_status` stays `unknown`, and quitting leaves no title or token. Publishing works end to end. Not exercised: which sidebar element shows the title versus the token, the opt-out, a pane that hosts an agent, and TTL expiry after an unclean kill. Both fields stay on; ADR-0022 already records the agent-pane risk | P3-10 |
+| 2026-10-03 | decision | Prepare v0.1.4 to put P2-60 (diagrams switched under the options window), the herdr launcher with text-only plugin panes (P3-09) and herdr page publishing (P3-10, [ADR-0022](../decisions/0022-herdr-launcher-and-page-publishing.md)) in the installed dogfood binary. Require green CI on the release merge commit before tagging. Phase 2 stays on fixes-only hold until the ≈ 2026-10-13 verdict; the adoption clock does not restart | P2-60, P3-09, P3-10, P3-08 |
 
 ## Related
 
