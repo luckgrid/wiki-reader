@@ -121,13 +121,44 @@ Required upstream regression: launch a popup child that immediately sends the
 Kitty/cell-size/status queries, assert confirmed Kitty and the actual host cell
 size without a sleep or window resize, and repeat through both CLI/plugin action
 and client keybinding paths. Check resize and multi-client ownership as well.
-No patched Herdr build was run; this is a source-backed fix proposal, not a
-validated implementation.
+The initial investigation did not run a patched build; the subsequent local
+patch below has native automated coverage, not real-popup visual acceptance.
 
 No forced protocol, guessed cell geometry, Herdr upgrade, user config change or
 dogfood binary replacement was performed. Both diagnostic runs' temporary
 plugin was unlinked; `plugin list` was empty again. Resolve the capability/geometry
 gap before completing P3-09; the initial feasibility verdict is not shipping proof.
+
+### Local host patch — 2026-10-03
+
+At the operator's request, prepared an uncommitted patch against upstream master
+`5da0a01e1eedda054db0c81dd3a780000c40d9f0` (package 0.9.3), in the isolated checkout
+`/tmp/wiki-reader-herdr-geometry`. Exported to
+`/tmp/wiki-reader-herdr-popup-geometry.patch`; validation notes are in
+`/tmp/wiki-reader-herdr-popup-geometry-validation.md`. These are local scratch
+artifacts, not distributed wiki-reader code.
+
+The patch initialises popup virtual-terminal and PTY pixel geometry before the
+child starts, keeps size bookkeeping consistent, and classifies plugin pane
+opens as geometry-changing on public and client endpoint paths. Public calls
+use the tab's geometry controller; client endpoint calls use the invoking client,
+restoring the foreground projection afterward. No dependencies, wire fields,
+startup sleeps, forced protocol or guessed font metrics were added.
+
+Five new regressions cover immediate argv/shell child cell-size queries plus
+PTY ioctl pixel extents, unknown geometry, public/controller versus client
+ownership, and request invalidation. Disabling initial metrics and the new
+classifiers makes the four bug-detection tests fail; restoring them passes all
+five and the native nextest suite (**3713 passed, 12 skipped**). Formatting,
+native all-target clippy (installed 1.96.0, not pinned 1.96.1), six architecture
+checks, 150 Python maintenance checks and Bun integration/docs tests pass.
+
+Full `just check` remains unverified: `just` is missing (one workflow test cannot
+run `just --dry-run`), and Windows cross-validation was not run. No SDK/license
+downloads, install, restart or patched-client connection to the stable server
+were performed. The patch remains uncommitted and unpublished; the authenticated
+account is not on Herdr's approved-contributor list, so no upstream implementation
+PR was opened. **P3-09 still needs real graphics acceptance on a fixed host.**
 
 ## Matrix
 
