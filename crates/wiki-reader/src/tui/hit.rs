@@ -69,12 +69,29 @@ pub enum Hit {
 #[derive(Debug, Default, Clone)]
 pub struct HitMap {
     entries: Vec<(Rect, Hit)>,
+    /// Popup panels drawn this frame (each after a `Clear`). Pictures consult the previous
+    /// frame's list to avoid first drawing where a popup will cover them.
+    occluders: Vec<Rect>,
 }
 
 impl HitMap {
     /// Clear for a new frame.
     pub fn clear(&mut self) {
         self.entries.clear();
+        self.occluders.clear();
+    }
+
+    /// Record a popup panel that covers whatever was drawn under it.
+    pub fn occlude(&mut self, rect: Rect) {
+        if rect.width > 0 && rect.height > 0 {
+            self.occluders.push(rect);
+        }
+    }
+
+    /// Popup panels recorded since the last [`clear`](Self::clear).
+    #[must_use]
+    pub fn occluders(&self) -> &[Rect] {
+        &self.occluders
     }
 
     /// Register a hit region.

@@ -174,6 +174,9 @@ pub struct App {
     copy_path: wiki_reader_core::config::CopyPathMode,
     /// Side nav left or right (P3-11).
     pub(crate) nav_position: wiki_reader_core::config::NavPosition,
+    /// Popup panels and which popups were open at the end of the last frame, so the next
+    /// frame can avoid first drawing a picture where a popup covers its first cell.
+    pub(crate) last_popups: (u8, Vec<ratatui::layout::Rect>),
     /// Terminal graphics (startup probe result), decode worker and prepared pictures.
     pub(crate) images: crate::tui::images::ImageManager,
     /// When false, skip session load/save (tests).
@@ -296,6 +299,7 @@ impl App {
             viewer_geom: crate::tui::regions::viewer::ViewerGeom::default(),
             nav_viewport: 20,
             hit_map: HitMap::default(),
+            last_popups: (0, Vec::new()),
             theme: Theme::resolve(theme_name, &herdr_theme),
             herdr_theme,
             quit: false,
