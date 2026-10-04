@@ -32,7 +32,7 @@ YAML (`---`) or TOML (`+++`). Unknown keys are kept and shown raw in a "metadata
 | `id` | string | Addressable ID; strong context match |
 | `title` | string | Display title |
 | `summary` | string | Highlights, search results, hover |
-| `status` | string | Highlights, tree badge |
+| `status` | enum | Highlights, tree badge. Canonical values: `draft`, `proposed`, `accepted`, `active`, `done`, `deferred`, `superseded`, `historical` (see [wiki README](../README.md)) |
 | `tags` | list | Context matching |
 | `work_units` | list | Context matching |
 | `applies_to` | list of path globs | Context matching |

@@ -105,6 +105,8 @@ See [architecture overview](../architecture/overview.md) and [ADR-0006](../decis
 3. Run `./scripts/check.sh` (the same checks CI runs).
 4. Set Status to `done`; reference the ID in commit messages. Leave exit criteria visible.
 
+Task-table Status (`todo` / `doing` / `done`) is not the same as a page's frontmatter `status` (`draft` / `proposed` / `accepted` / …). See [wiki README](../README.md) for the document enum.
+
 ## Related
 
 - [Roadmap](../roadmap/README.md)

@@ -9,7 +9,7 @@ Architecture decision records. Accepted ADRs are immutable — supersede, don't 
 | [0001](0001-rust-ratatui.md) | Rust + ratatui | accepted |
 | [0002](0002-build-vs-fork.md) | Build on existing pieces, don't fork the app | accepted |
 | [0003](0003-core-cli-first.md) | Core library + CLI first | superseded by [0006](0006-reader-first.md) |
-| [0004](0004-diagram-rendering.md) | Tiered diagram rendering | proposed |
+| [0004](0004-diagram-rendering.md) | Tiered diagram rendering | accepted |
 | [0005](0005-navigation-model.md) | Wiki navigation model | accepted |
 | [0006](0006-reader-first.md) | Reader first; core stays terminal-free | accepted |
 | [0007](0007-input-focus-model.md) | Input & focus model | accepted |

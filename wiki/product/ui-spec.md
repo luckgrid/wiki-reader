@@ -152,6 +152,8 @@ Table and image/diagram viewers share one modal shell (`Esc` dismisses, wheel sc
 
 Like markdown-reader's: focused region as a highlighted pill (`NAV`/`VIEW`, or `SEARCH`/`HELP` while a popup is open; peach, like the tabs and footer links), relative path, cursor line:column (`L12:C5`) and scroll %, updated date and the page's frontmatter `status` (colored by value), word count, reading time, and a **message area** for link targets, notices ("not found"), confirmations, and search match `n/m`. Help `?` and Options ⚙ are right-aligned on this row, one column inset from the terminal edge, with `?` two columns left of ⚙. Reserve their four columns before laying out status fields or messages so text cannot overwrite them. Lower-priority items drop first when narrow. On tiny widths draw and register only visible icon glyphs; a hidden footer has no hits.
 
+Frontmatter `status` colours (`tui/theme.rs`): `draft` → `status_warn` (orange); `proposed` → `status_plan` (blue); `accepted` / `active` / `done` → `status_ok` (green); `deferred` / `superseded` / `historical` → muted. Unknown values keep the plain text colour so user collections can keep a private vocabulary.
+
 ## Focus & cursor model
 
 Two focusable panes: **Side nav** and **View**. The search overlay is modal while open.
@@ -316,7 +318,7 @@ Click to focus a pane; click items, links, breadcrumbs, prev/next, header icons,
 
 ## Theming
 
-Semantic tokens only (`tui/theme.rs`): `surface`, `surface_muted`, `border`, `border_focus`, `text`, `text_muted`, `text_secondary`, `accent`, `cursor_line`, `peach` / `on_peach` (status pill, focused block actions, popup border; a fill, so never used as text), `border_focus` (also the selected tab and footer link label colour, because it is readable as text on every preset), `link`, `link_broken`, `link_external`, `link_unsupported`, `code_bg` / `code_fg`, `quote_bar` / `quote_text`, `heading[1..6]`, `alert[…]`, `status_*`, plus two non-colour entries per preset: the syntect theme for the raw view and the Mermaid diagram palette.
+Semantic tokens only (`tui/theme.rs`): `surface`, `surface_muted`, `border`, `border_focus`, `text`, `text_muted`, `text_secondary`, `accent`, `cursor_line`, `peach` / `on_peach` (status pill, focused block actions, popup border; a fill, so never used as text), `border_focus` (also the selected tab and footer link label colour, because it is readable as text on every preset), `link`, `link_broken`, `link_external`, `link_unsupported`, `code_bg` / `code_fg`, `quote_bar` / `quote_text`, `heading[1..6]`, `alert[…]`, `status_ok` / `status_warn` / `status_plan` (frontmatter status; see the status-bar section above), plus two non-colour entries per preset: the syntect theme for the raw view and the Mermaid diagram palette.
 
 The `theme` config key picks a built-in preset:
 

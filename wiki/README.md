@@ -37,13 +37,24 @@ Every non-README document uses this header:
 id: …
 title: …
 summary: …
-status: draft | accepted | proposed | superseded | deferred | historical
+status: draft | proposed | accepted | active | done | deferred | superseded | historical
 updated: YYYY-MM-DD
 related: [slug, …]
 nav_order: N   # optional; product and architecture pages use this for reading order
 ---
 ```
 
-`id` and `summary` are part of the product [content model](product/content-model.md). `title`, `updated`, and `related` follow common wiki frontmatter conventions.
+| Status | Meaning |
+|--------|---------|
+| `draft` | Being written, not reviewed |
+| `proposed` | Written, awaiting a decision, or planned but not started |
+| `accepted` | Reviewed and settled; for ADRs, immutable |
+| `active` | Living doc, in progress now |
+| `done` | Finished work item / spike / phase |
+| `deferred` | Postponed |
+| `superseded` | Replaced by another doc |
+| `historical` | Kept for the record, no longer maintained |
+
+`id` and `summary` are part of the product [content model](product/content-model.md). `title`, `updated`, and `related` follow common wiki frontmatter conventions. `link-check` rejects unknown `status` values under `wiki/**` (non-README).
 
 The body starts with `# Title`, a short summary paragraph, then sections. Optional `## Open questions` and `## Related` where they add value. Decisions live under `decisions/` and are immutable once accepted — supersede, don't edit; mechanical metadata or formatting fixes that don't change decision text are allowed.

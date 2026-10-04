@@ -13,10 +13,12 @@ pub mod parse;
 pub mod provider;
 pub mod search;
 pub mod session;
+pub mod status;
 pub mod watch;
 
 pub use error::Error;
 pub use index::Index;
+pub use status::DocStatus;
 
 #[cfg(test)]
 mod tests {

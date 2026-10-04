@@ -2,7 +2,7 @@
 id: WR-SPIKE-P1-S1
 title: P1-S1 Spike — herdr input
 summary: Which keys and mouse events reach a TUI under herdr; implications for the P1-08/09 keymap.
-status: accepted
+status: done
 updated: 2026-09-29
 related: [phase-1-reader-shell, 0007-input-focus-model]
 ---

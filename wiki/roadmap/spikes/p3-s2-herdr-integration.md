@@ -2,7 +2,7 @@
 id: WR-SPIKE-P3-S2
 title: P3-S2 herdr integration spike
 summary: Plugin popup and plain-pane metadata are viable on Herdr 0.9.0; live theme-name following needs a config watcher, not a plugin.
-status: complete
+status: done
 updated: 2026-10-03
 related: [phase-3-alpha, phase-4-beta, p3-s1-image-protocol]
 ---
