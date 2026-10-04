@@ -2,14 +2,14 @@
 id: WR-ADR-0023
 title: "ADR-0023: The lite build is a cargo feature, not a separate artifact"
 summary: Images, SVG and Mermaid rasterisation sit behind a default-on `media` cargo feature; lite is `cargo install --no-default-features`, with no `-lite` release tarball.
-status: proposed
+status: accepted
 updated: 2026-10-03
 related: [0004-diagram-rendering, 0006-reader-first, 0017-static-local-images-only]
 ---
 
 # ADR-0023: The lite build is a cargo feature, not a separate artifact
 
-**Status:** Proposed · **Date:** 2026-10-03
+**Status:** Accepted · **Date:** 2026-10-03
 
 ## Context
 

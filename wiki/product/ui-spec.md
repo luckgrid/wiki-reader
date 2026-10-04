@@ -109,6 +109,8 @@ Future: this search bar becomes a proper **side nav header**, and a **side nav f
 
 Opened with `,` or `c` (or the layout footer ⚙); the same keys close it, as does `Esc`. It floats over the panes like Help and Search.
 
+![Options window with grouped radio rows: Theme, Panels, Nav labels, Mermaid, Images, Max image rows, Copy path](../assets/wiki-reader-options.png)
+
 - **Grouped choices.** Each setting is a group with a title, and each value is one row with a radio mark: `●` is the active value, `○` the others. A group is one of Theme, Panels (nav position), Nav labels, Mermaid, Images, Max image rows, Copy path (`y`). Show images is an on/off row in the Images group.
 - **Navigation.** `↑` / `↓` or `j` / `k` move the `>` cursor between rows (it skips titles and wraps); `Enter`, `Space` or `→` applies the row, and a click selects and applies it. The window opens on the current theme. The footer lists the keys. It scrolls on short terminals and keeps a group's title with its first row.
 - **Live and saved.** A change applies at once and is written to the user config file (see [Configuration](../guides/configuration.md) and [ADR-0018](../decisions/0018-config-write-path.md)).
