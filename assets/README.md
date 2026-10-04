@@ -1,7 +1,9 @@
 # Screenshots
 
-The documentation screenshot of the app browsing its own wiki, used by the root [README](../README.md). They are not test fixtures: they are large and change with the UI. Fixtures for image tests live under `fixtures/` and stay tiny.
+The documentation screenshots of the app browsing its own wiki. They are not test fixtures: they are large and change with the UI. Fixtures for image tests live under `fixtures/` and stay tiny.
 
-`wiki/assets/` holds an identical copy of it so wiki pages can show it from inside the collection root (images outside it are not rendered, [ADR-0017](../wiki/decisions/0017-static-local-images-only.md)), plus the help and search screenshots, which only the wiki shows. Update both copies of `wiki-reader.png` when retaking it.
+- `wiki-reader.png`: the main layout, used by the root [README](../README.md) and the [UI spec](../wiki/product/ui-spec.md).
+- `wiki-reader-help.png`, `wiki-reader-search.png`: the Help and Search popups, shown in the UI spec.
+- `wiki-reader-options.png`: the options window, shown in the UI spec and the [configuration guide](../wiki/guides/configuration.md).
 
-P3-23 refreshed the README / ui-spec ASCII diagram and documented the carousel keys. The PNG retake (`assets/wiki-reader.png`, `wiki/assets/wiki-reader.png`, and ideally help/search) still needs an operator pass in Ghostty with Screen Recording permission — the agent session could not write a display capture.
+`wiki/assets/` holds an identical copy of every file so wiki pages can show them from inside the collection root (images outside it are not rendered, [ADR-0017](../wiki/decisions/0017-static-local-images-only.md)). Update both copies when retaking a screenshot. The files were retaken on 2026-10-04 after the Batch C and chrome work (new theme, bordered bars, footer icons, carousel keys).

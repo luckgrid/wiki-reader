@@ -157,6 +157,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 | 2026-10-04 | bite | Operator: the table viewer is less readable than the in-page table: cells cut at 40 columns, an empty column after scrolling to the end, no rule under the header | P3-20 |
 | 2026-10-04 | fix | Failed diagram modals size to their error text and source; table viewer columns use natural width with horizontal scroll, the last column fills the window, a `─┼─` rule sits under the header. Tests cover the failed-render size, the filled last column, and a 60-character cell shown in full | P3-20, P3-21 |
 | 2026-10-04 | decision | Code blocks truncate with `…` instead of wrapping and open in a code viewer (P3-24); header and footer icons become shared three-cell buttons (P3-25); frontmatter `status` gets eight canonical values, documented and enforced by `link-check` (P3-26). Each is its own PR; tasks stay `doing` until the operator reviews | P3-24, P3-25, P3-26 |
+| 2026-10-04 | decision | Operator manual pass done and approved. #133 and #134 squash-merged; the four follow-up PRs (#135 to #138) landed as one squash commit when #138 was retargeted to `main` early (#135 to #137 closed as merged via #138; `main`'s tree equals the stack tip that `check.sh` and CI passed on). P3-19 to P3-26 are `done` and ADR-0023 is `accepted`. Operator screenshots (main, help, search, options) copied into `assets/` and `wiki/assets/` and shown in the UI spec and the configuration guide | P3-19, P3-20, P3-21, P3-22, P3-23, P3-24, P3-25, P3-26 |
 
 ## Related
 
