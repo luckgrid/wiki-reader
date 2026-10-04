@@ -23,6 +23,7 @@ use super::App;
 use super::draw::draw;
 use crate::tui::action::Action;
 use crate::tui::hit::{Hit, HitMap};
+#[cfg(feature = "media")]
 use crate::tui::images;
 use crate::tui::keymap;
 use wiki_reader_core::nav::{NavStop, NodeId};
@@ -56,6 +57,7 @@ pub fn run(root: &Path, config: Option<&Path>) -> io::Result<()> {
     };
     // The graphics probe reads stdin, so it runs before mouse capture, the keyboard-enhancement
     // query and the first event read (ADR-0004). Config `diagrams = text|source` skips it entirely.
+    #[cfg(feature = "media")]
     if images::should_probe(app.diagram_mode_for_probe())
         && app.graphics_allowed()
         && let Some(picker) = images::detect_picker(&images::GraphicsEnv::from_process())

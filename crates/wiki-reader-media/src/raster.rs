@@ -1,4 +1,5 @@
-//! Mermaid → SVG → RGBA (ADR-0004 image tier). Deterministic embedded font; no external refs.
+//! Mermaid → SVG → RGBA (ADR-0004 image tier) and bitmap decode. Deterministic embedded font; no
+//! external refs.
 
 use std::fmt;
 
@@ -6,57 +7,12 @@ use image::RgbaImage;
 use mermaid_rs_renderer::{RenderOptions, render_with_options};
 use resvg::{tiny_skia, usvg};
 
-use crate::images::fit_scale;
+use crate::{DiagramPalette, is_legible};
 
 const FONT: &[u8] = include_bytes!("../fonts/NotoSans.ttf");
 /// Private family so mermaid-rs-renderer uses fallback metrics instead of a system font.
 const LAYOUT_FONT_FAMILY: &str = "WikiReaderEmbeddedNotoSans";
 const RASTER_FONT_FAMILY: &str = "Noto Sans";
-/// Minimum scale of natural diagram pixels into the slot before the text tier is preferred.
-pub const MIN_LEGIBLE_SCALE: f64 = 0.55;
-
-/// Colours a Mermaid diagram is drawn with, so the picture matches the active theme.
-///
-/// Plain RGB so the renderer stays terminal-free; the TUI fills it from its theme tokens. It is
-/// part of every diagram cache key, so changing preset re-measures and re-rasterises.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct DiagramPalette {
-    /// Card background, also used to fill the slot's padding so the picture is opaque.
-    pub bg: (u8, u8, u8),
-    /// Labels and titles.
-    pub text: (u8, u8, u8),
-    /// Edges and axes.
-    pub line: (u8, u8, u8),
-    /// Node fill.
-    pub node_fill: (u8, u8, u8),
-    /// Node outline.
-    pub node_border: (u8, u8, u8),
-    /// Subgraph / cluster fill.
-    pub cluster_fill: (u8, u8, u8),
-    /// Subgraph / cluster outline.
-    pub cluster_border: (u8, u8, u8),
-    /// Sequence / state note fill (its text uses [`text`](Self::text)).
-    pub note_fill: (u8, u8, u8),
-    /// Sequence / state note outline.
-    pub note_border: (u8, u8, u8),
-}
-
-impl Default for DiagramPalette {
-    /// Dark card, matching the default (dark) theme's code background.
-    fn default() -> Self {
-        Self {
-            bg: (30, 32, 36),
-            text: (226, 229, 236),
-            line: (140, 148, 164),
-            node_fill: (44, 48, 58),
-            node_border: (110, 120, 140),
-            cluster_fill: (38, 41, 50),
-            cluster_border: (80, 88, 104),
-            note_fill: (58, 54, 40),
-            note_border: (150, 130, 80),
-        }
-    }
-}
 
 /// Mid-tone categorical slices that keep light labels readable on a dark card. Mermaid's own
 /// dark pie colours (`#0b0000`, `#010029`, …) vanish into a dark background.
@@ -122,7 +78,7 @@ pub enum RasterError {
     Parse(String),
     /// `resvg` / usvg failed.
     Raster(String),
-    /// Natural size scaled into the pane is below [`MIN_LEGIBLE_SCALE`].
+    /// Natural size scaled into the pane is below [`crate::MIN_LEGIBLE_SCALE`].
     TooWide,
     /// Decoded pixel count exceeds the ADR-0017 cap.
     TooManyPixels,
@@ -146,6 +102,40 @@ pub struct RasterImage {
     pub image: RgbaImage,
     pub px_w: u32,
     pub px_h: u32,
+}
+
+/// ADR-0017 decode allocation cap: RGBA at the pixel cap, doubled for decoder scratch.
+const MAX_DECODE_ALLOC: u64 = wiki_reader_core::images::MAX_IMAGE_PIXELS * 4 * 2;
+
+/// Decode a bitmap file under the ADR-0017 allocation and pixel caps.
+///
+/// # Errors
+///
+/// Returns the decoder's message, or `"image too large"` past the pixel cap.
+pub fn decode_file(path: &std::path::Path) -> Result<image::DynamicImage, String> {
+    let mut reader = image::ImageReader::open(path)
+        .map_err(|e| e.to_string())?
+        .with_guessed_format()
+        .map_err(|e| e.to_string())?;
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(MAX_DECODE_ALLOC);
+    reader.limits(limits);
+    let decoded = reader.decode().map_err(|e| e.to_string())?;
+    if u64::from(decoded.width()) * u64::from(decoded.height())
+        > wiki_reader_core::images::MAX_IMAGE_PIXELS
+    {
+        return Err("image too large".into());
+    }
+    Ok(decoded)
+}
+
+/// Header-only pixel size of a bitmap file (the pixel cap is the caller's check, before decode).
+///
+/// # Errors
+///
+/// Returns the decoder's message when the header cannot be read.
+pub fn image_dimensions(path: &std::path::Path) -> Result<(u32, u32), String> {
+    image::image_dimensions(path).map_err(|e| e.to_string())
 }
 
 /// Usvg options shared by Mermaid and local SVG: embedded font only, no external image refs.
@@ -262,12 +252,6 @@ pub fn render_mermaid(src: &str, palette: &DiagramPalette) -> Result<RasterImage
     rasterise_svg(&mermaid_svg_bytes(src, palette)?)
 }
 
-/// True when fitting `px_w`×`px_h` into `max_cols` at `cell_px` keeps scale ≥ [`MIN_LEGIBLE_SCALE`].
-#[must_use]
-pub fn is_legible(px_w: u32, px_h: u32, cell_px: (u16, u16), max_cols: u16, max_rows: u16) -> bool {
-    fit_scale(px_w, px_h, cell_px, max_cols, max_rows) >= MIN_LEGIBLE_SCALE
-}
-
 /// Rasterise Mermaid and reject results that would be illegible in the pane.
 ///
 /// # Errors
@@ -299,14 +283,6 @@ mod tests {
         assert_eq!(a.px_w, b.px_w);
         assert_eq!(a.px_h, b.px_h);
         assert_eq!(a.image.as_raw(), b.image.as_raw());
-    }
-
-    #[test]
-    fn legibility_gate_rejects_wide_natural_size() {
-        // 2000 px into 80×8 = 640 px pane → scale 0.32 < 0.55.
-        assert!(!is_legible(2000, 400, (8, 17), 80, 30));
-        // Compact diagram stays legible.
-        assert!(is_legible(400, 200, (8, 17), 80, 30));
     }
 
     #[test]

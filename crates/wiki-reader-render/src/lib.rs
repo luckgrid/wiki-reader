@@ -3,7 +3,6 @@
 mod diagrams;
 mod images;
 mod link_span;
-mod mermaid_raster;
 mod render;
 
 pub use diagrams::{
@@ -12,17 +11,20 @@ pub use diagrams::{
 };
 pub use images::{
     DiagramRequest, DiagramSize, DiagramSizeCache, DiagramTextReason, ImageSlot, MAX_SLOT_ROWS,
-    SlotSource, empty_diagram_size_cache, fit_scale, slot_geometry,
+    SlotSource, empty_diagram_size_cache, slot_geometry,
 };
 pub use link_span::{LinkClass, LinkId, LinkSpan};
-pub use mermaid_raster::{
-    DiagramPalette, MIN_LEGIBLE_SCALE, RasterError, RasterImage, is_legible, mermaid_svg_bytes,
-    mermaid_to_svg, rasterise_svg, rasterise_svg_scaled, render_mermaid, render_mermaid_for_pane,
-    svg_natural_size,
-};
 pub use render::{
-    BlockAction, BlockActionKind, DocTable, RenderOpts, RenderedDoc, StyleKind, StyledLine,
-    StyledSpan, render, render_with,
+    BlockAction, BlockActionKind, DocCell, DocTable, MediaOccurrence, MediaOccurrenceKind,
+    RenderOpts, RenderedDoc, StyleKind, StyledLine, StyledSpan, render, render_with,
+};
+pub use wiki_reader_media::{
+    DiagramPalette, MIN_LEGIBLE_SCALE, fit_scale, is_legible, is_svg_path,
+};
+#[cfg(feature = "media")]
+pub use wiki_reader_media::{
+    RasterError, RasterImage, decode_file, mermaid_svg_bytes, mermaid_to_svg, rasterise_svg,
+    rasterise_svg_scaled, render_mermaid, render_mermaid_for_pane, svg_natural_size,
 };
 
 #[cfg(test)]
@@ -30,6 +32,7 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::path::Path;
+    #[cfg(feature = "media")]
     use std::sync::Arc;
     use unicode_width::UnicodeWidthStr;
     use wiki_reader_core::provider::{CollectionProvider, FsProvider, PageKey};
@@ -41,8 +44,8 @@ mod tests {
         }
     }
 
-    fn render_src(src: &str, width: u16) -> RenderedDoc {
-        let index = wiki_reader_core::Index {
+    fn empty_index() -> wiki_reader_core::Index {
+        wiki_reader_core::Index {
             collection_id: "t".into(),
             pages: HashMap::default(),
             edges: vec![],
@@ -51,8 +54,11 @@ mod tests {
             by_id: HashMap::default(),
             by_path: HashMap::default(),
             diagnostics: vec![],
-        };
-        render(src, None, &empty_key(), &index, width)
+        }
+    }
+
+    fn render_src(src: &str, width: u16) -> RenderedDoc {
+        render(src, None, &empty_key(), &empty_index(), width)
     }
 
     #[test]
@@ -827,12 +833,13 @@ mod tests {
         let doc = render_src(src, 40);
         assert_eq!(doc.tables.len(), 1);
         let t = &doc.tables[0];
-        assert_eq!(t.header, ["Name", "Note"]);
-        assert_eq!(
-            t.rows,
-            [["a", "x"], ["b", ""]],
-            "links flattened, short rows padded"
-        );
+        let text = |r: &[DocCell]| r.iter().map(DocCell::text).collect::<Vec<_>>();
+        assert_eq!(text(&t.header), ["Name", "Note"]);
+        assert_eq!(text(&t.rows[0]), ["a", "x"]);
+        assert_eq!(text(&t.rows[1]), ["b", ""], "short rows padded");
+        // The link keeps its style, so the viewer can colour it; plain text stays plain.
+        assert_eq!(t.rows[0][1].spans[0].kind, StyleKind::Link);
+        assert_ne!(t.rows[0][0].spans[0].kind, StyleKind::Link);
         assert_eq!(t.source_line, 3);
         let top = usize::try_from(t.line).unwrap();
         assert!(doc.lines[top].starts_with('┌'), "{:?}", doc.lines[top]);
@@ -1370,6 +1377,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "media")]
     fn block_images_reserve_slots_in_document_order() {
         let doc = render_images_fixture(Some((8, 17)), 80);
         let names: Vec<_> = doc
@@ -1435,6 +1443,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "media")]
     fn herdr_plugin_pane_names_itself_in_the_no_graphics_reason() {
         let plugin = render_images_fixture_with(
             RenderOpts {
@@ -1480,6 +1489,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "media")]
     fn herdr_plugin_pane_names_itself_in_the_diagram_tier_reason() {
         let src = "```mermaid\nflowchart LR\n  A --> B\n```\n";
         let key = empty_key();
@@ -1530,6 +1540,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "media")]
     fn inline_list_and_quote_images_stay_text() {
         let doc = render_images_fixture(Some((8, 17)), 80);
         assert_eq!(
@@ -1548,6 +1559,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "media")]
     fn image_slots_snapshot_by_width() {
         for w in [40u16, 60, 80, 120] {
             let doc = render_images_fixture(Some((8, 17)), w);
@@ -1570,6 +1582,46 @@ mod tests {
             }
             insta::assert_snapshot!(format!("images_{w}"), out);
         }
+    }
+
+    #[test]
+    fn media_inventory_is_document_ordered_and_stable_through_relayout() {
+        let src =
+            "![a](x.png)\n\n```mermaid\ngraph LR; A-->B\n```\n\n```mermaid\ngraph LR; A-->B\n```\n";
+        let wide = render_src(src, 80).media;
+        let narrow = render_src(src, 40).media;
+        assert_eq!(wide, narrow, "ids and kinds survive a width change");
+        assert!(matches!(
+            wide[0].kind,
+            MediaOccurrenceKind::Image { slot: false, .. }
+        ));
+        assert!(matches!(wide[1].kind, MediaOccurrenceKind::Diagram { .. }));
+        // Identical fences are separate occurrences.
+        assert_ne!(wide[1].id, wide[2].id);
+        assert_eq!(wide.len(), 3);
+    }
+
+    #[test]
+    #[cfg(not(feature = "media"))]
+    fn lite_image_mode_falls_back_to_text_with_a_reason() {
+        let opts = RenderOpts {
+            diagram_mode: wiki_reader_core::config::DiagramMode::Image,
+            graphics: true,
+            cell_px: Some((8, 17)),
+            ..RenderOpts::default()
+        };
+        let key = empty_key();
+        let index = empty_index();
+        let doc = render_with(
+            "```mermaid\ngraph LR; A-->B\n```\n",
+            None,
+            &key,
+            &index,
+            80,
+            &opts,
+        );
+        assert!(doc.image_slots.is_empty());
+        assert!(doc.lines.join("\n").contains("lite build: no image tier"));
     }
 
     #[test]
@@ -1624,6 +1676,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "media")]
     fn mermaid_image_tier_is_text_before_size_cache_and_slot_after() {
         let body = "flowchart LR\n  A[Build] --> B[Deploy]\n";
         let src = format!("```mermaid\n{body}```\n");
@@ -1689,6 +1742,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "media")]
     fn mermaid_size_cache_hit_across_widths_requests_once() {
         let body = "flowchart LR\n  A[Build] --> B[Deploy]\n";
         let src = format!("```mermaid\n{body}```\n");
@@ -1730,6 +1784,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "media")]
     fn mermaid_failed_measure_shows_parse_reason() {
         // Valid Mermaid so the text tier succeeds; the Failed cache entry supplies the header.
         let body = "flowchart LR\n  A[Build] --> B[Deploy]\n";
@@ -1768,6 +1823,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "media")]
     fn mermaid_illegible_natural_size_shows_too_wide() {
         let body = "flowchart LR\n  A[Build] --> B[Deploy]\n";
         let src = format!("```mermaid\n{body}```\n");
@@ -1809,6 +1865,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "media")]
     fn mermaid_slots_snapshot_by_width() {
         let body = "flowchart LR\n  A[Build] --> B[Deploy]\n";
         let src = format!("```mermaid\n{body}```\n");

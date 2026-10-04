@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use image::imageops::FilterType;
-use image::{DynamicImage, ImageReader, Limits, RgbaImage};
+use image::{DynamicImage, RgbaImage};
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::Span;
@@ -17,10 +17,10 @@ use ratatui_image::picker::cap_parser::QueryStdioOptions;
 use ratatui_image::picker::{Picker, ProtocolType};
 use ratatui_image::protocol::StatefulProtocol;
 use ratatui_image::{CropOptions, Resize, StatefulImage};
-use wiki_reader_core::images::MAX_IMAGE_PIXELS;
 use wiki_reader_render::{
     DiagramPalette, DiagramRequest, DiagramSize, DiagramSizeCache, DiagramTextReason, ImageSlot,
-    SlotSource, is_legible, mermaid_to_svg, rasterise_svg, render_mermaid, svg_natural_size,
+    SlotSource, decode_file, is_legible, is_svg_path, mermaid_to_svg, rasterise_svg,
+    render_mermaid, svg_natural_size,
 };
 
 use crate::tui::theme::Theme;
@@ -33,8 +33,6 @@ const QUERY_TIMEOUT_ENV: &str = "WIKI_READER_IMAGE_QUERY_TIMEOUT_MS";
 /// Prepared pictures kept for scroll-back, in RGBA bytes. Visible pictures are never evicted, so
 /// the cache can exceed this by at most one screenful.
 const READY_BYTE_BUDGET: u64 = 64 * 1024 * 1024;
-/// Decode allocation cap: four bytes per pixel at the pixel cap, doubled for the decoder's copy.
-const MAX_DECODE_ALLOC: u64 = MAX_IMAGE_PIXELS * 4 * 2;
 
 // ── Detection ────────────────────────────────────────────────────────────────────────────────
 
@@ -309,28 +307,6 @@ fn scale_and_pad(
     }
     image::imageops::overlay(&mut canvas, &scaled.to_rgba8(), 0, 0);
     DynamicImage::ImageRgba8(canvas)
-}
-
-/// Decode a bitmap file under the ADR-0017 allocation and pixel caps.
-pub(crate) fn decode_file(path: &std::path::Path) -> Result<DynamicImage, String> {
-    let mut reader = ImageReader::open(path)
-        .map_err(|e| e.to_string())?
-        .with_guessed_format()
-        .map_err(|e| e.to_string())?;
-    let mut limits = Limits::default();
-    limits.max_alloc = Some(MAX_DECODE_ALLOC);
-    reader.limits(limits);
-    let decoded = reader.decode().map_err(|e| e.to_string())?;
-    if u64::from(decoded.width()) * u64::from(decoded.height()) > MAX_IMAGE_PIXELS {
-        return Err("image too large".into());
-    }
-    Ok(decoded)
-}
-
-pub(crate) fn is_svg_path(path: &std::path::Path) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| e.eq_ignore_ascii_case("svg"))
 }
 
 /// Decode / rasterise `key` and pad to the slot's pixel size.

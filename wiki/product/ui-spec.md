@@ -30,6 +30,7 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 │                        ││                                                    │
 │                        ││ Start at Architecture Overview, follow Token       │
 │                        ││ Projection, then return via back when history      │
+│                        ││ exists. Enter a picture for Tab carousel / a fit.  │
 │                        │├────────────┬─────────────┬─────────────────────────┤
 │                        ││ ‹ Overview │             │ Architecture Overview › │
 └────────────────────────┘└────────────┴─────────────┴─────────────────────────┘
@@ -64,7 +65,7 @@ P3-18 places ⚙ at the full-width layout footer's far right, below both panes, 
 
 The layout footer reserves space for `?` / ⚙ before laying out status fields and messages. The View footer independently divides its width between prev/next. Labels truncate with `…`; unavailable links remain absent. Controls must not overlap, including at 40/60 columns and with Nav on either side. Collision policy: reserve the active tab first, ellipsizing its filename to the available label width (maximum 18 columns), then add other tabs in order only if each whole cell and its divider fits. Hide all tabs when fewer than seven columns are available. Prev and next cells are sized to their labels, each capped so that the two cells and their dividers fit in the interior; ellipsize labels and hide a cell if its cap cannot fit padding, an arrow and one label column. Hits occupy only the label row of each bar, never the border or seam rows. Short-terminal policy: retain the one-row layout header/footer whenever height permits; give the View's top bar its three rows first, then its bottom bar three more. Draw a bar only when all of its rows fit; an edge without a bar keeps just the pane's border row, with no controls or hits. Article rows are the remainder after the edges (six chrome rows when both bars fit). P3-01 sticky headings are explicitly deferred by operator decision; no additional sticky row is reserved.
 
-The ASCII diagram documents the bar layout; screenshots will be refreshed in P3-23 after the UI settles.
+The ASCII diagram documents the bar layout. Screenshot PNGs are refreshed in P3-23 once the operator retakes them in Ghostty (Screen Recording permission); the ASCII and carousel keys ship with the docs refresh even when the PNGs wait.
 
 ## Header (full width, 1 padded row)
 
@@ -136,11 +137,16 @@ Connected `‹ Prev title` and `Next title ›` controls sit in their own cells 
 
 ## Modal viewers
 
-Table and image/diagram viewers share one modal shell (`Esc` dismisses, wheel scrolls, click outside dismisses, drawn after a `Clear` so they sit above Kitty pictures). Entry points are block actions in the View Tab cycle plus `Enter` on the focused table or image slot.
+Table and image/diagram viewers share one modal shell (`Esc` dismisses, wheel scrolls, click outside dismisses, drawn after a `Clear` so they sit above Kitty pictures). Entry points are block actions in the View Tab cycle plus `Enter` on the focused table or image slot. The panel is **content-sized**: it wraps its content (at least 40 body columns), is centred, and never exceeds the full-size panel (the area inset by two columns and one row; tiny terminals get all of it). A wide table or picture therefore keeps today's width. The modal's keys are listed in Help under *Table and image viewers*, and the hint bar along the panel's bottom edge shows the ones that apply.
 
-**Table viewer.** Opens from the expand-table block action or `Enter` on any row of a table. Keys: arrows / `hjkl` move the cell cursor; `PgUp` / `PgDn` page; `g` / `G` top / bottom; `/` filter rows (`Enter` keep, `Esc` clear); `s` cycles sort asc / desc / off on the current column; `y` copies the cell; `Y` copies the row (tab-separated). The header row and first column stay fixed while the body scrolls.
+**Table viewer.** Opens from the expand-table block action or `Enter` on any row of a table. Keys: arrows / `hjkl` move the cell cursor; `PgUp` / `PgDn` page; `g` / `G` top / bottom; `/` filter rows (`Enter` keep, `Esc` clear); `s` cycles sort asc / desc / off on the current column; `y` copies the cell; `Y` copies the row (tab-separated). The header row and first column stay fixed while the body scrolls. Cells keep their inline styling (bold, link colour, code) and the header stays bold; filter, sort and copy use the plain text. The panel is as wide as all columns and as tall as all rows, up to the cap.
 
-**Image and diagram viewer.** Opens from the expand-diagram block action (`Enter` on the Mermaid fence line) or `Enter` on any row of a picture slot. Keys: arrows / `hjkl` pan by an eighth of the window; `PgUp` / `PgDn` and `g` / `G` as in the table viewer; `+` / `-` zoom (100–800 % of fit); `0` resets to fit. The wheel pans vertically. SVG and Mermaid re-rasterise at the zoomed size; raster files scale from the decoded bitmap. Text-tier Mermaid opens as a scrollable source view. Planned: fit / actual-size toggle and content-sized windows (P3-20); Tab / Shift+Tab carousel (P3-21); diagram image / text / source cycle (P3-22).
+**Image and diagram viewer.** Opens from the expand-diagram block action (`Enter` on the Mermaid fence line) or `Enter` on any row of a picture slot. Keys: arrows / `hjkl` pan by an eighth of the window; `PgUp` / `PgDn` and `g` / `G` as in the table viewer; `+` / `-` zoom (100–800 % of the base size); `0` fits the window and resets zoom; `a` toggles **fit** and **actual size**; `Tab` / `Shift+Tab` step to the next / previous image or diagram of the page, wrapping; `v` cycles a diagram's views. The wheel pans vertically. SVG and Mermaid re-rasterise at the zoomed size; raster files scale from the decoded bitmap.
+
+- **Sizing.** *Fit* scales the picture to the largest panel, enlarging small pictures up to 2× natural size, so an opened picture is always larger than its inline slot (which never exceeds natural size). *Actual size* is natural pixels (one picture pixel per terminal pixel; SVG and Mermaid at their natural SVG size) and pans when it exceeds the panel. Zoom multiplies either base. The 16-megapixel cap applies to every size. The panel wraps the picture, so a small picture gets a small panel and a wide one keeps the full width.
+- **Carousel.** The inventory is every block image and Mermaid fence of the page in document order, whatever tier the page painted it with. A picture that could not be loaded (remote, missing, too large) is an entry that shows why. The one opened shows first; each item starts at fit, zoom 100 %. Arrows stay pan.
+- **Diagram views.** `v` cycles *image* → *text* (terminal text art at the panel width) → *source*, for the open diagram only; nothing is saved. *Image* is skipped when the terminal has no graphics protocol (the viewer then opens on *source*, as the inline tier did). The lite build has no image viewer at all (`image viewer is not in this lite build`).
+- **Hint bar.** `←↑↓→ pan  +/- zoom  0 fit  a actual  g/G top/end  Tab/⇧Tab item  v image/text/source  Esc close`; `Tab/⇧Tab` shows only with more than one item, `v` only with more than one view, and the text views show `↑↓ scroll … (source view)`.
 
 ## Layout footer / status bar (full width, 1 row)
 
@@ -248,6 +254,21 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 | `↑ / ↓` | Move selection |
 | `Home / End` | Jump to first / last result |
 | `PgUp / PgDn` | Page results |
+
+### Table and image viewers
+
+| Key | Action |
+|-----|--------|
+| `↑↓←→ / hjkl` | Move the table cell cursor, or pan a picture |
+| `/` | Table: filter rows |
+| `s` | Table: sort by the current column |
+| `y / Y` | Table: copy cell / row |
+| `+ / -` | Picture: zoom in / out |
+| `0` | Picture: fit the window, reset zoom |
+| `a` | Picture: toggle fit / actual size |
+| `Tab / Shift+Tab` | Picture: next / previous image or diagram |
+| `v` | Diagram: cycle image / text / source |
+| `Esc / q` | Close the viewer |
 <!-- keymap:end -->
 
 ### Notes

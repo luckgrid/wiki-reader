@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::fmt::Write as _;
+use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -23,8 +24,8 @@ use crate::images::{
     DiagramRequest, DiagramSize, DiagramSizeCache, DiagramTextReason, ImagePlan, ImageSlot,
     SlotSource, empty_diagram_size_cache, placeholder_text, plan_image, slot_geometry,
 };
-use crate::mermaid_raster::DiagramPalette;
 use crate::{LinkClass, LinkId, LinkSpan};
+use wiki_reader_media::DiagramPalette;
 
 /// Semantic style for a span (TUI maps to theme colours).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -129,11 +130,57 @@ pub struct RenderedDoc {
     pub image_slots: Vec<ImageSlot>,
     /// Mermaid fences waiting on an off-thread size measure (image tier, cache miss).
     pub diagram_requests: Vec<DiagramRequest>,
+    /// Every block image and Mermaid fence in document order, whatever tier painted it.
+    pub media: Vec<MediaOccurrence>,
     pub word_count: u32,
     pub updated: String,
 }
 
-/// One table's cell grid (plain cell text, links flattened), for the table viewer.
+/// One block image or Mermaid fence in the document (P3-21 inventory; tier-independent).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MediaOccurrence {
+    /// Occurrence identity: hash of (kind, dest/source, n-th repeat of that pair). Not a content
+    /// hash: two identical fences get different ids. Survives relayout and edits elsewhere.
+    pub id: u64,
+    /// 0-based display line where the block starts (matches `ImageSlot::line` and the
+    /// `ExpandDiagram` action's line), so a click or `Enter` maps back to its occurrence.
+    pub line: u32,
+    pub kind: MediaOccurrenceKind,
+}
+
+/// What a [`MediaOccurrence`] is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MediaOccurrenceKind {
+    /// Block-level image; `slot` is true when rows were reserved for a picture.
+    Image {
+        dest: String,
+        alt: String,
+        slot: bool,
+    },
+    /// Mermaid fence; `tier` is what was painted (`Image` only when a slot was reserved).
+    Diagram {
+        source: String,
+        hash: u64,
+        tier: DiagramTier,
+    },
+}
+
+/// One table cell: its styled runs (bold, link, code, …), so the viewer keeps inline styling.
+/// [`Self::text`] is the plain text for filter, sort and copy.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DocCell {
+    pub spans: Vec<StyledSpan>,
+}
+
+impl DocCell {
+    /// Plain cell text (trimmed; links flattened to their label).
+    #[must_use]
+    pub fn text(&self) -> String {
+        self.spans.iter().map(|s| s.text.as_str()).collect()
+    }
+}
+
+/// One table's cell grid, for the table viewer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DocTable {
     /// Source line (1-based) of the header row.
@@ -143,9 +190,9 @@ pub struct DocTable {
     /// Display rows the table occupies.
     pub height: u32,
     /// Header cells.
-    pub header: Vec<String>,
+    pub header: Vec<DocCell>,
     /// Body rows; every row has `header.len()` cells.
-    pub rows: Vec<Vec<String>>,
+    pub rows: Vec<Vec<DocCell>>,
 }
 
 /// Kind of a Tab-cycle block action (BA / P2-03).
@@ -349,6 +396,7 @@ pub fn render_with(
         source_map,
         headings: state.headings,
         image_slots: state.image_slots,
+        media: state.media,
         diagram_requests: state.diagram_requests,
         word_count,
         updated,
@@ -426,6 +474,9 @@ struct LayoutState<'a> {
     list_marker_pending: bool,
     in_table: bool,
     table_row: Vec<String>,
+    /// Styled twins of `table_row` / `table_rows` for the viewer grid.
+    table_row_cells: Vec<DocCell>,
+    table_cells: Vec<Vec<DocCell>>,
     /// Source line for the row currently being collected.
     table_row_src: u32,
     /// (source line, cells) per header/body row.
@@ -450,6 +501,7 @@ struct LayoutState<'a> {
     max_slot_rows: u16,
     image_slots: Vec<ImageSlot>,
     diagram_requests: Vec<DiagramRequest>,
+    media: Vec<MediaOccurrence>,
 }
 
 /// A link whose display columns are only known after the table is laid out.
@@ -505,6 +557,8 @@ impl<'a> LayoutState<'a> {
             list_marker_pending: false,
             in_table: false,
             table_row: Vec::new(),
+            table_row_cells: Vec::new(),
+            table_cells: Vec::new(),
             table_row_src: 1,
             table_rows: Vec::new(),
             table_header_done: false,
@@ -526,7 +580,31 @@ impl<'a> LayoutState<'a> {
             max_slot_rows: crate::MAX_SLOT_ROWS,
             image_slots: Vec::new(),
             diagram_requests: Vec::new(),
+            media: Vec::new(),
         }
+    }
+
+    /// Append to the media inventory with a stable occurrence id.
+    fn push_media(&mut self, kind: MediaOccurrenceKind) {
+        let (tag, key) = match &kind {
+            MediaOccurrenceKind::Image { dest, .. } => (0u8, dest),
+            MediaOccurrenceKind::Diagram { source, .. } => (1u8, source),
+        };
+        let nth = self
+            .media
+            .iter()
+            .filter(|m| match &m.kind {
+                MediaOccurrenceKind::Image { dest, .. } => tag == 0 && dest == key,
+                MediaOccurrenceKind::Diagram { source, .. } => tag == 1 && source == key,
+            })
+            .count();
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        (tag, key, nth).hash(&mut h);
+        self.media.push(MediaOccurrence {
+            id: h.finish(),
+            line: u32::try_from(self.styled.len()).unwrap_or(0),
+            kind,
+        });
     }
 
     /// `Start(Paragraph) Start(Image) … End(Image) End(Paragraph)` at `events[i]`, outside
@@ -592,6 +670,11 @@ impl<'a> LayoutState<'a> {
             }
             other => other,
         };
+        self.push_media(MediaOccurrenceKind::Image {
+            dest: dest.to_owned(),
+            alt: alt.to_owned(),
+            slot: matches!(plan, ImagePlan::Slot { .. }),
+        });
         match plan {
             ImagePlan::Slot { source, cols, rows } => {
                 let line = u32::try_from(self.styled.len()).unwrap_or(0);
@@ -636,7 +719,8 @@ impl<'a> LayoutState<'a> {
         let env = DiagramEnv {
             tmux: self.tmux,
             herdr: self.herdr,
-            kitty_graphics: self.graphics && self.cell_px.is_some(),
+            // ponytail: lite has no image tier, whatever the caller claims.
+            kitty_graphics: cfg!(feature = "media") && self.graphics && self.cell_px.is_some(),
         };
         let tier = select_tier(self.diagram_mode, &env);
         let hash = content_hash(body);
@@ -646,13 +730,8 @@ impl<'a> LayoutState<'a> {
             match self.diagram_sizes.get(hash, palette) {
                 Some(DiagramSize::Natural { px_w, px_h }) => {
                     let cell_px = self.cell_px.unwrap_or((8, 17));
-                    if crate::mermaid_raster::is_legible(
-                        px_w,
-                        px_h,
-                        cell_px,
-                        width,
-                        self.max_slot_rows,
-                    ) {
+                    if wiki_reader_media::is_legible(px_w, px_h, cell_px, width, self.max_slot_rows)
+                    {
                         let (cols, rows) =
                             slot_geometry(px_w, px_h, cell_px, width, self.max_slot_rows);
                         Some((cols, rows))
@@ -679,6 +758,17 @@ impl<'a> LayoutState<'a> {
             None
         };
 
+        self.push_media(MediaOccurrenceKind::Diagram {
+            source: body.to_owned(),
+            hash,
+            tier: if image_plan.is_some() {
+                DiagramTier::Image
+            } else if tier == DiagramTier::Source {
+                DiagramTier::Source
+            } else {
+                DiagramTier::Text
+            },
+        });
         let start_line = u32::try_from(self.styled.len()).unwrap_or(0);
         if let Some((cols, rows)) = image_plan {
             self.ensure_block_gap(close_src);
@@ -733,14 +823,13 @@ impl<'a> LayoutState<'a> {
                         wiki_reader_core::config::DiagramMode::Image
                     ) && !env.tmux =>
                 {
-                    Some(
-                        if self.herdr_plugin_pane {
-                            ImageReject::NoGraphicsHerdrPlugin
-                        } else {
-                            ImageReject::NoGraphics
-                        }
-                        .to_string(),
-                    )
+                    Some(if cfg!(not(feature = "media")) {
+                        "lite build: no image tier".to_owned()
+                    } else if self.herdr_plugin_pane {
+                        ImageReject::NoGraphicsHerdrPlugin.to_string()
+                    } else {
+                        ImageReject::NoGraphics.to_string()
+                    })
                 }
                 _ => None,
             };
@@ -959,11 +1048,13 @@ impl<'a> LayoutState<'a> {
                 self.mark_block(src);
                 self.in_table = true;
                 self.table_rows.clear();
+                self.table_cells.clear();
                 self.table_links.clear();
                 self.table_header_done = false;
             }
             Tag::TableHead | Tag::TableRow => {
                 self.table_row.clear();
+                self.table_row_cells.clear();
                 self.table_row_src = src;
             }
             Tag::TableCell => {
@@ -1082,6 +1173,8 @@ impl<'a> LayoutState<'a> {
                 if !self.table_row.is_empty() {
                     self.table_rows
                         .push((self.table_row_src, std::mem::take(&mut self.table_row)));
+                    self.table_cells
+                        .push(std::mem::take(&mut self.table_row_cells));
                     self.table_header_done = true;
                 }
             }
@@ -1089,12 +1182,15 @@ impl<'a> LayoutState<'a> {
                 if !self.table_row.is_empty() {
                     self.table_rows
                         .push((self.table_row_src, std::mem::take(&mut self.table_row)));
+                    self.table_cells
+                        .push(std::mem::take(&mut self.table_row_cells));
                 }
             }
             TagEnd::TableCell => {
                 let _ = self.style_stack.pop();
-                let cell = self.drain_cur_text();
-                self.table_row.push(cell);
+                let cell = self.drain_cur_cell();
+                self.table_row.push(cell.text());
+                self.table_row_cells.push(cell);
             }
             _ => {}
         }
@@ -1675,10 +1771,24 @@ impl<'a> LayoutState<'a> {
         });
     }
 
-    fn drain_cur_text(&mut self) -> String {
-        let s: String = self.cur.iter().map(|sp| sp.text.as_str()).collect();
-        self.cur.clear();
-        s.trim().to_owned()
+    /// The collected cell runs with surrounding whitespace trimmed away.
+    fn drain_cur_cell(&mut self) -> DocCell {
+        let mut spans = std::mem::take(&mut self.cur);
+        while let Some(f) = spans.first_mut() {
+            f.text = f.text.trim_start().to_owned();
+            if !f.text.is_empty() {
+                break;
+            }
+            spans.remove(0);
+        }
+        while let Some(l) = spans.last_mut() {
+            l.text = l.text.trim_end().to_owned();
+            if !l.text.is_empty() {
+                break;
+            }
+            spans.pop();
+        }
+        DocCell { spans }
     }
 
     /// Lay the table out, then record its cell grid and an expand action.
@@ -1686,27 +1796,32 @@ impl<'a> LayoutState<'a> {
         let start = self.styled.len();
         let has_header = self.table_header_done;
         let grid = self.table_rows.clone();
+        let cells = std::mem::take(&mut self.table_cells);
         self.layout_table();
         let Some((source_line, first)) = grid.first().cloned() else {
             return;
         };
         let cols = grid.iter().map(|(_, c)| c.len()).max().unwrap_or(1).max(1);
-        let pad = |mut row: Vec<String>| {
-            row.resize(cols, String::new());
+        let pad = |mut row: Vec<DocCell>| {
+            row.resize(cols, DocCell::default());
             row
         };
-        let mut rows = grid.into_iter().map(|(_, c)| pad(c));
+        let mut rows = cells.into_iter().map(pad);
         // ponytail: a table without a header row (can't happen with GFM) gets an empty header.
         let header = if has_header {
             rows.next().unwrap_or_default()
         } else {
-            vec![String::new(); cols]
+            vec![DocCell::default(); cols]
         };
-        let rows: Vec<Vec<String>> = rows.collect();
+        let rows: Vec<Vec<DocCell>> = rows.collect();
         let fingerprint = format!(
             "{}\n{}",
             first.join("\t"),
-            rows.first().map_or(String::new(), |r| r.join("\t"))
+            rows.first().map_or(String::new(), |r| r
+                .iter()
+                .map(DocCell::text)
+                .collect::<Vec<_>>()
+                .join("\t"))
         );
         let line = u32::try_from(start).unwrap_or(0);
         let width = self.styled.get(start).map_or(1, |l| {

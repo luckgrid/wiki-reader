@@ -10,7 +10,12 @@ pub mod focus;
 pub mod help_ui;
 pub mod highlight;
 pub mod hit;
+#[cfg(feature = "media")]
 pub mod image_viewer;
+#[cfg(feature = "media")]
+pub mod images;
+#[cfg(not(feature = "media"))]
+#[path = "images_lite.rs"]
 pub mod images;
 pub mod keymap;
 pub mod layout;

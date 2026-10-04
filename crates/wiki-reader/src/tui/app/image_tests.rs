@@ -573,6 +573,24 @@ fn enter_on_a_picture_opens_it_zooms_within_caps_and_esc_closes() {
     modal_press(&mut app, KeyCode::Down);
     settle_modal(&mut term, &mut app);
 
+    // Carousel (P3-21): every block image of the page, opened one first; sizing is per item.
+    assert!(any_text(&term, "1/9") && any_text(&term, "fit 100%"));
+    modal_press(&mut app, KeyCode::Char('a'));
+    settle_modal(&mut term, &mut app);
+    assert!(any_text(&term, "actual 100%"), "a toggles actual size");
+    modal_press(&mut app, KeyCode::Tab);
+    settle_modal(&mut term, &mut app);
+    assert!(any_text(&term, "2/9") && any_text(&term, "fit 100%"));
+    // The remote image is in the inventory too, as a note instead of a picture.
+    for _ in 0..4 {
+        modal_press(&mut app, KeyCode::Tab);
+    }
+    draw_to(&mut term, &mut app);
+    assert!(any_text(&term, "6/9") && any_text(&term, "logo.png: no preview"));
+    modal_press(&mut app, KeyCode::BackTab);
+    settle_modal(&mut term, &mut app);
+    assert!(any_text(&term, "5/9"));
+
     modal_press(&mut app, KeyCode::Esc);
     assert!(app.modal.is_none(), "Esc closes and drops the viewer");
     assert_eq!(app.input_mode, crate::tui::keymap::InputMode::Normal);

@@ -3030,18 +3030,26 @@ dependencies = [
 ]
 
 [[package]]
-name = "wiki-reader-render"
+name = "wiki-reader-media"
 version = "0.1.4"
 dependencies = [
  "image",
- "insta",
  "mermaid-rs-renderer",
+ "resvg",
+ "wiki-reader-core",
+]
+
+[[package]]
+name = "wiki-reader-render"
+version = "0.1.4"
+dependencies = [
+ "insta",
  "mermaid-text",
  "pulldown-cmark",
- "resvg",
  "tempfile",
  "unicode-width",
  "wiki-reader-core",
+ "wiki-reader-media",
 ]
 
 [[package]]

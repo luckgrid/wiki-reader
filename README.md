@@ -18,6 +18,7 @@ A terminal wiki reader for markdown collections. It browses like a documentation
 │                        ││                                                    │
 │                        ││ Start at Architecture Overview, follow Token       │
 │                        ││ Projection, then return via back when history      │
+│                        ││ exists. Enter a picture for Tab carousel / a fit.  │
 │                        │├────────────┬─────────────┬─────────────────────────┤
 │                        ││ ‹ Overview │             │ Architecture Overview › │
 └────────────────────────┘└────────────┴─────────────┴─────────────────────────┘
@@ -29,7 +30,7 @@ A terminal wiki reader for markdown collections. It browses like a documentation
 
 Help (`?`), search (`/`) and options (`,` or `c`) are popups over the same layout. Click `?` / ⚙ at the full-width layout footer's bottom right, below both panes, for Help / Options; the header retains ◫ / ✕ for nav / quit.
 
-Nav rows show page titles by default (`nav.labels = "filename"` switches to filenames); folders always show the folder name. Press `?` in the app for every key.
+Nav rows show page titles by default (`nav.labels = "filename"` switches to filenames); folders always show the folder name. Press `?` in the app for every key. In the image / diagram viewer: `Tab` / `Shift+Tab` step through pictures on the page, `a` toggles fit / actual size, `v` cycles a diagram's image / text / source view.
 
 ## Why not an existing reader?
 
@@ -45,7 +46,7 @@ Other tools that shaped it, and what each contributed, are listed in [Prior art 
 
 ## Status
 
-Phase 2 is feature-complete on a dogfood hold (clock 2026-09-29 → ≈ 2026-10-13); Phase 3 alpha polish is active. See the [roadmap](wiki/roadmap/README.md) for what shipped and what's next, and the [dogfood log](wiki/roadmap/dogfood-log.md) for dated bites. Prereleases and binaries are on [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases).
+Phase 2 is feature-complete on a dogfood hold (clock 2026-09-29 → ≈ 2026-10-13). Phase 3 alpha polish is implemented on a branch for v0.1.5 (lite build, viewer sizing, carousel, diagram views); the phase stays active until review, the screenshot retake and installed-binary dogfood. See the [roadmap](wiki/roadmap/README.md) and the [dogfood log](wiki/roadmap/dogfood-log.md). Prereleases and binaries are on [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases).
 
 ## Install
 
@@ -53,6 +54,12 @@ From git (supported today):
 
 ```bash
 cargo install --locked --git https://github.com/luckgrid/wiki-reader wiki-reader
+```
+
+Lite build (no images, SVG or Mermaid pictures; diagrams stay text, source or a placeholder; smaller binary, faster build; see [ADR-0023](wiki/decisions/0023-lite-build-is-a-cargo-feature.md)). It is a cargo feature only; there is no `-lite` release download:
+
+```bash
+cargo install --locked --no-default-features --git https://github.com/luckgrid/wiki-reader wiki-reader
 ```
 
 Release binaries (macOS arm64 / x86_64, Linux x86_64) ship on `v*` tags under [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases). Download the matching `.tar.gz`, verify the checksum, and put `wiki-reader` on your `PATH`:
@@ -104,17 +111,14 @@ such as overlays and popups show text only.)
 ## Checks
 
 ```bash
-cargo fmt --check
-cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked
-cargo run --locked --quiet -p wiki-reader-tools --bin link-check
-rumdl fmt --check .
-rumdl check .
+./scripts/check.sh          # default and lite builds; `default` or `lite` runs one half
 ```
+
+That runs `cargo fmt --check`, clippy and tests for both feature sets, link-check, `rumdl` and the dependency-tree guards.
 
 ## Workspace
 
-Cargo workspace with `wiki-reader-core` (terminal-free), `wiki-reader-render`, and the `wiki-reader` TUI binary. Docs live in `wiki/`. See [guides/development.md](wiki/guides/development.md).
+Cargo workspace with `wiki-reader-core` (terminal-free), `wiki-reader-render`, `wiki-reader-media` (image decode and Mermaid/SVG rasterisation), and the `wiki-reader` TUI binary. Docs live in `wiki/`. See [guides/development.md](wiki/guides/development.md).
 
 ## License
 
