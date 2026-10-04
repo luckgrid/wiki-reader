@@ -125,6 +125,13 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 | 2026-10-03 | decision | #126 publication record merged as `731d43f`; main synced and installed binary reports 0.1.3. Phase 2 remains on fixes-only hold until the ≈ 2026-10-13 adoption verdict; no phase exit or release authorised by this housekeeping | P3-08 |
 | 2026-10-03 | decision | [P3-S2 herdr spike](spikes/p3-s2-herdr-integration.md): 0.9.0 popup launches with context cwd; operator confirmed real images, Help/Esc/Ctrl+Enter/q and no leftover fragments. Plain non-agent split metadata stored; operator confirmed title or token visible in the sidebar. Confirm feasibility for P3-09 popup and P3-10 ordinary-pane publishing; no metadata from popups (no pane ID). Overlay/split keys passed automation, graphics checks remain unverified. Scratch panes closed and global plugin unlinked; P4-05 theme-name following can use a config watcher without a plugin | P3-09, P3-10, P4-05 |
 
+## Next release (unreleased)
+
+| Date | Kind | Note | Task IDs |
+|------|------|------|----------|
+| 2026-10-03 | decision | #127 merged as `0182a96`; main synced. Begin herdr integration with the context-aware popup launcher, then ordinary-pane metadata. Intended release v0.1.4; no release or installed-binary upgrade yet. Phase 2 adoption clock unchanged | P3-09, P3-10 |
+| 2026-10-03 | fix | P3-09 implementation: optional root and `--herdr-context`, focused/workspace cwd parsing with silent invalid-context fallback, explicit serde_json dependency (no locked version changes), 80% popup manifest and bindable action using HERDR_BIN_PATH. Parser/root and manifest/action failure tests added; `scripts/check.sh` passed, including ADR-0006 guard. Shipping-plugin manual pass pending; not linked, released or installed | P3-09 |
+
 ## Related
 
 - [Phase 2](phase-2-mvp.md)

@@ -1,0 +1,19 @@
+id = "wiki-reader"
+name = "Wiki Reader"
+version = "0.1.0"
+min_herdr_version = "0.9.0"
+platforms = ["linux", "macos"]
+
+[[panes]]
+id = "reader"
+title = "Wiki Reader"
+placement = "popup"
+width = "80%"
+height = "80%"
+command = ["wiki-reader", "--herdr-context"]
+
+[[actions]]
+id = "open"
+title = "Open Wiki Reader"
+contexts = ["workspace"]
+command = ["sh", "-c", 'exec "$HERDR_BIN_PATH" plugin pane open --plugin wiki-reader --entrypoint reader']

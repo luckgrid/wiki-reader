@@ -1,10 +1,24 @@
-//! Reading herdr's own settings (read-only).
+//! Reading herdr's settings and plugin launch context (read-only).
 //!
 //! herdr does not tell child programs which theme it uses (no environment variable or socket
 //! call), but the choice is in its `config.toml`, so wiki-reader reads the theme name from there
 //! when its own `theme = "herdr"` is in effect.
 
 use std::path::{Path, PathBuf};
+
+/// Collection cwd from Herdr's plugin context: focused pane first, then workspace.
+///
+/// Missing, malformed or empty fields return `None`. This only parses the context;
+/// the launcher checks that the selected path is a directory before using it.
+#[must_use]
+pub fn parse_context_cwd(text: &str) -> Option<PathBuf> {
+    let context: serde_json::Value = serde_json::from_str(text).ok()?;
+    ["focused_pane_cwd", "workspace_cwd"]
+        .iter()
+        .filter_map(|key| context.get(*key)?.as_str())
+        .find(|cwd| !cwd.trim().is_empty())
+        .map(PathBuf::from)
+}
 
 /// herdr's config file: `$XDG_CONFIG_HOME/herdr/config.toml`, else `~/.config/herdr/config.toml`.
 #[must_use]
@@ -45,6 +59,44 @@ pub fn parse_theme_name(text: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn context_prefers_focused_pane_and_preserves_path() {
+        assert_eq!(
+            parse_context_cwd(
+                r#"{"focused_pane_cwd":"/a collection/with spaces", "workspace_cwd":"/workspace", "extra":true}"#
+            ),
+            Some(PathBuf::from("/a collection/with spaces"))
+        );
+    }
+
+    #[test]
+    fn context_falls_back_to_workspace() {
+        for focused in ["null", "42", "\"\"", "\"  \""] {
+            let text = format!(r#"{{"focused_pane_cwd":{focused},"workspace_cwd":"/workspace"}}"#);
+            assert_eq!(parse_context_cwd(&text), Some(PathBuf::from("/workspace")));
+        }
+        assert_eq!(
+            parse_context_cwd(r#"{"workspace_cwd":"/workspace"}"#),
+            Some(PathBuf::from("/workspace"))
+        );
+    }
+
+    #[test]
+    fn context_rejects_malformed_or_missing_paths() {
+        for text in [
+            "",
+            "not json",
+            "{",
+            "null",
+            "[]",
+            "{}",
+            r#"{"workspace_cwd":false}"#,
+            r#"{"workspace_cwd":" "}"#,
+        ] {
+            assert_eq!(parse_context_cwd(text), None, "{text}");
+        }
+    }
 
     #[test]
     fn reads_the_theme_name() {
