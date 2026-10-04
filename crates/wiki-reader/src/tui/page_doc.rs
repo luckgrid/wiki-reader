@@ -31,6 +31,15 @@ impl PageDoc {
         }
     }
 
+    /// Fenced code blocks; the raw view has none.
+    #[must_use]
+    pub fn code_blocks(&self) -> &[wiki_reader_render::DocCodeBlock] {
+        match self {
+            Self::Raw(_) => &[],
+            Self::Rendered(d) => d.code_blocks(),
+        }
+    }
+
     /// Mermaid size-measure requests from the latest render.
     #[must_use]
     pub fn diagram_requests(&self) -> &[wiki_reader_render::DiagramRequest] {

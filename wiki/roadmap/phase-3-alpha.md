@@ -3,7 +3,7 @@ id: WR-ROADMAP-P3
 title: Phase 3 — Alpha polish
 summary: Diagrams and images first, then themes, sticky headers, nav chrome, and early herdr niceties.
 status: active
-updated: 2026-10-03
+updated: 2026-10-04
 related: [phase-2-mvp, phase-4-beta, dogfood-log]
 nav_order: 3
 ---
@@ -86,6 +86,9 @@ Per batch: manual passes in Ghostty and herdr, plus iTerm2/tmux for media or fal
 | P3-21 | Image/diagram carousel | U7 | doing | Implemented 2026-10-03 (unreleased): `Tab` / `Shift+Tab` step (wrapping) through `RenderedDoc::media`, the P3-19 inventory, snapshotted into the viewer at open, so relayout while open cannot reorder it. `MediaOccurrence` gained `line` so `Enter` on a slot or the expand-diagram action finds its occurrence (ids are occurrence hashes, not content hashes, so duplicates stay distinct). Pictures that failed to load are entries showing why. Each item gets a fresh worker and starts at fit, zoom 100 %; arrows stay pan. Hint bar, Help (new display-only *Table and image viewers* section; generated keymap block regenerated) and ui-spec updated. Test: opens 1/9 on `fixtures/images`, Tab/Shift+Tab wrap, per-item sizing reset, a note entry |
 | P3-22 | Diagram state toggle | U7 | doing | Implemented 2026-10-03 (unreleased): `v` cycles image → text (`mermaid-text` art at the panel width) → source for the open diagram, per item, nothing persisted. States are computed per item: *image* needs a graphics protocol and a source, so terminals without one open on source and skip it. Lite has no image viewer (`image_viewer` is `media`-only, as before), so there is nothing to toggle there; `open_media` keeps the lite message. Hint bar and ui-spec updated. Gap: lite text/source diagram expansion is still unavailable (pre-existing from P3-19) |
 | P3-23 | Docs refresh once the UI settles | — | doing | Implemented 2026-10-03: README / ui-spec ASCII redrawn (carousel / fit callout); carousel keys in README prose, Help keymap and ui-spec. PNG retake of `assets/wiki-reader.png` and `wiki/assets/` copies is **operator-gated** (Screen Recording); `assets/README.md` records the gap. Exit decision waits on that retake plus the v0.1.5+ release dogfood |
+| P3-24 | Code blocks: truncate long fence lines with `…` instead of wrapping; open a fence in a scrollable code viewer | U6 | doing | dogfood 2026-10-04. Implemented on `feat/code-block-viewer` (unreleased): one display row per source line, `DocCodeBlock` keeps the full lines, `ExpandCode` block action before `CopyCode`, `CodeViewer` modal (`hjkl`, `0` / `$`, `y` copies the full source, Shift+wheel pans). Known limits in ui-spec: drag-select copies the visible `…`, `Tab` stops twice on a fence label. Awaiting operator review |
+| P3-25 | Toolbar icons share one size and gap | U2 / U8 | doing | dogfood 2026-10-04. Implemented on `feat/p3-25-toolbar-icons` (unreleased): header `◫ ✕` and footer `? ⚙` are three-cell buttons with no gap (`ICON_W` / `ICON_GAP` in `layout.rs`), hits cover the whole button; the breadcrumb and footer text lose two columns. Awaiting an operator check that `⚙` no longer looks oversized in Ghostty |
+| P3-26 | Frontmatter status enum | — | doing | dogfood 2026-10-04. Implemented on `feat/p3-26-status-enum` (unreleased): eight values (`draft`, `proposed`, `accepted`, `active`, `done`, `deferred`, `superseded`, `historical`) in `wiki-reader-core::DocStatus`, documented in `wiki/README.md`, coloured by `Theme::status_style`, rejected by `link-check` when unknown. Spikes are `done`, phase 4 is `proposed` (was `complete` / `accepted` / `planned`). Awaiting operator review |
 
 ## Related
 

@@ -23,8 +23,7 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, crumbs: &[Crumb], theme: &Theme, 
         return;
     }
 
-    // Trailer: " ◫ ✕" → 4 columns.
-    let icon_w: u16 = 4;
+    let icon_w = area.width.min(layout::icon_trail_w());
     let trail_w = area.width.saturating_sub(icon_w);
     let trail = truncate_crumbs(crumbs, usize::from(trail_w));
 
@@ -81,21 +80,11 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, crumbs: &[Crumb], theme: &Theme, 
         }
     }
 
-    // Glyph columns within padded area (right-aligned): ◫ ✕
-    for (offset, hit) in [(3, Hit::NavToggle), (1, Hit::Quit)] {
-        if area.width >= offset {
-            hits.push(
-                Rect {
-                    x: area.right() - offset,
-                    y: area.y,
-                    width: 1,
-                    height: 1,
-                },
-                hit,
-            );
-        }
-    }
-
+    let glyphs = if area.width >= layout::icon_trail_w() {
+        [("◫", Hit::NavToggle), ("✕", Hit::Quit)].as_slice()
+    } else {
+        [("✕", Hit::Quit)].as_slice()
+    };
     frame.render_widget(
         Paragraph::new(Line::from(spans)),
         Rect {
@@ -104,16 +93,18 @@ pub fn draw(frame: &mut Frame<'_>, area: Rect, crumbs: &[Crumb], theme: &Theme, 
         },
     );
     // Render independently: no breadcrumb can push controls off-screen.
-    let icons = Rect {
-        x: area.x.saturating_add(trail_w),
-        width: area.width.min(icon_w),
-        ..area
-    };
-    let controls: String = " ◫ ✕"
-        .chars()
-        .skip(usize::from(icon_w - icons.width))
-        .collect();
-    frame.render_widget(Paragraph::new(controls).style(theme.accent()), icons);
+    for (rect, (glyph, hit)) in layout::icon_button_rects(area)
+        .into_iter()
+        .zip(glyphs.iter().cloned())
+    {
+        hits.push(rect, hit);
+        let shown = if rect.width >= layout::ICON_W {
+            layout::icon_button_label(glyph)
+        } else {
+            glyph.to_owned()
+        };
+        frame.render_widget(Paragraph::new(shown).style(theme.accent()), rect);
+    }
 }
 
 /// Keep root and current; drop middle crumbs with `…` when over width.
@@ -132,6 +123,7 @@ fn truncate_crumbs(crumbs: &[Crumb], max_cols: usize) -> Vec<Crumb> {
     if crumbs.len() <= 2 {
         return crumbs.to_vec();
     }
+    // Root … current
     let mut out = vec![crumbs[0].clone()];
     out.push(Crumb {
         label: "…".into(),
@@ -139,4 +131,43 @@ fn truncate_crumbs(crumbs: &[Crumb], max_cols: usize) -> Vec<Crumb> {
     });
     out.push(crumbs[crumbs.len() - 1].clone());
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    use super::*;
+
+    #[test]
+    fn long_breadcrumbs_never_cover_the_icon_buttons() {
+        let crumbs: Vec<Crumb> = [
+            "Project Wiki",
+            "architecture",
+            "design-system",
+            "Token Projection",
+        ]
+        .iter()
+        .map(|label| Crumb {
+            label: (*label).to_owned(),
+            target: None,
+        })
+        .collect();
+        for width in [40u16, 60, 80, 120] {
+            let mut hits = HitMap::default();
+            let mut term = Terminal::new(TestBackend::new(width, 1)).unwrap();
+            term.draw(|f| draw(f, f.area(), &crumbs, &Theme::default(), &mut hits))
+                .unwrap();
+            let buf = term.backend().buffer();
+            let row = (0..width).map(|x| buf[(x, 0)].symbol()).collect::<String>();
+            let trail_start = width - 1 - layout::icon_trail_w();
+            assert_eq!(
+                buf[(width - 1 - 2, 0)].symbol(),
+                "✕",
+                "✕ centred in the right button at {width}: {row:?}"
+            );
+            assert_eq!(buf[(trail_start + 1, 0)].symbol(), "◫", "{row:?}");
+        }
+    }
 }

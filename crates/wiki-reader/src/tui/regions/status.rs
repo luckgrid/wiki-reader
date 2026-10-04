@@ -73,22 +73,28 @@ pub fn draw(
         return;
     }
     // Reserve controls before status/message layout, matching header padding.
-    let icon_w = area.width.min(4);
+    let trail = layout::icon_trail_w();
+    let icon_w = area.width.min(trail);
     let text_area = Rect {
         width: area.width - icon_w,
         ..area
     };
-    let icons = Rect {
-        x: text_area.right(),
-        width: icon_w,
-        ..area
+    let glyphs = if area.width >= trail {
+        [("?", Hit::OpenHelp), ("⚙", Hit::OpenOptions)].as_slice()
+    } else {
+        [("⚙", Hit::OpenOptions)].as_slice()
     };
-    let controls: String = " ? ⚙".chars().skip(usize::from(4 - icon_w)).collect();
-    frame.render_widget(Paragraph::new(controls).style(theme.accent()), icons);
-    for (offset, hit) in [(3, Hit::OpenHelp), (1, Hit::OpenOptions)] {
-        if area.width >= offset {
-            hits.push(Rect::new(area.right() - offset, area.y, 1, 1), hit);
-        }
+    for (rect, (glyph, hit)) in layout::icon_button_rects(area)
+        .into_iter()
+        .zip(glyphs.iter().cloned())
+    {
+        hits.push(rect, hit);
+        let shown = if rect.width >= layout::ICON_W {
+            layout::icon_button_label(glyph)
+        } else {
+            glyph.to_owned()
+        };
+        frame.render_widget(Paragraph::new(shown).style(theme.accent()), rect);
     }
     let reading = if model.minutes == 0 && model.words > 0 {
         "<1m".to_owned()
@@ -213,20 +219,22 @@ mod tests {
             let area = layout::chrome_pad(Rect::new(0, 0, width, 1));
             for (rect, hit) in hits.entries() {
                 assert!(rect.x >= area.x && rect.right() <= area.right());
+                assert_eq!(rect.width, layout::ICON_W.min(area.width));
                 let glyph = if *hit == Hit::OpenHelp { "?" } else { "⚙" };
-                assert_eq!(
-                    terminal.backend().buffer()[(rect.x, rect.y)].symbol(),
-                    glyph
+                let row = (rect.x..rect.right())
+                    .map(|x| terminal.backend().buffer()[(x, rect.y)].symbol())
+                    .collect::<String>();
+                assert!(
+                    row.contains(glyph),
+                    "button {hit:?} at width {width}: {row:?}"
                 );
             }
-            assert_eq!(
-                hits.entries().len(),
-                if area.width >= 3 {
-                    2
-                } else {
-                    usize::from(area.width > 0)
-                }
-            );
+            let expect = if area.width >= layout::icon_trail_w() {
+                2
+            } else {
+                usize::from(area.width > 0)
+            };
+            assert_eq!(hits.entries().len(), expect);
             hits.clear();
             terminal
                 .draw(|frame| draw(frame, Rect::new(0, 0, width, 0), &model, &theme, &mut hits))

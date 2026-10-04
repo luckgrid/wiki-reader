@@ -55,6 +55,7 @@ This has **bold**, *italic*, ~~strike~~, `inline code`, and a [working link](arc
 ```rust
 fn main() {
     println!("hello");
+    let long = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 }
 ```
 

@@ -16,7 +16,7 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 
 <!-- ui-diagram:start -->
 ```text
- Worked Example Wiki                                                        ◫ ✕
+ Worked Example Wiki                                                      ◫  ✕ 
 ┌────────────────────────┐┌─────────────┬─────────────┬────────────────────────┐
 │ / Search…              ││ README.md × │ tokens.md × │                        │
 ├────────────────────────┤├─────────────┴─────────────┴────────────────────────┤
@@ -34,7 +34,7 @@ Layout, side nav, header/footers, focus and cursor model, keyboard and mouse beh
 │                        │├────────────┬─────────────┬─────────────────────────┤
 │                        ││ ‹ Overview │             │ Architecture Overview › │
 └────────────────────────┘└────────────┴─────────────┴─────────────────────────┘
-  VIEW  · README.md · L1:C1 9% · 2026-09-28 · draft · 29w · 1m              ? ⚙
+  VIEW  · README.md · L1:C1 9% · 2026-09-28 · draft · 29w · 1m            ?  ⚙ 
 ```
 <!-- ui-diagram:end -->
 
@@ -70,7 +70,7 @@ The ASCII diagram documents the bar layout. Screenshot PNGs are refreshed in P3-
 ## Header (full width, 1 padded row)
 
 - **Left:** the root entry page's title, then the breadcrumb trail through side-nav groups to the current page. Example: `Project Wiki › architecture › design-system › Token Projection`. Segments follow the **side nav hierarchy** (groups), not raw directories, so folded folders ([content model](content-model.md)) don't produce extra crumbs. Each segment is clickable and opens that group's landing page. The trail drops middle segments with `…` when narrow, preferring the root and current page. Header icons reserve their right-hand columns first; any labels that still exceed the remaining space are ellipsized, and breadcrumb hit areas stop before the controls.
-- **Right:** icon buttons. `◫` toggles the side nav. `✕` quits (saves session; same as `q`). There is no syntax/formatted toggle: Rendered is always the formatted view and `r` shows the markdown syntax ([ADR-0014](../decisions/0014-remove-formatted-view-toggle.md)). Help (`?`) and Options (⚙) live in the layout footer below both panes.
+- **Right:** icon buttons. Each is a three-cell button with the glyph centred and no gap between buttons (six columns reserved, two more than the old bare glyphs, so the breadcrumb and the footer status text lose two columns at every width); hits cover the full button. `◫` toggles the side nav. `✕` quits (saves session; same as `q`). There is no syntax/formatted toggle: Rendered is always the formatted view and `r` shows the markdown syntax ([ADR-0014](../decisions/0014-remove-formatted-view-toggle.md)). Help (`?`) and Options (⚙) live in the layout footer below both panes.
 - Future: optional back/forward buttons (`‹ ›`). Back/forward are keyboard-only in v1.
 
 ## Side nav
@@ -120,10 +120,10 @@ Rendered by default (the formatted view: no `#`, fences or backticks); `r` toggl
 **Focusable items ("actions")** are what `Tab` cycles through, in document order:
 
 1. Links (internal, anchor, external, broken)
-2. Block actions: expand/collapse frontmatter (`▸`/`▾`, key-reachable and clickable from the first frame), copy a code block (OSC 52)
+2. Block actions: expand/collapse frontmatter (`▸`/`▾`, key-reachable and clickable from the first frame), expand then copy a code block (OSC 52; two Tab stops on the label), expand a table or diagram
 3. The View footer's ‹ Prev / Next › buttons (last in the cycle)
 
-After the last item, `Tab` wraps to the first. The focused item renders inverted, and the status bar shows its target or action (`→ decisions/0003.md#context`, `↗ https://…`, `? not found: foo.md`, `copy code`).
+After the last item, `Tab` wraps to the first. The focused item renders inverted, and the status bar shows its target or action (`→ decisions/0003.md#context`, `↗ https://…`, `? not found: foo.md`, `expand code (Enter)`, `copy code`).
 
 **Links:** underlined; broken links in the error color with `?`; external links with `↗`. `Enter` or left-click follows. Middle-click, Shift/Ctrl+click, or `t` opens in a new tab (`Ctrl+Enter` on a focused link does too where the kitty protocol reports it). External links ask `open https://… ? [y/N]` in the status bar, then use the system opener. Hovering (if the terminal reports motion) highlights the link and shows its target in the status bar.
 
@@ -137,9 +137,11 @@ Connected `‹ Prev title` and `Next title ›` controls sit in their own cells 
 
 ## Modal viewers
 
-Table and image/diagram viewers share one modal shell (`Esc` dismisses, wheel scrolls, click outside dismisses, drawn after a `Clear` so they sit above Kitty pictures). Entry points are block actions in the View Tab cycle plus `Enter` on the focused table or image slot. The panel is **content-sized**: it wraps its content (at least 40 body columns), is centred, and never exceeds the full-size panel (the area inset by two columns and one row; tiny terminals get all of it). A wide table or picture therefore keeps today's width. The modal's keys are listed in Help under *Table and image viewers*, and the hint bar along the panel's bottom edge shows the ones that apply.
+Table, image/diagram and code viewers share one modal shell (`Esc` dismisses, wheel scrolls, Shift+wheel pans horizontally where the viewer supports it, click outside dismisses, drawn after a `Clear` so they sit above Kitty pictures). Entry points are block actions in the View Tab cycle plus `Enter` on the focused table, image slot or code block. The panel is **content-sized**: it wraps its content (at least 40 body columns), is centred, and never exceeds the full-size panel (the area inset by two columns and one row; tiny terminals get all of it). A wide table, picture or code line therefore keeps today's width. The modal's keys are listed in Help under *Table, image and code viewers*, and the hint bar along the panel's bottom edge shows the ones that apply.
 
 **Table viewer.** Opens from the expand-table block action or `Enter` on any row of a table. Keys: arrows / `hjkl` move the cell cursor; `PgUp` / `PgDn` page; `g` / `G` top / bottom; `/` filter rows (`Enter` keep, `Esc` clear); `s` cycles sort asc / desc / off on the current column; `y` copies the cell; `Y` copies the row (tab-separated). The header row and first column stay fixed while the body scrolls. Cells keep their inline styling (bold, link colour, code) and the header stays bold; filter, sort and copy use the plain text. The panel is as wide as all columns and as tall as all rows, up to the cap.
+
+**Code viewer.** Opens from the expand-code block action or `Enter` on any row of a fenced code block. Inline fences paint one display row per source line and truncate with `…` instead of wrapping. Keys: arrows / `hjkl` scroll; `PgUp` / `PgDn` page; `g` / `G` top / bottom; `Home` / `End` / `0` / `$` jump horizontally; `y` copies the full source (OSC 52). The panel is as wide as the longest line (plus a gutter) and as tall as the line count, up to the cap. Known limits: dragging a selection across a truncated row copies the visible text including the `…` (use the block's copy action or `y` in the viewer for the full source); `Tab` stops twice on a fence label (expand, then copy), as it does on a diagram; tabs inside code count as one column.
 
 **Image and diagram viewer.** Opens from the expand-diagram block action (`Enter` on the Mermaid fence line) or `Enter` on any row of a picture slot. Keys: arrows / `hjkl` pan by an eighth of the window; `PgUp` / `PgDn` and `g` / `G` as in the table viewer; `+` / `-` zoom (100–800 % of the base size); `0` fits the window and resets zoom; `a` toggles **fit** and **actual size**; `Tab` / `Shift+Tab` step to the next / previous image or diagram of the page, wrapping; `v` cycles a diagram's views. The wheel pans vertically. SVG and Mermaid re-rasterise at the zoomed size; raster files scale from the decoded bitmap.
 
@@ -148,9 +150,13 @@ Table and image/diagram viewers share one modal shell (`Esc` dismisses, wheel sc
 - **Diagram views.** `v` cycles *image* → *text* (terminal text art at the panel width) → *source*, for the open diagram only; nothing is saved. *Image* is skipped when the terminal has no graphics protocol (the viewer then opens on *source*, as the inline tier did). The lite build has no image viewer at all (`image viewer is not in this lite build`).
 - **Hint bar.** `←↑↓→ pan  +/- zoom  0 fit  a actual  g/G top/end  Tab/⇧Tab item  v image/text/source  Esc close`; `Tab/⇧Tab` shows only with more than one item, `v` only with more than one view, and the text views show `↑↓ scroll … (source view)`.
 
+**Known limits (code).** Drag-selecting a truncated row copies the visible text including `…`; the block's copy action and the viewer's `y` give the full source. Tab visits two stops on a code label (expand, then copy), the same pattern as diagrams.
+
 ## Layout footer / status bar (full width, 1 row)
 
-Like markdown-reader's: focused region as a highlighted pill (`NAV`/`VIEW`, or `SEARCH`/`HELP` while a popup is open; peach, like the tabs and footer links), relative path, cursor line:column (`L12:C5`) and scroll %, updated date and the page's frontmatter `status` (colored by value), word count, reading time, and a **message area** for link targets, notices ("not found"), confirmations, and search match `n/m`. Help `?` and Options ⚙ are right-aligned on this row, one column inset from the terminal edge, with `?` two columns left of ⚙. Reserve their four columns before laying out status fields or messages so text cannot overwrite them. Lower-priority items drop first when narrow. On tiny widths draw and register only visible icon glyphs; a hidden footer has no hits.
+Like markdown-reader's: focused region as a highlighted pill (`NAV`/`VIEW`, or `SEARCH`/`HELP` while a popup is open; peach, like the tabs and footer links), relative path, cursor line:column (`L12:C5`) and scroll %, updated date and the page's frontmatter `status` (colored by value), word count, reading time, and a **message area** for link targets, notices ("not found"), confirmations, and search match `n/m`. Help `?` and Options ⚙ are right-aligned on this row, one column inset from the terminal edge. Each is a three-cell button with the glyph centred and no gap between buttons (six columns reserved); hits cover the full button. Reserve those six columns before laying out status fields or messages so text cannot overwrite them. Lower-priority items drop first when narrow. On tiny widths draw and register only visible icon glyphs; a hidden footer has no hits.
+
+Frontmatter `status` colours (`tui/theme.rs`): `draft` → `status_warn` (orange); `proposed` → `status_plan` (blue); `accepted` / `active` / `done` → `status_ok` (green); `deferred` / `superseded` / `historical` → muted. Unknown values keep the plain text colour so user collections can keep a private vocabulary.
 
 ## Focus & cursor model
 
@@ -255,14 +261,15 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 | `Home / End` | Jump to first / last result |
 | `PgUp / PgDn` | Page results |
 
-### Table and image viewers
+### Table, image and code viewers
 
 | Key | Action |
 |-----|--------|
-| `↑↓←→ / hjkl` | Move the table cell cursor, or pan a picture |
+| `↑↓←→ / hjkl` | Move the table cell cursor, pan a picture, or scroll code |
 | `/` | Table: filter rows |
 | `s` | Table: sort by the current column |
-| `y / Y` | Table: copy cell / row |
+| `y / Y` | Table: copy cell / row; code: copy the block (y) |
+| `Home / End / 0 / $` | Code: jump to the start / end of the line |
 | `+ / -` | Picture: zoom in / out |
 | `0` | Picture: fit the window, reset zoom |
 | `a` | Picture: toggle fit / actual size |
@@ -316,7 +323,7 @@ Click to focus a pane; click items, links, breadcrumbs, prev/next, header icons,
 
 ## Theming
 
-Semantic tokens only (`tui/theme.rs`): `surface`, `surface_muted`, `border`, `border_focus`, `text`, `text_muted`, `text_secondary`, `accent`, `cursor_line`, `peach` / `on_peach` (status pill, focused block actions, popup border; a fill, so never used as text), `border_focus` (also the selected tab and footer link label colour, because it is readable as text on every preset), `link`, `link_broken`, `link_external`, `link_unsupported`, `code_bg` / `code_fg`, `quote_bar` / `quote_text`, `heading[1..6]`, `alert[…]`, `status_*`, plus two non-colour entries per preset: the syntect theme for the raw view and the Mermaid diagram palette.
+Semantic tokens only (`tui/theme.rs`): `surface`, `surface_muted`, `border`, `border_focus`, `text`, `text_muted`, `text_secondary`, `accent`, `cursor_line`, `peach` / `on_peach` (status pill, focused block actions, popup border; a fill, so never used as text), `border_focus` (also the selected tab and footer link label colour, because it is readable as text on every preset), `link`, `link_broken`, `link_external`, `link_unsupported`, `code_bg` / `code_fg`, `quote_bar` / `quote_text`, `heading[1..6]`, `alert[…]`, `status_ok` / `status_warn` / `status_plan` (frontmatter status; see the status-bar section above), plus two non-colour entries per preset: the syntect theme for the raw view and the Mermaid diagram palette.
 
 The `theme` config key picks a built-in preset:
 

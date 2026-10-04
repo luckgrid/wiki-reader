@@ -12,7 +12,7 @@ Dated dogfood bites live in the [dogfood log](dogfood-log.md).
 | Phase 1 | done | Reader shell (~1–2 weeks) | [phase-1-reader-shell.md](phase-1-reader-shell.md) |
 | Phase 2 | feature complete; dogfood hold to ≈ 2026-10-13 | Wiki navigation MVP (~2 weeks) | Side nav, breadcrumbs, links, back/forward, prev/next, backlinks, heading jumps, tabs, search, help, column cursor + drag-select, soft-wrapped raw view, `$EDITOR`, config, session restore. Fixes only during the hold — [phase-2-mvp.md](phase-2-mvp.md) |
 | Phase 3 | active | Alpha polish | Themes, nav position, options window, table and image/diagram viewers, Mermaid image tier, chrome pass (v0.1.3), herdr launcher and page publishing (v0.1.4). Lite build, viewer sizing, carousel and diagram toggle are implemented on a branch for v0.1.5 — [phase-3-alpha.md](phase-3-alpha.md) |
-| Phase 4 | planned | Beta: widget sidebar and agent surface | [phase-4-beta.md](phase-4-beta.md) |
+| Phase 4 | proposed | Beta: widget sidebar and agent surface | [phase-4-beta.md](phase-4-beta.md) |
 
 ## Phase 0 (done)
 

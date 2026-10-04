@@ -353,6 +353,16 @@ impl App {
             self.open_table(i);
             return;
         }
+        // Enter anywhere in a code block opens it.
+        if let Some(i) = self
+            .doc
+            .code_blocks()
+            .iter()
+            .position(|c| (c.line..c.line + c.height).contains(&line))
+        {
+            self.open_code(i);
+            return;
+        }
         // Enter on a picture's rows opens it full size.
         if let Some(slot) = self
             .doc
@@ -383,6 +393,11 @@ impl App {
                 match self.clipboard.copy(&action.payload) {
                     Ok(()) => self.message = "sent to clipboard (OSC 52)".into(),
                     Err(err) => self.message = format!("copy failed: {err}"),
+                }
+            }
+            wiki_reader_render::BlockActionKind::ExpandCode => {
+                if let Ok(i) = action.payload.parse() {
+                    self.open_code(i);
                 }
             }
             wiki_reader_render::BlockActionKind::ExpandTable => {

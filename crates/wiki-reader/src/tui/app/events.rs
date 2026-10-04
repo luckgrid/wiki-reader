@@ -364,7 +364,14 @@ pub(crate) fn apply_mouse(
             let up = matches!(mouse.kind, MouseEventKind::ScrollUp);
             if app.modal.is_some() {
                 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-                let code = if up { KeyCode::Up } else { KeyCode::Down };
+                // Shift+wheel pans horizontally in modal viewers that support it.
+                let code = if mouse.modifiers.contains(KeyModifiers::SHIFT) {
+                    if up { KeyCode::Left } else { KeyCode::Right }
+                } else if up {
+                    KeyCode::Up
+                } else {
+                    KeyCode::Down
+                };
                 app.update(Action::ModalKey(KeyEvent::new(code, KeyModifiers::NONE)));
                 return None;
             }

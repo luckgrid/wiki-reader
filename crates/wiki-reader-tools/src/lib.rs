@@ -148,6 +148,11 @@ fn check_doc(
                 errors.push(format!("{rel}: missing frontmatter `{key}`"));
             }
         }
+        if let Some(status) = fm.status.as_deref()
+            && wiki_reader_core::DocStatus::parse(status).is_none()
+        {
+            errors.push(format!("{rel}: unknown status '{status}'"));
+        }
     }
 
     for (line, reference) in stale_docs_refs(&doc.page) {
@@ -467,6 +472,15 @@ mod tests {
                 "wiki/a.md: missing frontmatter `status`"
             ]
         );
+    }
+
+    #[test]
+    fn unknown_status_is_rejected_for_wiki_pages() {
+        let dir = tree(&[(
+            "wiki/a.md",
+            "---\nid: x\ntitle: X\nsummary: s\nstatus: complete\n---\n# A\n",
+        )]);
+        assert_eq!(errors(&dir), ["wiki/a.md: unknown status 'complete'"]);
     }
 
     #[test]

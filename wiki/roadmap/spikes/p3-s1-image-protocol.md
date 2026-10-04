@@ -2,7 +2,7 @@
 id: WR-SPIKE-P3-S1
 title: P3-S1 terminal image protocol spike
 summary: Image protocols and Mermaid rendering are viable with an allowlisted terminal probe, explicit iTerm2 selection, and per-block text fallback.
-status: complete
+status: done
 updated: 2026-10-02
 related: [phase-3-alpha, 0004-diagram-rendering]
 ---

@@ -1046,6 +1046,16 @@ impl App {
         self.message.clear();
     }
 
+    /// Open code block `i` of the current page in the modal viewer.
+    pub(crate) fn open_code(&mut self, i: usize) {
+        let Some(code) = self.doc.code_blocks().get(i).cloned() else {
+            return;
+        };
+        self.modal = Some(Box::new(super::code_viewer::CodeViewer::new(code)));
+        self.input_mode = InputMode::Modal;
+        self.message.clear();
+    }
+
     /// Open the picture or diagram whose block starts at display `line` in the modal viewer,
     /// with every picture of the page in the Tab carousel (source view on the text tier).
     #[cfg(feature = "media")]

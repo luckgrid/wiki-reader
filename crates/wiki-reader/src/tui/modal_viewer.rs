@@ -28,7 +28,7 @@ pub enum ModalEvent {
     Copy(String),
 }
 
-/// Body of a modal viewer: the table viewer (P3-14) and the image / diagram viewer (P3-15).
+/// Body of a modal viewer: table, image / diagram, or code.
 ///
 /// Pictures are drawn from [`Self::draw`]: the shell calls it after the panel's `Clear`, so a
 /// content-owned image lands over the cleared cells (image → `Clear` → popup order holds).

@@ -55,11 +55,11 @@ pub struct Theme {
     pub heading: [Color; 6],
     /// Alert colours by kind id (0 unused, 1=NOTE …).
     pub alert: [Color; 9],
-    /// Frontmatter status: accepted / active / done (was heading[2]).
+    /// Frontmatter status: accepted / active / done.
     pub status_ok: Color,
-    /// Frontmatter status: draft / proposed / wip (was heading[1]).
+    /// Frontmatter status: draft.
     pub status_warn: Color,
-    /// Frontmatter status: planned / todo / open (was heading[3]).
+    /// Frontmatter status: proposed.
     pub status_plan: Color,
     /// Syntect theme for the raw view (a name in `ThemeSet::load_defaults`).
     pub syntax: &'static str,
@@ -698,14 +698,19 @@ impl Theme {
     }
 
     /// Colour a frontmatter `status:` value by meaning.
+    ///
+    /// Unknown values (and user-collection vocabularies) keep the plain text colour.
     #[must_use]
     pub fn status_style(&self, status: &str) -> Style {
-        let fg = match status.to_ascii_lowercase().as_str() {
-            "accepted" | "active" | "done" | "stable" | "approved" | "published" => self.status_ok,
-            "draft" | "proposed" | "review" | "doing" | "wip" => self.status_warn,
-            "planned" | "todo" | "open" => self.status_plan,
-            "deferred" | "superseded" | "deprecated" | "rejected" | "archived" => self.text_muted,
-            _ => self.text,
+        use wiki_reader_core::DocStatus;
+        let fg = match DocStatus::parse(status) {
+            Some(DocStatus::Accepted | DocStatus::Active | DocStatus::Done) => self.status_ok,
+            Some(DocStatus::Draft) => self.status_warn,
+            Some(DocStatus::Proposed) => self.status_plan,
+            Some(DocStatus::Deferred | DocStatus::Superseded | DocStatus::Historical) => {
+                self.text_muted
+            }
+            None => self.text,
         };
         Style::default().fg(fg)
     }
@@ -759,6 +764,25 @@ mod tests {
         assert_eq!(note.fg, Some(t.alert[1]));
         let warn = t.style_kind(StyleKind::Alert(4));
         assert_eq!(warn.fg, Some(t.alert[4]));
+    }
+
+    #[test]
+    fn status_style_colours_every_canonical_value_and_falls_back() {
+        use wiki_reader_core::DocStatus;
+        let t = Theme::default();
+        for s in DocStatus::ALL {
+            let fg = t.status_style(s.as_str()).fg;
+            let expect = match s {
+                DocStatus::Draft => t.status_warn,
+                DocStatus::Proposed => t.status_plan,
+                DocStatus::Accepted | DocStatus::Active | DocStatus::Done => t.status_ok,
+                DocStatus::Deferred | DocStatus::Superseded | DocStatus::Historical => t.text_muted,
+            };
+            assert_eq!(fg, Some(expect), "{}", s.as_str());
+        }
+        assert_eq!(t.status_style("planned").fg, Some(t.text));
+        assert_eq!(t.status_style("complete").fg, Some(t.text));
+        assert_eq!(t.status_style("custom-vocab").fg, Some(t.text));
     }
 
     #[test]

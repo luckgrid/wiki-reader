@@ -2,7 +2,7 @@
 source: crates/wiki-reader/src/tui/app/tests.rs
 expression: out
 ---
- Worked Example Wiki                                    ◫ ✕ 
+ Worked Example Wiki                                  ◫  ✕  
 ┌─────────────┬────────────────────────────────────────────┐
 │ README.md × │                                            │
 ├─────────────┴────────────────────────────────────────────┤
@@ -25,4 +25,4 @@ expression: out
 ├────────────────────────────────┬─────────────────────────┤
 │                                │ Architecture Overview › │
 └────────────────────────────────┴─────────────────────────┘
-  VIEW  · README.md · L1:C1 10% · 2026-09-28 · draft    ? ⚙
+  VIEW  · README.md · L1:C1 10% · 2026-09-28 · draft  ?  ⚙

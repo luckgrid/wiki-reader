@@ -2,7 +2,7 @@
 source: crates/wiki-reader/src/tui/app/tests.rs
 expression: out
 ---
- Worked Example Wiki › … › Token Projection             ◫ ✕ 
+ Worked Example Wiki › … › Token Projection           ◫  ✕  
 ┌────────────────────────────┐─────────────────────────────┐
 │ / Search…                  │                             │
 ├────────────────────────────┤─────────────────────────────┤
@@ -25,4 +25,4 @@ expression: out
 │                            │─────────────┬───────────────┤
 │                            │             │ Workflow OS › │
 └────────────────────────────┘─────────────┴───────────────┘
-  NAV  · architecture/design-system/tokens.md           ? ⚙
+  NAV  · architecture/design-system/tokens.md         ?  ⚙

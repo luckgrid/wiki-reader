@@ -65,6 +65,61 @@ pub fn chrome_pad(area: Rect) -> Rect {
     }
 }
 
+/// Width of one right-hand chrome icon button (glyph centred).
+pub const ICON_W: u16 = 3;
+/// Gap between the two right-hand chrome icon buttons.
+pub const ICON_GAP: u16 = 0;
+
+/// Columns reserved for a pair of icon buttons.
+#[must_use]
+pub const fn icon_trail_w() -> u16 {
+    2 * ICON_W + ICON_GAP
+}
+
+/// Right-aligned button rects for the two chrome icons (left glyph, then right).
+///
+/// Each rect is [`ICON_W`] wide when it fits. When the area is too narrow, keep the
+/// right-hand button (quit / options) and drop the left one.
+#[must_use]
+pub fn icon_button_rects(area: Rect) -> Vec<Rect> {
+    if area.width == 0 {
+        return Vec::new();
+    }
+    let right_w = ICON_W.min(area.width);
+    let right = Rect {
+        x: area.right().saturating_sub(right_w),
+        y: area.y,
+        width: right_w,
+        height: 1,
+    };
+    let mut out = Vec::new();
+    if area.width >= icon_trail_w() {
+        out.push(Rect {
+            x: right.x.saturating_sub(ICON_GAP + ICON_W),
+            y: area.y,
+            width: ICON_W,
+            height: 1,
+        });
+    }
+    out.push(right);
+    out
+}
+
+/// Centre `glyph` in an [`ICON_W`]-wide button label (display columns).
+#[must_use]
+pub fn icon_button_label(glyph: &str) -> String {
+    let gw = u16::try_from(ratatui::text::Span::raw(glyph).width()).unwrap_or(1);
+    let pad = ICON_W.saturating_sub(gw.max(1));
+    let left = pad / 2;
+    let right = pad - left;
+    format!(
+        "{}{}{}",
+        " ".repeat(usize::from(left)),
+        glyph,
+        " ".repeat(usize::from(right))
+    )
+}
+
 /// Wrap width for viewer text: borders + left pad, capped at 100.
 #[must_use]
 pub fn viewer_text_width(viewer: Rect) -> u16 {
@@ -225,6 +280,35 @@ mod tests {
         assert_eq!(p.x, 1);
         assert_eq!(p.width, 78);
         assert_eq!(p.y, 0);
+    }
+
+    #[test]
+    fn icon_buttons_are_three_cells_with_no_gap() {
+        assert_eq!(icon_trail_w(), 6);
+        assert_eq!(icon_button_label("◫"), " ◫ ");
+        assert_eq!(icon_button_label("⚙"), " ⚙ ");
+        let area = Rect {
+            x: 1,
+            y: 0,
+            width: 78,
+            height: 1,
+        };
+        let rects = icon_button_rects(area);
+        assert_eq!(rects.len(), 2);
+        assert_eq!(rects[0].width, ICON_W);
+        assert_eq!(rects[1].width, ICON_W);
+        assert_eq!(rects[1].x, area.right() - ICON_W);
+        assert_eq!(rects[0].x, rects[1].x - ICON_W - ICON_GAP);
+        let tiny = Rect {
+            x: 0,
+            y: 0,
+            width: 3,
+            height: 1,
+        };
+        let one = icon_button_rects(tiny);
+        assert_eq!(one.len(), 1);
+        assert_eq!(one[0].x, 0);
+        assert_eq!(one[0].width, 3);
     }
 
     #[test]

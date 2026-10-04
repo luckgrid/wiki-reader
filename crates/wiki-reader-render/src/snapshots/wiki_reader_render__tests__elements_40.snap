@@ -71,6 +71,7 @@ Code
 ── rust ──
 │ fn main() {
 │     println!("hello");
+│     let long = "abcdefghijklmnopqrstu…
 │ }
 
 ── python ──

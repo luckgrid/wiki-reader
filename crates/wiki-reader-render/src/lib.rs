@@ -15,8 +15,9 @@ pub use images::{
 };
 pub use link_span::{LinkClass, LinkId, LinkSpan};
 pub use render::{
-    BlockAction, BlockActionKind, DocCell, DocTable, MediaOccurrence, MediaOccurrenceKind,
-    RenderOpts, RenderedDoc, StyleKind, StyledLine, StyledSpan, render, render_with,
+    BlockAction, BlockActionKind, DocCell, DocCodeBlock, DocTable, MediaOccurrence,
+    MediaOccurrenceKind, RenderOpts, RenderedDoc, StyleKind, StyledLine, StyledSpan, render,
+    render_with,
 };
 pub use wiki_reader_media::{
     DiagramPalette, MIN_LEGIBLE_SCALE, fit_scale, is_legible, is_svg_path,
@@ -1636,18 +1637,28 @@ mod tests {
     }
 
     #[test]
-    fn code_block_registers_copy_payload() {
-        let doc = render_src("```rust\nfn main() {}\n```\n", 40);
-        let action = doc
-            .block_actions
-            .iter()
-            .find(|a| a.kind == BlockActionKind::CopyCode)
-            .expect("copy action");
-        assert!(
-            action.payload.contains("fn main"),
-            "payload={}",
-            action.payload
+    fn code_block_registers_expand_before_copy_and_truncates_long_lines() {
+        let long = "a".repeat(80);
+        let doc = render_src(&format!("```rust\n{long}\n```\n"), 40);
+        let kinds: Vec<_> = doc.block_actions.iter().map(|a| a.kind).collect();
+        assert_eq!(
+            kinds,
+            [BlockActionKind::ExpandCode, BlockActionKind::CopyCode]
         );
+        let copy = &doc.block_actions[1];
+        assert!(copy.payload.contains(&long), "payload keeps full source");
+        assert_eq!(doc.code_blocks.len(), 1);
+        assert_eq!(doc.code_blocks[0].lines.as_slice(), [long.as_str()]);
+        assert_eq!(doc.block_actions[0].payload, "0");
+        let body = doc
+            .lines
+            .iter()
+            .find(|l| l.starts_with('│'))
+            .expect("code body row");
+        assert!(body.ends_with('…'), "{body}");
+        assert!(body.width() <= 40, "{body}");
+        // Source map stays monotonic across the truncated fence.
+        assert!(doc.source_map.windows(2).all(|w| w[0] <= w[1]));
     }
 
     #[test]

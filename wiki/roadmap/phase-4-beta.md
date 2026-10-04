@@ -2,7 +2,7 @@
 id: WR-ROADMAP-P4
 title: Phase 4 — Beta (widget sidebar and agent surface)
 summary: Seeds for after alpha polish — right-hand widget slot, context engine, agent CLI, and provider/theme revisits.
-status: planned
+status: proposed
 updated: 2026-10-03
 related: [phase-3-alpha, dogfood-log]
 nav_order: 4

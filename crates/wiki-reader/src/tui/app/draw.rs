@@ -808,6 +808,7 @@ fn block_action_status(app: &App, target: &str) -> String {
             }
         }
         wiki_reader_render::BlockActionKind::CopyCode => "copy code".into(),
+        wiki_reader_render::BlockActionKind::ExpandCode => "expand code (Enter)".into(),
         wiki_reader_render::BlockActionKind::ExpandTable => "expand table (Enter)".into(),
         wiki_reader_render::BlockActionKind::ExpandDiagram => "expand diagram (Enter)".into(),
     }

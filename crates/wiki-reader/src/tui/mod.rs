@@ -5,6 +5,7 @@
 pub mod action;
 pub mod app;
 pub mod clipboard;
+pub mod code_viewer;
 pub mod editor;
 pub mod focus;
 pub mod help_ui;

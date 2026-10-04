@@ -630,6 +630,46 @@ fn text_tier_expand_diagram_shows_the_source() {
     assert!(app.modal.is_none());
 }
 
+#[test]
+fn failed_mermaid_modal_stays_short() {
+    use crate::tui::action::Action;
+    use ratatui::crossterm::event::KeyCode;
+
+    let mut app = graphics_app(&mermaid_fixture());
+    let key = wiki_reader_core::provider::PageKey {
+        collection_id: app.navigator.index().collection_id.clone(),
+        relative_path: PathBuf::from("malformed.md"),
+    };
+    app.update(Action::GoToPage(key));
+    let mut term = terminal(120, 40);
+    draw_to(&mut term, &mut app);
+    let crate::tui::page_doc::PageDoc::Rendered(doc) = &app.doc else {
+        panic!("rendered page");
+    };
+    let line = doc
+        .block_actions()
+        .iter()
+        .find(|a| a.kind == wiki_reader_render::BlockActionKind::ExpandDiagram)
+        .expect("a diagram action")
+        .line;
+    app.update(Action::FocusViewer);
+    app.focused_item = None;
+    app.cursor_line = line;
+    app.update(Action::ViewerActivate);
+    assert!(app.modal.is_some());
+    settle_modal(&mut term, &mut app);
+    assert!(any_text(&term, "cannot render:"), "error note");
+    assert!(any_text(&term, "not a diagram"), "source listed");
+    // Content-sized: the panel is a few rows, not the full 40-row terminal.
+    let want = app.modal.as_mut().unwrap().want((118, 37));
+    assert!(
+        want.1 <= 6,
+        "failed diagram wants a short panel, got {want:?}"
+    );
+    modal_press(&mut app, KeyCode::Esc);
+    assert!(app.modal.is_none());
+}
+
 /// The Kitty upload rides in the picture's first cell on its first render, and
 /// `ratatui-image` never sends it again. A picture first drawn while a popup covers that cell
 /// must therefore wait until the cell is visible, or it stays blank after the popup closes.

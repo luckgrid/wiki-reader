@@ -98,6 +98,12 @@ impl RenderedViewerDoc {
         &self.inner.tables
     }
 
+    /// Fenced code blocks, document order.
+    #[must_use]
+    pub fn code_blocks(&self) -> &[wiki_reader_render::DocCodeBlock] {
+        &self.inner.code_blocks
+    }
+
     /// Source line (1-based) for rendered cursor line (0-based).
     #[must_use]
     pub fn source_line_for_rendered(&self, rendered_line: u32) -> u32 {
@@ -240,6 +246,25 @@ mod tests {
             s
         };
         assert_eq!(lines, sorted, "block actions must be document-ordered");
+        let kinds: Vec<_> = doc
+            .block_actions()
+            .iter()
+            .filter(|a| {
+                matches!(
+                    a.kind,
+                    wiki_reader_render::BlockActionKind::ExpandCode
+                        | wiki_reader_render::BlockActionKind::CopyCode
+                )
+            })
+            .map(|a| a.kind)
+            .collect();
+        assert_eq!(
+            kinds,
+            [
+                wiki_reader_render::BlockActionKind::ExpandCode,
+                wiki_reader_render::BlockActionKind::CopyCode
+            ]
+        );
         assert!(
             doc.block_actions()
                 .iter()
