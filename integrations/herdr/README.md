@@ -21,6 +21,12 @@ Herdr 0.9.0's CLI help omits popup placement, but the manifest works on that
 version (see the [spike evidence](../../wiki/roadmap/spikes/p3-s2-herdr-integration.md)).
 Overlay and split graphics are not promised by this plugin.
 
+**Shipping acceptance is currently blocked:** the implementation retest on
+Herdr 0.9.0 passes collection selection and keys, but falls back to text because
+the popup supplies no cell metrics. Kitty is confirmed; ratatui-image drops that
+result without a measured font size. See the [retest evidence](../../wiki/roadmap/spikes/p3-s2-herdr-integration.md#p3-09-implementation-retest--2026-10-03).
+A longer probe timeout did not help.
+
 Herdr starts plugin commands in the plugin directory. `--herdr-context` reads
 `HERDR_PLUGIN_CONTEXT_JSON`: an explicit collection root wins; otherwise it uses
 `focused_pane_cwd`, then `workspace_cwd` when the focused cwd is absent or empty.

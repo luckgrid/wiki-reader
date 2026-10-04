@@ -74,6 +74,34 @@ Implementation must be best-effort and off the UI thread, use the reader's inher
 
 This is a source/design finding, not a live-watch implementation or runtime test. A config watcher alone cannot observe terminal appearance changes under `auto_switch`, and custom palette mapping is separate work. Honour config replacement/atomic writes and retain the previous theme if re-reading fails. Also check `HERDR_CONFIG_PATH` handling when implementing: the current reader helper uses XDG/HOME rather than that override.
 
+## P3-09 implementation retest — 2026-10-03
+
+The operator tested the context-aware launcher from draft #128 with a temporary
+linked copy, using the local debug binary by absolute path rather than replacing
+the installed v0.1.3. Correct collection selection, Help/Esc/Ctrl+Enter/q and clean
+dismissal passed. **Images failed**: placeholders say `no graphics protocol`, and
+Mermaid uses text. Explicit `diagrams = "image"`, enabled images and a 2-second
+probe timeout did not change the result. This blocks shipping acceptance despite
+the earlier popup spike's visual pass; do not generalise that pass to this run.
+
+A diagnostic popup captured the raw startup query response:
+
+```text
+query: ESC_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA ESC\\ ESC[c ESC[16t ESC[5n
+reply: ESC_Gi=31;OK ESC\\ ESC[?62;22c ESC[0n
+```
+
+Kitty is confirmed, but the cell-size query has no reply. Separate `CSI 14t`,
+`CSI 18t` and `CSI 16t` queries likewise produced only the final status reply.
+`ratatui-image` 11.1.0 returns its default Halfblocks picker with a 10×20 font:
+its source discards the confirmed protocol when no font size can be obtained
+from the response or the PTY ioctl. That 10×20 is a library default, not measured
+popup geometry. Client/server remain Herdr 0.9.0, protocol 22, no stale binary.
+
+No forced protocol, guessed cell geometry, Herdr upgrade, user config change or
+dogfood binary replacement was performed. Resolve the capability/geometry gap
+before completing P3-09; the initial feasibility verdict is not shipping proof.
+
 ## Matrix
 
 | Placement / surface | Launch and context | Keys | Kitty images / cleanup | Status |
