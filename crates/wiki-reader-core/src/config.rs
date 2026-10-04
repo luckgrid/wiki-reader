@@ -146,6 +146,20 @@ impl Default for ImagesConfig {
     }
 }
 
+/// `[herdr]` table (P3-10).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct HerdrConfig {
+    /// Publish the current page to herdr's sidebar while running in a herdr pane.
+    #[serde(default = "default_true")]
+    pub publish: bool,
+}
+
+impl Default for HerdrConfig {
+    fn default() -> Self {
+        Self { publish: true }
+    }
+}
+
 fn default_true() -> bool {
     true
 }
@@ -191,6 +205,7 @@ pub struct Config {
     pub theme_set: bool,
     pub copy: CopyConfig,
     pub images: ImagesConfig,
+    pub herdr: HerdrConfig,
     /// Action-name → key chord overrides (e.g. `"quit" = "Q"`).
     pub keys: BTreeMap<String, String>,
     /// Human-readable diagnostics for bad / unknown keys.
@@ -256,6 +271,7 @@ impl Config {
                     | "theme"
                     | "copy"
                     | "images"
+                    | "herdr"
                     | "keys"
             ) {
                 self.diagnostics.push(format!("unknown config key: {key}"));
@@ -385,6 +401,21 @@ impl Config {
             } else {
                 self.diagnostics
                     .push(format!("images: expected table, got {v}"));
+            }
+        }
+        if let Some(v) = table.get("herdr") {
+            if let Some(herdr) = v.as_table() {
+                if let Some(publish) = herdr.get("publish") {
+                    match publish.as_bool() {
+                        Some(b) => self.herdr.publish = b,
+                        None => self
+                            .diagnostics
+                            .push(format!("herdr.publish: expected bool, got {publish}")),
+                    }
+                }
+            } else {
+                self.diagnostics
+                    .push(format!("herdr: expected table, got {v}"));
             }
         }
         if let Some(v) = table.get("keys") {
@@ -648,6 +679,25 @@ mod tests {
         assert!(cfg.exclude.is_empty());
         assert_eq!(cfg.nav.labels, LabelMode::Title);
         assert!(cfg.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn herdr_publish_defaults_on_and_parses() {
+        let tmp = tempdir().unwrap();
+        assert!(load_isolated(tmp.path(), None).herdr.publish);
+        let file = tmp.path().join("c.toml");
+        fs::write(&file, "[herdr]\npublish = false\n").unwrap();
+        let cfg = load_isolated(tmp.path(), Some(&file));
+        assert!(!cfg.herdr.publish);
+        assert!(cfg.diagnostics.is_empty(), "{:?}", cfg.diagnostics);
+        // A later layer can turn it back on; bad values keep the earlier one.
+        fs::write(&file, "[herdr]\npublish = \"no\"\n").unwrap();
+        let cfg = load_isolated(tmp.path(), Some(&file));
+        assert!(cfg.herdr.publish);
+        assert!(cfg.diagnostics[0].contains("herdr.publish: expected bool"));
+        fs::write(&file, "herdr = 3\n").unwrap();
+        let cfg = load_isolated(tmp.path(), Some(&file));
+        assert!(cfg.diagnostics[0].contains("herdr: expected table"));
     }
 
     #[test]

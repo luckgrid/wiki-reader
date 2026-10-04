@@ -27,6 +27,7 @@ Architecture decision records. Accepted ADRs are immutable — supersede, don't 
 | [0019](0019-theme-presets.md) | luckgrid presets, and `herdr` follows herdr's config | accepted |
 | [0020](0020-nav-label-modes.md) | Titles or actual filesystem names | accepted (chrome label scope superseded by [0021](0021-side-nav-only-label-mode.md)) |
 | [0021](0021-side-nav-only-label-mode.md) | Nav label mode applies only to the side nav | accepted |
+| [0022](0022-herdr-launcher-and-page-publishing.md) | herdr launcher opens an ordinary pane; page publishing is on by default | accepted |
 
 ## Related
 
