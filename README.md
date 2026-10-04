@@ -94,6 +94,13 @@ wiki-reader fixtures/worked-example
 # q to quit, ? for help
 ```
 
+### In herdr
+
+[`integrations/herdr/`](integrations/herdr/README.md) is a herdr plugin: bind a key to its
+`wiki-reader.open` action to open the reader in a new split pane in the focused pane's
+directory. (Images need an ordinary pane, which that action uses; herdr 0.9.x plugin panes
+such as overlays and popups show text only.)
+
 ## Checks
 
 ```bash

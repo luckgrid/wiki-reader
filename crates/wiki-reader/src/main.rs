@@ -2,6 +2,7 @@
 //!
 //! See [architecture overview](../../wiki/architecture/overview.md).
 
+mod herdr;
 mod tui;
 
 use std::path::{Path, PathBuf};
@@ -17,8 +18,14 @@ use clap::Parser;
 )]
 struct Args {
     /// Collection root to open (defaults to the current directory).
-    #[arg(default_value = ".")]
-    root: PathBuf,
+    root: Option<PathBuf>,
+    /// Use Herdr's focused pane or workspace cwd when no root is supplied.
+    #[arg(long)]
+    herdr_context: bool,
+    /// From a herdr plugin action: open the reader in a new ordinary split pane (which, unlike
+    /// plugin panes, can draw images) next to the focused pane, then exit.
+    #[arg(long, conflicts_with_all = ["root", "herdr_context", "config"])]
+    herdr_split: bool,
     /// Optional config TOML (overrides XDG and `<root>/.wiki-reader.toml`).
     #[arg(long = "config", value_name = "PATH")]
     config: Option<PathBuf>,
@@ -31,13 +38,37 @@ fn check_root(root: &Path) -> Result<(), String> {
     }
 }
 
+fn resolve_root(args: &Args, context: Option<&str>) -> PathBuf {
+    if let Some(root) = &args.root {
+        return root.clone();
+    }
+    if args.herdr_context
+        && let Some(root) = context.and_then(wiki_reader_core::herdr::parse_context_cwd)
+        && root.is_dir()
+    {
+        return root;
+    }
+    PathBuf::from(".")
+}
+
 fn main() -> ExitCode {
     let args = Args::parse();
-    if let Err(msg) = check_root(&args.root) {
+    let context = std::env::var("HERDR_PLUGIN_CONTEXT_JSON").ok();
+    if args.herdr_split {
+        return match herdr::open_split(&herdr::HerdrCli::from_env(), context.as_deref()) {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(msg) => {
+                eprintln!("wiki-reader: {msg}");
+                ExitCode::FAILURE
+            }
+        };
+    }
+    let root = resolve_root(&args, context.as_deref());
+    if let Err(msg) = check_root(&root) {
         eprintln!("wiki-reader: {msg}");
         return ExitCode::FAILURE;
     }
-    match tui::app::run(&args.root, args.config.as_deref()) {
+    match tui::app::run(&root, args.config.as_deref()) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("wiki-reader: {err}");
@@ -61,6 +92,65 @@ mod tests {
     fn check_root_rejects_missing_path() {
         let err = check_root(Path::new("/nope-wiki-reader-missing")).unwrap_err();
         assert!(err.contains("not a directory"), "got: {err}");
+    }
+
+    #[test]
+    fn root_defaults_to_current_directory_without_flag() {
+        let args = Args::try_parse_from(["wiki-reader"]).unwrap();
+        assert_eq!(
+            resolve_root(&args, Some(r#"{"workspace_cwd":"/"}"#)),
+            PathBuf::from(".")
+        );
+    }
+
+    #[test]
+    fn explicit_root_wins_even_when_invalid() {
+        let args = Args::try_parse_from([
+            "wiki-reader",
+            "--herdr-context",
+            "/nope-wiki-reader-missing",
+        ])
+        .unwrap();
+        let root = resolve_root(&args, Some(r#"{"workspace_cwd":"/"}"#));
+        assert_eq!(root, PathBuf::from("/nope-wiki-reader-missing"));
+        assert!(check_root(&root).is_err());
+    }
+
+    #[test]
+    fn context_root_uses_existing_focused_or_workspace_directory() {
+        let args = Args::try_parse_from(["wiki-reader", "--herdr-context"]).unwrap();
+        for field in ["focused_pane_cwd", "workspace_cwd"] {
+            let context = format!(r#"{{"{field}":"/"}}"#);
+            assert_eq!(resolve_root(&args, Some(&context)), PathBuf::from("/"));
+        }
+    }
+
+    #[test]
+    fn unusable_context_silently_defaults_to_current_directory() {
+        let args = Args::try_parse_from(["wiki-reader", "--herdr-context"]).unwrap();
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let file_context = format!(r#"{{"focused_pane_cwd":"{}"}}"#, file.path().display());
+        for context in [
+            None,
+            Some("not json"),
+            Some("{}"),
+            Some(r#"{"focused_pane_cwd":"/nope-wiki-reader-missing","workspace_cwd":"/"}"#),
+            Some(file_context.as_str()),
+        ] {
+            assert_eq!(resolve_root(&args, context), PathBuf::from("."));
+        }
+    }
+
+    #[test]
+    fn herdr_split_is_exclusive_with_the_reader_arguments() {
+        assert!(Args::try_parse_from(["wiki-reader", "--herdr-split"]).is_ok());
+        for other in [
+            vec!["wiki-reader", "--herdr-split", "docs"],
+            vec!["wiki-reader", "--herdr-split", "--herdr-context"],
+            vec!["wiki-reader", "--herdr-split", "--config", "c.toml"],
+        ] {
+            assert!(Args::try_parse_from(other).is_err());
+        }
     }
 
     #[test]

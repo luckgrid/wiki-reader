@@ -21,6 +21,7 @@ ratatui = "0.30.2"
 ratatui-image = { version = "11.1.0", default-features = false, features = ["crossterm"] }
 image = { version = "0.25.6", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.151"
 serde_norway = "0.9.42"
 toml = "0.9.8"
 toml_edit = "0.25.15"

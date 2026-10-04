@@ -35,6 +35,8 @@ pub enum ImageReject {
     NoRoot,
     /// The terminal has no usable graphics protocol (the image tier is an upgrade).
     NoGraphics,
+    /// No graphics inside a herdr plugin pane, which reports no cell size (herdr 0.9.x).
+    NoGraphicsHerdrPlugin,
 }
 
 impl fmt::Display for ImageReject {
@@ -50,6 +52,9 @@ impl fmt::Display for ImageReject {
             Self::Unreadable => "unreadable image",
             Self::NoRoot => "no collection root",
             Self::NoGraphics => "no graphics protocol",
+            Self::NoGraphicsHerdrPlugin => {
+                "no graphics protocol; herdr plugin panes report no cell size, open the reader in a normal pane"
+            }
         })
     }
 }

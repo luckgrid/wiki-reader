@@ -1,0 +1,42 @@
+id = "wiki-reader"
+name = "Wiki Reader"
+version = "0.1.0"
+min_herdr_version = "0.9.0"
+platforms = ["linux", "macos"]
+
+# Plugin panes (overlay, popup) cannot draw images on herdr 0.9.x: herdr starts them without
+# cell metrics and never answers the terminal's cell-size query. Text, keys and diagrams as
+# text work. The `open` action below opens an ordinary split pane instead, which does draw
+# images.
+[[panes]]
+id = "reader-overlay"
+title = "Wiki Reader (overlay)"
+placement = "overlay"
+command = ["wiki-reader", "--herdr-context"]
+
+[[panes]]
+id = "reader-popup"
+title = "Wiki Reader (popup)"
+placement = "popup"
+width = "80%"
+height = "80%"
+command = ["wiki-reader", "--herdr-context"]
+
+# Default: the reader in a new ordinary split pane next to the focused pane, in its cwd.
+[[actions]]
+id = "open"
+title = "Open Wiki Reader"
+contexts = ["workspace"]
+command = ["wiki-reader", "--herdr-split"]
+
+[[actions]]
+id = "open-overlay"
+title = "Open Wiki Reader (overlay, text only)"
+contexts = ["workspace"]
+command = ["sh", "-c", 'exec "$HERDR_BIN_PATH" plugin pane open --plugin wiki-reader --entrypoint reader-overlay']
+
+[[actions]]
+id = "open-popup"
+title = "Open Wiki Reader (popup, text only)"
+contexts = ["workspace"]
+command = ["sh", "-c", 'exec "$HERDR_BIN_PATH" plugin pane open --plugin wiki-reader --entrypoint reader-popup']

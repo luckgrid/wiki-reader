@@ -491,6 +491,7 @@ impl App {
             graphics: cell_px.is_some(),
             tmux: env.tmux,
             herdr: env.herdr,
+            herdr_plugin_pane: wiki_reader_core::herdr::running_in_plugin_pane(),
             diagram_palette: self.theme.diagram,
             diagram_sizes: self.images.diagram_sizes(),
             max_slot_rows: self.images_max_slot_rows,

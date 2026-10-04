@@ -1347,6 +1347,16 @@ mod tests {
 
     /// Render `fixtures/images/README.md` with the given graphics availability.
     fn render_images_fixture(cell_px: Option<(u16, u16)>, width: u16) -> RenderedDoc {
+        render_images_fixture_with(
+            RenderOpts {
+                cell_px,
+                ..RenderOpts::default()
+            },
+            width,
+        )
+    }
+
+    fn render_images_fixture_with(mut opts: RenderOpts, width: u16) -> RenderedDoc {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/images");
         let provider = FsProvider::open(&root).unwrap();
         let index = wiki_reader_core::Index::build(&provider).unwrap();
@@ -1355,11 +1365,7 @@ mod tests {
             relative_path: std::path::PathBuf::from("README.md"),
         };
         let src = provider.read(&key).unwrap();
-        let opts = RenderOpts {
-            image_root: Some(provider.root().to_path_buf()),
-            cell_px,
-            ..RenderOpts::default()
-        };
+        opts.image_root = Some(provider.root().to_path_buf());
         render_with(&src, index.pages.get(&key), &key, &index, width, &opts)
     }
 
@@ -1426,6 +1432,87 @@ mod tests {
             "{}",
             doc.lines.join("\n")
         );
+    }
+
+    #[test]
+    fn herdr_plugin_pane_names_itself_in_the_no_graphics_reason() {
+        let plugin = render_images_fixture_with(
+            RenderOpts {
+                herdr: true,
+                herdr_plugin_pane: true,
+                ..RenderOpts::default()
+            },
+            200,
+        );
+        assert!(
+            plugin.lines.iter().any(|l| l
+                == "[image: Small grid] img/small.png — no graphics protocol; herdr plugin panes report no cell size, open the reader in a normal pane"),
+            "{}",
+            plugin.lines.join("\n")
+        );
+        // The same fixture outside a plugin pane keeps the plain wording.
+        let plain = render_images_fixture_with(
+            RenderOpts {
+                herdr: true,
+                ..RenderOpts::default()
+            },
+            200,
+        );
+        assert!(
+            plain
+                .lines
+                .iter()
+                .any(|l| l == "[image: Small grid] img/small.png — no graphics protocol")
+        );
+        // Graphics that work are never reworded.
+        let ok = render_images_fixture_with(
+            RenderOpts {
+                herdr: true,
+                herdr_plugin_pane: true,
+                cell_px: Some((8, 17)),
+                graphics: true,
+                ..RenderOpts::default()
+            },
+            200,
+        );
+        assert!(!ok.image_slots.is_empty());
+        assert!(!ok.lines.join("\n").contains("overlay pane"));
+    }
+
+    #[test]
+    fn herdr_plugin_pane_names_itself_in_the_diagram_tier_reason() {
+        let src = "```mermaid\nflowchart LR\n  A --> B\n```\n";
+        let key = empty_key();
+        let index = wiki_reader_core::Index {
+            collection_id: "t".into(),
+            pages: HashMap::default(),
+            edges: vec![],
+            by_from: HashMap::default(),
+            by_to: HashMap::default(),
+            by_id: HashMap::default(),
+            by_path: HashMap::default(),
+            diagnostics: vec![],
+        };
+        for (plugin, expected) in [
+            (
+                true,
+                "diagram (text; no graphics protocol; herdr plugin panes report no cell size, open the reader in a normal pane)",
+            ),
+            (false, "diagram (text; no graphics protocol)"),
+        ] {
+            let opts = RenderOpts {
+                diagram_mode: wiki_reader_core::config::DiagramMode::Image,
+                herdr: true,
+                herdr_plugin_pane: plugin,
+                ..RenderOpts::default()
+            };
+            let doc = render_with(src, None, &key, &index, 200, &opts);
+            assert!(
+                doc.lines.iter().any(|l| l.contains(expected)),
+                "plugin={plugin}:\n{}",
+                doc.lines.join("\n")
+            );
+        }
     }
 
     #[test]
