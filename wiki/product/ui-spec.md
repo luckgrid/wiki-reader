@@ -41,7 +41,7 @@ The same layout in the running app, on this wiki:
 
 ![wiki-reader browsing its own wiki: side nav, rendered page, tab, Linked from pane](../assets/wiki-reader.png)
 
-Help (`?`) and search (`/`) open as popups over it, with both panes grayed behind:
+Help (`?`) and search (`/`) open as popups over it, with both panes grayed behind. Pictures are drawn under the popups; a picture whose first cell a popup covers is held back until that cell is visible (its one-time Kitty upload rides in the cell), so it appears when the popup closes rather than staying blank:
 
 ![Help overlay listing every key, grouped by Global, Side nav, View and Chords](../assets/wiki-reader-help.png)
 

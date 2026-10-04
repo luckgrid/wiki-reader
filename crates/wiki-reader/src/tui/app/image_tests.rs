@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
-use ratatui_image::picker::Picker;
+use ratatui_image::picker::{Picker, ProtocolType};
 
 use wiki_reader_render::SlotSource;
 
@@ -610,4 +610,136 @@ fn text_tier_expand_diagram_shows_the_source() {
     assert!(any_text(&term, "-->"), "the Mermaid source is listed");
     modal_press(&mut app, KeyCode::Esc);
     assert!(app.modal.is_none());
+}
+
+/// The Kitty upload rides in the picture's first cell on its first render, and
+/// `ratatui-image` never sends it again. A picture first drawn while a popup covers that cell
+/// must therefore wait until the cell is visible, or it stays blank after the popup closes.
+#[test]
+fn picture_first_drawn_under_a_popup_is_uploaded_once_the_popup_closes() {
+    use crate::tui::action::Action;
+
+    const KITTY_APC: &str = "\u{1b}_G";
+    let mut picker = Picker::halfblocks();
+    picker.set_protocol_type(ProtocolType::Kitty);
+    let mut app = App::for_tests(&images_fixture()).expect("app");
+    app.enable_graphics(picker);
+    let mut term = terminal(40, 30);
+    draw_to(&mut term, &mut app);
+    assert!(
+        !app.doc.image_slots().is_empty(),
+        "the fixture has pictures"
+    );
+
+    // The popup opens while the pictures are still decoding.
+    app.update(Action::OpenHelp);
+    wait_for_images(&mut app);
+    draw_to(&mut term, &mut app);
+    let carrier = |app: &App| {
+        let slot = &app.doc.image_slots()[0];
+        let (rect, _) = crate::tui::images::slot_visible(
+            slot,
+            app.scroll,
+            app.viewer_geom.text_x,
+            app.viewer_geom.top_y,
+            app.viewer_geom.rows,
+        )
+        .expect("the first picture is on screen");
+        (rect.x, rect.y)
+    };
+    let covered = carrier(&app);
+    assert!(
+        !term.backend().buffer()[covered]
+            .symbol()
+            .contains('\u{10EEEE}'),
+        "precondition: the help popup covers the first picture's first cell"
+    );
+
+    app.update(Action::CloseHelp);
+    draw_to(&mut term, &mut app);
+    let buf = term.backend().buffer();
+    let first_cell = carrier(&app);
+    assert!(
+        buf[first_cell].symbol().contains(KITTY_APC),
+        "the upload must reach the frame once nothing covers the first cell, got {:?}",
+        buf[first_cell].symbol()
+    );
+}
+
+/// A theme switch re-renders every diagram while the options window is open over the page.
+/// Each diagram that ends up on screen must have had its Kitty upload land in a visible first
+/// cell, or it stays blank until the page is left or scrolled.
+#[test]
+fn diagrams_switched_under_the_options_window_are_all_uploaded() {
+    use crate::tui::action::Action;
+    use crate::tui::options_ui::OptionChoice;
+    use std::collections::HashSet;
+    use wiki_reader_core::config::ThemeName;
+
+    const KITTY_APC: &str = "\u{1b}_G";
+    let mut picker = Picker::halfblocks();
+    picker.set_protocol_type(ProtocolType::Kitty);
+    let mut app = App::for_tests(&mermaid_fixture()).expect("app");
+    app.enable_graphics(picker);
+    let key = wiki_reader_core::provider::PageKey {
+        collection_id: app.navigator.index().collection_id.clone(),
+        relative_path: PathBuf::from("themed.md"),
+    };
+    app.update(Action::GoToPage(key));
+    let mut term = terminal(80, 120);
+
+    let uploads = |term: &Terminal<TestBackend>| -> HashSet<(u16, u16)> {
+        let buf = term.backend().buffer();
+        let mut found = HashSet::new();
+        for y in 0..buf.area.height {
+            for x in 0..buf.area.width {
+                if buf[(x, y)].symbol().contains(KITTY_APC) {
+                    found.insert((x, y));
+                }
+            }
+        }
+        found
+    };
+    settle_diagrams(&mut term, &mut app);
+    assert_eq!(app.doc.image_slots().len(), 3);
+
+    // Switch while the window covers the middle of the page, and let every frame upload.
+    app.update(Action::OpenOptions);
+    app.options_set(OptionChoice::Theme(ThemeName::Light));
+    let mut uploaded = HashSet::new();
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        app.images.poll();
+        if app.images.take_diagram_relayout() {
+            app.relayout_after_diagram_size();
+        }
+        draw_to(&mut term, &mut app);
+        uploaded.extend(uploads(&term));
+        if !app.images.has_pending() {
+            break;
+        }
+        assert!(Instant::now() < deadline, "diagram worker timed out");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    app.close_options();
+    draw_to(&mut term, &mut app);
+    uploaded.extend(uploads(&term));
+
+    assert_eq!(app.doc.image_slots().len(), 3);
+    for slot in app.doc.image_slots() {
+        let (rect, _) = crate::tui::images::slot_visible(
+            slot,
+            app.scroll,
+            app.viewer_geom.text_x,
+            app.viewer_geom.top_y,
+            app.viewer_geom.rows,
+        )
+        .unwrap_or_else(|| panic!("{} is on screen", slot.alt));
+        assert!(
+            uploaded.contains(&(rect.x, rect.y)),
+            "{} was never uploaded at its first cell {:?}",
+            slot.alt,
+            (rect.x, rect.y)
+        );
+    }
 }

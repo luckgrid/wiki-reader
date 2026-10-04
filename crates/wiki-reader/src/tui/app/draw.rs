@@ -4,6 +4,7 @@ use ratatui::Frame;
 
 use super::App;
 use crate::tui::focus::FocusPane;
+use crate::tui::images::Occlusion;
 use crate::tui::layout;
 use crate::tui::options_ui::{self, OptionLine, OptionsOverlay};
 use crate::tui::page_doc::PageDoc;
@@ -104,6 +105,21 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
 
     // Pictures go over the viewer text and under popups (their `Clear` covers them). A narrow
     // terminal's nav overlay hides pictures until it closes (terminal protocols are not cells).
+    // Popups draw after the pictures, and a Kitty picture's one-time upload rides in its first
+    // cell, so the pictures need to know where the popups will land (from the last frame; if
+    // the set of open popups just changed the panels are unknown, which counts as covered).
+    let open_popups = u8::from(app.search.is_some())
+        | u8::from(app.help.is_some()) << 1
+        | u8::from(app.options.is_some()) << 2
+        | u8::from(app.modal.is_some()) << 3;
+    let popup_rects = std::mem::take(&mut app.last_popups.1);
+    let occlusion = if open_popups == 0 {
+        Occlusion::None
+    } else if app.last_popups.0 != open_popups || popup_rects.is_empty() {
+        Occlusion::All
+    } else {
+        Occlusion::Rects(&popup_rects)
+    };
     if !regions.nav_overlay {
         app.images.draw(
             frame,
@@ -111,6 +127,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
             app.scroll,
             app.viewer_geom,
             &theme,
+            occlusion,
         );
     }
 
@@ -220,6 +237,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
     if let Some(modal) = app.modal.as_mut() {
         crate::tui::modal_viewer::draw(frame, area, modal.as_mut(), &theme, &mut app.hit_map);
     }
+    app.last_popups = (open_popups, app.hit_map.occluders().to_vec());
 }
 
 #[allow(clippy::too_many_lines)]
@@ -248,6 +266,7 @@ fn draw_search_overlay(
     let max_h = (u32::from(area.height) * 80 / 100).clamp(10, 50) as u16;
     let rect = centered_panel(area, max_w, max_h, 40, 10);
     frame.render_widget(Clear, rect);
+    hits.occlude(rect);
     let mode_tag = match overlay.mode {
         SearchMode::Files => "[Files]",
         SearchMode::Content => "[Content]",
@@ -498,6 +517,7 @@ fn draw_help_overlay(
     let max_h = area.height.saturating_sub(2).clamp(10, 60);
     let rect = centered_panel(area, 58, max_h, 40, 10);
     frame.render_widget(Clear, rect);
+    hits.occlude(rect);
     let title = Line::from(Span::styled(
         " Help (? or Esc to close) ",
         popup_accent(theme),
@@ -619,6 +639,7 @@ fn draw_options_overlay(
     let h = u16::try_from(lines.len() + 5).unwrap_or(u16::MAX);
     let rect = centered_panel(area, 52, h, 30, 8);
     frame.render_widget(Clear, rect);
+    hits.occlude(rect);
     let block = popup_block(
         Line::from(Span::styled(" Options ", popup_accent(theme))),
         theme,

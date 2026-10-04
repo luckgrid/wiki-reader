@@ -280,6 +280,10 @@ enum Entry {
         bytes: u64,
         /// `ImageManager::tick` when last drawn (least-recently-used eviction).
         used: u64,
+        /// The rectangle and crop at which the picture was last drawn with its first cell
+        /// visible. The Kitty upload rides in that cell on the first render at a size and
+        /// `ratatui-image` never repeats it, so the cell must not be under a popup then.
+        confirmed: Option<(Rect, Clip)>,
     },
     /// Kept for the page, so a file that cannot be decoded is not retried on every scroll-in.
     Failed(String),
@@ -619,6 +623,7 @@ impl ImageManager {
                                 protocol,
                                 bytes,
                                 used: self.tick,
+                                confirmed: None,
                             };
                             changed = true;
                         }
@@ -733,6 +738,7 @@ impl ImageManager {
         scroll: u32,
         geom: crate::tui::regions::viewer::ViewerGeom,
         theme: &Theme,
+        occlusion: Occlusion<'_>,
     ) {
         if self.picker.is_none() {
             return;
@@ -760,9 +766,23 @@ impl ImageManager {
             self.ensure(slot);
             let key = SlotKey::of(slot);
             match self.entries.get_mut(&key) {
-                Some(Entry::Ready { protocol, used, .. }) => {
-                    *used = self.tick;
+                Some(Entry::Ready {
+                    protocol,
+                    used,
+                    confirmed,
+                    ..
+                }) => {
                     let rect = rect.intersection(frame.area());
+                    let covered = occlusion.covers(rect.x, rect.y);
+                    let shown = Some((rect, clip));
+                    if covered && *confirmed != shown {
+                        // This render would carry the upload in a cell a popup is about to
+                        // overwrite, and it would never be sent again. Wait for the popup to
+                        // close; the placeholder stands in meanwhile.
+                        draw_placeholder(frame, slot, scroll, geom, None, theme);
+                        continue;
+                    }
+                    *used = self.tick;
                     let resize = Resize::Crop(Some(CropOptions {
                         clip_top: clip == Clip::Top,
                         clip_left: false,
@@ -772,6 +792,9 @@ impl ImageManager {
                         rect,
                         protocol.as_mut(),
                     );
+                    if !covered {
+                        *confirmed = shown;
+                    }
                 }
                 entry => {
                     let note = match entry {
@@ -781,6 +804,28 @@ impl ImageManager {
                     draw_placeholder(frame, slot, scroll, geom, note, theme);
                 }
             }
+        }
+    }
+}
+
+/// What covers the viewer when pictures are drawn, because popups draw after them.
+#[derive(Debug, Clone, Copy)]
+pub enum Occlusion<'a> {
+    /// Nothing is drawn over the pictures.
+    None,
+    /// These popup panels will be drawn over them.
+    Rects(&'a [Rect]),
+    /// A popup is open but its panel is not known yet (it just opened): assume it covers
+    /// everything.
+    All,
+}
+
+impl Occlusion<'_> {
+    fn covers(&self, x: u16, y: u16) -> bool {
+        match self {
+            Self::None => false,
+            Self::All => true,
+            Self::Rects(rects) => rects.iter().any(|r| r.contains((x, y).into())),
         }
     }
 }
@@ -1104,6 +1149,7 @@ mod tests {
             ),
             bytes,
             used,
+            confirmed: None,
         }
     }
 
