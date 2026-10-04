@@ -132,3 +132,42 @@ fn truncate_crumbs(crumbs: &[Crumb], max_cols: usize) -> Vec<Crumb> {
     out.push(crumbs[crumbs.len() - 1].clone());
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    use super::*;
+
+    #[test]
+    fn long_breadcrumbs_never_cover_the_icon_buttons() {
+        let crumbs: Vec<Crumb> = [
+            "Project Wiki",
+            "architecture",
+            "design-system",
+            "Token Projection",
+        ]
+        .iter()
+        .map(|label| Crumb {
+            label: (*label).to_owned(),
+            target: None,
+        })
+        .collect();
+        for width in [40u16, 60, 80, 120] {
+            let mut hits = HitMap::default();
+            let mut term = Terminal::new(TestBackend::new(width, 1)).unwrap();
+            term.draw(|f| draw(f, f.area(), &crumbs, &Theme::default(), &mut hits))
+                .unwrap();
+            let buf = term.backend().buffer();
+            let row = (0..width).map(|x| buf[(x, 0)].symbol()).collect::<String>();
+            let trail_start = width - 1 - layout::icon_trail_w();
+            assert_eq!(
+                buf[(width - 1 - 2, 0)].symbol(),
+                "✕",
+                "✕ centred in the right button at {width}: {row:?}"
+            );
+            assert_eq!(buf[(trail_start + 1, 0)].symbol(), "◫", "{row:?}");
+        }
+    }
+}
