@@ -5273,13 +5273,16 @@ fn page_changes_reach_the_herdr_publisher_once_with_title_and_relative_path() {
         "one report per page, not per frame: {calls:?}"
     );
     assert!(
-        calls[1].contains(&"--token=page=architecture/design-system/tokens.md".to_owned()),
+        calls[1]
+            .windows(2)
+            .any(|w| w[0] == "--token" && w[1] == "page=architecture/design-system/tokens.md"),
         "{:?}",
         calls[1]
     );
     let title = calls[1]
         .iter()
-        .find_map(|a| a.strip_prefix("--title="))
+        .position(|a| a == "--title")
+        .map(|at| calls[1][at + 1].as_str())
         .expect("a title");
     assert!(
         !title.is_empty() && std::path::Path::new(title).extension().is_none(),

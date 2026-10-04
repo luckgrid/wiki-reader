@@ -322,11 +322,15 @@ impl Worker {
     }
 
     fn report(&mut self, page: &Page) {
-        // `--name=value` so a title that starts with `-` is never read as a flag.
+        // herdr's CLI takes each option and its value as separate arguments: it rejects
+        // `--title=value` ("unknown option") and has no `--` terminator, but it does accept a
+        // value that starts with `-` after its option (checked on 0.9.0).
         let mut args = self.base_args();
         args.extend([
-            format!("--title={}", page.title),
-            format!("--token=page={}", page.path),
+            "--title".into(),
+            page.title.clone(),
+            "--token".into(),
+            format!("page={}", page.path),
             "--ttl-ms".into(),
             self.timing.ttl_ms.to_string(),
         ]);
@@ -550,6 +554,27 @@ mod tests {
         }
     }
 
+    /// The value after `flag` (herdr takes options and values as separate arguments).
+    fn arg_after<'a>(call: &'a [String], flag: &str) -> &'a str {
+        let at = call.iter().position(|a| a == flag).expect("flag present");
+        &call[at + 1]
+    }
+
+    #[test]
+    fn no_argument_uses_the_equals_form_herdr_rejects() {
+        let (publisher, recorder) = publisher(fast());
+        publisher.publish("T", "a.md");
+        wait_for(&recorder, 1);
+        drop(publisher);
+        for call in recorder.calls() {
+            assert!(
+                call.iter()
+                    .all(|a| !a.starts_with("--") || !a.contains('=')),
+                "herdr: unknown option --name=value, got {call:?}"
+            );
+        }
+    }
+
     fn seq(call: &[String]) -> u64 {
         let at = call.iter().position(|a| a == "--seq").unwrap();
         call[at + 1].parse().unwrap()
@@ -613,8 +638,10 @@ mod tests {
         assert_eq!(
             &call[7..],
             [
-                "--title=-Starts with a dash",
-                "--token=page=wiki/guides/README.md",
+                "--title",
+                "-Starts with a dash",
+                "--token",
+                "page=wiki/guides/README.md",
                 "--ttl-ms",
                 "4242"
             ]
@@ -640,7 +667,7 @@ mod tests {
         std::thread::sleep(Duration::from_millis(150));
         let calls = recorder.calls();
         assert_eq!(calls.len(), 1, "{calls:?}");
-        assert!(calls[0].contains(&"--title=Page 5".to_owned()));
+        assert_eq!(arg_after(&calls[0], "--title"), "Page 5");
     }
 
     #[test]
@@ -653,7 +680,7 @@ mod tests {
         assert_eq!(recorder.calls().len(), 1, "unchanged page");
         publisher.publish("B", "b.md");
         wait_for(&recorder, 2);
-        assert!(recorder.calls()[1].contains(&"--title=B".to_owned()));
+        assert_eq!(arg_after(&recorder.calls()[1], "--title"), "B");
     }
 
     #[test]
@@ -719,5 +746,49 @@ mod tests {
         drop(publisher);
         assert!(started.elapsed() < Duration::from_secs(2));
         assert_eq!(recorder.calls().len(), 3, "gave up after max_failures");
+    }
+    /// Opt-in contract check against the real herdr CLI, which the fake cannot give: herdr
+    /// rejects `--name=value`, so only a real call proves the arguments are accepted.
+    ///
+    /// `WIKI_READER_TEST_HERDR_PANE=<idle pane id> cargo test -p wiki-reader real_herdr -- --ignored`
+    #[test]
+    #[ignore = "talks to a real herdr: set WIKI_READER_TEST_HERDR_PANE to an idle pane"]
+    fn real_herdr_accepts_the_report_and_the_clear() {
+        let Ok(pane) = std::env::var("WIKI_READER_TEST_HERDR_PANE") else {
+            return;
+        };
+        let cli = Arc::new(HerdrCli::from_env());
+        let get = |cli: &HerdrCli| {
+            cli.run(&["pane".into(), "get".into(), pane.clone()])
+                .expect("pane get")
+        };
+        let publisher = Publisher::spawn(
+            Arc::clone(&cli) as Arc<dyn Herdr>,
+            pane.clone(),
+            Timing {
+                debounce: Duration::from_millis(30),
+                ..Timing::default()
+            },
+        );
+        // A title that starts with a dash is the awkward case for a CLI parser.
+        publisher.publish("-Real herdr title", "wiki/real.md");
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let info = get(&cli);
+            if info.contains(r#""title":"-Real herdr title""#)
+                && info.contains(r#""page":"wiki/real.md""#)
+            {
+                assert!(info.contains(r#""agent_status":"unknown""#), "{info}");
+                break;
+            }
+            assert!(Instant::now() < deadline, "never published: {info}");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        drop(publisher);
+        let info = get(&cli);
+        assert!(
+            !info.contains("Real herdr title") && !info.contains("wiki/real.md"),
+            "not cleared: {info}"
+        );
     }
 }
