@@ -188,6 +188,12 @@ Findings:
   `herdr pane run <pane> <command>` submits a command to it. Both are documented in the 0.9.3
   CLI reference. The control run shows such panes answer the queries.
 
+**Operator acceptance (2026-10-03).** With the shipping manifest linked from a scratch copy:
+the `open` action's split pane and a plain ordinary pane both draw images and diagrams. The
+overlay and popup entrypoints open, take keys and dismiss cleanly but are text-only, with the
+new "herdr plugin panes report no cell size, open the reader in a normal pane" wording in
+both, as predicted. That is the accepted behaviour for plugin panes on herdr 0.9.x.
+
 **Decision:** the plugin's default action (`open`) runs `wiki-reader --herdr-split`, which
 splits the focused pane, sets the new pane's cwd to the focused pane's, and runs
 `exec wiki-reader` in it (so quitting closes the pane). Overlay and popup stay as
@@ -201,7 +207,7 @@ with cell metrics. The ordinary-pane route has its own pane id, so P3-10 publish
 | Popup, 80% × 80% | logged caller cwd; no pane ID | operator: Help, Esc, Ctrl+Enter, q pass | first pass reported images; the shipping-plugin retest and the example both show no cell metrics, so no images | keys verified; images fail |
 | Overlay | logged caller cwd; own pane ID; focus restored on close | operator: all keys pass | retest: no cell metrics, no images, Mermaid as text | keys verified; images fail |
 | Plugin split | logged caller cwd; own pane ID; socket target workaround | automated: Help appears, Esc dismisses, Ctrl+Enter adds tabs | not visually checked; expected to match overlay | partial; no graphics claim |
-| Ordinary shell pane (control, and the `open` action's target) | caller cwd via `pane split --cwd` | normal | example: Kitty, 8×17, picture drawn | verified for the probe; the `open` action itself is checked in the P3-09 manual pass |
+| Ordinary shell pane (control, and the `open` action's target) | caller cwd via `pane split --cwd` | normal | example: Kitty, 8×17, picture drawn; operator 2026-10-03: the `open` action's split pane draws images and diagrams, and they survive theme switches | verified |
 | Plain-pane metadata | API stores title and page token without agent registration | not applicable | operator: title or token visible in sidebar | display feasibility verified |
 
 The earlier [P3-S1](p3-s1-image-protocol.md) verified Kitty in ordinary Herdr panes, which the control run reconfirms. Direct Ghostty, iTerm2 and tmux were not re-tested in this spike.
