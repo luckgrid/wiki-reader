@@ -19,9 +19,6 @@ use super::modal_viewer::{ModalContent, ModalEvent};
 use super::text_col::line_width;
 use super::theme::Theme;
 
-/// Widest column; longer cells are cut with `…` (copy still gets the full text).
-// ponytail: no in-cell wrap; upgrade: wrap the cursor row or show the cell in the footer.
-const MAX_COL_W: usize = 40;
 const SEP: &str = " │ ";
 /// Display columns of [`SEP`] (its `len()` is bytes).
 const SEP_W: usize = 3;
@@ -44,6 +41,7 @@ pub struct TableViewer {
     /// First visible row of `view`; first scrolling column (column 0 is always shown).
     top: usize,
     left: usize,
+    /// Natural column widths (longest cell/header +2 for the sort arrow).
     widths: Vec<usize>,
     /// Body rows that fit, from the last draw (page keys).
     page: usize,
@@ -64,7 +62,7 @@ impl TableViewer {
                     .max()
                     .unwrap_or(1);
                 // +2: room for the sort arrow.
-                (w + 2).clamp(3, MAX_COL_W)
+                (w + 2).max(3)
             })
             .collect();
         let mut v = Self {
@@ -121,18 +119,53 @@ impl TableViewer {
         self.col = self.col.saturating_add_signed(delta).min(last);
     }
 
-    /// Last column fully visible when scrolled to `self.left` in `avail` cells.
-    fn last_full(&self, avail: usize) -> usize {
-        let mut used = self.widths[0] + SEP_W;
-        let mut last = 0;
-        for k in self.left..self.widths.len() {
-            if used + self.widths[k] > avail && k > self.left {
+    /// Display widths: natural, but col 0 ≤ ~avail/2 and others ≤ the rest after col 0 + SEP.
+    fn eff_widths(&self, avail: usize) -> Vec<usize> {
+        if self.widths.is_empty() {
+            return Vec::new();
+        }
+        let w0_cap = (avail / 2).max(3);
+        let w0 = self.widths[0].min(w0_cap).max(3);
+        let rest_cap = avail.saturating_sub(SEP_W + w0).max(3);
+        self.widths
+            .iter()
+            .enumerate()
+            .map(|(i, &w)| {
+                if i == 0 {
+                    w.min(w0_cap).max(3)
+                } else {
+                    w.min(rest_cap).max(3)
+                }
+            })
+            .collect()
+    }
+
+    /// Visible column indexes (col 0 sticky, then from `self.left`) for `avail` cells.
+    fn visible_cols(&self, widths: &[usize], avail: usize) -> Vec<usize> {
+        let ncols = widths.len();
+        if ncols == 0 {
+            return Vec::new();
+        }
+        let mut cols = vec![0];
+        let mut used = widths[0];
+        for (k, &w) in widths.iter().enumerate().skip(self.left.min(ncols)) {
+            if k == 0 {
+                continue;
+            }
+            let next = used + SEP_W + w;
+            if next > avail && k > self.left {
                 break;
             }
-            used += self.widths[k] + SEP_W;
-            last = k;
+            used = next;
+            cols.push(k);
         }
-        last
+        cols
+    }
+
+    /// Last column fully visible when scrolled to `self.left` in `avail` cells.
+    fn last_full(&self, avail: usize) -> usize {
+        let widths = self.eff_widths(avail);
+        *self.visible_cols(&widths, avail).last().unwrap_or(&0)
     }
 
     fn keep_cursor_visible(&mut self, avail: usize, rows: usize) {
@@ -149,6 +182,29 @@ impl TableViewer {
         }
     }
 
+    /// Header rule matching the visible columns (`─` / `─┼─`).
+    fn rule_line(&self, avail: usize, theme: &Theme) -> Line<'static> {
+        let mut widths = self.eff_widths(avail);
+        let cols = self.visible_cols(&widths, avail);
+        let last_is_final = cols.last().is_some_and(|&k| k + 1 == widths.len());
+        if last_is_final {
+            let used: usize = cols.iter().map(|&k| widths[k]).sum::<usize>()
+                + cols.len().saturating_sub(1) * SEP_W;
+            if let Some(&last) = cols.last() {
+                widths[last] += avail.saturating_sub(used);
+            }
+        }
+        let mut spans = Vec::new();
+        for (i, &k) in cols.iter().enumerate() {
+            spans.push(Span::styled("─".repeat(widths[k]), theme.muted()));
+            let is_last = i + 1 == cols.len();
+            if !(last_is_final && is_last) {
+                spans.push(Span::styled("─┼─", theme.muted()));
+            }
+        }
+        Line::from(spans)
+    }
+
     /// One table line from `cells`, left to right; column 0 stays, then from `self.left`.
     /// `base` is the row style; `arrow` marks the sorted column (header only).
     fn cells_line(
@@ -160,29 +216,34 @@ impl TableViewer {
         theme: &Theme,
         arrow: Option<char>,
     ) -> Line<'static> {
-        let mut spans = Vec::new();
-        let mut used = 0;
-        let ncols = self.widths.len();
-        let cols = std::iter::once(0).chain(self.left.min(ncols)..ncols);
-        for k in cols {
-            if used >= avail {
-                break;
+        let mut widths = self.eff_widths(avail);
+        let cols = self.visible_cols(&widths, avail);
+        let last_is_final = cols.last().is_some_and(|&k| k + 1 == widths.len());
+        if last_is_final {
+            let used: usize = cols.iter().map(|&k| widths[k]).sum::<usize>()
+                + cols.len().saturating_sub(1) * SEP_W;
+            if let Some(&last) = cols.last() {
+                widths[last] += avail.saturating_sub(used);
             }
+        }
+        let sep_style = if cursor_row {
+            theme.muted().bg(theme.cursor_line)
+        } else {
+            theme.muted()
+        };
+        let mut spans = Vec::new();
+        for (i, &k) in cols.iter().enumerate() {
             let arrow = arrow.filter(|_| self.sort.is_some_and(|(c, _)| c == k));
             if cursor_row && k == self.col {
                 let cursor = Style::default().fg(theme.on_peach).bg(theme.peach);
-                spans.extend(cell_spans(&cells[k], self.widths[k], arrow, cursor, None));
+                spans.extend(cell_spans(&cells[k], widths[k], arrow, cursor, None));
             } else {
-                spans.extend(cell_spans(
-                    &cells[k],
-                    self.widths[k],
-                    arrow,
-                    base,
-                    Some(theme),
-                ));
+                spans.extend(cell_spans(&cells[k], widths[k], arrow, base, Some(theme)));
             }
-            spans.push(Span::styled(SEP, theme.muted()));
-            used += self.widths[k] + SEP_W;
+            let is_last = i + 1 == cols.len();
+            if !(last_is_final && is_last) {
+                spans.push(Span::styled(SEP, sep_style));
+            }
         }
         Line::from(spans)
     }
@@ -249,11 +310,13 @@ impl ModalContent for TableViewer {
         "TABLE"
     }
 
-    fn want(&mut self, _: (u16, u16)) -> (u16, u16) {
+    fn want(&mut self, cap: (u16, u16)) -> (u16, u16) {
         // All columns and all body rows (not the filtered count, so the panel holds still while
-        // typing a filter); one more row for the header, and for "no rows match".
+        // typing a filter); header + rule + body (or "no rows match"). `cap` sizes the panel
+        // via fit; draw calls eff_widths with the real body width.
+        let _ = cap;
         let w = self.widths.iter().map(|w| w + SEP_W).sum::<usize>();
-        let h = 1 + self.text.len().max(1);
+        let h = 2 + self.text.len().max(1);
         let to_u16 = |n: usize| u16::try_from(n).unwrap_or(u16::MAX);
         (to_u16(w), to_u16(h))
     }
@@ -347,7 +410,7 @@ impl ModalContent for TableViewer {
     }
 
     fn draw(&mut self, frame: &mut Frame<'_>, body: Rect, theme: &Theme) {
-        let rows = usize::from(body.height.saturating_sub(1)).max(1);
+        let rows = usize::from(body.height.saturating_sub(2)).max(1);
         let avail = usize::from(body.width);
         self.page = rows;
         self.keep_cursor_visible(avail, rows);
@@ -363,7 +426,7 @@ impl ModalContent for TableViewer {
                 '▲'
             }),
         );
-        let mut lines = vec![head];
+        let mut lines = vec![head, self.rule_line(avail, theme)];
         for (n, &i) in self.view.iter().enumerate().skip(self.top).take(rows) {
             let cursor = n == self.row;
             let style = if cursor {
@@ -483,15 +546,21 @@ mod tests {
             rows: vec![vec![cell("a"), link]],
         });
         let theme = Theme::default();
-        let mut term = Terminal::new(TestBackend::new(30, 3)).unwrap();
+        let mut term = Terminal::new(TestBackend::new(30, 4)).unwrap();
         term.draw(|f| v.draw(f, f.area(), &theme)).unwrap();
         let buf = term.backend().buffer();
         assert!(buf[(0, 0)].modifier.contains(Modifier::BOLD), "bold header");
-        let row = (0..30).map(|x| buf[(x, 1)].symbol()).collect::<String>();
+        let rule = (0..30).map(|x| buf[(x, 1)].symbol()).collect::<String>();
+        assert!(
+            rule.contains('─') && rule.contains('┼'),
+            "header rule: {rule}"
+        );
+        let row = (0..30).map(|x| buf[(x, 2)].symbol()).collect::<String>();
         let x = u16::try_from(row.find("docs").unwrap()).unwrap();
-        assert_eq!(buf[(x, 1)].fg, theme.link, "link colour in a body cell");
-        // Content-sized: both columns plus separators (widths include the 2-col sort arrow room).
-        assert_eq!(v.want((90, 30)), (6 + 3 + 6 + 3, 2));
+        assert_eq!(buf[(x, 2)].fg, theme.link, "link colour in a body cell");
+        // Content-sized: both columns plus separators; height is header + rule + body.
+        // "docs" (4) + sort room beats header "ref" (3) → col1 width 6.
+        assert_eq!(v.want((90, 30)), (6 + 3 + 6 + 3, 3));
     }
 
     #[test]
@@ -514,7 +583,7 @@ mod tests {
         for _ in 0..6 {
             press(&mut v, "l");
         }
-        let mut term = Terminal::new(TestBackend::new(40, 5)).unwrap();
+        let mut term = Terminal::new(TestBackend::new(40, 6)).unwrap();
         term.draw(|f| v.draw(f, f.area(), &Theme::default()))
             .unwrap();
         let buf = term.backend().buffer();
@@ -525,14 +594,43 @@ mod tests {
             row(0)
         );
         assert!(
-            row(2).starts_with("r2-col0") && row(2).contains("r2-col6"),
+            row(3).starts_with("r2-col0") && row(3).contains("r2-col6"),
             "{}",
-            row(2)
+            row(3)
         );
         assert!(
             !row(0).contains("h-col1 "),
             "scrolled past col 1: {}",
             row(0)
+        );
+    }
+
+    #[test]
+    fn last_column_fills_the_window_and_wide_cells_keep_natural_width() {
+        use ratatui::Terminal;
+        use ratatui::backend::TestBackend;
+        let long = "x".repeat(50);
+        let mut v = TableViewer::new(DocTable {
+            source_line: 1,
+            line: 0,
+            height: 3,
+            header: vec![cell("a"), cell("b")],
+            rows: vec![vec![cell("1"), cell(&long)]],
+        });
+        assert!(v.widths[1] > 40, "natural width is not clamped to 40");
+        let mut term = Terminal::new(TestBackend::new(40, 5)).unwrap();
+        term.draw(|f| v.draw(f, f.area(), &Theme::default()))
+            .unwrap();
+        let buf = term.backend().buffer();
+        let row = (0..40).map(|x| buf[(x, 2)].symbol()).collect::<String>();
+        assert!(
+            !row.trim_end().ends_with('│'),
+            "no dangling separator: {row:?}"
+        );
+        assert_eq!(
+            row.chars().count(),
+            40,
+            "last column fills the window: {row:?}"
         );
     }
 }

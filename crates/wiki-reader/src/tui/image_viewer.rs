@@ -385,7 +385,8 @@ impl ImageViewer {
 
     /// Everything but item / view switching: pan and zoom the picture, or scroll the text.
     fn pan_or_scroll(&mut self, code: KeyCode) {
-        let Some(g) = self.gfx.as_mut() else {
+        // No picture, or a failed one: arrows scroll the source / error note.
+        if self.gfx.as_ref().is_none_or(|g| g.error.is_some()) {
             match code {
                 KeyCode::Up | KeyCode::Char('k') => self.scroll_text(-1),
                 KeyCode::Down | KeyCode::Char('j') => self.scroll_text(1),
@@ -396,7 +397,8 @@ impl ImageViewer {
                 _ => {}
             }
             return;
-        };
+        }
+        let g = self.gfx.as_mut().expect("checked above");
         // ponytail: keys only; mouse is the wheel (pans vertically). Upgrade: drag to pan.
         let (step_x, step_y) = (i64::from(g.vp.0 / 8).max(1), i64::from(g.vp.1 / 8).max(1));
         match code {
@@ -436,6 +438,13 @@ impl ImageViewer {
         self.gfx.as_ref().map_or(100, |g| ZOOMS[g.zoom])
     }
 
+    /// Note line (if any) plus the source / text rows currently shown.
+    fn error_lines(&self, err: &str) -> Vec<String> {
+        let mut lines = vec![format!("cannot render: {err}")];
+        lines.extend(self.text.iter().cloned());
+        lines
+    }
+
     fn draw_text(&self, frame: &mut Frame<'_>, body: Rect, theme: &Theme, note: Option<&str>) {
         let mut lines: Vec<Line> = note.map(Line::from).into_iter().collect();
         lines.extend(self.text.iter().map(|l| Line::from(l.as_str())));
@@ -445,7 +454,12 @@ impl ImageViewer {
     }
 
     fn scroll_text(&mut self, rows: isize) {
-        let last = self.text.len().saturating_sub(1);
+        let n = self
+            .gfx
+            .as_ref()
+            .and_then(|g| g.error.as_ref())
+            .map_or(self.text.len(), |e| self.error_lines(e).len());
+        let last = n.saturating_sub(1);
         self.scroll = self.scroll.saturating_add_signed(rows).min(last);
     }
 }
@@ -460,15 +474,26 @@ impl ModalContent for ImageViewer {
     }
 
     fn want(&mut self, cap: (u16, u16)) -> (u16, u16) {
-        if let Some(g) = self.gfx.as_mut() {
+        let gfx_size = self.gfx.as_mut().map(|g| {
             let font = g.picker.font_size();
             let (fw, fh) = (u32::from(font.width.max(1)), u32::from(font.height.max(1)));
             g.sync((u32::from(cap.0) * fw, u32::from(cap.1) * fh));
             let cells = |px: u32, f: u32| u16::try_from(px.div_ceil(f)).unwrap_or(u16::MAX);
-            return match (&g.zoomed, &g.error) {
-                (Some(z), None) => (cells(z.img.width(), fw), cells(z.img.height(), fh)),
-                (None, None) => (0, 1), // "rendering…"
-                (_, Some(_)) => cap,
+            match (&g.zoomed, &g.error) {
+                (Some(z), None) => Ok((cells(z.img.width(), fw), cells(z.img.height(), fh))),
+                (None, None) => Ok((0, 1)), // "rendering…"
+                (_, Some(err)) => Err(err.clone()),
+            }
+        });
+        if let Some(sized) = gfx_size {
+            return match sized {
+                Ok(wh) => wh,
+                Err(err) => {
+                    let lines = self.error_lines(&err);
+                    let w = lines.iter().map(|l| line_width(l)).max().unwrap_or(0);
+                    let h = u16::try_from(lines.len()).unwrap_or(u16::MAX);
+                    (w, h)
+                }
             };
         }
         if self.view == View::Text && self.text_w != cap.0 {
@@ -558,18 +583,30 @@ impl ModalContent for ImageViewer {
     }
 
     fn draw(&mut self, frame: &mut Frame<'_>, body: Rect, theme: &Theme) {
+        if let Some(g) = self.gfx.as_mut() {
+            let font = g.picker.font_size();
+            let (fw, fh) = (u32::from(font.width.max(1)), u32::from(font.height.max(1)));
+            g.vp = (u32::from(body.width) * fw, u32::from(body.height) * fh);
+        }
+        if let Some(err) = self.gfx.as_ref().and_then(|g| g.error.clone()) {
+            // The diagram source is the next best thing to the picture.
+            let lines = self.error_lines(&err);
+            let rows = usize::from(body.height);
+            let shown: Vec<Line> = lines
+                .into_iter()
+                .skip(self.scroll)
+                .take(rows)
+                .map(Line::from)
+                .collect();
+            frame.render_widget(Paragraph::new(shown).style(theme.text()), body);
+            return;
+        }
         let Some(g) = self.gfx.as_mut() else {
             self.draw_text(frame, body, theme, None);
             return;
         };
         let font = g.picker.font_size();
         let (fw, fh) = (u32::from(font.width.max(1)), u32::from(font.height.max(1)));
-        g.vp = (u32::from(body.width) * fw, u32::from(body.height) * fh);
-        if let Some(err) = g.error.clone() {
-            // The diagram source is the next best thing to the picture.
-            self.draw_text(frame, body, theme, Some(&format!("cannot render: {err}")));
-            return;
-        }
         let Some(z) = &g.zoomed else {
             frame.render_widget(Paragraph::new("rendering…").style(theme.muted()), body);
             return;
@@ -709,6 +746,33 @@ mod tests {
         assert!(v.hint().contains("source view"));
         // The window wants the source's size, not the whole screen.
         assert_eq!(v.want((90, 30)), (24, 2));
+    }
+
+    #[test]
+    fn failed_render_wants_the_error_and_source_not_the_cap() {
+        let bad = SlotSource::Mermaid {
+            hash: 2,
+            palette: DiagramPalette::default(),
+            source: "not a diagram {{{".into(),
+        };
+        let mut v = ImageViewer::new(vec![item(1, Some(bad))], 0, Some(Picker::halfblocks()));
+        let g = v.gfx.as_mut().unwrap();
+        let vp = (4000, 4000);
+        g.sync(vp);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while g.error.is_none() {
+            assert!(Instant::now() < deadline, "worker timed out");
+            std::thread::sleep(Duration::from_millis(10));
+            g.sync(vp);
+        }
+        let err = g.error.clone().unwrap();
+        let lines = v.error_lines(&err);
+        let w = lines.iter().map(|l| line_width(l)).max().unwrap_or(0);
+        assert_eq!(v.want((90, 30)), (w, u16::try_from(lines.len()).unwrap()));
+        assert_eq!(lines.len(), 2, "note + one source line");
+        // Arrows scroll the source, they do not pan a missing picture.
+        press(&mut v, KeyCode::Down);
+        assert_eq!(v.scroll, 1);
     }
 
     #[test]
