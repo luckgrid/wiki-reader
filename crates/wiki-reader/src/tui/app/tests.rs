@@ -2414,6 +2414,41 @@ fn search_overlay_survives_case_folding_that_changes_byte_lengths() {
 }
 
 #[test]
+fn a_burst_of_search_keys_refreshes_once_before_the_next_draw() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    app.search_batching = true; // what the event loop sets
+    app.update(Action::OpenSearch);
+    app.update(Action::SearchToggleMode); // Content
+    let before = app.search_refreshes;
+    for c in "token".chars() {
+        app.update(Action::SearchChar(c));
+    }
+    assert_eq!(
+        app.search_refreshes, before,
+        "typing only marks the search dirty"
+    );
+    assert!(app.search.as_ref().is_some_and(|s| s.text_hits.is_empty()));
+    let _ = draw_app(&mut app, 100, 30);
+    assert_eq!(
+        app.search_refreshes,
+        before + 1,
+        "one search for the whole burst"
+    );
+    let overlay = app.search.as_ref().unwrap();
+    assert!(
+        !overlay.text_hits.is_empty(),
+        "results are there for the frame"
+    );
+    assert!(overlay.text_files >= 1);
+    // Another action never reads stale results: it flushes first.
+    app.update(Action::SearchBackspace);
+    let mid = app.search_refreshes;
+    app.update(Action::SearchSelectDelta(1));
+    assert_eq!(app.search_refreshes, mid + 1);
+}
+
+#[test]
 fn search_matches_survive_toggle_and_resize() {
     let root = fixture();
     let mut app = App::new(&root).unwrap();
@@ -2496,7 +2531,11 @@ fn reindex_anchored_keeps_cursor_via_scroll_none() {
     app.cursor_line = app.cursor_line.saturating_add(5).min(max);
     let view = app.view_state();
     let saved_source = view.cursor_line;
-    let index = app.navigator.index().clone();
+    let mut index = app.navigator.index().clone();
+    // A real change somewhere (an identical rebuild reloads nothing).
+    index.diagnostics.push(wiki_reader_core::parse::Diagnostic {
+        message: "changed".into(),
+    });
     let effects = app.navigator.reindex(index, view);
     assert!(
         effects
@@ -3582,6 +3621,29 @@ fn help_overlay_open_close_and_activate() {
     app.update(Action::HelpActivate);
     assert!(app.quit);
     assert!(app.help.is_none());
+}
+
+#[test]
+fn a_page_that_cannot_be_read_shows_the_removed_placeholder_not_the_previous_page() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("README.md"), "# Home\n\nhome body\n").unwrap();
+    std::fs::write(dir.path().join("other.md"), "# Other\n\nother body\n").unwrap();
+    let mut app = App::new(dir.path()).unwrap();
+    let _ = draw_app(&mut app, 80, 24);
+    // The index still lists the page, but the file is gone by the time it is opened.
+    std::fs::remove_file(dir.path().join("other.md")).unwrap();
+    app.update(Action::GoToPage(PageKey {
+        collection_id: app.navigator.index().collection_id.clone(),
+        relative_path: PathBuf::from("other.md"),
+    }));
+    assert!(app.page_missing, "the sticky removed state is set");
+    assert!(app.message.starts_with("read failed"), "{}", app.message);
+    let shown: String = app.doc.lines().join("\n");
+    assert!(shown.contains("page removed"), "{shown}");
+    assert!(
+        !shown.contains("home body"),
+        "the previous page is not left on screen"
+    );
 }
 
 #[test]

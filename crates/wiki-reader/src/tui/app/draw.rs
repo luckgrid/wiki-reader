@@ -11,11 +11,12 @@ use crate::tui::options_ui::{self, OptionLine, OptionsOverlay};
 use crate::tui::page_doc::PageDoc;
 use crate::tui::regions::status::StatusModel;
 use crate::tui::regions::{header, side_nav, status, viewer};
-use crate::tui::viewer_doc::{FocusTarget, ViewerDoc, format_target_with_provider};
+use crate::tui::viewer_doc::{FocusItem, FocusTarget, ViewerDoc, format_target_with_provider};
 
 /// Draw all regions and rebuild the hit map.
 #[allow(clippy::too_many_lines)] // layout + tab bar
 pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
+    app.flush_search_refresh();
     app.hit_map.clear();
     let area = frame.area();
     app.sync_nav_for_width(area.width);
@@ -144,7 +145,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         .pages
         .get(&page)
         .and_then(|p| p.parsed.frontmatter.status.clone());
-    let focus_target = focused_status_message(app);
+    let focus_target = focused_status_message(app, focus_item.as_ref());
     let status_msg = if app.message.is_empty() {
         focus_target.as_str()
     } else {
@@ -319,12 +320,20 @@ fn draw_search_overlay(
         match overlay.mode {
             SearchMode::Files => format!("{n} file{}", if n == 1 { "" } else { "s" }),
             SearchMode::Content => {
-                let files: std::collections::HashSet<_> =
-                    overlay.text_hits.iter().map(|h| &h.page).collect();
+                let files = overlay.text_files;
+                // At the cap the scan stopped early, so counts are lower bounds.
+                let more = if n >= wiki_reader_core::search::MAX_TEXT_HITS {
+                    "+"
+                } else {
+                    ""
+                };
                 format!(
-                    "{} file{}, {n} match{}",
-                    files.len(),
-                    if files.len() == 1 { "" } else { "s" },
+                    "{files}{more} file{}, {n}{more} match{}",
+                    if files == 1 && more.is_empty() {
+                        ""
+                    } else {
+                        "s"
+                    },
                     if n == 1 { "" } else { "es" }
                 )
             }
@@ -761,12 +770,10 @@ fn draw_options_footer(
     );
 }
 
-fn focused_status_message(app: &App) -> String {
-    let Some(i) = app.focused_item else {
-        return String::new();
-    };
-    let items = app.focus_list();
-    let Some(it) = items.get(i) else {
+/// Status text for the focused Tab stop. `focused` is the item the frame already resolved from
+/// one `focus_list()`, so a focused link does not rebuild that list a second time.
+fn focused_status_message(app: &App, focused: Option<&FocusItem>) -> String {
+    let Some(it) = focused else {
         return String::new();
     };
     let page = &app.navigator.tab().current().page;

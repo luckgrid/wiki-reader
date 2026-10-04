@@ -24,26 +24,25 @@ pub struct CodeViewer {
     left: u16,
     /// Body rows that fit, from the last draw.
     page: usize,
+    /// Widest line in display columns, measured once (the lines never change while open).
+    max_w: u16,
 }
 
 impl CodeViewer {
     #[must_use]
     pub fn new(code: DocCodeBlock) -> Self {
+        let max_w = code.lines.iter().map(|l| line_width(l)).max().unwrap_or(0);
         Self {
             code,
             top: 0,
             left: 0,
             page: 10,
+            max_w,
         }
     }
 
     fn max_line_w(&self) -> u16 {
-        self.code
-            .lines
-            .iter()
-            .map(|l| line_width(l))
-            .max()
-            .unwrap_or(0)
+        self.max_w
     }
 
     fn scroll_y(&mut self, delta: isize) {
@@ -62,11 +61,11 @@ impl CodeViewer {
         let mut used = 0u16;
         for ch in line.chars() {
             let w = char_width(ch);
-            if start + w <= self.left {
+            if start.saturating_add(w) <= self.left {
                 start = start.saturating_add(w);
                 continue;
             }
-            if used + w > avail {
+            if used.saturating_add(w) > avail {
                 break;
             }
             out.push(ch);
@@ -168,6 +167,24 @@ mod tests {
     fn want_is_longest_line_plus_gutter() {
         let mut v = viewer(&["hi", "abcdefghij"]);
         assert_eq!(v.want((80, 20)), (12, 2));
+    }
+
+    #[test]
+    fn a_line_wider_than_u16_scrolls_without_overflowing() {
+        use ratatui::Terminal;
+        use ratatui::backend::TestBackend;
+        let long = "x".repeat(70_000);
+        let mut v = viewer(&[long.as_str(), "short"]);
+        // The width is measured once and saturates instead of wrapping.
+        assert_eq!(v.max_w, u16::MAX);
+        assert_eq!(v.want((80, 20)).0, u16::MAX);
+        press(&mut v, '$');
+        let mut term = Terminal::new(TestBackend::new(30, 4)).unwrap();
+        term.draw(|f| v.draw(f, f.area(), &Theme::default()))
+            .unwrap();
+        press(&mut v, 'l');
+        term.draw(|f| v.draw(f, f.area(), &Theme::default()))
+            .unwrap();
     }
 
     #[test]

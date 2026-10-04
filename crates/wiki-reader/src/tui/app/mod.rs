@@ -151,14 +151,22 @@ pub struct App {
     rebuild_rx: Option<Receiver<Result<Index, String>>>,
     /// Dirty arrived while a rebuild was in flight — start another when done.
     rebuild_pending: bool,
-    /// In-flight raw-view highlight job (`token` must match [`Self::highlight_token`]).
-    highlight_rx: Option<(u64, Receiver<Vec<Vec<crate::tui::highlight::HlSpan>>>)>,
+    /// The raw-view highlight worker, started on first use (one thread, newest request wins).
+    highlight_worker: Option<crate::tui::highlight::HighlightWorker>,
     /// Bumped on each Raw load / leave-Raw so stale highlight results are dropped.
     highlight_token: u64,
     /// Sticky "page removed" until the user navigates elsewhere.
     pub(crate) page_missing: bool,
     /// In-page search match **source** lines (after opening a text hit).
     pub(crate) search_matches: Vec<u32>,
+    /// Coalesce search-as-you-type refreshes: the event loop sets this so a burst of keys (a
+    /// paste arrives as one key event per character) refreshes once, before the next draw.
+    /// Direct `update` calls (tests) refresh immediately.
+    pub(crate) search_batching: bool,
+    /// A refresh was requested while batching and not yet run.
+    search_dirty: bool,
+    /// Searches actually run (tests assert batching).
+    pub(crate) search_refreshes: u64,
     /// Page that `search_matches` belong to (clear on navigate away).
     search_match_page: Option<PageKey>,
     /// Index into `search_matches`.
@@ -343,10 +351,13 @@ impl App {
             watcher,
             rebuild_rx: None,
             rebuild_pending: false,
-            highlight_rx: None,
+            highlight_worker: None,
             highlight_token: 0,
             page_missing: false,
             search_matches: Vec::new(),
+            search_batching: false,
+            search_dirty: false,
+            search_refreshes: 0,
             search_match_page: None,
             search_match_idx: 0,
             match_highlight: None,
@@ -597,6 +608,10 @@ impl App {
     /// Pure state update (unit-testable without a terminal).
     #[allow(clippy::too_many_lines)] // action match grows with tabs/copy
     pub fn update(&mut self, action: Action) {
+        // Results must be current before anything but more typing reads them.
+        if self.search_dirty && !matches!(action, Action::SearchChar(_) | Action::SearchBackspace) {
+            self.flush_search_refresh();
+        }
         // Transient notices clear on the next key/action (Tab keeps focus target).
         // Sticky "page removed" survives until real navigation.
         if !self.page_missing
@@ -1009,6 +1024,7 @@ impl App {
             list_height: 10,
             page_hits: Vec::new(),
             text_hits: Vec::new(),
+            text_files: 0,
             prev_focus: self.focus,
             prev_cursor: self.cursor_line,
             prev_scroll: self.scroll,
@@ -1302,7 +1318,25 @@ impl App {
         self.update(action);
     }
 
+    /// Ask for a search refresh: now, or once per event batch when the loop is batching.
+    fn request_search_refresh(&mut self) {
+        if self.search_batching {
+            self.search_dirty = true;
+        } else {
+            self.search_refresh();
+        }
+    }
+
+    /// Run a deferred search refresh (before drawing, and before any other action).
+    pub(crate) fn flush_search_refresh(&mut self) {
+        if std::mem::take(&mut self.search_dirty) {
+            self.search_refresh();
+        }
+    }
+
     fn search_refresh(&mut self) {
+        self.search_dirty = false;
+        self.search_refreshes += 1;
         let Some(overlay) = self.search.as_mut() else {
             return;
         };
@@ -1314,6 +1348,8 @@ impl App {
             }
             SearchMode::Content => {
                 overlay.text_hits = search::search_text(&overlay.query, index);
+                // Hits come grouped by page, so distinct pages are the runs.
+                overlay.text_files = overlay.text_hits.chunk_by(|a, b| a.page == b.page).count();
                 overlay.page_hits.clear();
             }
         }
@@ -1324,14 +1360,14 @@ impl App {
         if let Some(overlay) = self.search.as_mut() {
             overlay.query.push(c);
         }
-        self.search_refresh();
+        self.request_search_refresh();
     }
 
     fn search_backspace(&mut self) {
         if let Some(overlay) = self.search.as_mut() {
             overlay.query.pop();
         }
-        self.search_refresh();
+        self.request_search_refresh();
     }
 
     fn search_select(&mut self, delta: i32) {
@@ -1674,46 +1710,42 @@ impl App {
     }
 
     fn poll_highlight_rx(&mut self) {
-        let Some((token, rx)) = &self.highlight_rx else {
+        let Some(worker) = &self.highlight_worker else {
             return;
         };
-        let token = *token;
-        match rx.try_recv() {
-            Ok(hl) => {
-                self.highlight_rx = None;
-                if token == self.highlight_token
-                    && let PageDoc::Raw(doc) = &mut self.doc
-                {
-                    doc.set_highlights(hl);
+        loop {
+            match worker.try_recv() {
+                Ok((token, hl)) => {
+                    if token == self.highlight_token
+                        && let PageDoc::Raw(doc) = &mut self.doc
+                    {
+                        doc.set_highlights(hl);
+                    }
                 }
-            }
-            Err(TryRecvError::Empty) => {}
-            Err(TryRecvError::Disconnected) => {
-                self.highlight_rx = None;
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => {
+                    // Pages stay plain; the next raw page starts a fresh worker.
+                    self.highlight_worker = None;
+                    break;
+                }
             }
         }
     }
 
     fn cancel_highlight(&mut self) {
         self.highlight_token = self.highlight_token.wrapping_add(1);
-        self.highlight_rx = None;
+        if let Some(worker) = &self.highlight_worker {
+            worker.cancel(self.highlight_token);
+        }
     }
 
     fn spawn_highlight(&mut self, source: String) {
-        // ponytail: spawn-per-request + token; mailbox worker if rapid nav piles threads
+        // Newest request wins: the worker drops older queued sources and aborts a superseded job.
         self.highlight_token = self.highlight_token.wrapping_add(1);
-        let token = self.highlight_token;
-        let (tx, rx) = mpsc::channel();
-        self.highlight_rx = Some((token, rx));
-        let syntax = self.theme.syntax;
-        std::thread::spawn(move || {
-            // A panic leaves the page plain: dropping `tx` reports "no highlights".
-            if let Ok(hl) = guarded("syntax highlight", || {
-                crate::tui::highlight::highlight_markdown(&source, syntax)
-            }) {
-                let _ = tx.send(hl);
-            }
-        });
+        let worker = self
+            .highlight_worker
+            .get_or_insert_with(crate::tui::highlight::HighlightWorker::spawn);
+        worker.submit(self.highlight_token, source, self.theme.syntax);
     }
 
     /// Apply a completed rebuild if ready. Returns true when a rebuild just finished.
@@ -1809,17 +1841,8 @@ impl App {
                     self.message = format!("open {url}? [y/N]");
                 }
                 Effect::PageRemoved => {
-                    self.page_missing = true;
+                    self.show_page_removed();
                     self.message = "page removed".into();
-                    self.cancel_highlight();
-                    self.doc = PageDoc::Raw(RawDoc::from_source(
-                        "# page removed\n\nThis page no longer exists on disk.\nPress Back to leave.\n",
-                        None,
-                    ));
-                    self.images.retain_for(&[]);
-                    self.cursor_line = 0;
-                    self.scroll = 0;
-                    self.clear_item_focus();
                 }
             }
         }
@@ -1839,6 +1862,20 @@ impl App {
         if page_changed {
             self.note_session_change();
         }
+    }
+
+    /// Replace the view with the "page removed" placeholder (sticky until real navigation).
+    fn show_page_removed(&mut self) {
+        self.page_missing = true;
+        self.cancel_highlight();
+        self.doc = PageDoc::Raw(RawDoc::from_source(
+            "# page removed\n\nThis page no longer exists on disk.\nPress Back to leave.\n",
+            None,
+        ));
+        self.images.retain_for(&[]);
+        self.cursor_line = 0;
+        self.scroll = 0;
+        self.clear_item_focus();
     }
 
     pub(crate) fn load_page(&mut self, key: &PageKey) {
@@ -1880,6 +1917,9 @@ impl App {
                 }
             }
             Err(err) => {
+                // Do not leave the previous page on screen under this tab: its cursor and
+                // scroll would be saved onto a page that could not be read.
+                self.show_page_removed();
                 self.message = format!("read failed: {err}");
             }
         }

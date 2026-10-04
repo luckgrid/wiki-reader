@@ -45,6 +45,21 @@ pub struct TableViewer {
     widths: Vec<usize>,
     /// Body rows that fit, from the last draw (page keys).
     page: usize,
+    /// Sort keys of the sorted column, computed once per sort (not per comparison).
+    sort_keys: Vec<SortKey>,
+    /// The column `sort_keys` belong to.
+    sort_keys_col: Option<usize>,
+}
+
+/// Column layout for one frame, computed once and shared by the header, rule and body rows.
+struct ColumnLayout {
+    /// Display widths; the last visible column is stretched to fill the window when it is the
+    /// table's last column.
+    widths: Vec<usize>,
+    /// Visible column indexes: column 0, then from `left`.
+    cols: Vec<usize>,
+    /// The last visible column is the table's last, so no trailing separator is drawn.
+    last_is_final: bool,
 }
 
 impl TableViewer {
@@ -76,6 +91,8 @@ impl TableViewer {
             left: 1,
             widths,
             page: 10,
+            sort_keys: Vec::new(),
+            sort_keys_col: None,
             text,
             table,
         };
@@ -85,20 +102,25 @@ impl TableViewer {
 
     /// Re-run filter and sort over the body rows.
     fn refresh(&mut self) {
-        let needle = self.filter.to_lowercase();
+        // Case-insensitive without allocating a lowercase copy of every cell per keystroke.
+        let needle = self.filter.as_str();
         self.view = (0..self.text.len())
             .filter(|&i| {
                 needle.is_empty()
-                    || self.text[i]
-                        .iter()
-                        .any(|c| c.to_lowercase().contains(&needle))
+                    || self.text[i].iter().any(|c| {
+                        wiki_reader_core::search::find_case_insensitive(c, needle).is_some()
+                    })
             })
             .collect();
         if let Some((c, desc)) = self.sort {
-            let rows = &self.text;
+            if self.sort_keys_col != Some(c) {
+                self.sort_keys = self.text.iter().map(|r| sort_key(&r[c])).collect();
+                self.sort_keys_col = Some(c);
+            }
+            let keys = &self.sort_keys;
             // Stable, so equal keys keep document order.
             self.view.sort_by(|&a, &b| {
-                let o = cmp_cells(&rows[a][c], &rows[b][c]);
+                let o = cmp_keys(&keys[a], &keys[b]);
                 if desc { o.reverse() } else { o }
             });
         }
@@ -162,12 +184,6 @@ impl TableViewer {
         cols
     }
 
-    /// Last column fully visible when scrolled to `self.left` in `avail` cells.
-    fn last_full(&self, avail: usize) -> usize {
-        let widths = self.eff_widths(avail);
-        *self.visible_cols(&widths, avail).last().unwrap_or(&0)
-    }
-
     fn keep_cursor_visible(&mut self, avail: usize, rows: usize) {
         if self.row < self.top {
             self.top = self.row;
@@ -176,14 +192,23 @@ impl TableViewer {
         }
         if self.col > 0 {
             self.left = self.left.clamp(1, self.col);
-            while self.left < self.col && self.last_full(avail) < self.col {
+            // Widths do not depend on `left`, so compute them once, not per step.
+            let widths = self.eff_widths(avail);
+            while self.left < self.col
+                && self
+                    .visible_cols(&widths, avail)
+                    .last()
+                    .copied()
+                    .unwrap_or(0)
+                    < self.col
+            {
                 self.left += 1;
             }
         }
     }
 
-    /// Header rule matching the visible columns (`─` / `─┼─`).
-    fn rule_line(&self, avail: usize, theme: &Theme) -> Line<'static> {
+    /// Widths and visible columns for `avail` cells, with the last column stretched to the edge.
+    fn column_layout(&self, avail: usize) -> ColumnLayout {
         let mut widths = self.eff_widths(avail);
         let cols = self.visible_cols(&widths, avail);
         let last_is_final = cols.last().is_some_and(|&k| k + 1 == widths.len());
@@ -194,11 +219,20 @@ impl TableViewer {
                 widths[last] += avail.saturating_sub(used);
             }
         }
+        ColumnLayout {
+            widths,
+            cols,
+            last_is_final,
+        }
+    }
+
+    /// Header rule matching the visible columns (`─` / `─┼─`).
+    fn rule_line(layout: &ColumnLayout, theme: &Theme) -> Line<'static> {
         let mut spans = Vec::new();
-        for (i, &k) in cols.iter().enumerate() {
-            spans.push(Span::styled("─".repeat(widths[k]), theme.muted()));
-            let is_last = i + 1 == cols.len();
-            if !(last_is_final && is_last) {
+        for (i, &k) in layout.cols.iter().enumerate() {
+            spans.push(Span::styled("─".repeat(layout.widths[k]), theme.muted()));
+            let is_last = i + 1 == layout.cols.len();
+            if !(layout.last_is_final && is_last) {
                 spans.push(Span::styled("─┼─", theme.muted()));
             }
         }
@@ -210,38 +244,34 @@ impl TableViewer {
     fn cells_line(
         &self,
         cells: &[DocCell],
-        avail: usize,
+        layout: &ColumnLayout,
         base: Style,
         cursor_row: bool,
         theme: &Theme,
         arrow: Option<char>,
     ) -> Line<'static> {
-        let mut widths = self.eff_widths(avail);
-        let cols = self.visible_cols(&widths, avail);
-        let last_is_final = cols.last().is_some_and(|&k| k + 1 == widths.len());
-        if last_is_final {
-            let used: usize = cols.iter().map(|&k| widths[k]).sum::<usize>()
-                + cols.len().saturating_sub(1) * SEP_W;
-            if let Some(&last) = cols.last() {
-                widths[last] += avail.saturating_sub(used);
-            }
-        }
         let sep_style = if cursor_row {
             theme.muted().bg(theme.cursor_line)
         } else {
             theme.muted()
         };
         let mut spans = Vec::new();
-        for (i, &k) in cols.iter().enumerate() {
+        for (i, &k) in layout.cols.iter().enumerate() {
             let arrow = arrow.filter(|_| self.sort.is_some_and(|(c, _)| c == k));
             if cursor_row && k == self.col {
                 let cursor = Style::default().fg(theme.on_peach).bg(theme.peach);
-                spans.extend(cell_spans(&cells[k], widths[k], arrow, cursor, None));
+                spans.extend(cell_spans(&cells[k], layout.widths[k], arrow, cursor, None));
             } else {
-                spans.extend(cell_spans(&cells[k], widths[k], arrow, base, Some(theme)));
+                spans.extend(cell_spans(
+                    &cells[k],
+                    layout.widths[k],
+                    arrow,
+                    base,
+                    Some(theme),
+                ));
             }
-            let is_last = i + 1 == cols.len();
-            if !(last_is_final && is_last) {
+            let is_last = i + 1 == layout.cols.len();
+            if !(layout.last_is_final && is_last) {
                 spans.push(Span::styled(SEP, sep_style));
             }
         }
@@ -414,9 +444,10 @@ impl ModalContent for TableViewer {
         let avail = usize::from(body.width);
         self.page = rows;
         self.keep_cursor_visible(avail, rows);
+        let layout = self.column_layout(avail);
         let head = self.cells_line(
             &self.table.header,
-            avail,
+            &layout,
             theme.text().add_modifier(Modifier::BOLD),
             false,
             theme,
@@ -426,7 +457,7 @@ impl ModalContent for TableViewer {
                 '▲'
             }),
         );
-        let mut lines = vec![head, self.rule_line(avail, theme)];
+        let mut lines = vec![head, Self::rule_line(&layout, theme)];
         for (n, &i) in self.view.iter().enumerate().skip(self.top).take(rows) {
             let cursor = n == self.row;
             let style = if cursor {
@@ -434,7 +465,7 @@ impl ModalContent for TableViewer {
             } else {
                 theme.text()
             };
-            lines.push(self.cells_line(&self.table.rows[i], avail, style, cursor, theme, None));
+            lines.push(self.cells_line(&self.table.rows[i], &layout, style, cursor, theme, None));
         }
         if self.view.is_empty() {
             lines.push(Line::from(Span::styled("no rows match", theme.muted())));
@@ -450,13 +481,28 @@ fn show(s: &str) -> String {
         .collect()
 }
 
+/// Sort key of one cell, computed once per sort.
+enum SortKey {
+    Num(f64),
+    /// Lowercased text.
+    Text(String),
+}
+
+/// Numbers (finite, so a name like "Nan" or "Inf" sorts as text) before text.
+fn sort_key(cell: &str) -> SortKey {
+    match cell.trim().parse::<f64>().ok().filter(|n| n.is_finite()) {
+        Some(n) => SortKey::Num(n),
+        None => SortKey::Text(cell.to_lowercase()),
+    }
+}
+
 /// Total order: numbers (by value) before text (case-insensitive).
-fn cmp_cells(a: &str, b: &str) -> Ordering {
-    match (a.trim().parse::<f64>(), b.trim().parse::<f64>()) {
-        (Ok(x), Ok(y)) => x.total_cmp(&y),
-        (Ok(_), Err(_)) => Ordering::Less,
-        (Err(_), Ok(_)) => Ordering::Greater,
-        (Err(_), Err(_)) => a.to_lowercase().cmp(&b.to_lowercase()),
+fn cmp_keys(a: &SortKey, b: &SortKey) -> Ordering {
+    match (a, b) {
+        (SortKey::Num(x), SortKey::Num(y)) => x.total_cmp(y),
+        (SortKey::Num(_), SortKey::Text(_)) => Ordering::Less,
+        (SortKey::Text(_), SortKey::Num(_)) => Ordering::Greater,
+        (SortKey::Text(x), SortKey::Text(y)) => x.cmp(y),
     }
 }
 
@@ -518,6 +564,46 @@ mod tests {
         assert_eq!(names(&v), ["Bob", "alice", "Carol"], "document order again");
         press(&mut v, "ls");
         assert_eq!(names(&v), ["alice", "Bob", "Carol"], "9 < 10 < x");
+    }
+
+    #[test]
+    fn names_that_parse_as_floats_sort_as_text() {
+        let row = |a: &str| vec![cell(a), cell("x")];
+        let mut v = TableViewer::new(DocTable {
+            source_line: 1,
+            line: 0,
+            height: 6,
+            header: vec![cell("name"), cell("n")],
+            rows: vec![row("Nan"), row("Bob"), row("5"), row("inf")],
+        });
+        press(&mut v, "s");
+        // 5 is a number; "inf" and "Nan" are words here, so they sort as text.
+        assert_eq!(names(&v), ["5", "Bob", "inf", "Nan"]);
+    }
+
+    #[test]
+    fn filter_folds_case_without_slicing_and_sort_keys_are_reused() {
+        let row = |a: &str| vec![cell(a), cell("x")];
+        let mut v = TableViewer::new(DocTable {
+            source_line: 1,
+            line: 0,
+            height: 5,
+            header: vec![cell("name"), cell("n")],
+            rows: vec![row("İstanbul"), row("Ankara"), row("izmir")],
+        });
+        press(&mut v, "s");
+        assert_eq!(
+            v.sort_keys_col,
+            Some(0),
+            "keys computed once for the sorted column"
+        );
+        press(&mut v, "/STANBUL");
+        assert_eq!(names(&v), ["İstanbul"]);
+        assert_eq!(
+            v.sort_keys.len(),
+            3,
+            "typing a filter does not rebuild the keys"
+        );
     }
 
     #[test]

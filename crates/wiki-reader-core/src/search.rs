@@ -168,7 +168,13 @@ pub fn find_case_insensitive(text: &str, needle: &str) -> Option<std::ops::Range
         .map(|i| folded[i].1..folded[i + want.len() - 1].2)
 }
 
-/// Case-insensitive scan of indexed page bodies (deterministic grouping).
+/// Most content hits [`search_text`] returns. A one-letter query on a large collection would
+/// otherwise build a snippet and a cloned key per matching line (10^6 hits); the overlay shows
+/// "N+ matches" at the cap.
+pub const MAX_TEXT_HITS: usize = 500;
+
+/// Case-insensitive scan of indexed page bodies (deterministic grouping), at most
+/// [`MAX_TEXT_HITS`] hits.
 #[must_use]
 pub fn search_text(query: &str, index: &Index) -> Vec<TextHit> {
     let q = query.trim();
@@ -188,6 +194,9 @@ pub fn search_text(query: &str, index: &Index) -> Vec<TextHit> {
                     line: line_no,
                     snippet: snippet_line(line, q),
                 });
+                if hits.len() >= MAX_TEXT_HITS {
+                    return hits;
+                }
             }
         }
     }
@@ -245,6 +254,18 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/worked-example");
         let provider = FsProvider::open(&root).unwrap();
         Index::build(&provider).unwrap()
+    }
+
+    #[test]
+    fn content_hits_are_capped() {
+        use crate::provider::FsProvider;
+        let dir = tempfile::tempdir().unwrap();
+        let body = "needle\n".repeat(MAX_TEXT_HITS + 200);
+        std::fs::write(dir.path().join("a.md"), format!("# A\n\n{body}")).unwrap();
+        std::fs::write(dir.path().join("b.md"), format!("# B\n\n{body}")).unwrap();
+        let index = Index::build(&FsProvider::open(dir.path()).unwrap()).unwrap();
+        let hits = search_text("needle", &index);
+        assert_eq!(hits.len(), MAX_TEXT_HITS, "stops scanning at the cap");
     }
 
     #[test]

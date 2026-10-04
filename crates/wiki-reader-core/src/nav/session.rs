@@ -220,6 +220,11 @@ impl Navigator {
     #[must_use]
     pub fn reindex(&mut self, index: Index, view: ViewState) -> Vec<Effect> {
         self.save_view(view);
+        if self.index == index {
+            // A touch, or an editor save with no edits: nothing changed, so the page, tree,
+            // selection and focus stay exactly as they are (no reload).
+            return Vec::new();
+        }
         let cur = self.tab().current().page.clone();
         self.index = index;
         self.title_tree = NavTree::build(&self.index);
@@ -964,7 +969,10 @@ mod tests {
     fn reindex_keeps_history_when_page_still_exists() {
         let mut nav = worked();
         nav.go_to_page(key("architecture/README.md"), ViewState::default());
-        let index = nav.index().clone();
+        let mut index = nav.index().clone();
+        index.diagnostics.push(crate::parse::Diagnostic {
+            message: "changed".into(),
+        });
         let effects = nav.reindex(index, ViewState::default());
         assert!(effects.iter().any(|e| matches!(e, Effect::LoadPage(_))));
         assert!(
@@ -985,7 +993,11 @@ mod tests {
             ViewState::default(),
         );
         assert!(nav.tab().current().anchor.is_some());
-        let index = nav.index().clone();
+        let mut index = nav.index().clone();
+        // A real change somewhere in the collection (a no-op rebuild reloads nothing).
+        index.diagnostics.push(crate::parse::Diagnostic {
+            message: "changed".into(),
+        });
         let effects = nav.reindex(index, view(26, 10));
         assert!(
             effects.iter().any(|e| matches!(e, Effect::ScrollTo(None))),
@@ -998,6 +1010,24 @@ mod tests {
         );
         assert_eq!(nav.tab().current().cursor_line, 26);
         assert_eq!(nav.tab().current().scroll, 10);
+    }
+
+    #[test]
+    fn reindex_with_an_identical_index_reloads_nothing() {
+        let mut nav = worked();
+        nav.go_to_page(key("README.md"), ViewState::default());
+        let same = nav.index().clone();
+        let effects = nav.reindex(same, view(12, 3));
+        assert!(
+            effects.is_empty(),
+            "no reload for an unchanged collection: {effects:?}"
+        );
+        assert_eq!(
+            nav.tab().current().cursor_line,
+            12,
+            "live view is still saved"
+        );
+        assert_eq!(nav.tab().current().scroll, 3);
     }
 
     #[test]
