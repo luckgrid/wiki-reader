@@ -3,7 +3,7 @@ id: WR-ROADMAP-DOGFOOD
 title: Dogfood log
 summary: Dated bites, fixes, releases and decisions from the Phase 2 dogfood clock, grouped by release cut.
 status: active
-updated: 2026-10-03
+updated: 2026-10-04
 related: [phase-2-mvp, phase-3-alpha, phase-4-beta]
 ---
 
@@ -153,6 +153,10 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 | 2026-10-03 | decision | P3-22 diagram state toggle landed in the working tree (unreleased): `v` cycles image / text / source for the open diagram, skipping image without a graphics protocol; session-only. Batch C landed as one working-tree batch; release split still available (P3-20 as v0.1.6, P3-21/22 as v0.1.7) pending operator cut after merge effort is known. Manual Ghostty/herdr pass still to do | P3-20, P3-21, P3-22 |
 | 2026-10-03 | decision | P3-23 docs refresh (partial): README / ui-spec ASCII redrawn with carousel/fit callout; carousel keys in README prose, Help and ui-spec. PNG retake of `assets/wiki-reader.png` and `wiki/assets/` copies blocked (no Screen Recording permission in the agent session); operator must retake in Ghostty | P3-23 |
 | 2026-10-03 | decision | Phase 3 status: still `active`. P3-19 to P3-23 are implemented on a branch (`doing`) and wait for review, the manual terminal pass, the PNG screenshot retake (operator-gated) and the v0.1.5 dogfood. The exit decision against the [exit criteria](phase-3-alpha.md#exit-criteria) is written after that dogfood, not before | P3-19…P3-23 |
+| 2026-10-04 | bite | Operator on the #134 build: the `Mermaid bad` diagram in the elements gallery opens in a full-screen modal that shows two lines of text. A failed graphics render wanted the whole cap | P3-21 |
+| 2026-10-04 | bite | Operator: the table viewer is less readable than the in-page table: cells cut at 40 columns, an empty column after scrolling to the end, no rule under the header | P3-20 |
+| 2026-10-04 | fix | Failed diagram modals size to their error text and source; table viewer columns use natural width with horizontal scroll, the last column fills the window, a `─┼─` rule sits under the header. Tests cover the failed-render size, the filled last column, and a 60-character cell shown in full | P3-20, P3-21 |
+| 2026-10-04 | decision | Code blocks truncate with `…` instead of wrapping and open in a code viewer (P3-24); header and footer icons become shared three-cell buttons (P3-25); frontmatter `status` gets eight canonical values, documented and enforced by `link-check` (P3-26). Each is its own PR; tasks stay `doing` until the operator reviews | P3-24, P3-25, P3-26 |
 
 ## Related
 
