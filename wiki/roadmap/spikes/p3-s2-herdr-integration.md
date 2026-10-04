@@ -98,9 +98,36 @@ its source discards the confirmed protocol when no font size can be obtained
 from the response or the PTY ioctl. That 10×20 is a library default, not measured
 popup geometry. Client/server remain Herdr 0.9.0, protocol 22, no stale binary.
 
+A second diagnostic waited 300 ms after entering the alternate screen before
+querying. It still returned Halfblocks/10×20 with no capabilities. A fixed
+startup sleep is therefore not an evidenced workaround.
+
+Inspection of Herdr's tagged 0.9.0 source identifies a geometry-update gap:
+
+- [Popup creation](https://github.com/herdrdev/herdr/blob/v0.9.0/src/app/popup.rs) starts the child with rows/columns but no initial cell metrics; the PTY/runtime start with zero pixel geometry.
+- [`public_request_may_change_geometry` and `shell_endpoint_claims_geometry`](https://github.com/herdrdev/herdr/blob/v0.9.0/src/server/headless/client_views.rs) omit `PluginPaneOpen`. Geometry reapplication resizes the popup, but opening it does not request that reapplication.
+- [Normal client-shell rendering](https://github.com/herdrdev/herdr/blob/v0.9.0/src/server/headless/render.rs) calls `render_client_shell_pane_surface` with `resize_panes = false`; merely drawing the new popup does not initialise its geometry.
+- Herdr's own `xtwinops_size_queries_stay_silent_without_pixel_geometry` test in [pane terminal tests](https://github.com/herdrdev/herdr/blob/v0.9.0/src/pane/terminal.rs) asserts the silent replies we observed. The positive tests expect `CSI 6;height;width t` after a resize with real metrics.
+
+The omission also remains in the inspected v0.9.3 and upstream master request
+classifiers; an upgrade alone is not a verified fix. Proposed host-side fix:
+initialise the popup PTY **and** virtual terminal with the owning client's
+known cell geometry before child execution/probe handling, classify popup opens
+as geometry-changing requests, and preserve updates on resize. Unknown geometry
+must remain unknown, not guessed. A post-spawn resize alone still needs a test
+for a child that queries immediately, because it can race startup.
+
+Required upstream regression: launch a popup child that immediately sends the
+Kitty/cell-size/status queries, assert confirmed Kitty and the actual host cell
+size without a sleep or window resize, and repeat through both CLI/plugin action
+and client keybinding paths. Check resize and multi-client ownership as well.
+No patched Herdr build was run; this is a source-backed fix proposal, not a
+validated implementation.
+
 No forced protocol, guessed cell geometry, Herdr upgrade, user config change or
-dogfood binary replacement was performed. Resolve the capability/geometry gap
-before completing P3-09; the initial feasibility verdict is not shipping proof.
+dogfood binary replacement was performed. Both diagnostic runs' temporary
+plugin was unlinked; `plugin list` was empty again. Resolve the capability/geometry
+gap before completing P3-09; the initial feasibility verdict is not shipping proof.
 
 ## Matrix
 
