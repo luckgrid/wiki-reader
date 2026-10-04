@@ -32,3 +32,4 @@ pub mod table_viewer;
 pub mod text_col;
 pub mod theme;
 pub mod viewer_doc;
+pub mod worker;

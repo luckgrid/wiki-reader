@@ -166,6 +166,13 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 | 2026-10-04 | decision | Prepare v0.1.5 to put the lite build (P3-19, [ADR-0023](../decisions/0023-lite-build-is-a-cargo-feature.md)), viewer sizing, carousel and diagram toggle (P3-20/21/22), the code viewer (P3-24), shared toolbar icons (P3-25), the status enum (P3-26), the viewer fixes and the retaken screenshots (P3-23) in the installed dogfood binary. Bump the workspace, path dependency versions and the herdr plugin manifest; require green CI on the release merge commit before tagging. Phase 2 stays on fixes-only hold until the ≈ 2026-10-13 verdict | P3-19, P3-20, P3-21, P3-22, P3-23, P3-24, P3-25, P3-26, P3-08 |
 | 2026-10-04 | release | [v0.1.5](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.5) published as a prerelease from #140 merge commit `cdbaac4` after its CI passed on `main`. The release workflow passed; three tarballs and three checksums present. macOS arm64 download checksum verified and the extracted binary reports 0.1.5 (17 MiB, 6.7 MiB tarball). `cargo install --locked --no-default-features` from the tag builds a lite binary of 8.5 MiB that reports 0.1.5. Cargo dogfood install upgraded from v0.1.4 to v0.1.5 (`~/.cargo/bin/wiki-reader`, the only copy on `PATH`; `--version` reports 0.1.5). The Phase 3 exit decision waits on dogfooding this install. Clock continues without restarting | P3-19, P3-20, P3-21, P3-22, P3-23, P3-24, P3-25, P3-26, P3-08 |
 
+## v0.1.6
+
+| Date | Kind | Note | Task IDs |
+|------|------|------|----------|
+| 2026-10-04 | decision | Audit follow-up: a pre-0.1.5 audit (E1 to E8) and a static re-audit of v0.1.5 (N1 to N20 plus lower items) are recorded in [audit-v0.1.5.md](audit-v0.1.5.md). Plan: crashes and terminal safety first (P3-27), then performance (P3-28), the rest staged. The re-audit read code only; N1 to N4 were re-read and confirmed | P3-27, P3-28 |
+| 2026-10-04 | fix | P3-27: shared case-insensitive match that maps back to original bytes (search overlay, snippets); editor requests deferred to the event loop; thread-aware panic hook and `worker::guarded` for image, viewer, highlight and reindex workers; dead workers surface an error instead of busy-redrawing; `[keys]` overrides only in Normal mode; session save backoff, tmp cleanup and a final flush; `nav_order` finite-only; recording test doubles gated. Regression tests for each | P3-27 |
+
 ## Related
 
 - [Phase 2](phase-2-mvp.md)

@@ -476,14 +476,14 @@ fn apply_frontmatter_key(
                 }),
             }
         }
-        "nav_order" => match value.as_f64() {
+        "nav_order" => match value.as_f64().filter(|n| n.is_finite()) {
             Some(n) => {
                 fm.nav_order = Some(n);
                 fm.props
                     .push((name.to_owned(), FmProp::Scalar(n.to_string())));
             }
             None => diagnostics.push(Diagnostic {
-                message: "frontmatter `nav_order`: expected number; skipped".into(),
+                message: "frontmatter `nav_order`: expected a finite number; skipped".into(),
             }),
         },
         "tags" | "work_units" | "applies_to" | "related" => match value.as_list_strings() {
@@ -886,6 +886,16 @@ mod tests {
         assert_eq!(page.frontmatter.id.as_deref(), Some("42"));
         assert_eq!(page.frontmatter.related, vec!["spec"]);
         assert!(page.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn non_finite_nav_order_is_skipped_with_a_diagnostic() {
+        for value in [".nan", ".inf", "-.inf", "\"NaN\"", "\"inf\""] {
+            let src = format!("---\ntitle: T\nnav_order: {value}\n---\n\n# H\n");
+            let page = parse(&src);
+            assert_eq!(page.frontmatter.nav_order, None, "{value}");
+            assert_eq!(page.diagnostics.len(), 1, "{value}");
+        }
     }
 
     #[test]

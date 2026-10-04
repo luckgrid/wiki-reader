@@ -1,6 +1,7 @@
 //! OSC 52 clipboard write (injectable for tests).
 
 use std::io::{self, Write};
+#[cfg(test)]
 use std::sync::{Arc, Mutex};
 
 /// Cap on the base64 payload of one OSC 52 sequence (many terminals drop
@@ -50,12 +51,13 @@ impl ClipboardWriter for Osc52Clipboard {
 }
 
 /// Recording clipboard for tests.
+#[cfg(test)]
 #[derive(Debug, Clone, Default)]
-#[allow(dead_code)] // constructed from `#[cfg(test)]` app tests
 pub struct RecordingClipboard {
     pub copied: Arc<Mutex<Vec<String>>>,
 }
 
+#[cfg(test)]
 impl ClipboardWriter for RecordingClipboard {
     fn copy(&mut self, text: &str) -> io::Result<()> {
         check_size(text)?;
