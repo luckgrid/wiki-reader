@@ -42,7 +42,7 @@ herdr is the host environment, so it's the integration most likely to pay off ea
 |-------|------|------|
 | Env awareness | Detect `HERDR_ENV`, choose Kitty-only graphics or the text tier | Phase 2 |
 | Context signals (Phase 4, widget sidebar) | `herdr pane list --workspace $HERDR_WORKSPACE_ID` → sibling cwds and agent states | Phase 4 |
-| Publish state | `herdr pane report-metadata --token page=… --token wu=…` so herdr's sidebar shows what the wiki pane is on | Alpha |
+| Publish state | `herdr pane report-metadata` with a title and a `page` token, from a worker thread, debounced, with a renewed TTL and cleared on exit; on by default in a pane with its own `HERDR_PANE_ID`, `[herdr] publish = false` to opt out ([ADR-0022](../decisions/0022-herdr-launcher-and-page-publishing.md)) | Alpha (P3-10) |
 | Plugin | [`integrations/herdr/`](../../integrations/herdr/README.md): an action that opens wiki-reader in a new ordinary split pane in the focused pane's directory (images work), plus text-only overlay and popup actions; herdr 0.9.x gives plugin panes no cell metrics | Alpha (P3-09) |
 
 ### Pane setup (today)

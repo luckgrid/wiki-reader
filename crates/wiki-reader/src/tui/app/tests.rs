@@ -5216,3 +5216,81 @@ fn enter_inside_a_table_opens_it_and_modal_copies_a_row() {
     modal_key(&mut app, "sY");
     assert_eq!(log.lock().unwrap().as_slice(), ["alice\t9"]);
 }
+
+#[test]
+fn page_changes_reach_the_herdr_publisher_once_with_title_and_relative_path() {
+    use crate::herdr::{Herdr, Publisher, Timing};
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+
+    #[derive(Default)]
+    struct Recorder(Mutex<Vec<Vec<String>>>);
+    impl Herdr for Recorder {
+        fn run(&self, args: &[String]) -> Result<String, String> {
+            self.0.lock().unwrap().push(args.to_vec());
+            Ok(String::new())
+        }
+    }
+
+    let recorder = Arc::new(Recorder::default());
+    let herdr: Arc<dyn Herdr> = Arc::clone(&recorder) as Arc<dyn Herdr>;
+    let mut app = App::new(&fixture()).unwrap();
+    app.publisher = Some(Publisher::spawn(
+        herdr,
+        "w1:p2".into(),
+        Timing {
+            debounce: Duration::from_millis(20),
+            ..Timing::default()
+        },
+    ));
+    let wait_for = |calls: usize| {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while recorder.0.lock().unwrap().len() < calls {
+            assert!(
+                Instant::now() < deadline,
+                "{:?}",
+                recorder.0.lock().unwrap()
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    };
+
+    app.sync_herdr();
+    app.sync_herdr();
+    wait_for(1);
+    app.update(Action::GoToPage(PageKey {
+        collection_id: app.navigator.index().collection_id.clone(),
+        relative_path: PathBuf::from("architecture/design-system/tokens.md"),
+    }));
+    app.sync_herdr();
+    app.sync_herdr();
+    wait_for(2);
+    std::thread::sleep(Duration::from_millis(100));
+    let calls = recorder.0.lock().unwrap().clone();
+    assert_eq!(
+        calls.len(),
+        2,
+        "one report per page, not per frame: {calls:?}"
+    );
+    assert!(
+        calls[1]
+            .windows(2)
+            .any(|w| w[0] == "--token" && w[1] == "page=architecture/design-system/tokens.md"),
+        "{:?}",
+        calls[1]
+    );
+    let title = calls[1]
+        .iter()
+        .position(|a| a == "--title")
+        .map(|at| calls[1][at + 1].as_str())
+        .expect("a title");
+    assert!(
+        !title.is_empty() && std::path::Path::new(title).extension().is_none(),
+        "a page title, got {title}"
+    );
+
+    // Without a publisher (tests, outside herdr, opted out) nothing happens.
+    let mut quiet = App::new(&fixture()).unwrap();
+    assert!(quiet.publisher.is_none());
+    quiet.sync_herdr();
+}

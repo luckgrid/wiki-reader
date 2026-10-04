@@ -177,6 +177,12 @@ pub struct App {
     /// Popup panels and which popups were open at the end of the last frame, so the next
     /// frame can avoid first drawing a picture where a popup covers its first cell.
     pub(crate) last_popups: (u8, Vec<ratatui::layout::Rect>),
+    /// `[herdr] publish`: show the current page in herdr's sidebar when running in a herdr pane.
+    pub(crate) herdr_publish: bool,
+    /// Created by `run` only (never in tests), so a test inside herdr cannot publish.
+    pub(crate) publisher: Option<crate::herdr::Publisher>,
+    /// The page last handed to the publisher.
+    herdr_page: Option<PageKey>,
     /// Terminal graphics (startup probe result), decode worker and prepared pictures.
     pub(crate) images: crate::tui::images::ImageManager,
     /// When false, skip session load/save (tests).
@@ -343,6 +349,9 @@ impl App {
             diagram_mode: config.diagrams,
             copy_path: config.copy.path,
             nav_position: config.nav.position,
+            herdr_publish: config.herdr.publish,
+            publisher: None,
+            herdr_page: None,
             images: crate::tui::images::ImageManager::disabled(),
             persist_session,
             session_saved_at: None,
@@ -419,6 +428,25 @@ impl App {
     }
 
     /// Flush a pending save (`force` ignores the 2s debounce).
+    /// Hand the current page to the herdr publisher when it changed. Cheap: the title is only
+    /// looked up on a page change.
+    pub(crate) fn sync_herdr(&mut self) {
+        let Some(publisher) = &self.publisher else {
+            return;
+        };
+        let page = self.navigator.tab().current().page.clone();
+        if self.herdr_page.as_ref() == Some(&page) {
+            return;
+        }
+        let title = self
+            .navigator
+            .title_tree()
+            .page_display_label(&page)
+            .unwrap_or_else(|| wiki_reader_core::nav::page_label(self.navigator.index(), &page));
+        publisher.publish(&title, &page.relative_path.display().to_string());
+        self.herdr_page = Some(page);
+    }
+
     pub(crate) fn flush_session(&mut self, force: bool) {
         if !self.session_dirty {
             return;

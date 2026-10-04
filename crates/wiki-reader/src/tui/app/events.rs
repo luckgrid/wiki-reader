@@ -46,6 +46,7 @@ pub fn run(root: &Path, config: Option<&Path>) -> io::Result<()> {
         other => io::Error::other(other),
     })?;
 
+    app.publisher = crate::herdr::Publisher::from_env(app.herdr_publish);
     install_panic_hook();
     let mut terminal = ratatui::try_init()?;
     // Armed after try_init: Drop always restores alt-screen/raw; mouse/keys if enabled.
@@ -130,6 +131,7 @@ fn run_loop(
             return Ok(());
         }
         app.poll_watcher();
+        app.sync_herdr();
         app.images.poll();
         if app.images.take_diagram_relayout() {
             app.relayout_after_diagram_size();

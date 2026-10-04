@@ -58,6 +58,15 @@ directory for `--herdr-context`; `--herdr-split` then lets herdr pick the target
 its own `terminal.new_cwd` policy. `--herdr-split` cannot be combined with a root, `--config`
 or `--herdr-context`.
 
+## Page in the sidebar
+
+When wiki-reader runs in a herdr pane that has its own pane id (the `open` action's split pane,
+an overlay, or any ordinary pane), it shows the page you are reading in herdr's sidebar: a title
+and a `page` token, renewed while the reader is open and cleared on exit. It is display-only and
+never reports agent state. Turn it off with `[herdr] publish = false` in wiki-reader's config.
+Plugin popups have no pane of their own, so they never publish. See
+[ADR-0022](../../wiki/decisions/0022-herdr-launcher-and-page-publishing.md).
+
 ## Troubleshooting
 
 `wiki-reader.open` runs `wiki-reader --herdr-split` as the plugin command, then types
