@@ -10,6 +10,7 @@ use pulldown_cmark::{
 };
 use unicode_width::UnicodeWidthStr;
 use wiki_reader_core::Index;
+use wiki_reader_core::images::ImageReject;
 use wiki_reader_core::index::Page;
 use wiki_reader_core::nav::{Target, resolve};
 use wiki_reader_core::parse::{self, github_slug};
@@ -193,6 +194,7 @@ fn content_block_id(kind: BlockActionKind, text: &str) -> u32 {
 
 /// Optional expansion state for re-layout.
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)] // independent environment/probe flags
 pub struct RenderOpts {
     /// Expanded block-action ids (frontmatter / tables).
     pub expanded: std::collections::HashSet<u32>,
@@ -210,6 +212,9 @@ pub struct RenderOpts {
     pub tmux: bool,
     /// `HERDR_ENV=1` — Kitty-only image preference when graphics are confirmed.
     pub herdr: bool,
+    /// Running in a herdr plugin popup (no pane id): only changes the wording of the
+    /// "no graphics" fallback reason, never what is drawn.
+    pub herdr_popup: bool,
     /// Mermaid colours (part of the size/slot cache key), filled from the active theme.
     pub diagram_palette: DiagramPalette,
     /// Shared Mermaid natural-size cache filled by the image worker.
@@ -228,6 +233,7 @@ impl Default for RenderOpts {
             graphics: false,
             tmux: false,
             herdr: false,
+            herdr_popup: false,
             diagram_palette: DiagramPalette::default(),
             diagram_sizes: empty_diagram_size_cache(),
             max_slot_rows: crate::MAX_SLOT_ROWS,
@@ -278,6 +284,7 @@ pub fn render_with(
     state.graphics = opts.graphics;
     state.tmux = opts.tmux;
     state.herdr = opts.herdr;
+    state.herdr_popup = opts.herdr_popup;
     state.diagram_palette = opts.diagram_palette;
     state.diagram_sizes = Arc::clone(&opts.diagram_sizes);
     state.max_slot_rows = opts.max_slot_rows;
@@ -437,6 +444,7 @@ struct LayoutState<'a> {
     graphics: bool,
     tmux: bool,
     herdr: bool,
+    herdr_popup: bool,
     diagram_palette: DiagramPalette,
     diagram_sizes: Arc<DiagramSizeCache>,
     max_slot_rows: u16,
@@ -512,6 +520,7 @@ impl<'a> LayoutState<'a> {
             graphics: false,
             tmux: false,
             herdr: false,
+            herdr_popup: false,
             diagram_palette: DiagramPalette::default(),
             diagram_sizes: empty_diagram_size_cache(),
             max_slot_rows: crate::MAX_SLOT_ROWS,
@@ -577,6 +586,12 @@ impl<'a> LayoutState<'a> {
             max_cols,
             self.max_slot_rows,
         );
+        let plan = match plan {
+            ImagePlan::Placeholder(ImageReject::NoGraphics) if self.herdr_popup => {
+                ImagePlan::Placeholder(ImageReject::NoGraphicsHerdrPopup)
+            }
+            other => other,
+        };
         match plan {
             ImagePlan::Slot { source, cols, rows } => {
                 let line = u32::try_from(self.styled.len()).unwrap_or(0);
@@ -694,9 +709,6 @@ impl<'a> LayoutState<'a> {
             });
         } else {
             let reason_owned: Option<String> = match tier {
-                DiagramTier::Image if self.cell_px.is_none() || !self.graphics => {
-                    Some("no graphics protocol".into())
-                }
                 DiagramTier::Image => match self.diagram_sizes.get(hash, palette) {
                     Some(DiagramSize::Text(DiagramTextReason::Failed(msg))) => Some(msg),
                     Some(
@@ -712,6 +724,23 @@ impl<'a> LayoutState<'a> {
                         ) =>
                 {
                     Some("tmux: text tier".into())
+                }
+                // An explicit `diagrams = "image"` that fell back because the terminal gave no
+                // usable graphics says why; `auto` stays quiet (the text tier is the default).
+                DiagramTier::Text
+                    if matches!(
+                        self.diagram_mode,
+                        wiki_reader_core::config::DiagramMode::Image
+                    ) && !env.tmux =>
+                {
+                    Some(
+                        if self.herdr_popup {
+                            ImageReject::NoGraphicsHerdrPopup
+                        } else {
+                            ImageReject::NoGraphics
+                        }
+                        .to_string(),
+                    )
                 }
                 _ => None,
             };

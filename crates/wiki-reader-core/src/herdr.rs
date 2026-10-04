@@ -20,6 +20,24 @@ pub fn parse_context_cwd(text: &str) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+/// Whether this process looks like it runs in a herdr plugin popup: inside herdr
+/// (`HERDR_ENV=1`) but without a pane of its own (`HERDR_PANE_ID` unset or empty).
+///
+/// herdr 0.9.x starts popups without pixel metrics, so terminal graphics cannot be sized
+/// there. Overlay, split and tab panes carry their own `HERDR_PANE_ID`.
+#[must_use]
+pub fn is_plugin_popup(herdr_env: Option<&str>, pane_id: Option<&str>) -> bool {
+    herdr_env == Some("1") && pane_id.is_none_or(|id| id.trim().is_empty())
+}
+
+/// [`is_plugin_popup`] for this process's environment.
+#[must_use]
+pub fn running_in_plugin_popup() -> bool {
+    let env = std::env::var("HERDR_ENV").ok();
+    let pane = std::env::var("HERDR_PANE_ID").ok();
+    is_plugin_popup(env.as_deref(), pane.as_deref())
+}
+
 /// herdr's config file: `$XDG_CONFIG_HOME/herdr/config.toml`, else `~/.config/herdr/config.toml`.
 #[must_use]
 pub fn config_path() -> Option<PathBuf> {
@@ -59,6 +77,15 @@ pub fn parse_theme_name(text: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn popup_is_herdr_without_its_own_pane() {
+        assert!(is_plugin_popup(Some("1"), None));
+        assert!(is_plugin_popup(Some("1"), Some("  ")));
+        assert!(!is_plugin_popup(Some("1"), Some("w1:p2")));
+        assert!(!is_plugin_popup(None, None), "outside herdr");
+        assert!(!is_plugin_popup(Some("0"), None));
+    }
 
     #[test]
     fn context_prefers_focused_pane_and_preserves_path() {

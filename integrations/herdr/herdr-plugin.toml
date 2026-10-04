@@ -4,9 +4,18 @@ version = "0.1.0"
 min_herdr_version = "0.9.0"
 platforms = ["linux", "macos"]
 
+# Default: a zoomed overlay. It is a normal herdr pane, so terminal graphics work and the
+# reader has its own HERDR_PANE_ID.
 [[panes]]
 id = "reader"
 title = "Wiki Reader"
+placement = "overlay"
+command = ["wiki-reader", "--herdr-context"]
+
+# Popup: no images on herdr 0.9.x (popups report no cell size); text and keys work.
+[[panes]]
+id = "reader-popup"
+title = "Wiki Reader (popup)"
 placement = "popup"
 width = "80%"
 height = "80%"
@@ -17,3 +26,9 @@ id = "open"
 title = "Open Wiki Reader"
 contexts = ["workspace"]
 command = ["sh", "-c", 'exec "$HERDR_BIN_PATH" plugin pane open --plugin wiki-reader --entrypoint reader']
+
+[[actions]]
+id = "open-popup"
+title = "Open Wiki Reader (popup)"
+contexts = ["workspace"]
+command = ["sh", "-c", 'exec "$HERDR_BIN_PATH" plugin pane open --plugin wiki-reader --entrypoint reader-popup']
