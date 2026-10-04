@@ -120,7 +120,6 @@ impl ModalContent for CodeViewer {
             }
             _ => {}
         }
-        let _ = key.modifiers;
         ModalEvent::Stay
     }
 

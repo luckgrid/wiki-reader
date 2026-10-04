@@ -2121,7 +2121,6 @@ fn split_at_width(s: &str, max: usize) -> (String, String) {
     (s.to_owned(), String::new())
 }
 
-/// Prefer breaking at the last whitespace that fits; empty take means "no break in avail".
 /// Cut `s` to `max` display columns, ending with `…` when trimmed.
 fn truncate_code_line(s: &str, max: usize) -> String {
     if max == 0 {
@@ -2145,6 +2144,7 @@ fn truncate_code_line(s: &str, max: usize) -> String {
     out
 }
 
+/// Prefer breaking at the last whitespace that fits; empty take means "no break in avail".
 fn split_at_word_boundary(s: &str, max: usize) -> (String, String) {
     if max == 0 {
         return (String::new(), s.to_owned());

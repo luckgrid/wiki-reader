@@ -42,13 +42,13 @@ struct LinkSpan { id: LinkId, target: Target, segments: Vec<(line: u32, cols: Ra
 `RenderedDoc` also carries two indexes the viewer's keyboard model needs ([UI spec](../product/ui-spec.md)):
 
 - **Block starts:** the rendered line where each content block begins (paragraph, list, code, table, quote, diagram, heading). `Shift+↑/↓` jump between these, and headings are flagged for the proposed heading-jump.
-- **Focusable items:** links and block actions (frontmatter toggle, copy code) in document order, each with its line. The viewer appends the footer's prev/next buttons to build the `Tab` cycle.
+- **Focusable items:** links and block actions (frontmatter toggle, expand and copy code, expand table, expand diagram) in document order, each with its line. The viewer appends the footer's prev/next buttons to build the `Tab` cycle.
 
 Both indexes are computed once per layout and stay valid across focus changes.
 
 ## Element coverage (P0)
 
-Headings (distinct per level), paragraphs with wrapping, bold/italic/strike/inline code, ordered/unordered/task lists (nested), blockquotes and GitHub-style alerts (`> [!NOTE]`, plus custom `goal`/`decision`/`risk`), fenced code with theme `StyleKind` spans (not syntect), tables (fit to width, wrap cells; too-wide tables fall back to an unwrapped dump with a note), links (styled, focusable), horizontal rules, and frontmatter as a collapsible properties block (every YAML key, aligned, with lists shown as lists). Top-level blocks are separated by one blank line; list items stay tight; quote and alert continuation rows keep their `│` bar.
+Headings (distinct per level), paragraphs with wrapping, bold/italic/strike/inline code, ordered/unordered/task lists (nested), blockquotes and GitHub-style alerts (`> [!NOTE]`, plus custom `goal`/`decision`/`risk`), fenced code with theme `StyleKind` spans (not syntect; one display row per source line, truncated with `…` rather than wrapped, and opened in the code viewer for the full text), tables (fit to width, wrap cells; too-wide tables fall back to an unwrapped dump with a note), links (styled, focusable), horizontal rules, and frontmatter as a collapsible properties block (every YAML key, aligned, with lists shown as lists). Top-level blocks are separated by one blank line; list items stay tight; quote and alert continuation rows keep their `│` bar.
 
 ## Rendered is formatted; raw shows the syntax
 
