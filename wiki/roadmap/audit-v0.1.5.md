@@ -13,7 +13,7 @@ Two audits feed this register. **E-findings** came from an audit done before v0.
 
 No `unsafe` Rust exists in the workspace (`unsafe_code = "forbid"` in every crate); that says nothing about third-party dependencies. Line numbers drift, so find items by symbol.
 
-**Status values:** `fixed` (merged or in an open PR), `planned` (next PR), `staged` (recorded, scheduled for a later release). Tasks: [P3-27](phase-3-alpha.md) (crash and terminal fixes) and [P3-28](phase-3-alpha.md) (performance).
+**Shipped in v0.1.6:** every `fixed` and `fixed in part` item below (P3-27 and P3-28). **Status values:** `fixed` (merged or in an open PR), `planned` (next PR), `staged` (recorded, scheduled for a later release). Tasks: [P3-27](phase-3-alpha.md) (crash and terminal fixes) and [P3-28](phase-3-alpha.md) (performance).
 
 ## High: crashes and terminal corruption
 
