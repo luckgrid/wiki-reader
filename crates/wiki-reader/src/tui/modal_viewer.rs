@@ -77,6 +77,7 @@ pub fn draw(
         area
     };
     frame.render_widget(Clear, rect);
+    hits.occlude(rect);
     let title = Line::from(Span::styled(
         format!(
             " {} ",
