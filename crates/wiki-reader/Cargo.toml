@@ -9,6 +9,12 @@ repository.workspace = true
 homepage.workspace = true
 readme = "../../README.md"
 
+[features]
+default = ["media"]
+# Image / Mermaid-raster / terminal-graphics stack. `--no-default-features` is the lite build
+# (ADR-0023): text placeholders and the text/source diagram tiers only.
+media = ["wiki-reader-render/media", "dep:image", "dep:ratatui-image"]
+
 [[bin]]
 name = "wiki-reader"
 path = "src/main.rs"
@@ -20,16 +26,18 @@ path = "examples/keylog.rs"
 [[example]]
 name = "image-protocol"
 path = "examples/image_protocol.rs"
+required-features = ["media"]
 
 [[example]]
 name = "mermaid-image"
 path = "examples/mermaid_image.rs"
+required-features = ["media"]
 
 [dependencies]
 clap = { workspace = true }
-image = { workspace = true }
+image = { workspace = true, optional = true }
 ratatui = { workspace = true }
-ratatui-image = { workspace = true }
+ratatui-image = { workspace = true, optional = true }
 shell-words = { workspace = true }
 signal-hook = { workspace = true }
 syntect = { workspace = true }

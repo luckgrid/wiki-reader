@@ -9,14 +9,18 @@ repository.workspace = true
 homepage.workspace = true
 readme = "../../README.md"
 
+[features]
+default = ["media"]
+# ponytail: media is a non-optional dep (DiagramPalette is needed by lite too); the feature only
+# turns on its heavy `raster` half.
+media = ["wiki-reader-media/raster"]
+
 [dependencies]
-image = { workspace = true }
-mermaid-rs-renderer = { workspace = true }
 mermaid-text = { workspace = true }
 pulldown-cmark = { workspace = true }
-resvg = { workspace = true }
 unicode-width = { workspace = true }
 wiki-reader-core = { workspace = true }
+wiki-reader-media = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }

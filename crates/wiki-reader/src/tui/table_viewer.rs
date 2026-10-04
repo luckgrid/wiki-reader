@@ -1,7 +1,9 @@
 //! Table viewer (P3-14): a [`ModalContent`] over one [`DocTable`].
 //!
 //! Two-axis scroll with a fixed header row and first column, row filter, column sort, and
-//! cell / row copy (tab-separated, like the inline table copy from P2-R38).
+//! cell / row copy (tab-separated, like the inline table copy from P2-R38). Cells keep their
+//! inline styling (bold, link colour, code) from [`DocCell`]; filter, sort and copy use the
+//! plain text.
 
 use std::cmp::Ordering;
 
@@ -11,10 +13,9 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use wiki_reader_render::DocTable;
+use wiki_reader_render::{DocCell, DocTable, StyleKind};
 
 use super::modal_viewer::{ModalContent, ModalEvent};
-use super::regions::footer::ellipsis;
 use super::text_col::line_width;
 use super::theme::Theme;
 
@@ -22,11 +23,15 @@ use super::theme::Theme;
 // ponytail: no in-cell wrap; upgrade: wrap the cursor row or show the cell in the footer.
 const MAX_COL_W: usize = 40;
 const SEP: &str = " │ ";
+/// Display columns of [`SEP`] (its `len()` is bytes).
+const SEP_W: usize = 3;
 const HINT: &str = "↑↓←→ move  / filter  s sort  y cell  Y row  Esc close";
 
 /// Open table viewer state.
 pub struct TableViewer {
     table: DocTable,
+    /// Plain text of the body cells, for width, filter, sort and copy.
+    text: Vec<Vec<String>>,
     /// Body row indexes after filter and sort.
     view: Vec<usize>,
     filter: String,
@@ -47,11 +52,14 @@ pub struct TableViewer {
 impl TableViewer {
     #[must_use]
     pub fn new(table: DocTable) -> Self {
-        let widths = (0..table.header.len())
+        let plain = |r: &[DocCell]| r.iter().map(DocCell::text).collect::<Vec<_>>();
+        let head = plain(&table.header);
+        let text: Vec<Vec<String>> = table.rows.iter().map(|r| plain(r)).collect();
+        let widths = (0..head.len())
             .map(|k| {
-                let cells = table.rows.iter().map(|r| show(&r[k]));
+                let cells = text.iter().map(|r| show(&r[k]));
                 let w = cells
-                    .chain(std::iter::once(show(&table.header[k])))
+                    .chain(std::iter::once(show(&head[k])))
                     .map(|c| usize::from(line_width(&c)))
                     .max()
                     .unwrap_or(1);
@@ -70,6 +78,7 @@ impl TableViewer {
             left: 1,
             widths,
             page: 10,
+            text,
             table,
         };
         v.refresh();
@@ -79,16 +88,16 @@ impl TableViewer {
     /// Re-run filter and sort over the body rows.
     fn refresh(&mut self) {
         let needle = self.filter.to_lowercase();
-        self.view = (0..self.table.rows.len())
+        self.view = (0..self.text.len())
             .filter(|&i| {
                 needle.is_empty()
-                    || self.table.rows[i]
+                    || self.text[i]
                         .iter()
                         .any(|c| c.to_lowercase().contains(&needle))
             })
             .collect();
         if let Some((c, desc)) = self.sort {
-            let rows = &self.table.rows;
+            let rows = &self.text;
             // Stable, so equal keys keep document order.
             self.view.sort_by(|&a, &b| {
                 let o = cmp_cells(&rows[a][c], &rows[b][c]);
@@ -99,7 +108,7 @@ impl TableViewer {
     }
 
     fn current_row(&self) -> Option<&Vec<String>> {
-        self.view.get(self.row).map(|&i| &self.table.rows[i])
+        self.view.get(self.row).map(|&i| &self.text[i])
     }
 
     fn move_row(&mut self, delta: isize) {
@@ -114,13 +123,13 @@ impl TableViewer {
 
     /// Last column fully visible when scrolled to `self.left` in `avail` cells.
     fn last_full(&self, avail: usize) -> usize {
-        let mut used = self.widths[0] + SEP.len();
+        let mut used = self.widths[0] + SEP_W;
         let mut last = 0;
         for k in self.left..self.widths.len() {
             if used + self.widths[k] > avail && k > self.left {
                 break;
             }
-            used += self.widths[k] + 3;
+            used += self.widths[k] + SEP_W;
             last = k;
         }
         last
@@ -140,15 +149,17 @@ impl TableViewer {
         }
     }
 
-    fn cells_line<'a>(
+    /// One table line from `cells`, left to right; column 0 stays, then from `self.left`.
+    /// `base` is the row style; `arrow` marks the sorted column (header only).
+    fn cells_line(
         &self,
-        cells: &[String],
+        cells: &[DocCell],
         avail: usize,
-        style: Style,
+        base: Style,
         cursor_row: bool,
         theme: &Theme,
         arrow: Option<char>,
-    ) -> Line<'a> {
+    ) -> Line<'static> {
         let mut spans = Vec::new();
         let mut used = 0;
         let ncols = self.widths.len();
@@ -157,30 +168,94 @@ impl TableViewer {
             if used >= avail {
                 break;
             }
-            let mut text = show(&cells[k]);
-            if arrow.is_some() && self.sort.is_some_and(|(c, _)| c == k) {
-                text = format!("{text} {}", arrow.unwrap_or(' '));
-            }
-            let text = ellipsis(&text, self.widths[k]);
-            let pad = self.widths[k].saturating_sub(usize::from(line_width(&text)));
-            let mut cell_style = style;
+            let arrow = arrow.filter(|_| self.sort.is_some_and(|(c, _)| c == k));
             if cursor_row && k == self.col {
-                cell_style = Style::default().fg(theme.on_peach).bg(theme.peach);
+                let cursor = Style::default().fg(theme.on_peach).bg(theme.peach);
+                spans.extend(cell_spans(&cells[k], self.widths[k], arrow, cursor, None));
+            } else {
+                spans.extend(cell_spans(
+                    &cells[k],
+                    self.widths[k],
+                    arrow,
+                    base,
+                    Some(theme),
+                ));
             }
-            spans.push(Span::styled(
-                format!("{text}{}", " ".repeat(pad)),
-                cell_style,
-            ));
             spans.push(Span::styled(SEP, theme.muted()));
-            used += self.widths[k] + SEP.len();
+            used += self.widths[k] + SEP_W;
         }
         Line::from(spans)
     }
 }
 
+/// One cell as spans of exactly `w` columns: runs cut with `…` when too long, the sort `arrow`
+/// after them when it fits, then padding. `theme` is `None` to paint the whole cell in `base`.
+fn cell_spans(
+    cell: &DocCell,
+    w: usize,
+    arrow: Option<char>,
+    base: Style,
+    theme: Option<&Theme>,
+) -> Vec<Span<'static>> {
+    let text_w: usize = cell
+        .spans
+        .iter()
+        .map(|s| usize::from(line_width(&s.text)))
+        .sum();
+    let arrow = arrow.filter(|_| text_w + 2 <= w);
+    let cut = text_w + if arrow.is_some() { 2 } else { 0 } > w;
+    let room = if cut { w.saturating_sub(1) } else { w };
+    // ponytail: every link takes the internal link colour; upgrade: carry `LinkClass` on the span.
+    let mut out = Vec::new();
+    let mut used = 0;
+    'runs: for run in &cell.spans {
+        let style = match (theme, run.kind) {
+            (Some(t), k)
+                if !matches!(
+                    k,
+                    StyleKind::Plain | StyleKind::Table | StyleKind::TableHeader
+                ) =>
+            {
+                base.patch(t.style_kind(k))
+            }
+            _ => base,
+        };
+        let mut piece = String::new();
+        for ch in show(&run.text).chars() {
+            let cw = usize::from(line_width(ch.encode_utf8(&mut [0; 4])));
+            if used + cw > room {
+                out.push(Span::styled(piece, style));
+                break 'runs;
+            }
+            used += cw;
+            piece.push(ch);
+        }
+        out.push(Span::styled(piece, style));
+    }
+    if cut {
+        out.push(Span::styled("…", base));
+        used += 1;
+    }
+    if let Some(a) = arrow {
+        out.push(Span::styled(format!(" {a}"), base));
+        used += 2;
+    }
+    out.push(Span::styled(" ".repeat(w.saturating_sub(used)), base));
+    out
+}
+
 impl ModalContent for TableViewer {
     fn label(&self) -> &'static str {
         "TABLE"
+    }
+
+    fn want(&mut self, _: (u16, u16)) -> (u16, u16) {
+        // All columns and all body rows (not the filtered count, so the panel holds still while
+        // typing a filter); one more row for the header, and for "no rows match".
+        let w = self.widths.iter().map(|w| w + SEP_W).sum::<usize>();
+        let h = 1 + self.text.len().max(1);
+        let to_u16 = |n: usize| u16::try_from(n).unwrap_or(u16::MAX);
+        (to_u16(w), to_u16(h))
     }
 
     fn title(&self) -> String {
@@ -326,8 +401,17 @@ fn cmp_cells(a: &str, b: &str) -> Ordering {
 mod tests {
     use super::*;
 
+    fn cell(s: &str) -> DocCell {
+        DocCell {
+            spans: vec![wiki_reader_render::StyledSpan {
+                text: s.to_owned(),
+                kind: StyleKind::Plain,
+            }],
+        }
+    }
+
     fn viewer() -> TableViewer {
-        let row = |a: &str, b: &str| vec![a.to_owned(), b.to_owned()];
+        let row = |a: &str, b: &str| vec![cell(a), cell(b)];
         TableViewer::new(DocTable {
             source_line: 1,
             line: 0,
@@ -346,10 +430,7 @@ mod tests {
     }
 
     fn names(v: &TableViewer) -> Vec<&str> {
-        v.view
-            .iter()
-            .map(|&i| v.table.rows[i][0].as_str())
-            .collect()
+        v.view.iter().map(|&i| v.text[i][0].as_str()).collect()
     }
 
     #[test]
@@ -385,10 +466,43 @@ mod tests {
     }
 
     #[test]
+    fn cells_keep_bold_header_and_link_colour_and_the_panel_fits_the_grid() {
+        use ratatui::Terminal;
+        use ratatui::backend::TestBackend;
+        let link = DocCell {
+            spans: vec![wiki_reader_render::StyledSpan {
+                text: "docs".into(),
+                kind: StyleKind::Link,
+            }],
+        };
+        let mut v = TableViewer::new(DocTable {
+            source_line: 1,
+            line: 0,
+            height: 4,
+            header: vec![cell("name"), cell("ref")],
+            rows: vec![vec![cell("a"), link]],
+        });
+        let theme = Theme::default();
+        let mut term = Terminal::new(TestBackend::new(30, 3)).unwrap();
+        term.draw(|f| v.draw(f, f.area(), &theme)).unwrap();
+        let buf = term.backend().buffer();
+        assert!(buf[(0, 0)].modifier.contains(Modifier::BOLD), "bold header");
+        let row = (0..30).map(|x| buf[(x, 1)].symbol()).collect::<String>();
+        let x = u16::try_from(row.find("docs").unwrap()).unwrap();
+        assert_eq!(buf[(x, 1)].fg, theme.link, "link colour in a body cell");
+        // Content-sized: both columns plus separators (widths include the 2-col sort arrow room).
+        assert_eq!(v.want((90, 30)), (6 + 3 + 6 + 3, 2));
+    }
+
+    #[test]
     fn scrolling_right_keeps_header_and_first_column() {
         use ratatui::Terminal;
         use ratatui::backend::TestBackend;
-        let cells = |p: &str| (0..8).map(|k| format!("{p}-col{k}")).collect::<Vec<_>>();
+        let cells = |p: &str| {
+            (0..8)
+                .map(|k| cell(&format!("{p}-col{k}")))
+                .collect::<Vec<_>>()
+        };
         let mut v = TableViewer::new(DocTable {
             source_line: 1,
             line: 0,

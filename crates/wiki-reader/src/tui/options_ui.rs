@@ -4,9 +4,12 @@
 use wiki_reader_core::config::{CopyPathMode, DiagramMode, LabelMode, NavPosition, ThemeName};
 
 /// Image slot heights offered in the "Max image rows" group (config accepts 1–60).
+#[cfg_attr(not(feature = "media"), allow(dead_code))] // only the hidden Images group uses it
 pub const MAX_ROW_STEPS: [u16; 6] = [10, 20, 30, 40, 50, 60];
 
 /// One selectable row. Radio groups pick one value; `ImagesEnabled` is an on/off toggle.
+// ponytail: the image variants stay in lite (never built there) so the app match has no cfg arms.
+#[cfg_attr(not(feature = "media"), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OptionChoice {
     Theme(ThemeName),
@@ -89,11 +92,15 @@ pub fn lines() -> Vec<OptionLine> {
         .map(OptionChoice::Diagrams)
         .into(),
     );
-    group("Images", vec![OptionChoice::ImagesEnabled]);
-    group(
-        "Max image rows",
-        MAX_ROW_STEPS.map(OptionChoice::ImagesMaxRows).into(),
-    );
+    // Lite build (ADR-0023) has no images, so their options are hidden.
+    #[cfg(feature = "media")]
+    {
+        group("Images", vec![OptionChoice::ImagesEnabled]);
+        group(
+            "Max image rows",
+            MAX_ROW_STEPS.map(OptionChoice::ImagesMaxRows).into(),
+        );
+    }
     group(
         "Copy path (y)",
         [CopyPathMode::Relative, CopyPathMode::Absolute]
@@ -186,7 +193,12 @@ mod tests {
     #[test]
     fn choices_cover_every_value_once() {
         let all = choices();
-        assert_eq!(all.len(), 3 + 2 + 2 + 4 + 1 + MAX_ROW_STEPS.len() + 2);
+        let images = if cfg!(feature = "media") {
+            1 + MAX_ROW_STEPS.len()
+        } else {
+            0
+        };
+        assert_eq!(all.len(), 3 + 2 + 2 + 4 + images + 2);
         for (i, a) in all.iter().enumerate() {
             assert!(!all[i + 1..].contains(a), "duplicate {a:?}");
         }

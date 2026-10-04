@@ -4,9 +4,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use wiki_reader_core::images::{ImageReject, MAX_IMAGE_PIXELS, resolve_local_image};
+use wiki_reader_core::images::{ImageReject, resolve_local_image};
 
-use crate::mermaid_raster::{self, DiagramPalette, RasterError};
+use wiki_reader_media::DiagramPalette;
 
 /// Tallest slot, in display rows. Keeps one image from filling several screens.
 pub const MAX_SLOT_ROWS: u16 = 30;
@@ -116,19 +116,6 @@ pub(crate) enum ImagePlan {
     Placeholder(ImageReject),
 }
 
-/// Fit scale for `px_w × px_h` into `max_cols` × `max_rows` at `cell_px`. Never upscales.
-#[must_use]
-pub fn fit_scale(px_w: u32, px_h: u32, cell_px: (u16, u16), max_cols: u16, max_rows: u16) -> f64 {
-    let cell_w = f64::from(cell_px.0.max(1));
-    let cell_h = f64::from(cell_px.1.max(1));
-    let w = f64::from(px_w.max(1));
-    let h = f64::from(px_h.max(1));
-    let max_cols = max_cols.max(1);
-    (f64::from(max_cols) * cell_w / w)
-        .min(f64::from(max_rows.max(1)) * cell_h / h)
-        .min(1.0)
-}
-
 /// Columns × rows for an image of `px_w × px_h` pixels: natural size, shrunk to fit
 /// `max_cols` and `max_rows` while keeping the aspect ratio. Never upscales.
 #[must_use]
@@ -146,16 +133,35 @@ pub fn slot_geometry(
     let h = f64::from(px_h.max(1));
     let max_cols = max_cols.max(1);
     let max_rows = max_rows.max(1);
-    let scale = fit_scale(px_w, px_h, cell_px, max_cols, max_rows);
+    let scale = wiki_reader_media::fit_scale(px_w, px_h, cell_px, max_cols, max_rows);
     let cols = (w * scale / cell_w).ceil().clamp(1.0, f64::from(max_cols));
     let rows = (h * scale / cell_h).ceil().clamp(1.0, f64::from(max_rows));
     (cols as u16, rows as u16)
 }
 
-fn is_svg(path: &Path) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| e.eq_ignore_ascii_case("svg"))
+/// Pixel size without decoding; the ADR-0017 pixel cap is enforced here, before any decode.
+#[cfg(feature = "media")]
+fn natural_size(path: &Path) -> Result<(u32, u32), ImageReject> {
+    use wiki_reader_core::images::MAX_IMAGE_PIXELS;
+    use wiki_reader_media::{RasterError, image_dimensions, is_svg_path, svg_natural_size};
+    if is_svg_path(path) {
+        let bytes = std::fs::read(path).map_err(|_| ImageReject::Unreadable)?;
+        return svg_natural_size(&bytes).map_err(|e| match e {
+            RasterError::TooManyPixels => ImageReject::TooManyPixels,
+            _ => ImageReject::Unreadable,
+        });
+    }
+    let (px_w, px_h) = image_dimensions(path).map_err(|_| ImageReject::Unreadable)?;
+    if u64::from(px_w) * u64::from(px_h) > MAX_IMAGE_PIXELS {
+        return Err(ImageReject::TooManyPixels);
+    }
+    Ok((px_w, px_h))
+}
+
+/// Lite build: no decoder, so every local image stays a text placeholder.
+#[cfg(not(feature = "media"))]
+fn natural_size(_: &Path) -> Result<(u32, u32), ImageReject> {
+    Err(ImageReject::NoGraphics)
 }
 
 /// Decide how a block-level image `dest` renders from the page at `page_rel`.
@@ -179,26 +185,9 @@ pub(crate) fn plan_image(
     let Some(cell_px) = cell_px else {
         return ImagePlan::Placeholder(ImageReject::NoGraphics);
     };
-    let (px_w, px_h) = if is_svg(&local.path) {
-        let Ok(bytes) = std::fs::read(&local.path) else {
-            return ImagePlan::Placeholder(ImageReject::Unreadable);
-        };
-        match mermaid_raster::svg_natural_size(&bytes) {
-            Ok(size) => size,
-            Err(RasterError::TooManyPixels) => {
-                return ImagePlan::Placeholder(ImageReject::TooManyPixels);
-            }
-            Err(_) => return ImagePlan::Placeholder(ImageReject::Unreadable),
-        }
-    } else {
-        // Header only: the pixel cap is enforced before any decode.
-        let Ok((px_w, px_h)) = image::image_dimensions(&local.path) else {
-            return ImagePlan::Placeholder(ImageReject::Unreadable);
-        };
-        if u64::from(px_w) * u64::from(px_h) > MAX_IMAGE_PIXELS {
-            return ImagePlan::Placeholder(ImageReject::TooManyPixels);
-        }
-        (px_w, px_h)
+    let (px_w, px_h) = match natural_size(&local.path) {
+        Ok(size) => size,
+        Err(reason) => return ImagePlan::Placeholder(reason),
     };
     let (cols, rows) = slot_geometry(px_w, px_h, cell_px, max_cols, max_rows);
     ImagePlan::Slot {

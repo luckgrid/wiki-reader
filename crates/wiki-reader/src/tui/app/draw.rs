@@ -4,6 +4,7 @@ use ratatui::Frame;
 
 use super::App;
 use crate::tui::focus::FocusPane;
+#[cfg(feature = "media")]
 use crate::tui::images::Occlusion;
 use crate::tui::layout;
 use crate::tui::options_ui::{self, OptionLine, OptionsOverlay};
@@ -103,32 +104,35 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
         &mut app.hit_map,
     );
 
-    // Pictures go over the viewer text and under popups (their `Clear` covers them). A narrow
-    // terminal's nav overlay hides pictures until it closes (terminal protocols are not cells).
-    // Popups draw after the pictures, and a Kitty picture's one-time upload rides in its first
-    // cell, so the pictures need to know where the popups will land (from the last frame; if
-    // the set of open popups just changed the panels are unknown, which counts as covered).
     let open_popups = u8::from(app.search.is_some())
         | u8::from(app.help.is_some()) << 1
         | u8::from(app.options.is_some()) << 2
         | u8::from(app.modal.is_some()) << 3;
-    let popup_rects = std::mem::take(&mut app.last_popups.1);
-    let occlusion = if open_popups == 0 {
-        Occlusion::None
-    } else if app.last_popups.0 != open_popups || popup_rects.is_empty() {
-        Occlusion::All
-    } else {
-        Occlusion::Rects(&popup_rects)
-    };
-    if !regions.nav_overlay {
-        app.images.draw(
-            frame,
-            app.doc.image_slots(),
-            app.scroll,
-            app.viewer_geom,
-            &theme,
-            occlusion,
-        );
+    #[cfg(feature = "media")]
+    {
+        // Pictures go over the viewer text and under popups (their `Clear` covers them). A narrow
+        // terminal's nav overlay hides pictures until it closes (terminal protocols are not cells).
+        // Popups draw after the pictures, and a Kitty picture's one-time upload rides in its first
+        // cell, so the pictures need to know where the popups will land (from the last frame; if
+        // the set of open popups just changed the panels are unknown, which counts as covered).
+        let popup_rects = std::mem::take(&mut app.last_popups.1);
+        let occlusion = if open_popups == 0 {
+            Occlusion::None
+        } else if app.last_popups.0 != open_popups || popup_rects.is_empty() {
+            Occlusion::All
+        } else {
+            Occlusion::Rects(&popup_rects)
+        };
+        if !regions.nav_overlay {
+            app.images.draw(
+                frame,
+                app.doc.image_slots(),
+                app.scroll,
+                app.viewer_geom,
+                &theme,
+                occlusion,
+            );
+        }
     }
 
     let total = u32::try_from(app.doc.lines().len().max(1)).unwrap_or(1);

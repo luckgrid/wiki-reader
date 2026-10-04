@@ -38,6 +38,7 @@ mod nav_ui;
 mod viewer_state;
 
 #[cfg(test)]
+#[cfg(feature = "media")]
 mod image_tests;
 #[cfg(test)]
 mod tests;
@@ -527,17 +528,20 @@ impl App {
     }
 
     /// `diagrams = "text" | "source"` or `images.enabled = false` opts out of graphics, including the startup probe.
+    #[cfg(feature = "media")]
     pub(crate) fn graphics_allowed(&self) -> bool {
         self.images_enabled && crate::tui::images::should_probe(self.diagram_mode)
     }
 
     /// Config mode visible to the startup probe (ADR-0004 step 1).
+    #[cfg(feature = "media")]
     pub(crate) fn diagram_mode_for_probe(&self) -> wiki_reader_core::config::DiagramMode {
         self.diagram_mode
     }
 
     /// Enable image drawing with a confirmed protocol. Call before the first draw: the first
     /// layout pass re-renders the page, which then reserves rows for images.
+    #[cfg(feature = "media")]
     pub(crate) fn enable_graphics(&mut self, picker: ratatui_image::picker::Picker) {
         let sizes = self.images.diagram_sizes();
         self.images = crate::tui::images::ImageManager::enabled_with_sizes(picker, sizes);
@@ -1042,12 +1046,60 @@ impl App {
         self.message.clear();
     }
 
-    /// Open a picture or diagram in the modal viewer (source view on the text tier).
-    pub(crate) fn open_image(&mut self, source: wiki_reader_render::SlotSource, alt: &str) {
-        let viewer = super::image_viewer::ImageViewer::new(source, alt, self.images.picker());
+    /// Open the picture or diagram whose block starts at display `line` in the modal viewer,
+    /// with every picture of the page in the Tab carousel (source view on the text tier).
+    #[cfg(feature = "media")]
+    pub(crate) fn open_media(&mut self, line: u32) {
+        use super::image_viewer::{ImageViewer, ViewerItem};
+        use wiki_reader_render::{DiagramTier, MediaOccurrenceKind as Kind, SlotSource};
+        let PageDoc::Rendered(doc) = &self.doc else {
+            return;
+        };
+        // Inventory order is slot order: each picture or image-tier diagram owns the next slot.
+        let mut slots = doc.image_slots().iter().map(|s| s.source.clone());
+        let mut start = 0;
+        let items: Vec<ViewerItem> = doc
+            .media()
+            .iter()
+            .enumerate()
+            .map(|(i, m)| {
+                if m.line == line {
+                    start = i;
+                }
+                let (alt, src, note) = match &m.kind {
+                    Kind::Image { dest, alt, slot } => (
+                        alt.clone(),
+                        slot.then(|| slots.next()).flatten(),
+                        format!("{dest}: no preview (not loaded inline)"),
+                    ),
+                    Kind::Diagram { source, hash, tier } => {
+                        if *tier == DiagramTier::Image {
+                            slots.next();
+                        }
+                        let src = SlotSource::Mermaid {
+                            hash: *hash,
+                            palette: self.theme.diagram,
+                            source: source.clone(),
+                        };
+                        ("diagram".into(), Some(src), String::new())
+                    }
+                };
+                ViewerItem { alt, src, note }
+            })
+            .collect();
+        if items.is_empty() {
+            return;
+        }
+        let viewer = ImageViewer::new(items, start, self.images.picker());
         self.modal = Some(Box::new(viewer));
         self.input_mode = InputMode::Modal;
         self.message.clear();
+    }
+
+    /// Lite build: no image viewer.
+    #[cfg(not(feature = "media"))]
+    pub(crate) fn open_media(&mut self, _: u32) {
+        self.message = "image viewer is not in this lite build".into();
     }
 
     fn modal_key(&mut self, key: ratatui::crossterm::event::KeyEvent) {

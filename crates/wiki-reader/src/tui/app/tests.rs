@@ -3549,6 +3549,7 @@ fn help_overlay_open_close_and_activate() {
 }
 
 #[test]
+#[cfg(feature = "media")]
 fn options_overlay_applies_choices_and_persists() {
     use wiki_reader_core::config::ThemeName;
     let root = fixture();
@@ -3603,6 +3604,7 @@ fn options_overlay_applies_choices_and_persists() {
 }
 
 #[test]
+#[cfg(feature = "media")]
 fn options_overlay_snapshot() {
     let root = fixture();
     let mut app = App::new(&root).unwrap();

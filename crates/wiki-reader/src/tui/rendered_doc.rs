@@ -75,6 +75,12 @@ impl RenderedViewerDoc {
         &self.inner.image_slots
     }
 
+    /// Every block image and Mermaid fence, document order (the viewer carousel).
+    #[must_use]
+    pub fn media(&self) -> &[wiki_reader_render::MediaOccurrence] {
+        &self.inner.media
+    }
+
     /// Mermaid fences waiting on an off-thread size measure.
     #[must_use]
     pub fn diagram_requests(&self) -> &[wiki_reader_render::DiagramRequest] {

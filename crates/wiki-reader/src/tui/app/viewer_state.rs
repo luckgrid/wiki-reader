@@ -359,9 +359,9 @@ impl App {
             .image_slots()
             .iter()
             .find(|s| (s.line..s.line + u32::from(s.rows)).contains(&line))
-            .cloned()
+            .map(|s| s.line)
         {
-            self.open_image(slot.source, &slot.alt);
+            self.open_media(slot);
         }
     }
 
@@ -391,12 +391,7 @@ impl App {
                 }
             }
             wiki_reader_render::BlockActionKind::ExpandDiagram => {
-                let source = wiki_reader_render::SlotSource::Mermaid {
-                    hash: wiki_reader_render::content_hash(&action.payload),
-                    palette: self.theme.diagram,
-                    source: action.payload,
-                };
-                self.open_image(source, "diagram");
+                self.open_media(action.line);
             }
             wiki_reader_render::BlockActionKind::ToggleFrontmatter => {
                 if !self.expanded_blocks.remove(&id) {

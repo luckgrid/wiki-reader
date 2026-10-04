@@ -38,7 +38,8 @@ wiki-reader/
 │   │   ├── nav/               # link resolution, NavTree build (titles, folding, order), prev/next
 │   │   ├── watch/             # notify-debouncer-mini → markdown dirty flag
 │   │   └── config/
-│   ├── wiki-reader-render/    # markdown → RenderedDoc (lines + link spans + source map)
+│   ├── wiki-reader-render/    # markdown → RenderedDoc (lines + link spans + source map + media inventory)
+│   ├── wiki-reader-media/     # image decode, Mermaid/SVG raster (feature `raster`; off in lite, ADR-0023)
 │   └── wiki-reader/           # binary: TUI app
 │       └── tui/               # app state, navigator, layout, regions, hit map, keymap, theme
 ├── wiki/                      # this collection (dogfood)

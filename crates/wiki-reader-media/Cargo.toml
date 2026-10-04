@@ -1,0 +1,27 @@
+[package]
+name = "wiki-reader-media"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Image decode and Mermaid/SVG rasterisation for wiki-reader"
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "../../README.md"
+
+[features]
+default = ["raster"]
+# Heavy deps (ADR-0023): off in the lite build, leaving only the palette and fit maths.
+raster = ["dep:image", "dep:resvg", "dep:mermaid-rs-renderer"]
+
+[dependencies]
+image = { workspace = true, optional = true }
+mermaid-rs-renderer = { workspace = true, optional = true }
+resvg = { workspace = true, optional = true }
+wiki-reader-core = { workspace = true }
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"

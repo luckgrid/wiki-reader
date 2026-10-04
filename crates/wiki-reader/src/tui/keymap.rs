@@ -50,6 +50,8 @@ pub enum BindingScope {
     Overlay,
     /// Multi-key chords (display-only in help; special-cased in map).
     Chord,
+    /// Table and image / diagram viewers (display-only in help; the modal reads its own keys).
+    Viewers,
 }
 
 impl BindingScope {
@@ -62,6 +64,7 @@ impl BindingScope {
             Self::Viewer => "View",
             Self::Chord => "Chords",
             Self::Overlay => "Search overlay",
+            Self::Viewers => "Table and image viewers",
         }
     }
 }
@@ -677,6 +680,76 @@ pub static BINDINGS: &[Binding] = &[
         help: "Page results",
         matcher: None,
     },
+    Binding {
+        keys: "↑↓←→ / hjkl",
+        scope: BindingScope::Viewers,
+        action: None,
+        help: "Move the table cell cursor, or pan a picture",
+        matcher: None,
+    },
+    Binding {
+        keys: "/",
+        scope: BindingScope::Viewers,
+        action: None,
+        help: "Table: filter rows",
+        matcher: None,
+    },
+    Binding {
+        keys: "s",
+        scope: BindingScope::Viewers,
+        action: None,
+        help: "Table: sort by the current column",
+        matcher: None,
+    },
+    Binding {
+        keys: "y / Y",
+        scope: BindingScope::Viewers,
+        action: None,
+        help: "Table: copy cell / row",
+        matcher: None,
+    },
+    Binding {
+        keys: "+ / -",
+        scope: BindingScope::Viewers,
+        action: None,
+        help: "Picture: zoom in / out",
+        matcher: None,
+    },
+    Binding {
+        keys: "0",
+        scope: BindingScope::Viewers,
+        action: None,
+        help: "Picture: fit the window, reset zoom",
+        matcher: None,
+    },
+    Binding {
+        keys: "a",
+        scope: BindingScope::Viewers,
+        action: None,
+        help: "Picture: toggle fit / actual size",
+        matcher: None,
+    },
+    Binding {
+        keys: "Tab / Shift+Tab",
+        scope: BindingScope::Viewers,
+        action: None,
+        help: "Picture: next / previous image or diagram",
+        matcher: None,
+    },
+    Binding {
+        keys: "v",
+        scope: BindingScope::Viewers,
+        action: None,
+        help: "Diagram: cycle image / text / source",
+        matcher: None,
+    },
+    Binding {
+        keys: "Esc / q",
+        scope: BindingScope::Viewers,
+        action: None,
+        help: "Close the viewer",
+        matcher: None,
+    },
 ];
 
 /// True when CONTROL and ALT are absent (SHIFT alone is fine for capitals).
@@ -1112,7 +1185,7 @@ mod tests {
             let focus = match b.scope {
                 BindingScope::Nav => FocusPane::Nav,
                 BindingScope::Viewer | BindingScope::Global => FocusPane::Viewer,
-                BindingScope::Overlay | BindingScope::Chord => continue,
+                BindingScope::Overlay | BindingScope::Chord | BindingScope::Viewers => continue,
             };
             let (got, _) = map_with_overrides(key, focus, InputMode::Normal, Chord::None, None);
             assert_eq!(

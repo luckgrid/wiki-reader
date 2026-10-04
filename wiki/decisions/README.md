@@ -28,6 +28,7 @@ Architecture decision records. Accepted ADRs are immutable — supersede, don't 
 | [0020](0020-nav-label-modes.md) | Titles or actual filesystem names | accepted (chrome label scope superseded by [0021](0021-side-nav-only-label-mode.md)) |
 | [0021](0021-side-nav-only-label-mode.md) | Nav label mode applies only to the side nav | accepted |
 | [0022](0022-herdr-launcher-and-page-publishing.md) | herdr launcher opens an ordinary pane; page publishing is on by default | accepted |
+| [0023](0023-lite-build-is-a-cargo-feature.md) | The lite build is a cargo feature, not a separate artifact | proposed |
 
 ## Related
 

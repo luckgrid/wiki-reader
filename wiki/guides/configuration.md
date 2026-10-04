@@ -29,7 +29,7 @@ The collection file is untrusted, since it comes with the content you are readin
 | `nav.position` | `"left"`, `"right"` | `"left"` | Side nav on the left or right edge. Nav width stays session-only. |
 | `nav.labels` | `"title"`, `"filename"` | `"title"` | Side-nav page titles or actual filenames including extensions; folders keep on-disk names. Header/footer labels stay title-based. |
 | `diagrams` | `"auto"`, `"image"`, `"text"`, `"source"` | `"auto"` | Mermaid tier; see [ADR-0004](../decisions/0004-diagram-rendering.md). tmux always uses text. |
-| `images.enabled` | `true`, `false` | `true` | `false` skips the terminal graphics probe and shows text placeholders. |
+| `images.enabled` | `true`, `false` | `true` | `false` skips the terminal graphics probe and shows text placeholders. No effect in the [lite build](#lite-build). |
 | `images.max_slot_rows` | integer `1`–`60` | `30` | Tallest picture or diagram slot, in rows. |
 | `herdr.publish` | `true`, `false` | `true` | Inside a herdr pane, show the page being read in herdr's sidebar (title and a `page` token, renewed while open and cleared on exit). Display-only; never reports agent state. Plugin popups have no pane of their own and never publish. See [ADR-0022](../decisions/0022-herdr-launcher-and-page-publishing.md). |
 | `copy.path` | `"relative"`, `"absolute"` | `"relative"` | What `y` ("Copy file path" in Help) copies: with the nav focused, the selected row's file or folder path; with the viewer focused, the open page's path. Relative to the collection root, or absolute. Also a row in the options window. |
@@ -54,6 +54,10 @@ publish = false
 ```
 
 Legacy `nav.labels = "title+filename"` is read as `"title"` with one warning per config load, even if several config layers use it. Loading does not rewrite files; choose a supported value in Options or edit the config to stop the warning. See [ADR-0020](../decisions/0020-nav-label-modes.md).
+
+## Lite build
+
+`cargo install --locked --no-default-features --git https://github.com/luckgrid/wiki-reader wiki-reader` builds without the image stack ([ADR-0023](../decisions/0023-lite-build-is-a-cargo-feature.md)). `images.enabled` and `images.max_slot_rows` are still read but have no effect: every image is a text placeholder, no graphics probe runs, and the options window hides the Images and Max image rows groups. `diagrams = "image"` renders the text tier with the header `lite build: no image tier`; `auto` and `text` look the same as on a terminal without graphics. Everything else is unchanged.
 
 ## Options window
 

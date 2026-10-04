@@ -26,7 +26,7 @@ Supported path today — install the binary from git:
 cargo install --locked --git https://github.com/luckgrid/wiki-reader wiki-reader
 ```
 
-Tagged releases attach platform tarballs (macOS arm64 / x86_64, Linux x86_64) plus SHA256 checksums. To upgrade, replace or roll back an installed version, see [Releasing and upgrading](releasing.md), which also covers how maintainers cut, dry-run, verify and fix a release. The tag name must be `v` plus the workspace `Cargo.toml` version (for example `v0.1.0-alpha.5.1`).
+Tagged releases attach platform tarballs (macOS arm64 / x86_64, Linux x86_64) plus SHA256 checksums. To upgrade, replace or roll back an installed version, see [Releasing and upgrading](releasing.md), which also covers how maintainers cut, dry-run, verify and fix a release. The tag name must be `v` plus the workspace `Cargo.toml` version (for example `v0.1.N`).
 
 crates.io metadata is prepared on the publishable crates; do not `cargo publish` until that is an intentional follow-up. `wiki-reader-tools` stays `publish = false`.
 
@@ -35,7 +35,8 @@ crates.io metadata is prepared on the publishable crates; do not `cargo publish`
 Local mirror of CI (run before every push):
 
 ```bash
-./scripts/check.sh
+./scripts/check.sh          # default + lite
+./scripts/check.sh default  # or: lite
 ```
 
 Optional: install the repo pre-push hook so those checks run automatically:
@@ -50,10 +51,13 @@ Same steps individually:
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
+cargo clippy --locked --all-targets --no-default-features -p wiki-reader -p wiki-reader-render -p wiki-reader-media -- -D warnings  # lite
+cargo test --locked --no-default-features -p wiki-reader -p wiki-reader-render -p wiki-reader-media
 cargo run --locked --quiet -p wiki-reader-tools --bin link-check
 rumdl fmt --check .
 rumdl check .
 cargo tree -p wiki-reader-core -e normal  # must not list ratatui or crossterm (ADR-0006)
+cargo tree --locked --no-default-features -p wiki-reader -e normal  # must not list image, resvg, mermaid-rs-renderer, ratatui-image (ADR-0023)
 ```
 
 Quickstart:
@@ -75,7 +79,8 @@ cargo run -p wiki-reader --example keylog
 | Crate | Responsibility |
 |-------|----------------|
 | `wiki-reader-core` | Provider, parse, index, nav, watch, config. **No** `ratatui` / `crossterm`. |
-| `wiki-reader-render` | Markdown → `RenderedDoc` (lines, link spans, source map). |
+| `wiki-reader-render` | Markdown → `RenderedDoc` (lines, link spans, source map, media inventory). |
+| `wiki-reader-media` | Image decode and Mermaid/SVG rasterisation behind `raster`; never depends on render. |
 | `wiki-reader` | Binary TUI: app state, layout, hit map, keymap. |
 
 See [architecture overview](../architecture/overview.md) and [ADR-0006](../decisions/0006-reader-first.md).
