@@ -81,7 +81,7 @@ To go back to an older release, repeat the steps with that release's tarball (or
 
 Cut a tag only from a commit whose CI is already green on `main`. The release workflow builds and smoke-tests `--version` but does not re-run the full test suite.
 
-1. **Prepare.** Branch `release/vX.Y.Z` (for example `release/v0.1.2`), bump `version` in the workspace `Cargo.toml` to the next `0.1.N` and refresh `Cargo.lock`, and update the roadmap note. Run `./scripts/check.sh`, open a PR, wait for green checks, and squash-merge.
+1. **Prepare.** Branch `release/vX.Y.Z` (for example `release/v0.1.2`), bump `version` in the workspace `Cargo.toml` to the next `0.1.N` and refresh `Cargo.lock`, bump `version` in `integrations/herdr/herdr-plugin.toml` to match, and update the roadmap note. Run `./scripts/check.sh`, open a PR, wait for green checks, and squash-merge.
 2. **Optional dry run.** In GitHub, Actions → Release → *Run workflow* on the branch or `main`. It builds all three targets, names the packages `dry-run`, and uploads them as workflow artifacts. It does **not** create or touch a GitHub Release (the attach step only runs on a tag push). Use this after changing `release.yml` or its pinned actions.
 3. **Tag the merge commit** as `v` plus the `Cargo.toml` version and push the tag. The workflow fails if the tag and the crate version differ.
 
