@@ -633,4 +633,25 @@ mod tests {
             "last column fills the window: {row:?}"
         );
     }
+
+    #[test]
+    fn a_cell_that_fits_the_window_is_shown_in_full_without_an_ellipsis() {
+        use ratatui::Terminal;
+        use ratatui::backend::TestBackend;
+        let long = "y".repeat(60);
+        let mut v = TableViewer::new(DocTable {
+            source_line: 1,
+            line: 0,
+            height: 3,
+            header: vec![cell("a"), cell("b")],
+            rows: vec![vec![cell("1"), cell(&long)]],
+        });
+        let mut term = Terminal::new(TestBackend::new(90, 5)).unwrap();
+        term.draw(|f| v.draw(f, f.area(), &Theme::default()))
+            .unwrap();
+        let buf = term.backend().buffer();
+        let row = (0..90).map(|x| buf[(x, 2)].symbol()).collect::<String>();
+        assert!(row.contains(&long), "full cell text: {row:?}");
+        assert!(!row.contains('…'), "no ellipsis: {row:?}");
+    }
 }
