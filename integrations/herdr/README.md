@@ -15,11 +15,12 @@ herdr plugin link "$PWD/integrations/herdr"
 herdr plugin action invoke wiki-reader.open
 ```
 
-To bind a key, add this to herdr's config (choose a key that is free in your setup):
+To bind a key, add this to herdr's config. Pick one that is free: `prefix+w` is herdr's default
+for workspace navigation, and `prefix+?` lists every active binding.
 
 ```toml
 [[keys.command]]
-key = "prefix+w"
+key = "prefix+shift+r"
 type = "plugin_action"
 command = "wiki-reader.open"
 description = "open wiki reader"
