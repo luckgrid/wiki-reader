@@ -2992,7 +2992,7 @@ dependencies = [
 
 [[package]]
 name = "wiki-reader"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "clap",
  "filetime",
@@ -3011,7 +3011,7 @@ dependencies = [
 
 [[package]]
 name = "wiki-reader-core"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "globset",
  "ignore",
@@ -3031,7 +3031,7 @@ dependencies = [
 
 [[package]]
 name = "wiki-reader-render"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "image",
  "insta",
@@ -3046,7 +3046,7 @@ dependencies = [
 
 [[package]]
 name = "wiki-reader-tools"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "pulldown-cmark",
  "tempfile",
