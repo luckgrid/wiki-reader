@@ -172,6 +172,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 |------|------|------|----------|
 | 2026-10-04 | decision | Audit follow-up: a pre-0.1.5 audit (E1 to E8) and a static re-audit of v0.1.5 (N1 to N20 plus lower items) are recorded in [audit-v0.1.5.md](audit-v0.1.5.md). Plan: crashes and terminal safety first (P3-27), then performance (P3-28), the rest staged. The re-audit read code only; N1 to N4 were re-read and confirmed | P3-27, P3-28 |
 | 2026-10-04 | fix | P3-27: shared case-insensitive match that maps back to original bytes (search overlay, snippets); editor requests deferred to the event loop; thread-aware panic hook and `worker::guarded` for image, viewer, highlight and reindex workers; dead workers surface an error instead of busy-redrawing; `[keys]` overrides only in Normal mode; session save backoff, tmp cleanup and a final flush; `nav_order` finite-only; recording test doubles gated. Regression tests for each | P3-27 |
+| 2026-10-04 | fix | P3-28: `SlugAllocator` (50,000 identical headings in well under the 5 s test bound; the old rescan took minutes); search refresh coalesced per event batch with `MAX_TEXT_HITS`; `HighlightWorker` mailbox with line-level cancellation; `NavTree` page order and index built once; viewer layout computed once per frame and sort keys cached; failed reads show the removed state; identical reindex is a no-op. Regression tests for each. Timings are test thresholds, not release benchmarks | P3-28 |
 
 ## Related
 
