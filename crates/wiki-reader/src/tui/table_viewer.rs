@@ -52,6 +52,8 @@ pub struct TableViewer {
     sort_keys: Vec<SortKey>,
     /// The column `sort_keys` belong to.
     sort_keys_col: Option<usize>,
+    /// Cached `(avail, max_expand_height)` so `want` does not re-wrap every cell each frame.
+    max_expand_cache: Option<(usize, usize)>,
 }
 
 /// Column layout for one frame, computed once and shared by the header, rule and body rows.
@@ -96,6 +98,7 @@ impl TableViewer {
             page: 10,
             sort_keys: Vec::new(),
             sort_keys_col: None,
+            max_expand_cache: None,
             text,
             table,
         };
@@ -237,10 +240,20 @@ impl TableViewer {
         }
         if self.col > 0 {
             self.left = self.left.clamp(1, self.col);
-            while self.left < self.col
-                && self.column_layout(avail).cols.last().copied().unwrap_or(0) < self.col
-            {
-                self.left += 1;
+            let full = self.eff_widths(avail);
+            while self.left < self.col {
+                let layout = self.column_layout(avail);
+                let last = layout.cols.last().copied().unwrap_or(0);
+                // Partial columns count as visible for overflow, but the cursor column must
+                // be whole so expand/wrap can show the full cell.
+                let partial_cursor = last == self.col
+                    && layout.widths.get(self.col).copied().unwrap_or(0)
+                        < full.get(self.col).copied().unwrap_or(0);
+                if last < self.col || partial_cursor {
+                    self.left += 1;
+                } else {
+                    break;
+                }
             }
         }
     }
@@ -253,14 +266,20 @@ impl TableViewer {
         for n in top..self.view.len() {
             let expand = n == self.row;
             let h = self.row_height(n, layout, expand, body_h);
-            let cost = if expand { h.saturating_add(2) } else { 1 };
+            // Header rule doubles as the expand rule above when the expand is the first body row.
+            let rules = if expand {
+                if n == top { 1 } else { 2 }
+            } else {
+                0
+            };
+            let cost = if expand { h.saturating_add(rules) } else { 1 };
             if used + cost > body_h && n > top {
                 break;
             }
             if expand && used + cost > body_h {
                 // Clip the expansion to what remains (rules prefer to stay).
-                let remain = body_h.saturating_sub(used).saturating_sub(2).max(1);
-                cursor_fits = remain >= h || remain >= body_h.saturating_sub(2).max(1);
+                let remain = body_h.saturating_sub(used).saturating_sub(rules).max(1);
+                cursor_fits = remain >= h || remain >= body_h.saturating_sub(rules).max(1);
                 page_rows += 1;
                 break;
             }
@@ -299,12 +318,18 @@ impl TableViewer {
     }
 
     /// Tallest expansion any body row would need at `avail` (for stable `want`).
-    fn max_expand_height(&self, avail: usize) -> usize {
+    fn max_expand_height(&mut self, avail: usize) -> usize {
         if self.text.is_empty() {
             return 1;
         }
+        if let Some((cached_avail, h)) = self.max_expand_cache
+            && cached_avail == avail
+        {
+            return h;
+        }
         let widths = self.eff_widths(avail.max(1));
-        self.text
+        let h = self
+            .text
             .iter()
             .map(|row| {
                 row.iter()
@@ -318,7 +343,9 @@ impl TableViewer {
             })
             .max()
             .unwrap_or(1)
-            .max(1)
+            .max(1);
+        self.max_expand_cache = Some((avail, h));
+        h
     }
 
     /// Header rule matching the visible columns (`─` / `─┼─`).
@@ -371,6 +398,54 @@ impl TableViewer {
             }
         }
         Line::from(spans)
+    }
+
+    /// Pre-wrap each visible cell of body row `i` to `h` lines (pad or clip with …).
+    fn wrap_expanded_row(
+        &self,
+        i: usize,
+        layout: &ColumnLayout,
+        style: Style,
+        theme: &Theme,
+        h: usize,
+    ) -> Vec<Vec<Vec<Span<'static>>>> {
+        layout
+            .cols
+            .iter()
+            .map(|&k| {
+                let mut lines = wrap_cell(
+                    &self.table.rows[i][k],
+                    layout.widths[k],
+                    style,
+                    if k == self.col { None } else { Some(theme) },
+                );
+                if lines.len() > h {
+                    lines.truncate(h);
+                    if let Some(last) = lines.last_mut() {
+                        *last = cell_spans(
+                            &DocCell {
+                                spans: vec![wiki_reader_render::StyledSpan {
+                                    text: show(&self.table.rows[i][k].text()),
+                                    kind: StyleKind::Plain,
+                                }],
+                            },
+                            layout.widths[k],
+                            None,
+                            if k == self.col {
+                                Style::default().fg(theme.on_peach).bg(theme.peach)
+                            } else {
+                                style
+                            },
+                            None,
+                        );
+                    }
+                }
+                while lines.len() < h {
+                    lines.push(vec![Span::styled(" ".repeat(layout.widths[k]), style)]);
+                }
+                lines
+            })
+            .collect()
     }
 
     /// One wrap-line of an expanded row; `wrapped[col_slot]` is the pre-wrapped cell lines.
@@ -703,51 +778,18 @@ impl ModalContent for TableViewer {
                 theme.text()
             };
             if expand {
-                let max_h = body_h.saturating_sub(used).saturating_sub(2).max(1);
+                // Header rule doubles as the rule above when expand is the first body row.
+                let rules = if n == self.top { 1 } else { 2 };
+                let max_h = body_h.saturating_sub(used).saturating_sub(rules).max(1);
                 let h = self.row_height(n, &layout, true, max_h);
-                let cost = h + 2;
+                let cost = h + rules;
                 if used + cost > body_h && n > self.top {
                     break;
                 }
-                let wrapped: Vec<Vec<Vec<Span<'static>>>> = layout
-                    .cols
-                    .iter()
-                    .map(|&k| {
-                        let mut lines = wrap_cell(
-                            &self.table.rows[i][k],
-                            layout.widths[k],
-                            style,
-                            if k == self.col { None } else { Some(theme) },
-                        );
-                        // Clip with … on the last line when capped.
-                        if lines.len() > h {
-                            lines.truncate(h);
-                            if let Some(last) = lines.last_mut() {
-                                *last = cell_spans(
-                                    &DocCell {
-                                        spans: vec![wiki_reader_render::StyledSpan {
-                                            text: show(&self.table.rows[i][k].text()),
-                                            kind: StyleKind::Plain,
-                                        }],
-                                    },
-                                    layout.widths[k],
-                                    None,
-                                    if k == self.col {
-                                        Style::default().fg(theme.on_peach).bg(theme.peach)
-                                    } else {
-                                        style
-                                    },
-                                    None,
-                                );
-                            }
-                        }
-                        while lines.len() < h {
-                            lines.push(vec![Span::styled(" ".repeat(layout.widths[k]), style)]);
-                        }
-                        lines
-                    })
-                    .collect();
-                lines.push(Self::rule_line(&layout, theme));
+                let wrapped = self.wrap_expanded_row(i, &layout, style, theme, h);
+                if n != self.top {
+                    lines.push(Self::rule_line(&layout, theme));
+                }
                 for li in 0..h {
                     lines.push(self.expanded_line(&wrapped, &layout, style, theme, li));
                 }
@@ -984,10 +1026,10 @@ mod tests {
             rule.contains('─') && rule.contains('┼'),
             "header rule: {rule}"
         );
-        // Expanded row: rule, body, rule — body is on y=3.
-        let row = row_at(buf, 3, 30);
+        // Expanded row at top: header rule doubles as the rule above — body is on y=2.
+        let row = row_at(buf, 2, 30);
         let x = u16::try_from(row.find("docs").unwrap()).unwrap();
-        assert_eq!(buf[(x, 3)].fg, theme.link, "link colour in a body cell");
+        assert_eq!(buf[(x, 2)].fg, theme.link, "link colour in a body cell");
         // Content-sized: both columns plus separators; height reserves expand + rules.
         // "docs" (4) + sort room beats header "ref" (3) → col1 width 6.
         assert_eq!(v.want((90, 30)).0, 6 + 3 + 6 + 3);
@@ -1046,8 +1088,8 @@ mod tests {
         term.draw(|f| v.draw(f, f.area(), &Theme::default()))
             .unwrap();
         let buf = term.backend().buffer();
-        // Expanded body line (after header rule + expand rule).
-        let row = row_at(buf, 3, 40);
+        // Expanded body line (after header rule; expand at top has no second rule above).
+        let row = row_at(buf, 2, 40);
         assert!(
             !row.trim_end().ends_with('│'),
             "no dangling separator: {row:?}"
@@ -1075,7 +1117,7 @@ mod tests {
         term.draw(|f| v.draw(f, f.area(), &Theme::default()))
             .unwrap();
         let buf = term.backend().buffer();
-        let row = row_at(buf, 3, 90);
+        let row = row_at(buf, 2, 90);
         assert!(row.contains(&long), "full cell text: {row:?}");
         assert!(!row.contains('…'), "no ellipsis: {row:?}");
     }
@@ -1109,6 +1151,99 @@ mod tests {
         assert!(
             collapsed.contains('…') || collapsed.contains("short"),
             "previous row collapses: {collapsed}"
+        );
+    }
+
+    #[test]
+    fn open_has_one_rule_under_the_header_not_two() {
+        use ratatui::Terminal;
+        use ratatui::backend::TestBackend;
+        let mut v = TableViewer::new(DocTable {
+            source_line: 1,
+            line: 0,
+            height: 4,
+            header: vec![cell("a"), cell("b")],
+            rows: vec![vec![cell("r0"), cell("x")], vec![cell("r1"), cell("y")]],
+        });
+        let mut term = Terminal::new(TestBackend::new(30, 10)).unwrap();
+        term.draw(|f| v.draw(f, f.area(), &Theme::default()))
+            .unwrap();
+        let buf = term.backend().buffer();
+        let is_rule = |y: u16| {
+            let s = row_at(buf, y, 30);
+            s.contains('─') && !s.contains('r') && !s.contains('a')
+        };
+        assert!(is_rule(1), "header rule at y=1");
+        assert!(
+            !is_rule(2),
+            "expand body, not a second rule: {}",
+            row_at(buf, 2, 30)
+        );
+        assert!(row_at(buf, 2, 30).contains("r0"), "expand body at y=2");
+        assert!(is_rule(3), "rule below expand");
+    }
+
+    #[test]
+    fn cursor_column_is_scrolled_until_whole_not_partial() {
+        // Narrow: col0 + col1 fit, col2 is partial. Moving onto col2 must drop col1 so col2
+        // is shown at full eff width.
+        let mut v = TableViewer::new(DocTable {
+            source_line: 1,
+            line: 0,
+            height: 3,
+            header: vec![cell("id"), cell("mid"), cell("acceptance")],
+            rows: vec![vec![
+                cell("1"),
+                cell("medium-text-here"),
+                cell("very-long-acceptance-criteria-text-that-needs-clipping"),
+            ]],
+        });
+        let avail = 42usize;
+        // Before moving: partial third column is present.
+        let before = v.column_layout(avail);
+        assert!(
+            before.cols.contains(&2) && before.widths[2] < v.eff_widths(avail)[2],
+            "setup: col2 is partial (w={} eff={:?} cols={:?})",
+            before.widths[2],
+            v.eff_widths(avail),
+            before.cols
+        );
+        press(&mut v, "ll");
+        assert_eq!(v.col, 2);
+        v.keep_cursor_visible(avail, 8);
+        let layout = v.column_layout(avail);
+        let full = v.eff_widths(avail)[2];
+        assert_eq!(
+            layout.widths[2], full,
+            "cursor col is whole: left={}, cols={:?}, w={}",
+            v.left, layout.cols, layout.widths[2]
+        );
+        assert!(!layout.cols.contains(&1), "middle col scrolled away");
+    }
+
+    #[test]
+    fn max_expand_height_is_cached_per_avail() {
+        // Wide natural widths so different caps produce different `avail` after min(cap, w).
+        let long = "x".repeat(80);
+        let mut v = TableViewer::new(DocTable {
+            source_line: 1,
+            line: 0,
+            height: 3,
+            header: vec![cell("a"), cell("b")],
+            rows: vec![vec![cell("1"), cell(&long)]],
+        });
+        assert!(v.max_expand_cache.is_none());
+        let h1 = v.want((40, 20)).1;
+        let cached = v.max_expand_cache;
+        assert!(cached.is_some(), "want fills the cache");
+        let h2 = v.want((40, 20)).1;
+        assert_eq!(h1, h2);
+        assert_eq!(v.max_expand_cache, cached, "same avail reuses the cache");
+        let _ = v.want((80, 20));
+        assert_ne!(
+            v.max_expand_cache.map(|(a, _)| a),
+            cached.map(|(a, _)| a),
+            "different avail recomputes"
         );
     }
 
