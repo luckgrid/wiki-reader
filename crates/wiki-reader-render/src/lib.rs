@@ -16,8 +16,8 @@ pub use images::{
 pub use link_span::{LinkClass, LinkId, LinkSpan};
 pub use render::{
     BlockAction, BlockActionKind, DocCell, DocCodeBlock, DocTable, MediaOccurrence,
-    MediaOccurrenceKind, RenderOpts, RenderedDoc, StyleKind, StyledLine, StyledSpan, render,
-    render_with,
+    MediaOccurrenceKind, RenderOpts, RenderedDoc, StyleKind, StyledLine, StyledSpan,
+    is_sanitized_control, render, render_with, sanitize_controls,
 };
 pub use wiki_reader_media::{
     DiagramPalette, MIN_LEGIBLE_SCALE, fit_scale, is_legible, is_svg_path,
@@ -60,6 +60,60 @@ mod tests {
 
     fn render_src(src: &str, width: u16) -> RenderedDoc {
         render(src, None, &empty_key(), &empty_index(), width)
+    }
+
+    #[test]
+    fn control_characters_become_spaces_in_display_and_plain() {
+        let doc = render_src("Hello\u{0001}world\n", 80);
+        let joined = doc.lines.join("\n");
+        assert!(
+            joined.contains("Hello world"),
+            "display should replace controls: {joined:?}"
+        );
+        assert!(
+            !joined.contains('\u{0001}'),
+            "control must not survive into plain lines"
+        );
+        let plain: String = doc.styled.iter().map(StyledLine::plain).collect();
+        assert!(plain.contains("Hello world"), "styled plain={plain:?}");
+    }
+
+    #[test]
+    fn bidi_format_characters_become_spaces_in_display() {
+        let doc = render_src("safe\u{202E}evil\n", 80);
+        let joined = doc.lines.join("\n");
+        assert!(
+            joined.contains("safe evil"),
+            "U+202E must become a space: {joined:?}"
+        );
+        assert!(!joined.contains('\u{202E}'));
+    }
+
+    #[test]
+    fn code_block_copy_and_lines_sanitise_bidi() {
+        let doc = render_src("```\ncode\u{202E}x\n```\n", 80);
+        let copy = doc
+            .block_actions
+            .iter()
+            .find(|a| a.kind == BlockActionKind::CopyCode)
+            .expect("CopyCode");
+        assert!(
+            !copy.payload.contains('\u{202E}'),
+            "payload={:?}",
+            copy.payload
+        );
+        assert!(
+            copy.payload.contains("code x"),
+            "payload={:?}",
+            copy.payload
+        );
+        let block = doc.code_blocks.first().expect("code block");
+        assert!(
+            block.lines.iter().any(|l| l.contains("code x")),
+            "lines={:?}",
+            block.lines
+        );
+        assert!(block.lines.iter().all(|l| !l.contains('\u{202E}')));
     }
 
     #[test]

@@ -91,6 +91,34 @@ pub struct StyledSpan {
     pub kind: StyleKind,
 }
 
+/// Control characters become spaces so copied text matches what is shown (N20).
+/// Keeps `\t` and `\n` (line structure / indentation).
+#[must_use]
+pub fn sanitize_controls(s: &str) -> String {
+    s.chars()
+        .map(|c| if is_sanitized_control(c) { ' ' } else { c })
+        .collect()
+}
+
+/// `Cc` (except tab/newline) plus bidi / isolate format controls (`Cf`).
+#[must_use]
+pub fn is_sanitized_control(c: char) -> bool {
+    if c == '\t' || c == '\n' {
+        return false;
+    }
+    if c.is_control() {
+        return true;
+    }
+    matches!(
+        c,
+        '\u{061C}'
+            | '\u{200E}'
+            | '\u{200F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2066}'..='\u{2069}'
+    )
+}
+
 /// One display row after wrap.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StyledLine {
@@ -1272,10 +1300,11 @@ impl<'a> LayoutState<'a> {
             if body.is_empty() && t.ends_with('\n') {
                 return;
             }
+            let body = sanitize_controls(body);
             if !self.code_body.is_empty() {
                 self.code_body.push('\n');
             }
-            self.code_body.push_str(body);
+            self.code_body.push_str(&body);
             // Mermaid: accumulate only; TagEnd paints diagram_lines once.
             if crate::diagrams::is_mermaid_lang(&self.code_fence_lang) {
                 self.code_line_src = self
@@ -1477,14 +1506,20 @@ impl<'a> LayoutState<'a> {
     }
 
     /// Push a full display row without wrapping (diagrams, table rows).
-    fn push_raw_line(&mut self, text: String, kind: StyleKind, src: u32) {
+    fn push_raw_line(&mut self, mut text: String, kind: StyleKind, src: u32) {
         self.finish_block();
         self.cur_src = src;
+        if text.chars().any(is_sanitized_control) {
+            text = sanitize_controls(&text);
+        }
         self.cur.push(StyledSpan { text, kind });
         self.commit_line(src);
     }
 
-    fn push_span(&mut self, text: String, kind: StyleKind, src: u32) {
+    fn push_span(&mut self, mut text: String, kind: StyleKind, src: u32) {
+        if text.chars().any(is_sanitized_control) {
+            text = sanitize_controls(&text);
+        }
         if text.is_empty() {
             return;
         }

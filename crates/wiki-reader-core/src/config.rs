@@ -5,6 +5,7 @@
 
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
@@ -517,8 +518,54 @@ pub fn write_patch(path: &Path, update: &ConfigPatch) -> Result<(), String> {
         }
     }
 
-    fs::write(path, doc.to_string())
-        .map_err(|err| format!("could not write {}: {err}", path.display()))?;
+    // ponytail: options patches scalar/table keys only; inline-table rewrite needs a full
+    // document round-trip if we ever write nested inline tables here.
+    let text = doc.to_string();
+    // Resolve symlinks first so rename updates the target and the link stays a link (N16).
+    let target = if path.exists() {
+        fs::canonicalize(path)
+            .map_err(|err| format!("could not resolve {}: {err}", path.display()))?
+    } else {
+        path.to_path_buf()
+    };
+    let parent = target.parent().filter(|p| !p.as_os_str().is_empty());
+    let tmp = match parent {
+        Some(dir) => dir.join(format!(
+            ".{}.tmp-{}",
+            target
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("config.toml"),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_nanos())
+        )),
+        None => target.with_extension(format!(
+            "toml.tmp-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_nanos())
+        )),
+    };
+    let write_tmp = || -> Result<(), String> {
+        let mut file = fs::File::create(&tmp)
+            .map_err(|err| format!("could not create {}: {err}", tmp.display()))?;
+        if let Ok(meta) = fs::metadata(&target) {
+            file.set_permissions(meta.permissions())
+                .map_err(|err| format!("could not set permissions on {}: {err}", tmp.display()))?;
+        }
+        file.write_all(text.as_bytes())
+            .map_err(|err| format!("could not write {}: {err}", tmp.display()))?;
+        file.sync_all()
+            .map_err(|err| format!("could not sync {}: {err}", tmp.display()))?;
+        fs::rename(&tmp, &target)
+            .map_err(|err| format!("could not write {}: {err}", target.display()))?;
+        Ok(())
+    };
+    if let Err(err) = write_tmp() {
+        let _ = fs::remove_file(&tmp);
+        return Err(err);
+    }
     Ok(())
 }
 
@@ -1052,6 +1099,83 @@ quit = "Q"
         assert!(!cfg.images.enabled);
         assert_eq!(cfg.images.max_slot_rows, 40);
         assert!(cfg.diagnostics.is_empty(), "diags={:?}", cfg.diagnostics);
+    }
+
+    #[test]
+    fn write_patch_is_atomic_and_cleans_temp_on_success() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("config.toml");
+        fs::write(&path, "theme = \"dark\"\n").unwrap();
+        write_patch(
+            &path,
+            &ConfigPatch {
+                theme: Some(ThemeName::Light),
+                ..ConfigPatch::default()
+            },
+        )
+        .unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(text.contains("light"), "text={text}");
+        let leftovers: Vec<_> = fs::read_dir(tmp.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|e| e.file_name())
+            .filter(|n| n.to_string_lossy().contains(".tmp-"))
+            .collect();
+        assert!(leftovers.is_empty(), "temp left behind: {leftovers:?}");
+    }
+
+    #[test]
+    fn write_patch_preserves_symlink() {
+        let tmp = tempdir().unwrap();
+        let real = tmp.path().join("real.toml");
+        let link = tmp.path().join("config.toml");
+        fs::write(&real, "theme = \"dark\"\n").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        #[cfg(not(unix))]
+        {
+            // Windows: skip if symlink creation needs elevation.
+            if std::os::windows::fs::symlink_file(&real, &link).is_err() {
+                return;
+            }
+        }
+        write_patch(
+            &link,
+            &ConfigPatch {
+                theme: Some(ThemeName::Light),
+                ..ConfigPatch::default()
+            },
+        )
+        .unwrap();
+        assert!(
+            link.symlink_metadata().unwrap().file_type().is_symlink(),
+            "config path must stay a symlink"
+        );
+        let text = fs::read_to_string(&real).unwrap();
+        assert!(text.contains("light"), "target text={text}");
+        assert_eq!(fs::read_to_string(&link).unwrap(), text);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_patch_preserves_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("config.toml");
+        fs::write(&path, "theme = \"dark\"\n").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        write_patch(
+            &path,
+            &ConfigPatch {
+                theme: Some(ThemeName::Light),
+                ..ConfigPatch::default()
+            },
+        )
+        .unwrap();
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "mode={mode:#o}");
+        assert!(fs::read_to_string(&path).unwrap().contains("light"));
     }
 
     #[test]

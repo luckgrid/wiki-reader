@@ -13,7 +13,7 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use wiki_reader_render::{DocCell, DocTable, StyleKind};
+use wiki_reader_render::{DocCell, DocTable, StyleKind, is_sanitized_control};
 
 use super::modal_viewer::{ModalContent, ModalEvent};
 use super::text_col::line_width;
@@ -65,7 +65,8 @@ struct ColumnLayout {
 impl TableViewer {
     #[must_use]
     pub fn new(table: DocTable) -> Self {
-        let plain = |r: &[DocCell]| r.iter().map(DocCell::text).collect::<Vec<_>>();
+        // Sanitise once so filter, sort, copy and display agree (N20).
+        let plain = |r: &[DocCell]| r.iter().map(|c| show(&c.text())).collect::<Vec<_>>();
         let head = plain(&table.header);
         let text: Vec<Vec<String>> = table.rows.iter().map(|r| plain(r)).collect();
         let widths = (0..head.len())
@@ -474,10 +475,10 @@ impl ModalContent for TableViewer {
     }
 }
 
-/// Cell text for one terminal line: control characters become spaces.
+/// Cell text for one terminal line: control and bidi format characters become spaces.
 fn show(s: &str) -> String {
     s.chars()
-        .map(|c| if c.is_control() { ' ' } else { c })
+        .map(|c| if is_sanitized_control(c) { ' ' } else { c })
         .collect()
 }
 
@@ -612,6 +613,20 @@ mod tests {
         press(&mut v, "jl");
         assert_eq!(press(&mut v, "y"), ModalEvent::Copy("9".into()));
         assert_eq!(press(&mut v, "Y"), ModalEvent::Copy("alice\t9".into()));
+    }
+
+    #[test]
+    fn bidi_in_cell_is_sanitised_for_display_and_copy() {
+        let mut v = TableViewer::new(DocTable {
+            source_line: 1,
+            line: 0,
+            height: 3,
+            header: vec![cell("name")],
+            rows: vec![vec![cell("safe\u{202E}evil")]],
+        });
+        assert_eq!(v.text[0][0], "safe evil");
+        assert_eq!(press(&mut v, "y"), ModalEvent::Copy("safe evil".into()));
+        assert!(!v.text[0][0].contains('\u{202E}'));
     }
 
     #[test]
