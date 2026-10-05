@@ -7,6 +7,11 @@ use std::path::{Path, PathBuf};
 
 use crate::Error;
 
+/// Soft cap on markdown pages discovered in one collection (N15).
+pub const MAX_PAGES: usize = 50_000;
+/// Largest page body read from disk (N15); matches the image file cap scale.
+pub const MAX_PAGE_BYTES: u64 = 8 * 1024 * 1024;
+
 /// Stable identity for a page inside a collection.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PageKey {
@@ -115,7 +120,10 @@ impl CollectionProvider for FsProvider {
             .build();
 
         for entry in walker {
-            let entry = entry?;
+            // One unreadable directory must not abort discovery (N15).
+            let Ok(entry) = entry else {
+                continue;
+            };
             // Symlinked .md files are skipped: follow_links is false.
             if !entry.file_type().is_some_and(|ft| ft.is_file()) {
                 continue;
@@ -124,10 +132,10 @@ impl CollectionProvider for FsProvider {
             if !is_markdown(path) {
                 continue;
             }
-            let relative_path = path
-                .strip_prefix(&self.root)
-                .map_err(|_| Error::PathOutsideRoot(path.to_path_buf()))?
-                .to_path_buf();
+            let Ok(relative_path) = path.strip_prefix(&self.root) else {
+                continue;
+            };
+            let relative_path = relative_path.to_path_buf();
             if crate::config::path_excluded(self.exclude.as_ref(), &relative_path) {
                 continue;
             }
@@ -137,6 +145,9 @@ impl CollectionProvider for FsProvider {
                     relative_path,
                 },
             });
+            if pages.len() >= MAX_PAGES {
+                break;
+            }
         }
 
         pages.sort_by(|a, b| a.key.relative_path.cmp(&b.key.relative_path));
@@ -145,6 +156,10 @@ impl CollectionProvider for FsProvider {
 
     fn read(&self, key: &PageKey) -> Result<String, Error> {
         let abs = self.resolve(&key.relative_path)?;
+        let len = fs::metadata(&abs)?.len();
+        if len > MAX_PAGE_BYTES {
+            return Err(Error::PageTooLarge(key.relative_path.clone()));
+        }
         Ok(fs::read_to_string(abs)?)
     }
 }
@@ -321,5 +336,55 @@ mod tests {
         let paths = rel_paths(&provider);
         assert_eq!(paths, vec!["README.md".to_owned()]);
         assert!(!paths.iter().any(|p| p.contains("drafts")));
+    }
+
+    #[test]
+    fn list_pages_skips_unreadable_directory() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        fs::write(root.join("ok.md"), "# Ok\n").unwrap();
+        let bad = root.join("bad");
+        fs::create_dir(&bad).unwrap();
+        fs::write(bad.join("hidden.md"), "# Hidden\n").unwrap();
+        // Make the subdirectory unreadable (skip on platforms where chmod is a no-op).
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&bad, fs::Permissions::from_mode(0o000)).unwrap();
+        }
+        let provider = FsProvider::open(root).expect("open");
+        let paths = rel_paths(&provider);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&bad, fs::Permissions::from_mode(0o755));
+        }
+        assert!(paths.iter().any(|p| p == "ok.md"), "paths={paths:?}");
+        assert!(
+            !paths.iter().any(|p| p.contains("hidden")),
+            "unreadable dir still listed: {paths:?}"
+        );
+    }
+
+    #[test]
+    fn read_rejects_oversized_page() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("big.md");
+        // Sparse file: set length without writing every byte.
+        {
+            let f = fs::File::create(&path).unwrap();
+            f.set_len(super::MAX_PAGE_BYTES + 1).unwrap();
+        }
+        let provider = FsProvider::open(dir.path()).expect("open");
+        let key = PageKey {
+            collection_id: provider
+                .root()
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into(),
+            relative_path: PathBuf::from("big.md"),
+        };
+        assert!(matches!(provider.read(&key), Err(Error::PageTooLarge(_))));
     }
 }

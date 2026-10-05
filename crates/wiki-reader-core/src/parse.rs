@@ -7,6 +7,12 @@ use std::ops::Range;
 
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 
+/// Cap on frontmatter byte length before YAML/TOML parse (N14).
+const MAX_FRONTMATTER_BYTES: usize = 64 * 1024;
+/// Cap on YAML `*alias` markers in the raw frontmatter (N14). `serde_norway` already
+/// bounds recursion and jumpcount; this rejects alias-heavy input before expansion.
+const MAX_YAML_ALIAS_MARKERS: usize = 64;
+
 /// Non-fatal problem found while parsing a page.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostic {
@@ -247,6 +253,33 @@ fn parse_yaml_frontmatter(raw: &str, diagnostics: &mut Vec<Diagnostic>) -> Front
             ..Frontmatter::default()
         };
     }
+    if raw.len() > MAX_FRONTMATTER_BYTES {
+        diagnostics.push(Diagnostic {
+            message: format!("YAML frontmatter exceeds {MAX_FRONTMATTER_BYTES} bytes; skipped"),
+        });
+        return Frontmatter {
+            kind: Some(FrontmatterKind::Yaml),
+            ..Frontmatter::default()
+        };
+    }
+    // Count alias uses (`*name`); anchors (`&name`) alone are cheap.
+    // ponytail: raw byte scan, not a YAML lexer; upgrade if false positives appear in titles.
+    let alias_markers = raw
+        .as_bytes()
+        .windows(2)
+        .filter(|w| w[0] == b'*' && (w[1].is_ascii_alphanumeric() || w[1] == b'_'))
+        .count();
+    if alias_markers > MAX_YAML_ALIAS_MARKERS {
+        diagnostics.push(Diagnostic {
+            message: format!(
+                "YAML frontmatter has {alias_markers} alias markers (max {MAX_YAML_ALIAS_MARKERS}); skipped"
+            ),
+        });
+        return Frontmatter {
+            kind: Some(FrontmatterKind::Yaml),
+            ..Frontmatter::default()
+        };
+    }
     match serde_norway::from_str::<serde_norway::Value>(raw) {
         Ok(serde_norway::Value::Mapping(map)) => {
             let mut fm = Frontmatter {
@@ -284,6 +317,15 @@ fn parse_yaml_frontmatter(raw: &str, diagnostics: &mut Vec<Diagnostic>) -> Front
 
 fn parse_toml_frontmatter(raw: &str, diagnostics: &mut Vec<Diagnostic>) -> Frontmatter {
     if raw.trim().is_empty() {
+        return Frontmatter {
+            kind: Some(FrontmatterKind::Toml),
+            ..Frontmatter::default()
+        };
+    }
+    if raw.len() > MAX_FRONTMATTER_BYTES {
+        diagnostics.push(Diagnostic {
+            message: format!("TOML frontmatter exceeds {MAX_FRONTMATTER_BYTES} bytes; skipped"),
+        });
         return Frontmatter {
             kind: Some(FrontmatterKind::Toml),
             ..Frontmatter::default()
@@ -831,6 +873,30 @@ mod tests {
         assert!(page.frontmatter.unknown.contains_key("custom"));
         assert_eq!(page.h1.as_deref(), Some("H1"));
         assert!(page.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn yaml_alias_amplification_is_skipped() {
+        // Classic alias fan-out: many `*a` references without exceeding recursion depth.
+        let mut aliases = String::from("a: &a [x]\nb: [");
+        for i in 0..MAX_YAML_ALIAS_MARKERS + 10 {
+            if i > 0 {
+                aliases.push(',');
+            }
+            aliases.push_str(" *a");
+        }
+        aliases.push(']');
+        let src = format!("---\n{aliases}\n---\n\n# Body\n");
+        let page = parse(&src);
+        assert!(
+            page.diagnostics
+                .iter()
+                .any(|d| d.message.contains("alias markers")),
+            "diags={:?}",
+            page.diagnostics
+        );
+        assert!(page.frontmatter.title.is_none());
+        assert_eq!(page.h1.as_deref(), Some("Body"));
     }
 
     #[test]

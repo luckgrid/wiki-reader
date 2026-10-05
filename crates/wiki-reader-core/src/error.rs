@@ -34,4 +34,8 @@ pub enum Error {
     /// Requested start page is not in the index.
     #[error("page not found: {}", .0.relative_path.display())]
     PageNotFound(PageKey),
+
+    /// Page file exceeds [`crate::provider::MAX_PAGE_BYTES`].
+    #[error("page too large: {}", .0.display())]
+    PageTooLarge(PathBuf),
 }

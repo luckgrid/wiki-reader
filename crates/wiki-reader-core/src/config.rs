@@ -517,8 +517,20 @@ pub fn write_patch(path: &Path, update: &ConfigPatch) -> Result<(), String> {
         }
     }
 
-    fs::write(path, doc.to_string())
-        .map_err(|err| format!("could not write {}: {err}", path.display()))?;
+    // ponytail: options patches scalar/table keys only; inline-table rewrite needs a full
+    // document round-trip if we ever write nested inline tables here.
+    let text = doc.to_string();
+    // Same directory so rename is atomic on the same filesystem (N16).
+    let tmp = path.with_extension(format!(
+        "toml.tmp-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos())
+    ));
+    if let Err(err) = fs::write(&tmp, &text).and_then(|()| fs::rename(&tmp, path)) {
+        let _ = fs::remove_file(&tmp);
+        return Err(format!("could not write {}: {err}", path.display()));
+    }
     Ok(())
 }
 
@@ -1052,6 +1064,30 @@ quit = "Q"
         assert!(!cfg.images.enabled);
         assert_eq!(cfg.images.max_slot_rows, 40);
         assert!(cfg.diagnostics.is_empty(), "diags={:?}", cfg.diagnostics);
+    }
+
+    #[test]
+    fn write_patch_is_atomic_and_cleans_temp_on_success() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("config.toml");
+        fs::write(&path, "theme = \"dark\"\n").unwrap();
+        write_patch(
+            &path,
+            &ConfigPatch {
+                theme: Some(ThemeName::Light),
+                ..ConfigPatch::default()
+            },
+        )
+        .unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(text.contains("light"), "text={text}");
+        let leftovers: Vec<_> = fs::read_dir(tmp.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|e| e.file_name())
+            .filter(|n| n.to_string_lossy().contains(".toml.tmp-"))
+            .collect();
+        assert!(leftovers.is_empty(), "temp left behind: {leftovers:?}");
     }
 
     #[test]

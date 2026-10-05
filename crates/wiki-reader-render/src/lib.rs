@@ -63,6 +63,22 @@ mod tests {
     }
 
     #[test]
+    fn control_characters_become_spaces_in_display_and_plain() {
+        let doc = render_src("Hello\u{0001}world\n", 80);
+        let joined = doc.lines.join("\n");
+        assert!(
+            joined.contains("Hello world"),
+            "display should replace controls: {joined:?}"
+        );
+        assert!(
+            !joined.contains('\u{0001}'),
+            "control must not survive into plain lines"
+        );
+        let plain: String = doc.styled.iter().map(StyledLine::plain).collect();
+        assert!(plain.contains("Hello world"), "styled plain={plain:?}");
+    }
+
+    #[test]
     fn renders_heading_line() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/worked-example");
         let provider = FsProvider::open(&root).unwrap();

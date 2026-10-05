@@ -91,6 +91,21 @@ pub struct StyledSpan {
     pub kind: StyleKind,
 }
 
+/// Control characters become spaces so copied text matches what is shown (N20).
+/// Keeps `\t` and `\n` (line structure / indentation).
+#[must_use]
+pub fn sanitize_controls(s: &str) -> String {
+    s.chars()
+        .map(|c| {
+            if c.is_control() && c != '\t' && c != '\n' {
+                ' '
+            } else {
+                c
+            }
+        })
+        .collect()
+}
+
 /// One display row after wrap.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StyledLine {
@@ -1477,14 +1492,26 @@ impl<'a> LayoutState<'a> {
     }
 
     /// Push a full display row without wrapping (diagrams, table rows).
-    fn push_raw_line(&mut self, text: String, kind: StyleKind, src: u32) {
+    fn push_raw_line(&mut self, mut text: String, kind: StyleKind, src: u32) {
         self.finish_block();
         self.cur_src = src;
+        if text
+            .chars()
+            .any(|c| c.is_control() && c != '\t' && c != '\n')
+        {
+            text = sanitize_controls(&text);
+        }
         self.cur.push(StyledSpan { text, kind });
         self.commit_line(src);
     }
 
-    fn push_span(&mut self, text: String, kind: StyleKind, src: u32) {
+    fn push_span(&mut self, mut text: String, kind: StyleKind, src: u32) {
+        if text
+            .chars()
+            .any(|c| c.is_control() && c != '\t' && c != '\n')
+        {
+            text = sanitize_controls(&text);
+        }
         if text.is_empty() {
             return;
         }

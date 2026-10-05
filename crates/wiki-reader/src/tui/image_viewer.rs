@@ -80,9 +80,11 @@ struct Zoomed {
     key: ReqKey,
 }
 
-/// What the worker keeps between requests: the decoded bitmap, or the SVG to re-rasterise.
+/// What the worker keeps between requests: one RGBA bitmap, or the SVG to re-rasterise.
+/// Holding [`RgbaImage`] (not [`DynamicImage`]) keeps the peak near one decode buffer
+/// plus one zoomed buffer instead of ~300 MB with overlapping decoder formats (N8).
 enum Natural {
-    Bitmap(DynamicImage),
+    Bitmap(RgbaImage),
     Svg(Vec<u8>, (u32, u32)),
 }
 
@@ -91,6 +93,14 @@ impl Natural {
         match self {
             Self::Bitmap(i) => (i.width(), i.height()),
             Self::Svg(_, size) => *size,
+        }
+    }
+
+    /// RGBA byte size of the retained natural buffer (0 for SVG source).
+    fn rgba_bytes(&self) -> u64 {
+        match self {
+            Self::Bitmap(i) => u64::from(i.width()) * u64::from(i.height()) * 4,
+            Self::Svg(_, _) => 0,
         }
     }
 }
@@ -108,7 +118,8 @@ fn load(source: &SlotSource) -> Result<Natural, String> {
                 let size = svg_natural_size(&bytes).map_err(|e| e.to_string())?;
                 Ok(Natural::Svg(bytes, size))
             } else {
-                decode_file(path).map(Natural::Bitmap)
+                // Decode under the alloc cap, then keep a single RGBA so decoder scratch drops.
+                Ok(Natural::Bitmap(decode_file(path)?.to_rgba8()))
             }
         }
         SlotSource::Mermaid {
@@ -123,8 +134,13 @@ fn load(source: &SlotSource) -> Result<Natural, String> {
 
 fn zoom_to(nat: &Natural, key: ReqKey) -> Result<RgbaImage, String> {
     let (w, h) = zoom_dims(nat.size(), key.1, key.0, key.2);
+    // Cap: natural RGBA + zoomed RGBA stay within 2× the pixel budget (N8 / L1–L5).
+    let zoomed_bytes = u64::from(w) * u64::from(h) * 4;
+    if nat.rgba_bytes().saturating_add(zoomed_bytes) > MAX_IMAGE_PIXELS * 4 * 2 {
+        return Err("image too large".into());
+    }
     match nat {
-        Natural::Bitmap(img) => Ok(img.resize_exact(w, h, FilterType::Triangle).to_rgba8()),
+        Natural::Bitmap(img) => Ok(image::imageops::resize(img, w, h, FilterType::Triangle)),
         Natural::Svg(bytes, (nw, _)) => {
             #[allow(clippy::cast_precision_loss)] // pixel sizes are far below f32's exact range
             let scale = w as f32 / *nw as f32;
@@ -748,6 +764,20 @@ mod tests {
         assert!(w <= 200 && h <= 200);
         // Zoom multiplies the base of either mode.
         assert_eq!(zoom_dims((100, 50), (4000, 4000), 200, true), (200, 100));
+    }
+
+    #[test]
+    fn retained_bitmap_plus_zoom_stays_within_two_rgba_budgets() {
+        // Natural at the pixel cap + zoomed output must fit the N8 2× budget.
+        let nat = Natural::Bitmap(RgbaImage::new(4000, 4000));
+        assert!(nat.rgba_bytes() <= MAX_IMAGE_PIXELS * 4);
+        let key = (100, (800, 600), false);
+        let zoomed = zoom_to(&nat, key).expect("zoom");
+        let total = nat.rgba_bytes() + u64::from(zoomed.width()) * u64::from(zoomed.height()) * 4;
+        assert!(
+            total <= MAX_IMAGE_PIXELS * 4 * 2,
+            "natural+zoomed {total} exceeds 2× RGBA budget"
+        );
     }
 
     #[test]
