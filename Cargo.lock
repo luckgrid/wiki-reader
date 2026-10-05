@@ -2992,7 +2992,7 @@ dependencies = [
 
 [[package]]
 name = "wiki-reader"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "clap",
  "filetime",
@@ -3011,7 +3011,7 @@ dependencies = [
 
 [[package]]
 name = "wiki-reader-core"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "globset",
  "ignore",
@@ -3031,7 +3031,7 @@ dependencies = [
 
 [[package]]
 name = "wiki-reader-media"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "image",
  "mermaid-rs-renderer",
@@ -3041,7 +3041,7 @@ dependencies = [
 
 [[package]]
 name = "wiki-reader-render"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "insta",
  "mermaid-text",
@@ -3054,7 +3054,7 @@ dependencies = [
 
 [[package]]
 name = "wiki-reader-tools"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "pulldown-cmark",
  "tempfile",
