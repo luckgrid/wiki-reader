@@ -3,9 +3,11 @@
 //! See [architecture overview](../../../wiki/architecture/overview.md).
 
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use crate::Error;
+use crate::parse::Diagnostic;
 
 /// Soft cap on markdown pages discovered in one collection (N15).
 pub const MAX_PAGES: usize = 50_000;
@@ -35,10 +37,12 @@ pub trait CollectionProvider {
 
     /// Discover markdown pages under the root.
     ///
+    /// Returns pages plus non-fatal discovery diagnostics (truncation, skipped paths).
+    ///
     /// # Errors
     ///
-    /// Returns when the walk fails or the root is unreadable.
-    fn list_pages(&self) -> Result<Vec<PageMeta>, Error>;
+    /// Returns when the root is unreadable.
+    fn list_pages(&self) -> Result<(Vec<PageMeta>, Vec<Diagnostic>), Error>;
 
     /// Read the raw text of a page.
     ///
@@ -107,8 +111,43 @@ impl CollectionProvider for FsProvider {
         &self.root
     }
 
-    fn list_pages(&self) -> Result<Vec<PageMeta>, Error> {
+    fn list_pages(&self) -> Result<(Vec<PageMeta>, Vec<Diagnostic>), Error> {
+        self.list_pages_limited(MAX_PAGES)
+    }
+
+    fn read(&self, key: &PageKey) -> Result<String, Error> {
+        let abs = self.resolve(&key.relative_path)?;
+        let mut file = fs::File::open(&abs)?;
+        let mut buf = Vec::new();
+        file.by_ref()
+            .take(MAX_PAGE_BYTES.saturating_add(1))
+            .read_to_end(&mut buf)?;
+        if buf.len() as u64 > MAX_PAGE_BYTES {
+            return Err(Error::PageTooLarge(key.relative_path.clone()));
+        }
+        String::from_utf8(buf).map_err(|err| {
+            Error::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                err.to_string(),
+            ))
+        })
+    }
+}
+
+impl FsProvider {
+    /// Discover pages with an explicit page-count cap (tests use a small `max`).
+    ///
+    /// # Errors
+    ///
+    /// Returns when building the walker fails (same as [`CollectionProvider::list_pages`]).
+    pub fn list_pages_limited(
+        &self,
+        max: usize,
+    ) -> Result<(Vec<PageMeta>, Vec<Diagnostic>), Error> {
         let mut pages = Vec::new();
+        let mut diagnostics = Vec::new();
+        let mut skipped = 0usize;
+        let mut truncated = false;
         let walker = ignore::WalkBuilder::new(&self.root)
             .hidden(false) // content-model: include dot-dirs unless gitignored
             .require_git(false)
@@ -122,6 +161,7 @@ impl CollectionProvider for FsProvider {
         for entry in walker {
             // One unreadable directory must not abort discovery (N15).
             let Ok(entry) = entry else {
+                skipped += 1;
                 continue;
             };
             // Symlinked .md files are skipped: follow_links is false.
@@ -145,26 +185,27 @@ impl CollectionProvider for FsProvider {
                     relative_path,
                 },
             });
-            if pages.len() >= MAX_PAGES {
+            if pages.len() >= max {
+                truncated = true;
                 break;
             }
         }
 
-        pages.sort_by(|a, b| a.key.relative_path.cmp(&b.key.relative_path));
-        Ok(pages)
-    }
-
-    fn read(&self, key: &PageKey) -> Result<String, Error> {
-        let abs = self.resolve(&key.relative_path)?;
-        let len = fs::metadata(&abs)?.len();
-        if len > MAX_PAGE_BYTES {
-            return Err(Error::PageTooLarge(key.relative_path.clone()));
+        if truncated {
+            diagnostics.push(Diagnostic {
+                message: format!("collection truncated at {max} pages"),
+            });
         }
-        Ok(fs::read_to_string(abs)?)
-    }
-}
+        if skipped > 0 {
+            diagnostics.push(Diagnostic {
+                message: format!("skipped {skipped} unreadable paths during discovery"),
+            });
+        }
 
-impl FsProvider {
+        pages.sort_by(|a, b| a.key.relative_path.cmp(&b.key.relative_path));
+        Ok((pages, diagnostics))
+    }
+
     /// True when `relative` points at a regular non-markdown file under the collection root.
     #[must_use]
     pub fn non_markdown_file_exists(&self, relative: &Path) -> bool {
@@ -220,6 +261,7 @@ mod tests {
         provider
             .list_pages()
             .expect("list")
+            .0
             .iter()
             .map(|p| p.key.relative_path.to_string_lossy().replace('\\', "/"))
             .collect()
@@ -248,7 +290,7 @@ mod tests {
     #[test]
     fn reads_page_body() {
         let provider = FsProvider::open(fixture_root()).expect("open fixture");
-        let pages = provider.list_pages().expect("list");
+        let pages = provider.list_pages().expect("list").0;
         let root = pages
             .iter()
             .find(|p| p.key.relative_path == Path::new("README.md"))
@@ -353,11 +395,19 @@ mod tests {
             fs::set_permissions(&bad, fs::Permissions::from_mode(0o000)).unwrap();
         }
         let provider = FsProvider::open(root).expect("open");
-        let paths = rel_paths(&provider);
+        let (pages, diags) = provider.list_pages().expect("list");
+        let paths: Vec<_> = pages
+            .iter()
+            .map(|p| p.key.relative_path.to_string_lossy().replace('\\', "/"))
+            .collect();
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             let _ = fs::set_permissions(&bad, fs::Permissions::from_mode(0o755));
+            assert!(
+                diags.iter().any(|d| d.message.contains("unreadable paths")),
+                "diags={diags:?}"
+            );
         }
         assert!(paths.iter().any(|p| p == "ok.md"), "paths={paths:?}");
         assert!(
@@ -367,14 +417,32 @@ mod tests {
     }
 
     #[test]
+    fn list_pages_limited_reports_truncation() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        for name in ["a.md", "b.md", "c.md"] {
+            fs::write(dir.path().join(name), "# x\n").unwrap();
+        }
+        let provider = FsProvider::open(dir.path()).expect("open");
+        let (pages, diags) = provider.list_pages_limited(2).expect("list");
+        assert_eq!(pages.len(), 2);
+        assert!(
+            diags
+                .iter()
+                .any(|d| d.message.contains("truncated at 2 pages")),
+            "diags={diags:?}"
+        );
+    }
+
+    #[test]
     fn read_rejects_oversized_page() {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("big.md");
-        // Sparse file: set length without writing every byte.
-        {
-            let f = fs::File::create(&path).unwrap();
-            f.set_len(super::MAX_PAGE_BYTES + 1).unwrap();
-        }
+        // Write just over the cap so take(MAX+1) sees the overflow.
+        let n = usize::try_from(super::MAX_PAGE_BYTES).expect("page cap fits usize") + 1;
+        let mut big = vec![b'x'; n];
+        big[0] = b'#';
+        big[1] = b' ';
+        fs::write(&path, &big).unwrap();
         let provider = FsProvider::open(dir.path()).expect("open");
         let key = PageKey {
             collection_id: provider

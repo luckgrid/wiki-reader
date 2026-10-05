@@ -81,8 +81,8 @@ struct Zoomed {
 }
 
 /// What the worker keeps between requests: one RGBA bitmap, or the SVG to re-rasterise.
-/// Holding [`RgbaImage`] (not [`DynamicImage`]) keeps the peak near one decode buffer
-/// plus one zoomed buffer instead of ~300 MB with overlapping decoder formats (N8).
+/// Peak is decoder scratch, then one retained RGBA (via [`DynamicImage::into_rgba8`]) plus
+/// the current zoomed buffer under the 2× pixel-byte budget (N8).
 enum Natural {
     Bitmap(RgbaImage),
     Svg(Vec<u8>, (u32, u32)),
@@ -118,8 +118,9 @@ fn load(source: &SlotSource) -> Result<Natural, String> {
                 let size = svg_natural_size(&bytes).map_err(|e| e.to_string())?;
                 Ok(Natural::Svg(bytes, size))
             } else {
-                // Decode under the alloc cap, then keep a single RGBA so decoder scratch drops.
-                Ok(Natural::Bitmap(decode_file(path)?.to_rgba8()))
+                // Decode under the alloc cap, then keep a single RGBA (into_rgba8 avoids a
+                // copy when the decoded buffer is already Rgba8).
+                Ok(Natural::Bitmap(decode_file(path)?.into_rgba8()))
             }
         }
         SlotSource::Mermaid {

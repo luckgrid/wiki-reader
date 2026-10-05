@@ -90,7 +90,7 @@ impl Index {
     ///
     /// Returns when listing pages fails.
     pub fn build(provider: &impl CollectionProvider) -> Result<Self, Error> {
-        let metas = provider.list_pages()?;
+        let (metas, mut diagnostics) = provider.list_pages()?;
         let collection_id = metas.first().map_or_else(
             || {
                 provider
@@ -104,7 +104,6 @@ impl Index {
         let mut pages: HashMap<PageKey, Page> = HashMap::with_capacity(metas.len());
         let mut by_id: HashMap<String, PageKey> = HashMap::new();
         let mut by_path: HashMap<PathBuf, PageKey> = HashMap::with_capacity(metas.len());
-        let mut diagnostics = Vec::new();
 
         for meta in metas {
             let source = match provider.read(&meta.key) {

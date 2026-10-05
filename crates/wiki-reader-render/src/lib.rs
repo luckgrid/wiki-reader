@@ -79,6 +79,44 @@ mod tests {
     }
 
     #[test]
+    fn bidi_format_characters_become_spaces_in_display() {
+        let doc = render_src("safe\u{202E}evil\n", 80);
+        let joined = doc.lines.join("\n");
+        assert!(
+            joined.contains("safe evil"),
+            "U+202E must become a space: {joined:?}"
+        );
+        assert!(!joined.contains('\u{202E}'));
+    }
+
+    #[test]
+    fn code_block_copy_and_lines_sanitise_bidi() {
+        let doc = render_src("```\ncode\u{202E}x\n```\n", 80);
+        let copy = doc
+            .block_actions
+            .iter()
+            .find(|a| a.kind == BlockActionKind::CopyCode)
+            .expect("CopyCode");
+        assert!(
+            !copy.payload.contains('\u{202E}'),
+            "payload={:?}",
+            copy.payload
+        );
+        assert!(
+            copy.payload.contains("code x"),
+            "payload={:?}",
+            copy.payload
+        );
+        let block = doc.code_blocks.first().expect("code block");
+        assert!(
+            block.lines.iter().any(|l| l.contains("code x")),
+            "lines={:?}",
+            block.lines
+        );
+        assert!(block.lines.iter().all(|l| !l.contains('\u{202E}')));
+    }
+
+    #[test]
     fn renders_heading_line() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/worked-example");
         let provider = FsProvider::open(&root).unwrap();

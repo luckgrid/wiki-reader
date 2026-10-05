@@ -40,19 +40,19 @@ No `unsafe` Rust exists in the workspace (`unsafe_code = "forbid"` in every crat
 | N5 | search overlay | No bracketed paste, up to 256 events per redraw each with a full refresh, no hit cap, a per-frame `HashSet`. | fixed (P3-28): batching, `MAX_TEXT_HITS = 500` with a "500+" footer, no per-frame `HashSet` |
 | N6 | core `NavTree::prev/next` | `page_order()` clones every key per call; 4 to 6 whole-collection clones per frame. | fixed (P3-28): `NavTree` builds the page order and index once; `focus_list` is no longer rebuilt for the status line |
 | N7 | image workers | A worker panic left `busy()` true forever; `Disconnected` was ignored. | fixed (P3-27): `worker::guarded`, disconnect handling |
-| N8 | `image_viewer.rs`, `raster.rs` | One large bitmap peaks near 300 MB. | fixed (P3-29): keep one RGBA natural + zoomed; 2× pixel-byte budget |
+| N8 | `image_viewer.rs`, `raster.rs` | One large bitmap peaks near 300 MB. | fixed (P3-29): `into_rgba8` retention + 2× pixel-byte budget |
 | N9 | `image_viewer.rs` | After a zoom-time error, zoom keys did nothing. | fixed (P3-27) |
 | N10 | `code_viewer.rs` | Width rescanned per frame, `slice_line` is O(left + width) per row. | fixed (P3-28): width measured once, column maths saturates |
 | N11 | `table_viewer.rs` | Widths rebuilt per row per frame, sort and filter allocate per comparison. | fixed (P3-28): one layout per frame, sort keys cached per column, filter without allocation |
 | N12 | `app/mod.rs` load and reindex | Failed `load_page` leaves a stale doc; any change reloads the page and clobbers selection. | fixed in part (P3-28): a failed read shows the removed state; an unchanged index reloads nothing. A real change still reloads the page and resets selection and focus |
 | N13 | `events.rs`, `images.rs` | Relayout storm per diagram completion and per width change. | staged |
-| N14 | core `parse.rs` | YAML alias amplification is only partly bounded. | fixed (P3-29): frontmatter size and alias-marker caps |
-| N15 | core `provider.rs` | One unreadable directory is fatal; no file-size or page-count caps. | fixed (P3-29): skip walk errors; `MAX_PAGES` / `MAX_PAGE_BYTES` |
-| N16 | core `config.rs` | Config write is not atomic; inline tables fail. | fixed (P3-29): temp file then rename (inline tables still unpatched; options write scalars only) |
+| N14 | core `parse.rs` | YAML alias amplification is only partly bounded. | fixed (P3-29): frontmatter size + token-start alias-marker caps |
+| N15 | core `provider.rs` | One unreadable directory is fatal; no file-size or page-count caps. | fixed (P3-29): skip walk errors with diagnostics; `MAX_PAGES` / `take(MAX_PAGE_BYTES)` |
+| N16 | core `config.rs` | Config write is not atomic; inline tables fail. | fixed (P3-29): canonicalize symlink target, copy perms, sync_all, rename (inline tables still unpatched) |
 | N17 | session save | Failed save retried every tick, tmp files left, history unbounded, no flush after loop errors. | fixed in part (P3-27): backoff, message, tmp cleanup, flush after the loop; history cap staged |
 | N18 | `release.yml` | Write token present during dependency build scripts. | staged |
 | N19 | `wiki-reader-tools` `check_doc` | Link rules differ from the reader; non-`NotFound` errors abort the check. | staged |
-| N20 | render | No control-character sanitising, so copied text can differ from what is shown. | fixed (P3-29): `sanitize_controls` on display spans |
+| N20 | render | No control-character sanitising, so copied text can differ from what is shown. | fixed (P3-29): `sanitize_controls` on display spans, code body / CopyCode, and bidi `Cf` |
 
 ## Low and code quality
 

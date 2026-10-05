@@ -262,13 +262,29 @@ fn parse_yaml_frontmatter(raw: &str, diagnostics: &mut Vec<Diagnostic>) -> Front
             ..Frontmatter::default()
         };
     }
-    // Count alias uses (`*name`); anchors (`&name`) alone are cheap.
-    // ponytail: raw byte scan, not a YAML lexer; upgrade if false positives appear in titles.
-    let alias_markers = raw
-        .as_bytes()
-        .windows(2)
-        .filter(|w| w[0] == b'*' && (w[1].is_ascii_alphanumeric() || w[1] == b'_'))
-        .count();
+    // Count alias uses (`*name`) only at token starts (after whitespace, `[`, `,`, or `:`).
+    // ponytail: not a YAML lexer; `**bold**` in descriptions must not trip the cap.
+    let alias_markers = {
+        let bytes = raw.as_bytes();
+        let mut n = 0usize;
+        let mut i = 0usize;
+        while i + 1 < bytes.len() {
+            if bytes[i] == b'*'
+                && (bytes[i + 1].is_ascii_alphanumeric() || bytes[i + 1] == b'_')
+                && (i == 0
+                    || matches!(
+                        bytes[i - 1],
+                        b' ' | b'\t' | b'\n' | b'\r' | b'[' | b',' | b':'
+                    ))
+            {
+                n += 1;
+                i += 2;
+                continue;
+            }
+            i += 1;
+        }
+        n
+    };
     if alias_markers > MAX_YAML_ALIAS_MARKERS {
         diagnostics.push(Diagnostic {
             message: format!(
@@ -897,6 +913,23 @@ mod tests {
         );
         assert!(page.frontmatter.title.is_none());
         assert_eq!(page.h1.as_deref(), Some("Body"));
+    }
+
+    #[test]
+    fn yaml_emphasis_in_description_does_not_trip_alias_cap() {
+        // Many `**bold**` pairs would false-positive the old anywhere-`*` scan.
+        let bold = "**bold** ".repeat(MAX_YAML_ALIAS_MARKERS);
+        let src = format!("---\ntitle: Keep\ndescription: |\n  {bold}\n---\n\n# Body\n");
+        let page = parse(&src);
+        assert!(
+            !page
+                .diagnostics
+                .iter()
+                .any(|d| d.message.contains("alias markers")),
+            "diags={:?}",
+            page.diagnostics
+        );
+        assert_eq!(page.frontmatter.title.as_deref(), Some("Keep"));
     }
 
     #[test]
