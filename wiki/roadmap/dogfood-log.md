@@ -188,6 +188,15 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 | 2026-10-05 | decision | Pre-v0.1.7 image A/B (installed v0.1.6 vs main/`6b6451f` release binary): ordinary herdr split panes draw inline images and open the image viewer with content on both builds (not a P3-29 regression). `Ghostty -e` `image-protocol` probes also select Kitty with a real cell size on both builds when herdr env is cleared. Plugin/overlay/popup panes remain text-only by design (P3-09). The earlier empty-viewer note is treated as a pre-existing limit or mis-typed pane, not a release blocker | P3-29 |
 | 2026-10-05 | release | [v0.1.7](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.7) published as a prerelease from #150 merge commit `5e3aa36` after its CI passed on `main`. The release workflow passed (linux job re-run after a runner cancel); three tarballs and three checksums present. macOS arm64 download checksum verified and the extracted binary reports 0.1.7 (16.7 MiB, 6.7 MB tarball). `cargo install --locked --no-default-features` from the tag builds an 8.5 MiB lite binary that reports 0.1.7. Cargo dogfood install upgraded from v0.1.6 to v0.1.7 (`~/.cargo/bin/wiki-reader`, the only copy on `PATH`; `--version` reports 0.1.7). The Phase 3 exit decision waits on dogfooding this install. Clock continues without restarting | P3-29, P3-08 |
 
+## v0.1.8
+
+| Date | Kind | Note | Task IDs |
+|------|------|------|----------|
+| 2026-10-05 | bite | Table viewer does not show full cell content and the design is incomplete (`wiki/assets/dogfood-table-viewer-1.png` … `-4.png`) | P3-14, P3-20, P3-30 |
+| 2026-10-05 | bite | Empty space instead of a column when its text does not fit (the product spec requirements table; screenshots 3 and 4) | P3-14, P3-20, P3-30 |
+| 2026-10-05 | bite | No borders between body rows, which makes expanded text hard to separate | P3-14, P3-20, P3-30 |
+| 2026-10-05 | decision | Suggested fix: expand the focused row (cells wrap in column, row grows taller; previous row returns to one line with ellipsis; inner focus on the whole row; ↑/↓ expands neighbours; collapsed rows cut earlier; truncated text instead of blank columns; rules between body rows; also fix `show()` tab/newline sanitising). Filed as [P3-30](phase-3-alpha.md); gates the Phase 3 exit. Phase 4 seeds P4-09…P4-11 and a beyond-Phase-4 uWiki note also filed | P3-30, P4-09, P4-10, P4-11 |
+
 ## Related
 
 - [Phase 2](phase-2-mvp.md)
