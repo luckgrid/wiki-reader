@@ -16,8 +16,8 @@ pub use images::{
 pub use link_span::{LinkClass, LinkId, LinkSpan};
 pub use render::{
     BlockAction, BlockActionKind, DocCell, DocCodeBlock, DocTable, MediaOccurrence,
-    MediaOccurrenceKind, RenderOpts, RenderedDoc, StyleKind, StyledLine, StyledSpan, render,
-    render_with,
+    MediaOccurrenceKind, RenderOpts, RenderedDoc, StyleKind, StyledLine, StyledSpan,
+    is_sanitized_control, render, render_with, sanitize_controls,
 };
 pub use wiki_reader_media::{
     DiagramPalette, MIN_LEGIBLE_SCALE, fit_scale, is_legible, is_svg_path,
