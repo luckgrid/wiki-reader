@@ -3,7 +3,7 @@ id: WR-ROADMAP-P3
 title: Phase 3 — Alpha polish
 summary: Diagrams and images first, then themes, sticky headers, nav chrome, and early herdr niceties.
 status: active
-updated: 2026-10-04
+updated: 2026-10-05
 related: [phase-2-mvp, phase-4-beta, dogfood-log]
 nav_order: 3
 ---
@@ -31,10 +31,10 @@ End with a recorded decision, not an automatic status change:
 2. **P3-18** — Footer buttons: ⚙ moves from the header to the footer's bottom right, with a `?` help button to its left (part of P3-02). *Done.*
 3. **P3-17** — Chrome pass: tab titles end in `.md`; the View's tab bar and prev/next bar are fully bordered three-row boxes with `│` dividers; the search bar in the nav matches the tab bar; selected labels are bold in the focus colour. P3-18 lands first so footer geometry changes once. *Done.*
 4. **P3-09 / P3-10** — herdr spike and implementation. *Done in v0.1.4.*
-5. **P3-19** — Lite build: move image/SVG/Mermaid-raster into `wiki-reader-media` behind a default-on cargo feature (before the viewer rework so that code lands once).
-6. **P3-20** — Viewer sizing: content-sized windows capped at today's size; fit / actual-size toggle. *Implemented, awaiting review.*
-7. **P3-21** — Image/diagram carousel (Tab / Shift+Tab). *Implemented, awaiting review.*
-8. **P3-22** — Diagram state toggle (image / text / source, session-only). *Implemented, awaiting review.*
+5. **P3-19** — Lite build: move image/SVG/Mermaid-raster into `wiki-reader-media` behind a default-on cargo feature (before the viewer rework so that code lands once). *Done (v0.1.5).*
+6. **P3-20** — Viewer sizing: content-sized windows capped at today's size; fit / actual-size toggle. *Done (v0.1.5).*
+7. **P3-21** — Image/diagram carousel (Tab / Shift+Tab). *Done (v0.1.5).*
+8. **P3-22** — Diagram state toggle (image / text / source, session-only). *Done (v0.1.5).*
 9. **P3-23** — Docs refresh once the UI settles (screenshots, README ASCII, carousel keys). *Done: ASCII, keys and screenshots (retaken 2026-10-04).*
 
 ### Batches and dependencies
