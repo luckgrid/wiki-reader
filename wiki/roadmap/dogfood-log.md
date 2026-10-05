@@ -3,7 +3,7 @@ id: WR-ROADMAP-DOGFOOD
 title: Dogfood log
 summary: Dated bites, fixes, releases and decisions from the Phase 2 dogfood clock, grouped by release cut.
 status: active
-updated: 2026-10-04
+updated: 2026-10-05
 related: [phase-2-mvp, phase-3-alpha, phase-4-beta]
 ---
 
@@ -175,6 +175,12 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 | 2026-10-04 | fix | P3-28: `SlugAllocator` (50,000 identical headings in well under the 5 s test bound; the old rescan took minutes); search refresh coalesced per event batch with `MAX_TEXT_HITS`; `HighlightWorker` mailbox with line-level cancellation; `NavTree` page order and index built once; viewer layout computed once per frame and sort keys cached; failed reads show the removed state; identical reindex is a no-op. Regression tests for each. Timings are test thresholds, not release benchmarks | P3-28 |
 | 2026-10-04 | decision | Operator manual pass done for P3-27 and P3-28 (İ titles in search, Help → Open in editor, broken diagrams, large-collection scrolling and search): everything works as expected. #142 squash-merged; #143 was rebased onto `main` (its tree identical to the verified one) and squash-merged. P3-27 and P3-28 are `done`. Prepare v0.1.6: bump the workspace, path dependency versions and the herdr plugin manifest, and require green CI on the release merge commit before tagging. Phase 2 stays on the fixes-only hold until the ≈ 2026-10-13 verdict | P3-27, P3-28, P3-08 |
 | 2026-10-04 | release | [v0.1.6](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.6) published as a prerelease from #144 merge commit `17e9007` after its CI passed on `main`. The release workflow passed; three tarballs and three checksums present. macOS arm64 download checksum verified and the extracted binary reports 0.1.6 (17 MiB, 7.0 MB tarball). `cargo install --locked --no-default-features` from the tag builds an 8.5 MiB lite binary that reports 0.1.6. Cargo dogfood install upgraded from v0.1.5 to v0.1.6 (`~/.cargo/bin/wiki-reader`, the only copy on `PATH`; `--version` reports 0.1.6). The Phase 3 exit decision waits on dogfooding this install. Clock continues without restarting | P3-27, P3-28, P3-08 |
+
+## v0.1.7
+
+| Date | Kind | Note | Task IDs |
+|------|------|------|----------|
+| 2026-10-05 | decision | Roadmap vs tags/releases/CI audit on main @ 91a6f7e: v0.1.6 + docs #145; no unreleased commits; Phase 3 tasks P3-06–P3-28 done; P3-10 sidebar/opt-out/agent-pane/TTL checks still open in log; Phase 2 dogfood hold to ≈2026-10-13; Phase 3 exit waits on v0.1.6 dogfood | |
 
 ## Related
 
