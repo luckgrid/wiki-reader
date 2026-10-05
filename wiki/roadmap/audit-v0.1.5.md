@@ -13,7 +13,7 @@ Two audits feed this register. **E-findings** came from an audit done before v0.
 
 No `unsafe` Rust exists in the workspace (`unsafe_code = "forbid"` in every crate); that says nothing about third-party dependencies. Line numbers drift, so find items by symbol.
 
-**Shipped in v0.1.6:** every `fixed` and `fixed in part` item below that cites P3-27 or P3-28. **P3-29** (robustness) carries N8, N14, N15, N16, N20 and L1–L5 in part. **Status values:** `fixed` (merged or in an open PR), `planned` (next PR), `staged` (recorded, scheduled for a later release). Tasks: [P3-27](phase-3-alpha.md) (crash and terminal fixes), [P3-28](phase-3-alpha.md) (performance) and [P3-29](phase-3-alpha.md) (robustness).
+**Shipped in v0.1.6:** every `fixed` and `fixed in part` item below that cites P3-27 or P3-28. **Shipped in v0.1.7:** P3-29 (N8, N14, N15, N16, N20 and L1–L5 in part). **Status values:** `fixed` (merged or in an open PR), `planned` (next PR), `staged` (recorded, scheduled for a later release). Tasks: [P3-27](phase-3-alpha.md) (crash and terminal fixes), [P3-28](phase-3-alpha.md) (performance) and [P3-29](phase-3-alpha.md) (robustness).
 
 ## High: crashes and terminal corruption
 
@@ -47,7 +47,7 @@ No `unsafe` Rust exists in the workspace (`unsafe_code = "forbid"` in every crat
 | N12 | `app/mod.rs` load and reindex | Failed `load_page` leaves a stale doc; any change reloads the page and clobbers selection. | fixed in part (P3-28): a failed read shows the removed state; an unchanged index reloads nothing. A real change still reloads the page and resets selection and focus |
 | N13 | `events.rs`, `images.rs` | Relayout storm per diagram completion and per width change. | staged |
 | N14 | core `parse.rs` | YAML alias amplification is only partly bounded. | fixed (P3-29): frontmatter size + token-start alias-marker caps |
-| N15 | core `provider.rs` | One unreadable directory is fatal; no file-size or page-count caps. | fixed (P3-29): skip walk errors with diagnostics; `MAX_PAGES` / `take(MAX_PAGE_BYTES)` |
+| N15 | core `provider.rs` | One unreadable directory is fatal; no file-size or page-count caps. | fixed (P3-29): skip walk errors with diagnostics; `MAX_PAGES` / `take(MAX_PAGE_BYTES)` (above the page cap, which pages survive follows FS walk order) |
 | N16 | core `config.rs` | Config write is not atomic; inline tables fail. | fixed (P3-29): canonicalize symlink target, copy perms, sync_all, rename (inline tables still unpatched) |
 | N17 | session save | Failed save retried every tick, tmp files left, history unbounded, no flush after loop errors. | fixed in part (P3-27): backoff, message, tmp cleanup, flush after the loop; history cap staged |
 | N18 | `release.yml` | Write token present during dependency build scripts. | staged |

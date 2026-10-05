@@ -185,6 +185,8 @@ impl FsProvider {
                     relative_path,
                 },
             });
+            // ponytail: stop at max before sorting; survivors above MAX_PAGES follow FS walk
+            // order (not deterministic). Sort the walk (sort_by_file_name) if a stable set matters.
             if pages.len() >= max {
                 truncated = true;
                 break;

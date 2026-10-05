@@ -185,6 +185,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 | 2026-10-05 | fix | P3-29 review follow-up: symlink-safe config write with permission copy and sync_all (N16); bidi/Cf sanitising plus code CopyCode path (N20); discovery diagnostics and take-capped reads (N15); `into_rgba8` (N8); token-start YAML alias counting (N14) | P3-29 |
 | 2026-10-05 | decision | #147 squash-merged as `6b6451f` (stacked on #146). P3-29 is `done`. No v0.1.7 cut yet; Phase 2 dogfood hold and Phase 3 exit still wait on operator dogfood of installed v0.1.6 | P3-29 |
 | 2026-10-05 | decision | Operator manual pass done for P3-29 (symlinked 0600 config Options write; unreadable-dir discovery; oversized page via grow+watcher → page removed; bidi/control copy from body / code / table; Wide grid zoom in Ghostty): everything works as expected. Note: herdr panes and `Ghostty -e` launches stayed on text placeholders / empty image viewer; a normal Ghostty tab showed pictures | P3-29 |
+| 2026-10-05 | decision | Pre-v0.1.7 image A/B (installed v0.1.6 vs main/`6b6451f` release binary): ordinary herdr split panes draw inline images and open the image viewer with content on both builds (not a P3-29 regression). `Ghostty -e` `image-protocol` probes also select Kitty with a real cell size on both builds when herdr env is cleared. Plugin/overlay/popup panes remain text-only by design (P3-09). The earlier empty-viewer note is treated as a pre-existing limit or mis-typed pane, not a release blocker | P3-29 |
 
 ## Related
 
