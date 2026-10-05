@@ -1174,7 +1174,11 @@ mod tests {
             s.contains('─') && !s.contains('r') && !s.contains('a')
         };
         assert!(is_rule(1), "header rule at y=1");
-        assert!(!is_rule(2), "expand body, not a second rule: {}", row_at(buf, 2, 30));
+        assert!(
+            !is_rule(2),
+            "expand body, not a second rule: {}",
+            row_at(buf, 2, 30)
+        );
         assert!(row_at(buf, 2, 30).contains("r0"), "expand body at y=2");
         assert!(is_rule(3), "rule below expand");
     }
@@ -1198,8 +1202,7 @@ mod tests {
         // Before moving: partial third column is present.
         let before = v.column_layout(avail);
         assert!(
-            before.cols.contains(&2)
-                && before.widths[2] < v.eff_widths(avail)[2],
+            before.cols.contains(&2) && before.widths[2] < v.eff_widths(avail)[2],
             "setup: col2 is partial (w={} eff={:?} cols={:?})",
             before.widths[2],
             v.eff_widths(avail),
