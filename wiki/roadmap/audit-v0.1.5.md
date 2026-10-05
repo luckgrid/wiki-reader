@@ -52,7 +52,7 @@ No `unsafe` Rust exists in the workspace (`unsafe_code = "forbid"` in every crat
 | N17 | session save | Failed save retried every tick, tmp files left, history unbounded, no flush after loop errors. | fixed in part (P3-27): backoff, message, tmp cleanup, flush after the loop; history cap staged |
 | N18 | `release.yml` | Write token present during dependency build scripts. | staged |
 | N19 | `wiki-reader-tools` `check_doc` | Link rules differ from the reader; non-`NotFound` errors abort the check. | staged |
-| N20 | render | No control-character sanitising, so copied text can differ from what is shown. | fixed (P3-29): `sanitize_controls` on display spans, code body / CopyCode, and bidi `Cf` |
+| N20 | render | No control-character sanitising, so copied text can differ from what is shown. | fixed (P3-29): `sanitize_controls` on display spans, code body / CopyCode, table viewer, and bidi `Cf` |
 
 ## Low and code quality
 
