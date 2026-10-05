@@ -184,6 +184,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 | 2026-10-05 | fix | P3-29 audit robustness: atomic config write (N16); skip unreadable dirs and cap page file size / page count (N15); YAML frontmatter size and alias-marker caps (N14); control-character sanitising in render so copy matches display (N20); image viewer keeps one RGBA natural buffer under a 2× pixel-byte budget (N8 / L1–L5 in part). Regression tests for each. N18/L15 and N13/E4–E8/L6–L13 stay staged | P3-29 |
 | 2026-10-05 | fix | P3-29 review follow-up: symlink-safe config write with permission copy and sync_all (N16); bidi/Cf sanitising plus code CopyCode path (N20); discovery diagnostics and take-capped reads (N15); `into_rgba8` (N8); token-start YAML alias counting (N14) | P3-29 |
 | 2026-10-05 | decision | #147 squash-merged as `6b6451f` (stacked on #146). P3-29 is `done`. No v0.1.7 cut yet; Phase 2 dogfood hold and Phase 3 exit still wait on operator dogfood of installed v0.1.6 | P3-29 |
+| 2026-10-05 | decision | Operator manual pass done for P3-29 (symlinked 0600 config Options write; unreadable-dir discovery; oversized page via grow+watcher → page removed; bidi/control copy from body / code / table; Wide grid zoom in Ghostty): everything works as expected. Note: herdr panes and `Ghostty -e` launches stayed on text placeholders / empty image viewer; a normal Ghostty tab showed pictures | P3-29 |
 
 ## Related
 
