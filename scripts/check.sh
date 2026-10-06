@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Usage: scripts/check.sh [all|default|lite]   (no args = all)
-#   default  fmt, clippy, tests, orphan-exit check (V22), link-check, rumdl, ADR-0006 tree
+#   default  fmt, clippy, tests, orphan-exit check (V22), link-check, cargo-deny (if installed),
+#            rumdl, ADR-0006 tree
 #   lite     clippy, tests, and the no-image-deps tree check with --no-default-features (ADR-0023)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -33,6 +34,13 @@ if [[ $mode != lite ]]; then
   cargo build --locked -p wiki-reader-tui
   python3 scripts/check-orphan-exit.py target/debug/wiki-reader
   cargo run --locked --quiet -p wiki-reader-tools --bin link-check
+  # Licences, advisories and sources (deny.toml). CI always runs it; locally it needs
+  # `cargo install --locked cargo-deny`, so a missing tool is a warning, not a failure.
+  if command -v cargo-deny >/dev/null; then
+    cargo deny check
+  else
+    echo "warning: cargo-deny not installed; skipping cargo deny check (CI runs it)" >&2
+  fi
   rumdl fmt --check .
   rumdl check .
 

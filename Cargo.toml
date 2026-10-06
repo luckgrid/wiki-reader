@@ -6,7 +6,9 @@ resolver = "3"
 version = "0.1.10"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-rust-version = "1.98.1"
+# MSRV: the lowest toolchain CI compiles (the `msrv` job). Dependencies set the floor (mermaid-text
+# and ascii-dag need 1.92); development uses the newer pin in rust-toolchain.toml.
+rust-version = "1.92"
 authors = ["LUCKGRID"]
 repository = "https://github.com/luckgrid/wiki-reader"
 homepage = "https://github.com/luckgrid/wiki-reader"

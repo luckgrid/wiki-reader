@@ -13,7 +13,7 @@ How to pick up work in this repo.
 
 ## Toolchain
 
-- Rust from [`rust-toolchain.toml`](../../rust-toolchain.toml): channel `1.98.1`, with `rustfmt` and `clippy`.
+- Rust from [`rust-toolchain.toml`](../../rust-toolchain.toml): channel `1.98.1`, with `rustfmt` and `clippy`. The minimum supported version is the workspace `rust-version` (1.92, set by dependencies); CI compiles everything on it in the `msrv` job.
 - Install [rumdl](https://github.com/rvben/rumdl) for Markdown linting and formatting: `uv tool install rumdl` (a prebuilt binary; `cargo install rumdl --locked` also works but compiles slowly). CI pins the version in `.github/workflows/ci.yml`.
 - Edition 2024; `rustfmt.toml` sets `style_edition = "2024"`.
 - Builds and CI use `--locked` against the committed `Cargo.lock`.
@@ -121,7 +121,11 @@ See [architecture overview](../architecture/overview.md) and [ADR-0006](../decis
 - Review `cargo tree` before adding a dep.
 - Prefer stdlib / already-chosen crates from [prior art & libraries](../architecture/prior-art-and-libs.md).
 - Markdown is checked and formatted with [rumdl](https://github.com/rvben/rumdl); run `rumdl fmt .` when making documentation changes (`rumdl fmt --check .` only reports).
-- No third-party source is vendored or ported. If that changes, keep copyright notices in the ported files and add a `THIRD_PARTY.md` in the same change.
+- No third-party source is vendored or ported. If that changes, keep copyright notices in the ported files and add the notices to `THIRD-PARTY-LICENSES` in the same change.
+- **Licences and advisories:** [`deny.toml`](../../deny.toml) allows permissive licences only and records the two accepted unmaintained-crate advisories with a reason and a revisit date. `cargo deny check` runs in CI (`cargo install --locked cargo-deny` to run it locally; `scripts/check.sh` runs it when installed).
+- **Third-party notices:** release tarballs ship [`THIRD-PARTY-LICENSES`](../../THIRD-PARTY-LICENSES) (every package in the shipped dependency graph, plus the embedded Noto Sans font under the SIL OFL). Regenerate it after any dependency change with `scripts/gen-third-party-licenses.sh` (needs `cargo install --locked cargo-about --features cli`); `link-check` fails when a direct dependency is missing from it.
+- **Licence files in crates:** `LICENSE-MIT`, `LICENSE-APACHE` and `NOTICE` are copied into each published crate directory (crates.io packages only the crate). `link-check` fails when a copy differs from the root file.
+- **Minimum Rust version:** the workspace `rust-version` is the lowest toolchain that compiles everything; the `msrv` CI job checks it. Raise it deliberately when a dependency needs a newer compiler.
 
 ## Docs and ADRs
 

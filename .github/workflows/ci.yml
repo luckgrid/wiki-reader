@@ -86,3 +86,37 @@ jobs:
             echo "wiki-reader-core must not depend on ratatui or crossterm (ADR-0006)" >&2
             exit 1
           fi
+
+  # Minimum supported Rust version: compile everything (tests and examples included) on the
+  # `rust-version` toolchain, default and lite. The development toolchain is pinned separately.
+  msrv:
+    name: msrv (1.92)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install the MSRV toolchain
+        run: rustup toolchain install 1.92.0 --profile minimal
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv
+
+      - name: Check (default features)
+        run: cargo +1.92.0 check --workspace --locked --all-targets
+
+      - name: Check (lite)
+        run: cargo +1.92.0 check --locked --no-default-features -p wiki-reader-tui -p wiki-reader-render -p wiki-reader-media
+
+  # Licences, advisories, duplicate crates and sources (deny.toml). Separate from the matrix: it
+  # needs no toolchain and runs once.
+  deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # EmbarkStudios/cargo-deny-action@v2.1.1
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25
+        with:
+          command: check
