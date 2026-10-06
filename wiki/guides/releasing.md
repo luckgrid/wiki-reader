@@ -88,7 +88,7 @@ Cut a tag only from a commit whose CI is already green on `main`. The release wo
    - `Cargo.lock` (refresh by building or testing)
    - `integrations/herdr/herdr-plugin.toml` (asserted)
    - the Status line in root `README.md` (must name `v` + workspace version; asserted)
-   - a matching `## v0.1.N` heading in the [dogfood log](../roadmap/dogfood-log.md) when the release is recorded (must not be newer than the workspace before the bump lands; asserted)
+   - a matching `## v0.1.N` heading in the [dogfood log](../roadmap/dogfood-log.md) when the release is recorded (may be at most one patch ahead of the workspace; asserted)
    - [wiki/roadmap/README.md](../roadmap/README.md) phase table / notes as needed
    - Phase 3 intro, Done list, and P3-08 release list in [phase-3-alpha.md](../roadmap/phase-3-alpha.md)
    - the audit register "Shipped in" line when the release closes audit work

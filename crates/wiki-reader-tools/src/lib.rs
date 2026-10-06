@@ -144,10 +144,10 @@ fn check_version_sync(root: &Path, errors: &mut Vec<String>) -> Result<(), Error
     let dogfood = root.join("wiki/roadmap/dogfood-log.md");
     let dogfood_text = fs::read_to_string(&dogfood).map_err(io_error(&dogfood))?;
     if let Some(latest) = latest_dogfood_release(&dogfood_text)
-        && version_triple(&latest) > version_triple(&workspace)
+        && more_than_one_patch_ahead(&latest, &workspace)
     {
         errors.push(format!(
-            "wiki/roadmap/dogfood-log.md: latest ## {latest} is newer than workspace {workspace}"
+            "wiki/roadmap/dogfood-log.md: latest ## {latest} is more than one patch ahead of workspace {workspace}"
         ));
     }
     Ok(())
@@ -236,7 +236,20 @@ fn is_plain_semver(v: &str) -> bool {
 fn version_triple(ver: &str) -> (u32, u32, u32) {
     let mut parts = ver.split('.');
     let parse = |p: Option<&str>| p.and_then(|s| s.parse().ok()).unwrap_or(0);
-    (parse(parts.next()), parse(parts.next()), parse(parts.next()))
+    (
+        parse(parts.next()),
+        parse(parts.next()),
+        parse(parts.next()),
+    )
+}
+
+/// True when `latest` is newer than workspace by more than one patch (same or
+/// higher major/minor). Equal and one patch ahead are allowed so a dogfood
+/// heading can land before the Cargo bump.
+fn more_than_one_patch_ahead(latest: &str, workspace: &str) -> bool {
+    let (lm, lmi, lp) = version_triple(latest);
+    let (wm, wmi, wp) = version_triple(workspace);
+    (lm, lmi, lp) > (wm, wmi, wp.saturating_add(1))
 }
 
 fn io_error(path: &Path) -> impl FnOnce(io::Error) -> Error + use<> {
@@ -657,8 +670,8 @@ mod docs_sync {
     use std::path::Path;
 
     use super::{
-        is_plain_semver, latest_dogfood_release, readme_status_section, version_triple,
-        workspace_package_version, workspace_path_dep_versions,
+        is_plain_semver, latest_dogfood_release, more_than_one_patch_ahead, readme_status_section,
+        version_triple, workspace_package_version, workspace_path_dep_versions,
     };
 
     const START: &str = "<!-- ui-diagram:start -->";
@@ -703,7 +716,8 @@ other = "1.0"
             workspace_path_dep_versions(cargo),
             vec![("wiki-reader-core".into(), "0.1.9".into())]
         );
-        let status = readme_status_section("intro\n\n## Status\n\nshipped through v0.1.9\n\n## Install\n");
+        let status =
+            readme_status_section("intro\n\n## Status\n\nshipped through v0.1.9\n\n## Install\n");
         assert!(status.unwrap().contains("v0.1.9"));
         assert!(is_plain_semver("0.1.9"));
         assert!(!is_plain_semver("0.1.0-alpha.1"));
@@ -712,5 +726,10 @@ other = "1.0"
             Some("0.1.9")
         );
         assert!(version_triple("0.1.10") > version_triple("0.1.9"));
+        // Equal and one patch ahead OK; two patches ahead fails.
+        assert!(!more_than_one_patch_ahead("0.1.9", "0.1.9"));
+        assert!(!more_than_one_patch_ahead("0.1.10", "0.1.9"));
+        assert!(more_than_one_patch_ahead("0.1.11", "0.1.9"));
+        assert!(!more_than_one_patch_ahead("0.1.8", "0.1.9"));
     }
 }
