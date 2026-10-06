@@ -1,4 +1,7 @@
 //! Markdown → `RenderedDoc` (styled lines, link spans, source map).
+//!
+//! Internal crate of [wiki-reader](https://github.com/luckgrid/wiki-reader); its API is not
+//! stable.
 
 mod diagrams;
 mod images;

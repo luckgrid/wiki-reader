@@ -1,6 +1,9 @@
 //! Media helpers (P3-19): the diagram palette and fit maths are always built; image decode and
 //! Mermaid/SVG rasterisation sit behind the default `raster` feature (the lite build drops it).
 //! This crate must not depend on `wiki-reader-render`.
+//!
+//! Internal crate of [wiki-reader](https://github.com/luckgrid/wiki-reader); its API is not
+//! stable.
 
 mod palette;
 

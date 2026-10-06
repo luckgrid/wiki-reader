@@ -1,6 +1,6 @@
 //! wiki-reader binary: TUI app over the core and render crates.
 //!
-//! See [architecture overview](../../wiki/architecture/overview.md).
+//! See the [architecture overview](https://github.com/luckgrid/wiki-reader/blob/main/wiki/architecture/overview.md).
 
 mod herdr;
 mod tui;
