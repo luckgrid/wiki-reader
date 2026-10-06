@@ -3,7 +3,7 @@ id: WR-ROADMAP-AUDIT-V018
 title: Audit of v0.1.8
 summary: Viewing-experience performance audit of v0.1.8 with a P3-31 measured baseline and scheduled fix batches.
 status: active
-updated: 2026-10-05
+updated: 2026-10-06
 related: [phase-3-alpha, dogfood-log, audit-v0.1.5]
 ---
 
@@ -19,12 +19,14 @@ No `unwrap`/`expect` problems were found in the audited non-test code, no trunca
 
 **Shipped in v0.1.9:** V4 (P3-34 linear wrap).
 
+**Shipped in v0.1.10:** V22 (P3-37 orphaned-reader exit: session-leader watchdog, stdin hang-up poll, TTY guard, no panic on a dead stderr) and the V17 signal-registration part.
+
 ## High
 
 | ID | Where | Finding | Measured | Status |
 |---|---|---|---|---|
 | V4 | `render.rs` wrap helpers; `diagrams.rs` fallback | Quadratic wrapping: each cut copies the remainder. A multi-MB token or data URI stalls open and each resize. | Before: open 1 MB **26.3 s**, 400 KB resize **8.7 s**. After linear wrap: open 1 MB **8.2 ms**, 400 KB resize **6.0 ms** (two release runs; re-confirmed on `58fe76b`). | fixed (P3-34) |
-| V22 | `events.rs` `run_loop`; crossterm `event::poll` | Orphaned processes burn ~100 %CPU indefinitely. Live sample (v0.1.8): main thread stuck in `poll` → `try_read` → `read` with a still-open slave TTY and no interactive shell. Not V17 hygiene. Fix: `IsTerminal` guard, early signals, session-leader watchdog (`kill(sid, 0)` via rustix), stdin POLLHUP/ERR poll via rustix (covers live-parent + closed master). Forced exit skips Drop and terminal restore (hung-up PTY writes can block forever; herdr TTL / no session flush). | Dogfood 2026-10-05: four spinners ~45 min. PTY matrix on release binary (2026-10-06): (i) parent alive + master closed + slave held → exit; (ii) parent killed → exit; (iii) `/dev/null` → exit; (iv) HUP/TERM/INT → exit. On main before fix, (i) spun at ~100 %CPU. Follow-up check `scripts/check-orphan-exit.py` (CI, ubuntu + macOS) also found a startup race: closing the PTY master during startup aborted the process (SIGABRT, macOS crash report) because `eprintln!` panics on a dead stderr; `main` and the background-panic report now use `eprint_line` (write errors ignored). Root cause pinned on macOS (v0.1.10 work): the spin follows the death of the **session leader**, with the PTY master still open and drained; killing only the parent while the leader lives leaves the reader idle (0.2 % CPU), and a stdin hang-up poll does not see the leader case. The first V22 fix keyed on the parent pid, which was both too broad (a launcher exiting would end a healthy session) and indirect. `WIKI_READER_NO_WATCHDOG=1` skips the leader check. | staged (P3-37) → v0.1.10 |
+| V22 | `events.rs` `run_loop`; crossterm `event::poll` | Orphaned processes burn ~100 %CPU indefinitely. Live sample (v0.1.8): main thread stuck in `poll` → `try_read` → `read` with a still-open slave TTY and no interactive shell. Not V17 hygiene. Fix: `IsTerminal` guard, early signals, session-leader watchdog (`kill(sid, 0)` via rustix), stdin POLLHUP/ERR poll via rustix (covers live-parent + closed master). Forced exit skips Drop and terminal restore (hung-up PTY writes can block forever; herdr TTL / no session flush). | Dogfood 2026-10-05: four spinners ~45 min. PTY matrix on release binary (2026-10-06): (i) parent alive + master closed + slave held → exit; (ii) parent killed → exit; (iii) `/dev/null` → exit; (iv) HUP/TERM/INT → exit. On main before fix, (i) spun at ~100 %CPU. Follow-up check `scripts/check-orphan-exit.py` (CI, ubuntu + macOS) also found a startup race: closing the PTY master during startup aborted the process (SIGABRT, macOS crash report) because `eprintln!` panics on a dead stderr; `main` and the background-panic report now use `eprint_line` (write errors ignored). Root cause pinned on macOS (v0.1.10 work): the spin follows the death of the **session leader**, with the PTY master still open and drained; killing only the parent while the leader lives leaves the reader idle (0.2 % CPU), and a stdin hang-up poll does not see the leader case. The first V22 fix keyed on the parent pid, which was both too broad (a launcher exiting would end a healthy session) and indirect. `WIKI_READER_NO_WATCHDOG=1` skips the leader check. | fixed (P3-37, v0.1.10) |
 
 ## Medium
 
@@ -91,7 +93,7 @@ Input coalescing of up to 256 events per redraw; width clamp at 100 so wide resi
 | [P3-34](phase-3-alpha.md) | Algorithmic | **V4 fixed** (linear wrap; shipped v0.1.9). V10/V13/V14 dropped |
 | [P3-35](phase-3-alpha.md) | Media | Measure first: V6 (SVG harness), V15 (Kitty), V16 (LRU + reason), L1–L5 caps |
 | [P3-36](phase-3-alpha.md) | Process and tooling | V17 remainder (reap/timeout/open errors), V19, V20, V21, boolean-arg tidy-ups |
-| [P3-37](phase-3-alpha.md) | Orphan spin + early signals | V22 (orphan spin), V17 signal registration before raw mode |
+| [P3-37](phase-3-alpha.md) | Orphan spin + early signals | **V22 fixed** (v0.1.10), V17 signal registration before raw mode |
 
 Each fix PR starts with a failing test or a measurement; `./scripts/check.sh all`; regression tests with exact assertions; operator manual pass for user-visible changes (P3-34 wrap, P3-35 media); a dogfood-log line; release (`v0.1.10`+) only after the pass and explicit go-ahead before tagging.
 
