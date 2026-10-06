@@ -2,8 +2,8 @@
 id: WR-ROADMAP-P2
 title: Phase 2 — Wiki navigation MVP
 summary: Custom nav order, backlinks, tabs, diagrams, config, and session restore.
-status: active
-updated: 2026-10-05
+status: done
+updated: 2026-10-06
 related: [phase-1-reader-shell, phase-3-alpha, dogfood-log]
 nav_order: 2
 ---
@@ -12,21 +12,21 @@ nav_order: 2
 
 Time box: ≈ 2 weeks.
 
-**Status (2026-10-03): feature complete, dogfood hold.** [Phase 3](phase-3-alpha.md) is active. Phase 2 now accepts only fixes for things the dogfood clock turns up (a small PR with a test or snapshot and a dated line in the [dogfood log](dogfood-log.md)) until the ≈ 2026-10-13 verdict.
+**Status (2026-10-06): done.** Closed early by operator decision: the dogfood clock started 2026-09-29, so about one week of the planned two had run. [Phase 3](phase-3-alpha.md) is active, and anything dogfooding turns up from here is a Phase 3 item, recorded in the [dogfood log](dogfood-log.md).
 
 ## Exit criteria
 
 All P0/P1 acceptance criteria in [product spec](../product/spec.md) pass; two weeks without opening a GUI markdown app for these collections.
 
-The dogfood polish batch (P2-11…P2-24a) should land before the clock is judged, but the two weeks do **not** restart or extend. Clock started 2026-09-29; exit remains ≈ 2026-10-13. P2-24b (image diagrams) may slip to Phase 3 without blocking exit.
+The dogfood polish batch (P2-11…P2-24a) should land before the clock is judged, but the two weeks do **not** restart or extend. Clock started 2026-09-29; the operator closed the phase on 2026-10-06 (see Status). P2-24b (image diagrams) may slip to Phase 3 without blocking exit.
 
 ## Dogfood log
 
-Phase 2 stays `active` through two weeks of real use on a real collection. Clock started 2026-09-29; exit remains ≈ 2026-10-13. Dated bites, fixes, releases and decisions live in the [dogfood log](dogfood-log.md).
+Phase 2 was `active` through the dogfood clock (2026-09-29 to 2026-10-06, closed early). Dated bites, fixes, releases and decisions live in the [dogfood log](dogfood-log.md).
 
 ## Interim acceptance walk (2026-09-30) — historical
 
-**Historical.** Snapshot from 2026-09-30; later landings supersede several rows below (image tier [P3-12](phase-3-alpha.md) / [ADR-0017](../decisions/0017-static-local-images-only.md); themes/layout/options [P3-07](phase-3-alpha.md)/[P3-11](phase-3-alpha.md)/[P3-13](phase-3-alpha.md) shipped; formatted toggle removed by [ADR-0014](../decisions/0014-remove-formatted-view-toggle.md)). Formal exit review ≈ 2026-10-13 still re-confirms the adoption verdict.
+**Historical.** Snapshot from 2026-09-30; later landings supersede several rows below (image tier [P3-12](phase-3-alpha.md) / [ADR-0017](../decisions/0017-static-local-images-only.md); themes/layout/options [P3-07](phase-3-alpha.md)/[P3-11](phase-3-alpha.md)/[P3-13](phase-3-alpha.md) shipped; formatted toggle removed by [ADR-0014](../decisions/0014-remove-formatted-view-toggle.md)). The formal exit review planned for ≈ 2026-10-13 never ran: the operator closed Phase 2 early on 2026-10-06.
 
 ### P0
 
@@ -65,7 +65,7 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 
 | Measure | Result | Notes |
 |---------|--------|-------|
-| Two weeks without a GUI markdown app | pending | clock 2026-09-29 → ≈ 2026-10-13 |
+| Two weeks without a GUI markdown app | closed early | clock 2026-09-29 → 2026-10-06 (about one week); the operator closed Phase 2 on 2026-10-06 and moved dogfooding to Phase 3 |
 
 ## Tasks
 
@@ -188,7 +188,7 @@ Acceptance: diagrams render as images where Kitty graphics is available, otherwi
 
 ## Order (done)
 
-Feature work below is complete; Phase 2 remains on dogfood hold (fixes only) until the ≈ 2026-10-13 adoption verdict — do not treat this section as a to-do list.
+Feature work below is complete and Phase 2 is done (closed 2026-10-06) — do not treat this section as a to-do list.
 
 1. P2-R31 → P2-R32 → P2-R33 — done
 2. P2-05 Tabs — done
