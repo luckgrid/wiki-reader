@@ -36,7 +36,7 @@ syntect = { version = "5.3.0", default-features = false, features = ["default-sy
 globset = "0.4.16"
 unicode-width = "0.2.0"
 shell-words = "1.1.1"
-mermaid-text = "0.56.1"
+mermaid-text = "0.57.0"
 mermaid-rs-renderer = { version = "0.3.1", default-features = false }
 resvg = { version = "0.48.1", default-features = false, features = ["text"] }
 signal-hook = "0.3.18"
