@@ -3,7 +3,7 @@ id: WR-ROADMAP-AUDIT-V018
 title: Audit of v0.1.8
 summary: Viewing-experience performance audit of v0.1.8 with a P3-31 measured baseline and scheduled fix batches.
 status: active
-updated: 2026-10-05
+updated: 2026-10-06
 related: [phase-3-alpha, dogfood-log, audit-v0.1.5]
 ---
 
@@ -15,26 +15,29 @@ No `unwrap`/`expect` problems were found in the audited non-test code, no trunca
 
 **V-findings** continue the style of the [v0.1.5 audit](audit-v0.1.5.md) with a `V` prefix. Many restate staged E/N/L leftovers from that register. **Status values:** `fixed`, `staged` (still scheduled), `dropped` (measured negligible — not fixed). Fix batches [P3-32](phase-3-alpha.md)…[P3-36](phase-3-alpha.md) do **not** gate the Phase 3 exit. Proposed budgets (not CI asserts): frame build ≤ 16 ms p95, keypress→frame ≤ 50 ms, width relayout ≤ 50 ms, UI-thread reindex ≤ 16 ms.
 
-**Verified on main** at `5b8351e` (P3-31 harness, #159). Tag `v0.1.8` = release merge `cb36cec` (#154). Register landed in #158.
+**Verified on main** at `58fe76b` (P3-34 V4, #161; P3-31b #160). Tag `v0.1.8` = release merge `cb36cec` (#154). Register landed in #158.
+
+**Shipped in v0.1.9:** V4 (P3-34 linear wrap).
 
 ## High
 
 | ID | Where | Finding | Measured | Status |
 |---|---|---|---|---|
-| V4 | `render.rs` wrap helpers; `diagrams.rs` fallback | Quadratic wrapping: each cut copies the remainder. A multi-MB token or data URI stalls open and each resize. | Before: open 1 MB **26.3 s**, 400 KB resize **8.7 s**. After linear wrap: open 1 MB **8.2 ms**, 400 KB resize **6.0 ms** (two release runs). | fixed (P3-34) |
+| V4 | `render.rs` wrap helpers; `diagrams.rs` fallback | Quadratic wrapping: each cut copies the remainder. A multi-MB token or data URI stalls open and each resize. | Before: open 1 MB **26.3 s**, 400 KB resize **8.7 s**. After linear wrap: open 1 MB **8.2 ms**, 400 KB resize **6.0 ms** (two release runs; re-confirmed on `58fe76b`). | fixed (P3-34) |
+| V22 | `events.rs` `run_loop`; crossterm `event::poll` | Orphaned processes burn ~100 %CPU indefinitely. Live sample (v0.1.8): main thread stuck in `poll` → `try_read` → `read` with a still-open slave TTY and no interactive shell. `/dev/null` no-TTY exits (os error 6); closing a fresh PTY master exits. Not V17 hygiene. | Four spinners ~45 min at ~100 %CPU; stack in dogfood 2026-10-05. | staged (P3-36) |
 
 ## Medium
 
 | ID | Where | Finding | Measured | Status |
 |---|---|---|---|---|
 | V2 | `relayout_after_diagram_size`, `ensure_layout_width` | N13: diagram-ready still full-reloads; width changes reload rendered pages. Cache shared (not cleared every drag). | Width relayout **1.6 ms**; diagram-ready relayout **1.1 ms** (both under budget). | dropped (P3-31b): coalesce not worth a fix alone |
-| V3 | `watch.rs`; `session.rs` `reindex` | N12 remainder: full rebuild off-thread; deep `index ==`; real change reloads page even if open file unchanged. | UI-thread reindex identical **5.5 ms**, one-page change **15.6–16.9 ms** (at the 16 ms budget). | staged (P3-33) |
-| V6 | `raster.rs` `usvg_options` | E5: font copied and font DB rebuilt every call; SVG measure on UI thread; Mermaid layout 2–3×. | Not isolated (TestBackend / text-tier diagrams). | staged (P3-35) |
-| V12 | `render_with`, `body_and_offset` | E6: clones `ParsedPage` and body. | Folded into open/relayout times; not isolated. | staged (P3-33) |
-| V15 | `image_viewer.rs`; Kitty path | Uncancelled pan workers; suspected re-upload per pan. | Needs Kitty / counting writer. | staged (P3-35) |
-| V16 | `diagrams.rs` caches | E4 unbounded width-keyed cache; E8 drops fallback reason. | Not isolated. | staged (P3-35) |
+| V3 | `watch.rs`; `session.rs` `reindex` | N12 remainder: full rebuild off-thread; deep `index ==`; real change reloads page even if open file unchanged. | UI-thread reindex identical **5.5 ms**, one-page change **15.6–16.9 ms** (at the 16 ms budget). | staged (P3-33); low priority |
+| V6 | `raster.rs` `usvg_options` | E5: font copied and font DB rebuilt every call; SVG measure on UI thread; Mermaid layout 2–3×. | Not isolated (TestBackend / text-tier diagrams). | staged (P3-35); measure first |
+| V12 | `render_with`, `body_and_offset` | E6: clones `ParsedPage` and body. | Folded into open/relayout times; not isolated. | dropped (re-scope): no measured cost |
+| V15 | `image_viewer.rs`; Kitty path | Uncancelled pan workers; suspected re-upload per pan. | Needs Kitty / counting writer. | staged (P3-35); measure first |
+| V16 | `diagrams.rs` caches | E4 unbounded width-keyed cache; E8 drops fallback reason. | Not isolated. | staged (P3-35); cheap hygiene |
 | V17 | opener / herdr / signals | L10: late signals, no SIGINT, unreaped children, no herdr timeout. | Process behaviour, not timed. | staged (P3-36) |
-| V18 | `index.rs`; `nav/tree.rs` | Full bodies in index; key duplication; no byte budget. | RSS after 5k-page open ≈ **39–42 MB**; after heavy pages ≈ **134–140 MB** (`ps` RSS). | staged (P3-33) |
+| V18 | `index.rs`; `nav/tree.rs` | Full bodies in index; key duplication; no byte budget. | RSS after 5k-page open ≈ **39–42 MB**; after heavy pages ≈ **134–140 MB** (`ps` RSS). | dropped (re-scope): no measured cost |
 
 ## Dropped (negligible under budget)
 
@@ -45,7 +48,7 @@ No `unwrap`/`expect` problems were found in the audited non-test code, no trunca
 | V9 | breadcrumb / label DFS | Whole-tree DFS with clones per frame. | Included in frame timings above (TestBackend). | dropped (P3-31) |
 | V14 | `keep_cursor_visible` (P3-30 regression), `max_expand_height` | O(rows) jump; per-cell `Vec<char>`; wrap churn. | 10k-row table: `want` **4.1 ms**, `G`+draw **2.3 ms**, `PgDn`+draw **1.0 ms**. Dropped at 10k only — loop is O(rows), so ≈25 ms at 100k. | dropped (P3-31) |
 | V7 | `events.rs` event loop | L12: draw every tick. | Idle **0.0 %CPU** / idlew **0** on v0.1.8 (PTY). | dropped (P3-31b) |
-| V8 | `images.rs` idle poll | 20 ms worker poll; per-frame set churn. | Same idle pass as V7. | dropped (P3-31b) |
+| V8 | `images.rs` idle poll | 20 ms worker poll; per-frame set churn. | Same idle pass as V7 (bare PTY; no cell-size / image manager). Graphics-on remeasure still pending. | dropped (P3-31b); confirm in Ghostty/herdr with a picture |
 | V2 | `relayout_after_diagram_size` | Diagram-ready full reload. | Diagram-ready relayout **1.1 ms** (TestBackend). | dropped (P3-31b) |
 | V10 | `app/mod.rs` search | Sync UI-thread search; re-sort / lowercase. | Content search keystroke+flush **5.5 ms** (under 50 ms budget). | dropped (P3-31b) |
 | V11 | `match_spans`, `store_search_matches` | Rebuild glyph map / linear hit walk. | `match_spans` **0.007 ms**; next-match+draw **0.9 ms**. | dropped (P3-31b) |
@@ -84,11 +87,11 @@ Input coalescing of up to 256 events per redraw; width clamp at 100 so wide resi
 | Task | Batch | Items |
 |---|---|---|
 | [P3-31](phase-3-alpha.md) | Baseline (measure) | Done: harness + [benchmarks](../architecture/benchmarks.md#viewing-cost-p3-31); register re-ranked. P3-31b top-up: idle CPU, V2/V10/V11/V13/V4-scale |
-| [P3-32](phase-3-alpha.md) | Frame cost | **Empty** — V7/V8/V11 dropped after measurement (V1/V5/V9 already dropped) |
-| [P3-33](phase-3-alpha.md) | Relayout and reindex | V3, V12, V18 (V2 dropped — diagram-ready 1.1 ms) |
-| [P3-34](phase-3-alpha.md) | Algorithmic | **V4 fixed** (linear wrap). V10/V13/V14 dropped |
-| [P3-35](phase-3-alpha.md) | Media | V6, V15, V16, L1–L5 caps |
-| [P3-36](phase-3-alpha.md) | Process and tooling | V17, V19, V20, V21, boolean-arg tidy-ups |
+| [P3-32](phase-3-alpha.md) | Frame cost | **Empty / dropped** — V7/V8/V11 dropped after measurement (V1/V5/V9 already dropped). V8 still needs graphics-on idle confirm |
+| [P3-33](phase-3-alpha.md) | Relayout and reindex | **V3 only** (low priority). V12/V18 dropped unless re-measured |
+| [P3-34](phase-3-alpha.md) | Algorithmic | **V4 fixed** (linear wrap; ships v0.1.9). V10/V13/V14 dropped |
+| [P3-35](phase-3-alpha.md) | Media | Measure first: V6 (SVG harness), V15 (Kitty), V16 (LRU + reason), L1–L5 caps |
+| [P3-36](phase-3-alpha.md) | Process and tooling | V22 (orphan spin), V17, V19, V20, V21, boolean-arg tidy-ups |
 
 Each fix PR starts with a failing test or a measurement; `./scripts/check.sh all`; regression tests with exact assertions; operator manual pass for user-visible changes (P3-34 wrap, P3-35 media); a dogfood-log line; release (`v0.1.9`+) only after the pass and explicit go-ahead before tagging.
 
