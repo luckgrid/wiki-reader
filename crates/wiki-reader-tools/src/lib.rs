@@ -94,10 +94,149 @@ pub fn check(root: &Path) -> Result<Report, Error> {
     for doc in docs.values() {
         check_doc(doc, &mut anchors, &mut errors)?;
     }
+    check_version_sync(&root, &mut errors)?;
     Ok(Report {
         files: docs.len(),
         errors,
     })
+}
+
+/// Keep release-facing version strings aligned with `[workspace.package].version`.
+fn check_version_sync(root: &Path, errors: &mut Vec<String>) -> Result<(), Error> {
+    let cargo = root.join("Cargo.toml");
+    let cargo_text = fs::read_to_string(&cargo).map_err(io_error(&cargo))?;
+    let Some(workspace) = workspace_package_version(&cargo_text) else {
+        errors.push("Cargo.toml: missing [workspace.package] version".into());
+        return Ok(());
+    };
+
+    for (name, ver) in workspace_path_dep_versions(&cargo_text) {
+        if ver != workspace {
+            errors.push(format!(
+                "Cargo.toml: [workspace.dependencies] {name} version {ver} != workspace {workspace}"
+            ));
+        }
+    }
+
+    let plugin = root.join("integrations/herdr/herdr-plugin.toml");
+    let plugin_text = fs::read_to_string(&plugin).map_err(io_error(&plugin))?;
+    match toml_string_value(&plugin_text, "version") {
+        Some(ver) if ver == workspace => {}
+        Some(ver) => errors.push(format!(
+            "integrations/herdr/herdr-plugin.toml: version {ver} != workspace {workspace}"
+        )),
+        None => errors.push("integrations/herdr/herdr-plugin.toml: missing version".into()),
+    }
+
+    let readme = root.join("README.md");
+    let readme_text = fs::read_to_string(&readme).map_err(io_error(&readme))?;
+    if let Some(status) = readme_status_section(&readme_text) {
+        let needle = format!("v{workspace}");
+        if !status.contains(&needle) {
+            errors.push(format!(
+                "README.md: Status section must name workspace version {needle}"
+            ));
+        }
+    } else {
+        errors.push("README.md: missing ## Status section".into());
+    }
+
+    let dogfood = root.join("wiki/roadmap/dogfood-log.md");
+    let dogfood_text = fs::read_to_string(&dogfood).map_err(io_error(&dogfood))?;
+    if let Some(latest) = latest_dogfood_release(&dogfood_text)
+        && version_triple(&latest) > version_triple(&workspace)
+    {
+        errors.push(format!(
+            "wiki/roadmap/dogfood-log.md: latest ## {latest} is newer than workspace {workspace}"
+        ));
+    }
+    Ok(())
+}
+
+fn workspace_package_version(cargo: &str) -> Option<String> {
+    let mut in_pkg = false;
+    for line in cargo.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            in_pkg = trimmed == "[workspace.package]";
+            continue;
+        }
+        if in_pkg && let Some(ver) = quoted_assignment(trimmed, "version") {
+            return Some(ver);
+        }
+    }
+    None
+}
+
+fn workspace_path_dep_versions(cargo: &str) -> Vec<(String, String)> {
+    let mut in_deps = false;
+    let mut out = Vec::new();
+    for line in cargo.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            in_deps = trimmed == "[workspace.dependencies]";
+            continue;
+        }
+        if !in_deps || trimmed.starts_with('#') || !trimmed.contains("path =") {
+            continue;
+        }
+        let Some((name, rest)) = trimmed.split_once('=') else {
+            continue;
+        };
+        let name = name.trim().to_owned();
+        // wiki-reader-core = { path = "...", version = "0.1.9" }
+        if let Some(ver) = rest
+            .split(',')
+            .find_map(|part| quoted_assignment(part.trim(), "version"))
+        {
+            out.push((name, ver));
+        }
+    }
+    out
+}
+
+fn toml_string_value(text: &str, key: &str) -> Option<String> {
+    text.lines()
+        .find_map(|line| quoted_assignment(line.trim(), key))
+}
+
+fn quoted_assignment(line: &str, key: &str) -> Option<String> {
+    let prefix = format!("{key} = \"");
+    let rest = line.strip_prefix(&prefix)?;
+    let end = rest.find('"')?;
+    Some(rest[..end].to_owned())
+}
+
+fn readme_status_section(readme: &str) -> Option<&str> {
+    let start = readme.find("\n## Status\n")?;
+    let after = &readme[start + "\n## Status\n".len()..];
+    let end = after.find("\n## ").unwrap_or(after.len());
+    Some(&after[..end])
+}
+
+fn latest_dogfood_release(dogfood: &str) -> Option<String> {
+    dogfood
+        .lines()
+        .filter_map(|line| line.strip_prefix("## v"))
+        .filter(|v| is_plain_semver(v))
+        .max_by(|a, b| version_triple(a).cmp(&version_triple(b)))
+        .map(str::to_owned)
+}
+
+fn is_plain_semver(v: &str) -> bool {
+    // Alpha tags like 0.1.0-alpha.1 are ignored; only plain 0.1.N headings.
+    let mut parts = v.split('.');
+    let digits = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit());
+    parts.next().is_some_and(digits)
+        && parts.next().is_some_and(digits)
+        && parts.next().is_some_and(digits)
+        && parts.next().is_none()
+}
+
+fn version_triple(ver: &str) -> (u32, u32, u32) {
+    let mut parts = ver.split('.');
+    let parse = |p: Option<&str>| p.and_then(|s| s.parse().ok()).unwrap_or(0);
+    (parse(parts.next()), parse(parts.next()), parse(parts.next()))
 }
 
 fn io_error(path: &Path) -> impl FnOnce(io::Error) -> Error + use<> {
@@ -517,6 +656,11 @@ mod tests {
 mod docs_sync {
     use std::path::Path;
 
+    use super::{
+        is_plain_semver, latest_dogfood_release, readme_status_section, version_triple,
+        workspace_package_version, workspace_path_dep_versions,
+    };
+
     const START: &str = "<!-- ui-diagram:start -->";
     const END: &str = "<!-- ui-diagram:end -->";
 
@@ -542,5 +686,31 @@ mod docs_sync {
             readme, ui_spec,
             "README.md and wiki/product/ui-spec.md diagrams differ; edit both together"
         );
+    }
+
+    #[test]
+    fn workspace_version_helpers_parse_path_deps_and_status() {
+        let cargo = r#"
+[workspace.package]
+version = "0.1.9"
+
+[workspace.dependencies]
+wiki-reader-core = { path = "crates/wiki-reader-core", version = "0.1.9" }
+other = "1.0"
+"#;
+        assert_eq!(workspace_package_version(cargo).as_deref(), Some("0.1.9"));
+        assert_eq!(
+            workspace_path_dep_versions(cargo),
+            vec![("wiki-reader-core".into(), "0.1.9".into())]
+        );
+        let status = readme_status_section("intro\n\n## Status\n\nshipped through v0.1.9\n\n## Install\n");
+        assert!(status.unwrap().contains("v0.1.9"));
+        assert!(is_plain_semver("0.1.9"));
+        assert!(!is_plain_semver("0.1.0-alpha.1"));
+        assert_eq!(
+            latest_dogfood_release("## v0.1.0-alpha.5\n## v0.1.8\n## v0.1.9\n").as_deref(),
+            Some("0.1.9")
+        );
+        assert!(version_triple("0.1.10") > version_triple("0.1.9"));
     }
 }

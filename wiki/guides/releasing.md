@@ -81,7 +81,20 @@ To go back to an older release, repeat the steps with that release's tarball (or
 
 Cut a tag only from a commit whose CI is already green on `main`. The release workflow builds and smoke-tests `--version` but does not re-run the full test suite.
 
-1. **Prepare.** Branch `release/vX.Y.Z` (for example `release/v0.1.2`), bump `version` in the workspace `Cargo.toml` to the next `0.1.N` and refresh `Cargo.lock`, bump `version` in `integrations/herdr/herdr-plugin.toml` to match, and update the roadmap note. Run `./scripts/check.sh`, open a PR, wait for green checks, and squash-merge.
+1. **Prepare.** Branch `release/vX.Y.Z` (for example `release/v0.1.N`), then bump every place that carries the version (link-check asserts the starred items stay aligned):
+
+   - * workspace `version` in root `Cargo.toml`
+   - * the three path-dependency versions in `[workspace.dependencies]`
+   - `Cargo.lock` (refresh by building or testing)
+   - * `integrations/herdr/herdr-plugin.toml`
+   - * the Status line in root `README.md` (must name `v` + workspace version)
+   - * a matching `## v0.1.N` heading in the [dogfood log](../roadmap/dogfood-log.md) when the release is recorded (must not be newer than the workspace before the bump lands)
+   - [wiki/roadmap/README.md](../roadmap/README.md) phase table / notes as needed
+   - Phase 3 intro, Done list, and P3-08 release list in [phase-3-alpha.md](../roadmap/phase-3-alpha.md)
+   - the audit register "Shipped in" line when the release closes audit work
+   - version/commit labels in [benchmarks.md](../architecture/benchmarks.md) when numbers are re-measured
+
+   Run `./scripts/check.sh`, open a PR, wait for green checks, and squash-merge.
 2. **Optional dry run.** In GitHub, Actions → Release → *Run workflow* on the branch or `main`. It builds all three targets, names the packages `dry-run`, and uploads them as workflow artifacts. It does **not** create or touch a GitHub Release (the attach step only runs on a tag push). Use this after changing `release.yml` or its pinned actions.
 3. **Tag the merge commit** as `v` plus the `Cargo.toml` version and push the tag. The workflow fails if the tag and the crate version differ.
 
