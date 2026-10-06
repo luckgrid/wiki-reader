@@ -3,13 +3,15 @@ id: WR-ADR-0020
 title: "ADR-0020: Titles or actual filesystem names"
 summary: Two nav label modes, literal folder names and explicit migration from title+filename.
 status: accepted
-updated: 2026-10-03
-related: [0008-side-nav-as-site-nav, 0013-nav-labels-folder-names-and-titles]
+updated: 2026-10-05
+related: [0008-side-nav-as-site-nav, 0013-nav-labels-folder-names-and-titles, 0021-side-nav-only-label-mode]
 ---
 
 # ADR-0020: Titles or actual filesystem names
 
-**Status:** Accepted · **Date:** 2026-10-03 · **Supersedes:** nav-label choices in [ADR-0008](0008-side-nav-as-site-nav.md) and the page/landing/folder label rules in [ADR-0013](0013-nav-labels-folder-names-and-titles.md). Tree grouping and ordering are unchanged; accepted ADRs remain immutable.
+**Status:** Accepted · **Date:** 2026-10-03 · **Supersedes:** nav-label choices in [ADR-0008](0008-side-nav-as-site-nav.md) and the page/landing/folder label rules in [ADR-0013](0013-nav-labels-folder-names-and-titles.md). Tree grouping and ordering are unchanged; accepted ADRs remain immutable. · **Chrome label scope superseded by:** [ADR-0021](0021-side-nav-only-label-mode.md)
+
+> Note: the mode-dependent breadcrumb/prev-next label rule here is superseded by [ADR-0021](0021-side-nav-only-label-mode.md); other label rules and config migration remain.
 
 ## Context
 

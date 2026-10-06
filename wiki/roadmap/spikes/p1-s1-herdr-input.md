@@ -3,13 +3,15 @@ id: WR-SPIKE-P1-S1
 title: P1-S1 Spike — herdr input
 summary: Which keys and mouse events reach a TUI under herdr; implications for the P1-08/09 keymap.
 status: done
-updated: 2026-09-29
-related: [phase-1-reader-shell, 0007-input-focus-model]
+updated: 2026-10-05
+related: [phase-1-reader-shell, 0007-input-focus-model, 0015-new-tab-combos-kitty-keyboard, 0016-ctrl-only-new-tab-combos]
 ---
 
 # P1-S1 Spike — herdr input
 
 Timebox note for Phase 1. Sources: herdr 0.9.x docs ([Keyboard](https://herdr.dev/docs/keyboard/), [Troubleshooting](https://herdr.dev/docs/troubleshooting/), [Concepts](https://herdr.dev/docs/concepts/)), plus ADR-0007.
+
+**Later:** the "do not bind Ctrl+Enter" guidance below is superseded in part by [ADR-0015](../../decisions/0015-new-tab-combos-kitty-keyboard.md) / [ADR-0016](../../decisions/0016-ctrl-only-new-tab-combos.md) (kitty disambiguation; Ctrl-only new-tab combos).
 
 ## How input reaches the pane
 
@@ -27,7 +29,7 @@ Timebox note for Phase 1. Sources: herdr 0.9.x docs ([Keyboard](https://herdr.de
 | `Alt+←/→` | Forwarded as CSI `1;3D` / `1;3C` when Option=Alt | herdr does **not** rewrite these (issue #1370). Prefer for **back/forward** only if the outer terminal is configured; else use `Backspace` / `Alt+←` with documented setup, or `Ctrl+o` / `Ctrl+i` |
 | `Backspace` | Reaches the TUI | Good primary **back** binding |
 | Click / wheel | Reach the TUI when mouse reporting is on | Hit map works; middle-click for new tab (ADR-0005) needs button reporting |
-| `Ctrl+Enter` | Unreliable without kitty keyboard protocol | Do **not** bind new-tab to Ctrl+Enter; use `t` + middle-click (ADR-0005/0007) |
+| `Ctrl+Enter` | Unreliable without kitty keyboard protocol | Phase 1: do **not** bind new-tab to Ctrl+Enter; use `t` + middle-click (ADR-0005/0007). Superseded later by [ADR-0015](../../decisions/0015-new-tab-combos-kitty-keyboard.md) / [ADR-0016](../../decisions/0016-ctrl-only-new-tab-combos.md) |
 
 ## Double Enter/Tab/Backspace
 
@@ -39,7 +41,7 @@ Old outer terminals can emit press+release as duplicate bytes under kitty keyboa
 - **Forward:** `Alt+→` / `Alt+f` (Ghostty Option+→)
 - **Pane focus:** `Shift+←` / `Shift+→`, with `F6` fallback
 - **Block jump:** `Shift+↑/↓`, with `Ctrl+↑/↓` fallback if needed
-- **New tab:** `t` / middle-click — never `Ctrl+Enter`
+- **New tab:** `t` / middle-click — never `Ctrl+Enter` (Phase 1 draft; later [ADR-0015](../../decisions/0015-new-tab-combos-kitty-keyboard.md) / [ADR-0016](../../decisions/0016-ctrl-only-new-tab-combos.md))
 
 ## Real keyboard verification (Ghostty + herdr, macOS)
 
