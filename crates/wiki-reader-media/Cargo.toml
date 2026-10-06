@@ -4,10 +4,12 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "Image decode and Mermaid/SVG rasterisation for wiki-reader"
+keywords = ["markdown", "mermaid", "svg", "image"]
+categories = ["multimedia"]
 rust-version.workspace = true
 repository.workspace = true
 homepage.workspace = true
-readme = "../../README.md"
+readme = "README.md"
 
 [features]
 default = ["raster"]

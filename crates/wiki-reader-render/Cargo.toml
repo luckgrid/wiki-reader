@@ -4,10 +4,12 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "Markdown to RenderedDoc for wiki-reader"
+keywords = ["markdown", "render", "tui"]
+categories = ["text-processing"]
 rust-version.workspace = true
 repository.workspace = true
 homepage.workspace = true
-readme = "../../README.md"
+readme = "README.md"
 
 [features]
 default = ["media"]

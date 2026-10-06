@@ -1662,7 +1662,7 @@ mod docs_sync {
     /// Markdown tables per scope, in help-overlay order, default (non-overridden) keys.
     fn keymap_markdown() -> String {
         let mut out = String::from(
-            "Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same table the `?` help overlay shows. Edit the table there, then run `UPDATE_DOCS=1 cargo test -p wiki-reader keymap_docs`.\n",
+            "Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same table the `?` help overlay shows. Edit the table there, then run `UPDATE_DOCS=1 cargo test -p wiki-reader-tui keymap_docs`.\n",
         );
         let mut last: Option<BindingScope> = None;
         for b in help_entries(&std::collections::BTreeMap::new()) {
@@ -1742,7 +1742,7 @@ mod docs_sync {
         assert_eq!(
             &doc[body_start..end],
             want,
-            "ui-spec keymap block is out of date; run `UPDATE_DOCS=1 cargo test -p wiki-reader keymap_docs`"
+            "ui-spec keymap block is out of date; run `UPDATE_DOCS=1 cargo test -p wiki-reader-tui keymap_docs`"
         );
     }
 }

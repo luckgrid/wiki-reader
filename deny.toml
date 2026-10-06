@@ -1,0 +1,47 @@
+# cargo-deny policy: licences, advisories, duplicate crates and sources.
+# Run with `cargo deny check`; CI runs it on every push (see .github/workflows/ci.yml).
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+# Unmaintained-crate warnings we have looked at and accept for now. Revisit when the parent
+# crate moves on; each entry names its reason and a date to look again.
+ignore = [
+  # bincode 1.3.3 comes in through syntect (syntax highlighting). No fix in the 1.x line;
+  # syntect has not moved to a replacement yet. Revisit 2026-12.
+  { id = "RUSTSEC-2025-0141", reason = "unmaintained; reached only through syntect" },
+  # ttf-parser 0.25.1 comes in through the SVG/Mermaid text stack (usvg/fontdb). Revisit 2026-12.
+  { id = "RUSTSEC-2026-0192", reason = "unmaintained; reached only through usvg/fontdb" },
+]
+
+[licenses]
+version = 2
+# Permissive licences only. Dual-licensed crates (for example `Apache-2.0 OR GPL-2.0-only`) are
+# accepted through their permissive alternative.
+allow = [
+  "0BSD",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "CC0-1.0",
+  "ISC",
+  "MIT",
+  "Unicode-3.0",
+  "Unlicense",
+  "Zlib",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

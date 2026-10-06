@@ -13,7 +13,7 @@ How to pick up work in this repo.
 
 ## Toolchain
 
-- Rust from [`rust-toolchain.toml`](../../rust-toolchain.toml): channel `1.98.1`, with `rustfmt` and `clippy`.
+- Rust from [`rust-toolchain.toml`](../../rust-toolchain.toml): channel `1.98.1`, with `rustfmt` and `clippy`. The minimum supported version is the workspace `rust-version` (1.92, set by dependencies); CI compiles everything on it in the `msrv` job.
 - Install [rumdl](https://github.com/rvben/rumdl) for Markdown linting and formatting: `uv tool install rumdl` (a prebuilt binary; `cargo install rumdl --locked` also works but compiles slowly). CI pins the version in `.github/workflows/ci.yml`.
 - Edition 2024; `rustfmt.toml` sets `style_edition = "2024"`.
 - Builds and CI use `--locked` against the committed `Cargo.lock`.
@@ -24,10 +24,10 @@ Supported path today — install the binary from git:
 
 ```bash
 # Full build (default features: images / Mermaid raster)
-cargo install --locked --git https://github.com/luckgrid/wiki-reader wiki-reader
+cargo install --locked --git https://github.com/luckgrid/wiki-reader wiki-reader-tui
 
 # Lite build (no image stack; ADR-0023)
-cargo install --locked --no-default-features --git https://github.com/luckgrid/wiki-reader wiki-reader
+cargo install --locked --no-default-features --git https://github.com/luckgrid/wiki-reader wiki-reader-tui
 ```
 
 Tagged releases attach platform tarballs (macOS arm64 / x86_64, Linux x86_64) plus SHA256 checksums. To upgrade, replace or roll back an installed version, see [Releasing and upgrading](releasing.md), which also covers how maintainers cut, dry-run, verify and fix a release. The tag name must be `v` plus the workspace `Cargo.toml` version (for example `v0.1.N`).
@@ -55,26 +55,26 @@ Same steps individually:
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
-cargo clippy --locked --all-targets --no-default-features -p wiki-reader -p wiki-reader-render -p wiki-reader-media -- -D warnings  # lite
-cargo test --locked --no-default-features -p wiki-reader -p wiki-reader-render -p wiki-reader-media
+cargo clippy --locked --all-targets --no-default-features -p wiki-reader-tui -p wiki-reader-render -p wiki-reader-media -- -D warnings  # lite
+cargo test --locked --no-default-features -p wiki-reader-tui -p wiki-reader-render -p wiki-reader-media
 cargo run --locked --quiet -p wiki-reader-tools --bin link-check
 rumdl fmt --check .
 rumdl check .
 cargo tree -p wiki-reader-core -e normal  # must not list ratatui or crossterm (ADR-0006)
-cargo tree --locked --no-default-features -p wiki-reader -e normal  # must not list image, resvg, mermaid-rs-renderer, ratatui-image (ADR-0023)
+cargo tree --locked --no-default-features -p wiki-reader-tui -e normal  # must not list image, resvg, mermaid-rs-renderer, ratatui-image (ADR-0023)
 ```
 
 Quickstart:
 
 ```bash
-cargo run -p wiki-reader -- fixtures/worked-example
+cargo run -p wiki-reader-tui -- fixtures/worked-example
 # q to quit, ? for help
 ```
 
 Herdr keymap check (historical Phase 1 entry criterion for P1-08; kept as a probe):
 
 ```bash
-cargo run -p wiki-reader --example keylog
+cargo run -p wiki-reader-tui --example keylog
 # Run under herdr; see wiki/roadmap/spikes/p1-s1-herdr-input.md
 ```
 
@@ -90,7 +90,7 @@ the same with `WIKI_READER_NO_WATCHDOG=1`, only the launcher exiting, no TTY) an
 (ubuntu and macOS) run it:
 
 ```bash
-cargo build --locked -p wiki-reader
+cargo build --locked -p wiki-reader-tui
 python3 scripts/check-orphan-exit.py target/debug/wiki-reader
 ```
 
@@ -110,7 +110,7 @@ python3 scripts/check-orphan-exit.py target/debug/wiki-reader
 | `wiki-reader-core` | Provider, parse, index, nav, watch, config. **No** `ratatui` / `crossterm`. |
 | `wiki-reader-render` | Markdown → `RenderedDoc` (lines, link spans, source map, media inventory). |
 | `wiki-reader-media` | Image decode and Mermaid/SVG rasterisation behind `raster`; never depends on render. |
-| `wiki-reader` | Binary TUI: app state, layout, hit map, keymap. |
+| `wiki-reader-tui` | Binary TUI (`[[bin]]` name `wiki-reader`): app state, layout, hit map, keymap. |
 | `wiki-reader-tools` | Repo tooling (`link-check`); `publish = false`. |
 
 See [architecture overview](../architecture/overview.md) and [ADR-0006](../decisions/0006-reader-first.md).
@@ -121,7 +121,11 @@ See [architecture overview](../architecture/overview.md) and [ADR-0006](../decis
 - Review `cargo tree` before adding a dep.
 - Prefer stdlib / already-chosen crates from [prior art & libraries](../architecture/prior-art-and-libs.md).
 - Markdown is checked and formatted with [rumdl](https://github.com/rvben/rumdl); run `rumdl fmt .` when making documentation changes (`rumdl fmt --check .` only reports).
-- No third-party source is vendored or ported. If that changes, keep copyright notices in the ported files and add a `THIRD_PARTY.md` in the same change.
+- No third-party source is vendored or ported. If that changes, keep copyright notices in the ported files and add the notices to `THIRD-PARTY-LICENSES` in the same change.
+- **Licences and advisories:** [`deny.toml`](../../deny.toml) allows permissive licences only and records the two accepted unmaintained-crate advisories with a reason and a revisit date. `cargo deny check` runs in CI (`cargo install --locked cargo-deny` to run it locally; `scripts/check.sh` runs it when installed).
+- **Third-party notices:** release tarballs ship [`THIRD-PARTY-LICENSES`](../../THIRD-PARTY-LICENSES) (every package in the shipped dependency graph, plus the embedded Noto Sans font under the SIL OFL). Regenerate it after any dependency change with `scripts/gen-third-party-licenses.sh` (needs `cargo install --locked cargo-about --features cli`); `link-check` fails when a direct dependency is missing from it.
+- **Licence files in crates:** `LICENSE-MIT`, `LICENSE-APACHE` and `NOTICE` are copied into each published crate directory (crates.io packages only the crate). `link-check` fails when a copy differs from the root file.
+- **Minimum Rust version:** the workspace `rust-version` is the lowest toolchain that compiles everything; the `msrv` CI job checks it. Raise it deliberately when a dependency needs a newer compiler.
 
 ## Docs and ADRs
 

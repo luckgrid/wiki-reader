@@ -53,14 +53,16 @@ Phase 2 is feature-complete on a dogfood hold (clock 2026-09-29 → ≈ 2026-10-
 From git (supported today):
 
 ```bash
-cargo install --locked --git https://github.com/luckgrid/wiki-reader wiki-reader
+cargo install --locked --git https://github.com/luckgrid/wiki-reader wiki-reader-tui
 ```
 
 Lite build (no images, SVG or Mermaid pictures; diagrams stay text, source or a placeholder; smaller binary, faster build; see [ADR-0023](wiki/decisions/0023-lite-build-is-a-cargo-feature.md)). It is a cargo feature only; there is no `-lite` release download:
 
 ```bash
-cargo install --locked --no-default-features --git https://github.com/luckgrid/wiki-reader wiki-reader
+cargo install --locked --no-default-features --git https://github.com/luckgrid/wiki-reader wiki-reader-tui
 ```
+
+The package is named `wiki-reader-tui` (the command it installs is still `wiki-reader`), because the name `wiki-reader` is taken on crates.io. Releases up to and including v0.1.10 use the old package name: pin one with `cargo install --locked --git https://github.com/luckgrid/wiki-reader --tag v0.1.10 wiki-reader`. If you installed `wiki-reader` before the rename, run `cargo uninstall wiki-reader` first (or add `--force`), because cargo will not let a second package overwrite the same command.
 
 Release binaries (macOS arm64 / x86_64, Linux x86_64) ship on `v*` tags under [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases). Download the matching `.tar.gz`, verify the checksum, and put `wiki-reader` on your `PATH`:
 
@@ -78,8 +80,8 @@ crates.io packaging metadata is prepared (`version` on path deps, repository/rea
 Check your version with `wiki-reader --version` and `which wiki-reader`. Upgrade the **same way you installed** (mixing paths leaves two binaries; whichever is first on `PATH` wins).
 
 ```bash
-# cargo install → ~/.cargo/bin (--force replaces it; add --tag v0.1.N to pin one)
-cargo install --locked --force --git https://github.com/luckgrid/wiki-reader wiki-reader
+# cargo install → ~/.cargo/bin (--force replaces it; a --tag before the rename needs the old name, see Install)
+cargo install --locked --force --git https://github.com/luckgrid/wiki-reader wiki-reader-tui
 
 # release tarball → usually ~/.local/bin (verify and unpack as above, then overwrite)
 install -m 0755 wiki-reader-vX.Y.Z-<platform>/wiki-reader ~/.local/bin/wiki-reader
@@ -90,7 +92,7 @@ If `which wiki-reader` and the install target disagree, remove the extra copy or
 ## Quickstart
 
 ```bash
-cargo run -p wiki-reader -- fixtures/worked-example
+cargo run -p wiki-reader-tui -- fixtures/worked-example
 # q to quit, ? for help
 ```
 
@@ -126,4 +128,4 @@ Cargo workspace with `wiki-reader-core` (terminal-free), `wiki-reader-render`, `
 
 ## License
 
-Copyright © 2026 LUCKGRID. Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option. The two licenses are alternatives: users need to comply with only the one they choose.
+Copyright © 2026 LUCKGRID. Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option. The two licenses are alternatives: users need to comply with only the one they choose. The [NOTICE](NOTICE) file names the copyright holder (the Apache-2.0 text is kept verbatim, as the licence requires). Release binaries also contain third-party packages and the embedded Noto Sans font (SIL OFL 1.1); their notices are in [THIRD-PARTY-LICENSES](THIRD-PARTY-LICENSES) and in every release tarball.

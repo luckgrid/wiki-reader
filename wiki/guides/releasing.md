@@ -37,11 +37,14 @@ Quit any running wiki-reader before replacing the binary.
 
 ```bash
 # Latest main
-cargo install --locked --force --git https://github.com/luckgrid/wiki-reader wiki-reader
+cargo install --locked --force --git https://github.com/luckgrid/wiki-reader wiki-reader-tui
 
-# A specific release (also how you roll back)
-cargo install --locked --force --git https://github.com/luckgrid/wiki-reader --tag v0.1.N wiki-reader
+# A specific release (also how you roll back); tags up to v0.1.10 use the old package name
+cargo install --locked --force --git https://github.com/luckgrid/wiki-reader --tag v0.1.N wiki-reader-tui
+cargo install --locked --force --git https://github.com/luckgrid/wiki-reader --tag v0.1.10 wiki-reader
 ```
+
+The package was renamed `wiki-reader-tui` because `wiki-reader` is taken on crates.io; the installed command is still `wiki-reader`. `cargo install --list` shows which package name your copy was installed under.
 
 `--force` is what replaces the already-installed binary in `~/.cargo/bin`. Confirm with `which wiki-reader` that you are not still hitting a copy elsewhere.
 
@@ -77,7 +80,7 @@ To go back to an older release, repeat the steps with that release's tarball (or
 
 ### Uninstall
 
-`cargo uninstall wiki-reader` for a cargo install, or delete the binary you copied into your `PATH`. Remove the config and state directories above if you also want to drop settings and sessions.
+`cargo uninstall wiki-reader-tui` for a cargo install (`cargo uninstall wiki-reader` if `cargo install --list` shows the old package name), or delete the binary you copied into your `PATH`. Remove the config and state directories above if you also want to drop settings and sessions.
 
 ## Cut a release (maintainers)
 

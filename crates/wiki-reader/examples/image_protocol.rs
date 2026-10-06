@@ -1,10 +1,10 @@
 //! P3-12a terminal-image protocol spike.
 //!
 //! ```text
-//! cargo run -p wiki-reader --example image-protocol
-//! cargo run -p wiki-reader --example image-protocol -- --force-kitty
-//! cargo run -p wiki-reader --example image-protocol -- --force-iterm2
-//! WIKI_READER_IMAGE_QUERY_TIMEOUT_MS=500 cargo run -p wiki-reader --example image-protocol
+//! cargo run -p wiki-reader-tui --example image-protocol
+//! cargo run -p wiki-reader-tui --example image-protocol -- --force-kitty
+//! cargo run -p wiki-reader-tui --example image-protocol -- --force-iterm2
+//! WIKI_READER_IMAGE_QUERY_TIMEOUT_MS=500 cargo run -p wiki-reader-tui --example image-protocol
 //!
 //! `j`/`k` simulate a tall image becoming top-clipped, `o` overlays `Clear` plus a popup, and
 //! `n` replaces the image. This deliberately exercises `StatefulImage` with `Resize::Crop`.

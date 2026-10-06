@@ -11,6 +11,8 @@ related: [0004-diagram-rendering, 0006-reader-first, 0017-static-local-images-on
 
 **Status:** Accepted · **Date:** 2026-10-03
 
+**Note (2026-10-06):** the TUI package was renamed `wiki-reader-tui` for crates.io; the installed command is still `wiki-reader`. Read `-p wiki-reader` and the `… wiki-reader` install commands below as `wiki-reader-tui`. The decision is unchanged.
+
 ## Context
 
 The image stack (`image`, `resvg`, `mermaid-rs-renderer`, `ratatui-image`, an embedded font) is the largest single step in binary size and build time; see [benchmarks](../architecture/benchmarks.md). Some readers never use a graphics terminal and only want text, source and placeholders. The text tier (`mermaid-text`) already works without any of it ([ADR-0004](0004-diagram-rendering.md)).

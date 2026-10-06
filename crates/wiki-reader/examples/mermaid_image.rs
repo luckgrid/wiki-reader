@@ -3,8 +3,8 @@
 //! Run from the repository root:
 //!
 //! ```text
-//! cargo run -p wiki-reader --example mermaid-image -- fixtures/mermaid/common-types.md
-//! cargo run -p wiki-reader --example mermaid-image -- --render-only --output-dir /tmp/mermaid fixtures/mermaid/common-types.md
+//! cargo run -p wiki-reader-tui --example mermaid-image -- fixtures/mermaid/common-types.md
+//! cargo run -p wiki-reader-tui --example mermaid-image -- --render-only --output-dir /tmp/mermaid fixtures/mermaid/common-types.md
 //! ```
 
 use std::env;

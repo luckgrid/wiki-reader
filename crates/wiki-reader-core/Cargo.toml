@@ -7,7 +7,9 @@ description = "Terminal-free index, nav, and content core for wiki-reader"
 rust-version.workspace = true
 repository.workspace = true
 homepage.workspace = true
-readme = "../../README.md"
+readme = "README.md"
+keywords = ["markdown", "wiki", "index", "navigation"]
+categories = ["parsing", "text-processing"]
 
 [dependencies]
 thiserror = { workspace = true }

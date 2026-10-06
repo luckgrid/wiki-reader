@@ -178,7 +178,7 @@ Two focusable panes: **Side nav** and **View**. The search overlay is modal whil
 The tables below are generated from the binding table that also drives the `?` help overlay, so they cannot drift from it. `Esc` closes overlays; it does not quit.
 
 <!-- keymap:start -->
-Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same table the `?` help overlay shows. Edit the table there, then run `UPDATE_DOCS=1 cargo test -p wiki-reader keymap_docs`.
+Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same table the `?` help overlay shows. Edit the table there, then run `UPDATE_DOCS=1 cargo test -p wiki-reader-tui keymap_docs`.
 
 ### Global
 

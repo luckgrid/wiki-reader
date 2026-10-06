@@ -1,5 +1,5 @@
 [package]
-name = "wiki-reader"
+name = "wiki-reader-tui"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,7 +7,11 @@ description = "Terminal wiki reader for markdown collections"
 rust-version.workspace = true
 repository.workspace = true
 homepage.workspace = true
-readme = "../../README.md"
+readme = "README.md"
+keywords = ["tui", "markdown", "wiki", "terminal", "reader"]
+categories = ["command-line-utilities", "text-processing"]
+# Keep the published crate small; snapshots and heavy test modules stay in git.
+exclude = ["**/snapshots/", "src/tui/app/image_tests.rs", "src/tui/app/perf_baseline.rs"]
 
 [features]
 default = ["media"]

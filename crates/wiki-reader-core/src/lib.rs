@@ -1,7 +1,8 @@
 //! Terminal-free index, navigation, and content core for wiki-reader.
 //!
-//! See [architecture overview](../../wiki/architecture/overview.md) and
-//! [ADR-0006](../../wiki/decisions/0006-reader-first.md).
+//! Internal crate of [wiki-reader](https://github.com/luckgrid/wiki-reader); its API is not
+//! stable. See the [architecture overview](https://github.com/luckgrid/wiki-reader/blob/main/wiki/architecture/overview.md)
+//! and [ADR-0006](https://github.com/luckgrid/wiki-reader/blob/main/wiki/decisions/0006-reader-first.md).
 
 pub mod config;
 pub mod error;
