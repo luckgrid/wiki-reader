@@ -2692,6 +2692,8 @@ mod offset_line_tests {
             ("x", 1),
             ("😀😀", 2),
             ("   spaced", 4),
+            ("\u{2764}\u{FE0F}", 2), // ❤️ — fits both Str and per-char
+            ("\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}", 8), // 👨‍👩‍👧 — fits
         ];
         for &(s, max) in &cases {
             let (a, b) = split_at_width(s, max);
@@ -2701,6 +2703,19 @@ mod offset_line_tests {
             let (la, lb) = legacy_split_at_word_boundary(s, max);
             assert_eq!((a, b), (la.as_str(), lb.as_str()), "word {max:?} on {s:?}");
         }
+        // ponytail: VS16/ZWJ — UnicodeWidthStr counts the sequence wider than the
+        // per-char sum, so legacy word-boundary early-exit disagrees when max sits
+        // between those two widths. Linear helpers keep per-char; accepted.
+        let heart = "\u{2764}\u{FE0F}";
+        assert_eq!(split_at_word_boundary(heart, 1), (heart, ""));
+        assert_ne!(
+            legacy_split_at_word_boundary(heart, 1),
+            (heart.to_owned(), String::new())
+        );
+        let family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}";
+        let (take, rest) = split_at_width(family, 2);
+        assert!(!take.is_empty());
+        assert_eq!(format!("{take}{rest}"), family);
         // wrap_cell: long token hard-splits
         let lines = wrap_cell(&"a".repeat(10), 3);
         assert_eq!(lines, vec!["aaa", "aaa", "aaa", "a"]);
