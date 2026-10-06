@@ -5,7 +5,7 @@ Binary distributions also contain the open-source packages listed below, each un
 licence, and the Noto Sans font (SIL Open Font License 1.1, reproduced at the end).
 
 Overview of licences:
-  * Apache License 2.0 (169)
+  * Apache License 2.0 (170)
   * MIT License (62)
   * BSD 3-Clause "New" or "Revised" License (2)
   * ISC License (2)
@@ -4136,6 +4136,7 @@ Used by:
   * signal-hook-mio 0.2.5 (https://github.com/vorner/signal-hook)
   * signal-hook-registry 1.4.8 (https://github.com/vorner/signal-hook)
   * signal-hook 0.3.18 (https://github.com/vorner/signal-hook)
+  * signal-hook 0.4.5 (https://github.com/vorner/signal-hook)
   * simplecss 0.2.2 (https://github.com/linebender/simplecss)
   * smallvec 1.16.2 (https://github.com/servo/rust-smallvec)
   * svgtypes 0.16.1 (https://github.com/linebender/svgtypes)
@@ -4766,7 +4767,7 @@ Apache License 2.0
 
 Used by:
   * getrandom 0.2.17 (https://github.com/rust-random/getrandom)
-  * getrandom 0.3.4 (https://github.com/rust-random/getrandom)
+  * getrandom 0.4.3 (https://github.com/rust-random/getrandom)
   * rand_chacha 0.3.1 (https://github.com/rust-random/rand)
 
                               Apache License
