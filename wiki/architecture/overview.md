@@ -2,8 +2,8 @@
 id: WR-ARCH
 title: Architecture
 summary: Crate layout, the navigation core, hit-testing, and runtime model for wiki-reader.
-status: draft
-updated: 2026-10-01
+status: active
+updated: 2026-10-05
 related: [rendering, context-engine, integrations]
 nav_order: 1
 ---
@@ -32,19 +32,24 @@ wiki-reader/
 ├── Cargo.toml                 # workspace
 ├── crates/
 │   ├── wiki-reader-core/      # no terminal deps
-│   │   ├── provider/          # CollectionProvider trait + FsProvider
+│   │   ├── provider/          # CollectionProvider + FsProvider (page count/size caps)
 │   │   ├── parse/             # frontmatter split, pulldown-cmark walk, links, headings
 │   │   ├── index/             # pages, headings, edges (links/backlinks), search
-│   │   ├── nav/               # link resolution, NavTree build (titles, folding, order), prev/next
+│   │   ├── nav/               # link resolution, NavTree build, prev/next
 │   │   ├── watch/             # notify-debouncer-mini → markdown dirty flag
-│   │   └── config/
-│   ├── wiki-reader-render/    # markdown → RenderedDoc (lines + link spans + source map + media inventory)
-│   ├── wiki-reader-media/     # image decode, Mermaid/SVG raster (feature `raster`; off in lite, ADR-0023)
+│   │   ├── herdr/             # herdr theme name + pane metadata helpers
+│   │   └── config/            # load/merge + typed write patches (ADR-0018)
+│   ├── wiki-reader-render/    # markdown → RenderedDoc (lines + link spans + source map + media)
+│   ├── wiki-reader-media/     # decode, Mermaid sizing/SVG raster (`raster`; off in lite, ADR-0023)
 │   └── wiki-reader/           # binary: TUI app
-│       └── tui/               # app state, navigator, layout, regions, hit map, keymap, theme
+│       ├── herdr.rs           # --herdr-context / --herdr-split; page publish worker
+│       └── tui/               # app, options (ADR-0018), modal viewers, images, keymap, theme
+├── integrations/herdr/        # herdr plugin (open / overlay / popup)
 ├── wiki/                      # this collection (dogfood)
 └── fixtures/                  # sample collections incl. broken links, SUMMARY.md, deep trees
 ```
+
+Default build includes the media stack. `--no-default-features` is the **lite** build: no decode/raster/`ratatui-image`; diagrams fall back to text ([ADR-0023](../decisions/0023-lite-build-is-a-cargo-feature.md)).
 
 The context engine ([context engine](context-engine.md)) and agent CLI are Phase 4. They'll live in `wiki-reader-core/context` and a `cli` module, which is why `core` stays free of terminal code ([ADR-0006](../decisions/0006-reader-first.md)).
 
@@ -86,7 +91,7 @@ impl App {
 
 ## Regions & hit map
 
-The screen is split into regions: `Header`, `SideNav` (future sub-regions: header, list, footer), `TabBar` (optional), `Viewer` (future sticky header; body; sticky `ViewerFooter`), `StatusBar`, an optional `SearchOverlay`, and later `Widgets`. Each region renders itself and **registers clickable areas** in a per-frame `HitMap`:
+The screen is split into regions: `Header`, `SideNav`, `TabBar`, `Viewer` (body + prev/next bar; sticky section header deferred), `StatusBar`, overlays (`Search` / `Help` / `Options`), modal viewers, and later `Widgets`. Each region renders itself and **registers clickable areas** in a per-frame `HitMap`:
 
 ```rust
 enum Hit { Link(LinkId), BlockAction(ItemId), NavItem(NodeId), NavGroupToggle(NodeId),
@@ -101,8 +106,9 @@ For links, the renderer emits `LinkSpan { id, target, line, col_range }` per wra
 
 ## Runtime model
 
-- Synchronous crossterm `event::poll` loop on the UI thread (no tokio; [ADR-0011](../decisions/0011-renderer-source.md)). Each wake applies every queued event (capped at 256) before a single redraw, so wheel and mouse-move floods don't back up behind full redraws; unread input is drained when the terminal is restored.
-- Background workers on std threads with `mpsc` channels: index rebuild, syntect highlight for raw view. The `notify` debouncer runs on its own thread and posts into the same poll loop.
+- Synchronous crossterm `event::poll` loop on the UI thread (no tokio; [ADR-0011](../decisions/0011-renderer-source.md)). Each wake applies every queued event (capped at 256) before a single redraw, so wheel floods don't back up behind full redraws; unread input is drained when the terminal is restored. `signal-hook` handles terminal teardown signals.
+- Background workers on std threads with `mpsc` channels: index rebuild, syntect highlight for raw view, image decode / Mermaid size measure (full build). The `notify` debouncer runs on its own thread and posts into the same poll loop. Inside a herdr pane, a publish worker renews the current-page title/token ([ADR-0022](../decisions/0022-herdr-launcher-and-page-publishing.md)).
+- Options changes write one key at a time to the user config (or `--config`) via `toml_edit` ([ADR-0018](../decisions/0018-config-write-path.md)).
 - State lives in one `App`; rendering is a pure function of state (+ caches) that also produces the `HitMap`.
 
 ## Persistence
