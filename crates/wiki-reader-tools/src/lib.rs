@@ -312,10 +312,17 @@ fn check_third_party_notices(root: &Path, errors: &mut Vec<String>) -> Result<()
         let Some(vers) = versions.get(&dep) else {
             continue;
         };
-        if !vers.iter().any(|v| text.contains(&format!("* {dep} {v}"))) {
+        // Every locked version counts: a crate can be both a direct dependency and a transitive
+        // one at another version (signal-hook 0.3 via crossterm, 0.4 direct), and a bump of one
+        // must not hide behind the other.
+        let missing: Vec<&String> = vers
+            .iter()
+            .filter(|v| !text.contains(&format!("* {dep} {v}")))
+            .collect();
+        if !missing.is_empty() {
             errors.push(format!(
                 "THIRD-PARTY-LICENSES: {dep} {} is not listed; run scripts/gen-third-party-licenses.sh",
-                vers.join(" / ")
+                missing.iter().map(|v| v.as_str()).collect::<Vec<_>>().join(" / ")
             ));
         }
     }
