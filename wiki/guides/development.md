@@ -83,10 +83,10 @@ cargo run -p wiki-reader --example keylog
 An orphaned reader used to burn ~100 %CPU inside `crossterm::event::poll` when the PTY master
 closed (or the parent died) while the slave stayed open, and one startup race aborted the
 process (SIGABRT) because `eprintln!` panics on a dead terminal. Now non-TTY stdio exits
-immediately, a watchdog exits on parent reparent or stdin POLLHUP/ERR, and error output never
-panics. [`scripts/check-orphan-exit.py`](../../scripts/check-orphan-exit.py) runs the cases on
-a PTY (master closed with the slave held, master closed during startup, parent killed, no
-TTY) and fails unless the binary exits by itself with an exit code. `scripts/check.sh` and CI
+immediately, a watchdog exits when the session leader is gone or stdin reports POLLHUP/ERR,
+and error output never panics. [`scripts/check-orphan-exit.py`](../../scripts/check-orphan-exit.py) runs the cases on
+a PTY (master closed with the slave held, master closed during startup, session leader killed,
+the same with `WIKI_READER_NO_WATCHDOG=1`, only the launcher exiting, no TTY) and fails unless the binary exits by itself with an exit code. `scripts/check.sh` and CI
 (ubuntu and macOS) run it:
 
 ```bash

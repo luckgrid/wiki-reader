@@ -102,7 +102,8 @@ wiki-reader fixtures/worked-example
 ```
 
 wiki-reader exits by itself when its terminal goes away (the window closes, or the shell that
-started it exits); it never keeps running in the background.
+owns the terminal session exits); it never keeps running in the background. An escape hatch,
+`WIKI_READER_NO_WATCHDOG=1`, is in the [configuration guide](wiki/guides/configuration.md#environment).
 
 ### In herdr
 
