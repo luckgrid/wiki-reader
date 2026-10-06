@@ -2,8 +2,8 @@
 id: WR-LIBS
 title: Prior art & libraries
 summary: Existing tools worth learning from and the libraries wiki-reader builds on.
-status: draft
-updated: 2026-10-03
+status: active
+updated: 2026-10-05
 related: [overview, rendering, benchmarks]
 nav_order: 4
 ---
@@ -47,6 +47,8 @@ Tried as-is inside herdr. **Kept:** it's markdown-only, reads far better than su
 **Still worth borrowing:** its rendering (tables, code, frontmatter box, wrapping), Mermaid pipeline, `.gitignore`-aware discovery, live reload, and theme approach. See [ADR-0002](../decisions/0002-build-vs-fork.md).
 
 ## Libraries
+
+`syntect` and `ratatui-image` live in the TUI binary; `image` / `resvg` / `mermaid-rs-renderer` live in `wiki-reader-media` behind the `raster` feature. Other workspace deps include `serde_norway`, `toml` / `toml_edit`, `shell-words`, `signal-hook`, `notify` / `notify-debouncer-mini`, `pulldown-cmark`, and `clap`.
 
 ### Core (`wiki-reader-core`)
 
@@ -97,4 +99,4 @@ Tried as-is inside herdr. **Kept:** it's markdown-only, reads far better than su
 
 ## Licensing
 
-Choose MIT or Apache-2.0 (dual is common in Rust). That keeps you compatible with porting MIT code from markdown-reader. No source has been ported. If code is ever ported, keep its copyright notice in the ported files and add a `THIRD_PARTY.md` in the same change.
+The project is dual-licensed **MIT OR Apache-2.0**. No third-party source is ported; if that changes, keep copyright notices and add `THIRD_PARTY.md` in the same change.

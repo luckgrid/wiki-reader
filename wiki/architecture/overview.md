@@ -2,8 +2,8 @@
 id: WR-ARCH
 title: Architecture
 summary: Crate layout, the navigation core, hit-testing, and runtime model for wiki-reader.
-status: draft
-updated: 2026-10-01
+status: active
+updated: 2026-10-05
 related: [rendering, context-engine, integrations]
 nav_order: 1
 ---
@@ -41,7 +41,8 @@ wiki-reader/
 │   ├── wiki-reader-render/    # markdown → RenderedDoc (lines + link spans + source map + media inventory)
 │   ├── wiki-reader-media/     # image decode, Mermaid/SVG raster (feature `raster`; off in lite, ADR-0023)
 │   └── wiki-reader/           # binary: TUI app
-│       └── tui/               # app state, navigator, layout, regions, hit map, keymap, theme
+│       ├── herdr.rs           # pane launch + sidebar page publish
+│       └── tui/               # app, options (ADR-0018), modal viewers, images, keymap, theme
 ├── wiki/                      # this collection (dogfood)
 └── fixtures/                  # sample collections incl. broken links, SUMMARY.md, deep trees
 ```
@@ -86,7 +87,7 @@ impl App {
 
 ## Regions & hit map
 
-The screen is split into regions: `Header`, `SideNav` (future sub-regions: header, list, footer), `TabBar` (optional), `Viewer` (future sticky header; body; sticky `ViewerFooter`), `StatusBar`, an optional `SearchOverlay`, and later `Widgets`. Each region renders itself and **registers clickable areas** in a per-frame `HitMap`:
+The screen is split into regions: `Header`, `SideNav`, `TabBar`, `Viewer` (body + prev/next bar; sticky section header deferred), `StatusBar`, overlays (`Search` / `Help` / `Options`), modal viewers, and later `Widgets`. Each region renders itself and **registers clickable areas** in a per-frame `HitMap`:
 
 ```rust
 enum Hit { Link(LinkId), BlockAction(ItemId), NavItem(NodeId), NavGroupToggle(NodeId),

@@ -2,8 +2,8 @@
 id: WR-UI
 title: UI spec
 summary: Layout, side nav, header/footers, focus and cursor model, keyboard and mouse behavior for the wiki-reader reader.
-status: draft
-updated: 2026-10-03
+status: active
+updated: 2026-10-05
 related: [spec, content-model]
 nav_order: 4
 ---
@@ -65,13 +65,13 @@ P3-18 places ⚙ at the full-width layout footer's far right, below both panes, 
 
 The layout footer reserves space for `?` / ⚙ before laying out status fields and messages. The View footer independently divides its width between prev/next. Labels truncate with `…`; unavailable links remain absent. Controls must not overlap, including at 40/60 columns and with Nav on either side. Collision policy: reserve the active tab first, ellipsizing its filename to the available label width (maximum 18 columns), then add other tabs in order only if each whole cell and its divider fits. Hide all tabs when fewer than seven columns are available. Prev and next cells are sized to their labels, each capped so that the two cells and their dividers fit in the interior; ellipsize labels and hide a cell if its cap cannot fit padding, an arrow and one label column. Hits occupy only the label row of each bar, never the border or seam rows. Short-terminal policy: retain the one-row layout header/footer whenever height permits; give the View's top bar its three rows first, then its bottom bar three more. Draw a bar only when all of its rows fit; an edge without a bar keeps just the pane's border row, with no controls or hits. Article rows are the remainder after the edges (six chrome rows when both bars fit). P3-01 sticky headings are explicitly deferred by operator decision; no additional sticky row is reserved.
 
-The ASCII diagram documents the bar layout. Screenshot PNGs are refreshed in P3-23 once the operator retakes them in Ghostty (Screen Recording permission); the ASCII and carousel keys ship with the docs refresh even when the PNGs wait.
+The ASCII diagram documents the bar layout. The four main screenshot PNGs (`wiki-reader.png`, `-help`, `-search`, `-options`) were retaken on 2026-10-04 and predate P3-30 table-viewer expand; they will be retaken after V22 / at Phase 3 exit. See [assets/README.md](../../assets/README.md).
 
 ## Header (full width, 1 padded row)
 
 - **Left:** the root entry page's title, then the breadcrumb trail through side-nav groups to the current page. Example: `Project Wiki › architecture › design-system › Token Projection`. Segments follow the **side nav hierarchy** (groups), not raw directories, so folded folders ([content model](content-model.md)) don't produce extra crumbs. Each segment is clickable and opens that group's landing page. The trail drops middle segments with `…` when narrow, preferring the root and current page. Header icons reserve their right-hand columns first; any labels that still exceed the remaining space are ellipsized, and breadcrumb hit areas stop before the controls.
 - **Right:** icon buttons. Each is a three-cell button with the glyph centred and no gap between buttons (six columns reserved, two more than the old bare glyphs, so the breadcrumb and the footer status text lose two columns at every width); hits cover the full button. `◫` toggles the side nav. `✕` quits (saves session; same as `q`). There is no syntax/formatted toggle: Rendered is always the formatted view and `r` shows the markdown syntax ([ADR-0014](../decisions/0014-remove-formatted-view-toggle.md)). Help (`?`) and Options (⚙) live in the layout footer below both panes.
-- Future: optional back/forward buttons (`‹ ›`). Back/forward are keyboard-only in v1.
+- Back/forward are keyboard-only; header buttons are deferred (P4-07).
 
 ## Side nav
 
@@ -85,8 +85,6 @@ A file tree **presented as a documentation site's side nav**. By default it dock
 
 **Search entry (top of the side nav).** The first row is `/ Search…` (`/` is the key that opens search, and it renders at text height in every font), drawn as a bordered bar that lines up with the View's tab bar: a label row followed by a seam rule, with no fill. The text is muted; when it is the focused nav stop it turns bold in the focus colour, like a selected tab. Selecting it, clicking it, or pressing the search hotkey anywhere opens the **search overlay panel** (below). It's a nav stop for Shift+↑/↓ (see keyboard).
 
-Future: this search bar becomes a proper **side nav header**, and a **side nav footer** can hold widget actions or tabbed features (e.g. Pages / Outline).
-
 ## Search overlay panel
 
 - Opens with `/` or `Ctrl-k` from anywhere, a click on the search row, or `Enter` on it.
@@ -96,7 +94,6 @@ Future: this search bar becomes a proper **side nav header**, and a **side nav f
 - Results use a large centered pane (~80% × ~80%, up to ~100 × 50). The list scrolls; `Home`/`End`/`PgUp`/`PgDn` and the mouse wheel jump or step selection. The selected row's background spans the full width. Content rows start with the source line number (`[12]`, peach), then the bold title, the dim path and the snippet, with query matches underlined.
 - `↑`/`↓` or mouse selects; `Enter` or click opens the result in the current view (replace + history), lands on the match: the page stays where it normally loads (it scrolls, centring the match, only when the match is off-screen), the searched phrase is highlighted in the active-tab peach and the cursor sits on its first letter (the default text colour as a block, the glyph inverted); `n`/`N` then cycle matches in the page.
 - `Esc` or a click outside closes it and restores the previous focus and cursor.
-- The last query and results are kept for the session.
 
 ## Help overlay panel
 
@@ -111,8 +108,8 @@ Opened with `,` or `c` (or the layout footer ⚙); the same keys close it, as do
 
 ![Options window with grouped radio rows: Theme, Panels, Nav labels, Mermaid, Images, Max image rows, Copy path](../assets/wiki-reader-options.png)
 
-- **Grouped choices.** Each setting is a group with a title, and each value is one row with a radio mark: `●` is the active value, `○` the others. A group is one of Theme, Panels (nav position), Nav labels, Mermaid, Images, Max image rows, Copy path (`y`). Show images is an on/off row in the Images group.
-- **Navigation.** `↑` / `↓` or `j` / `k` move the `>` cursor between rows (it skips titles and wraps); `Enter`, `Space` or `→` applies the row, and a click selects and applies it. The window opens on the current theme. The footer lists the keys. It scrolls on short terminals and keeps a group's title with its first row.
+- **Grouped choices.** Each setting is a group with a title, and each value is one row with a radio mark: `●` is the active value, `○` the others. A group is one of Theme, Panels (nav position), Nav labels, Mermaid, Images, Max image rows, Copy path (`y`). Show images is an on/off row in the Images group. The lite build hides the Images and Max image rows groups ([ADR-0023](../decisions/0023-lite-build-is-a-cargo-feature.md)).
+- **Navigation.** `↑` / `↓` or `j` / `k` move the `>` cursor between rows (it skips titles and wraps); `Enter`, `Space` or `→` applies the row, and a click selects and applies it. The window opens on the current theme. The footer lists the keys. It scrolls on short terminals (mouse wheel too) and keeps a group's title with its first row.
 - **Live and saved.** A change applies at once and is written to the user config file (see [Configuration](../guides/configuration.md) and [ADR-0018](../decisions/0018-config-write-path.md)).
 
 ## View (center)
@@ -127,7 +124,7 @@ Rendered by default (the formatted view: no `#`, fences or backticks); `r` toggl
 
 After the last item, `Tab` wraps to the first. The focused item renders inverted, and the status bar shows its target or action (`→ decisions/0003.md#context`, `↗ https://…`, `? not found: foo.md`, `expand code (Enter)`, `copy code`).
 
-**Links:** underlined; broken links in the error color with `?`; external links with `↗`. `Enter` or left-click follows. Middle-click, Shift/Ctrl+click, or `t` opens in a new tab (`Ctrl+Enter` on a focused link does too where the kitty protocol reports it). External links ask `open https://… ? [y/N]` in the status bar, then use the system opener. Hovering (if the terminal reports motion) highlights the link and shows its target in the status bar.
+**Links:** underlined; broken links in the error color with `?`; external links with `↗`. `Enter` or left-click follows. Middle-click, Shift/Ctrl+click, or `t` opens in a new tab (`Ctrl+Enter` on a focused link does too where the kitty protocol reports it). External links ask `open https://… ? [y/N]` in the status bar, then use the system opener. A focused link (Tab cycle) shows its target in the status bar. Link hover preview is deferred ([P4-08](../roadmap/phase-4-beta.md)).
 
 **End of article:** "Linked from" pane (box-drawn with side borders: tag header, each entry's title and optional one-line summary as one focusable hit; Tab focus paints selection background across the entry and replaces the left `│` with a teal ▌). Summary comes from frontmatter or the first body paragraph as plain text (no markdown markup), truncated with `…` when it would wrap.
 
@@ -156,7 +153,7 @@ Table, image/diagram and code viewers share one modal shell (`Esc` dismisses, wh
 
 ## Layout footer / status bar (full width, 1 row)
 
-Like markdown-reader's: focused region as a highlighted pill (`NAV`/`VIEW`, or `SEARCH`/`HELP` while a popup is open; peach, like the tabs and footer links), relative path, cursor line:column (`L12:C5`) and scroll %, updated date and the page's frontmatter `status` (colored by value), word count, reading time, and a **message area** for link targets, notices ("not found"), confirmations, and search match `n/m`. Help `?` and Options ⚙ are right-aligned on this row, one column inset from the terminal edge. Each is a three-cell button with the glyph centred and no gap between buttons (six columns reserved); hits cover the full button. Reserve those six columns before laying out status fields or messages so text cannot overwrite them. Lower-priority items drop first when narrow. On tiny widths draw and register only visible icon glyphs; a hidden footer has no hits.
+Like markdown-reader's: focused region as a highlighted pill (`NAV`/`VIEW`, or `SEARCH`/`HELP`/`OPTIONS` while a popup is open, or `TABLE`/`CODE`/`IMAGE`/`DIAGRAM` while a modal viewer is open; peach, like the tabs and footer links), relative path, cursor line:column (`L12:C5`) and scroll %, updated date and the page's frontmatter `status` (colored by value), word count, reading time, and a **message area** for link targets, notices ("not found"), confirmations, and search match `n/m`. Help `?` and Options ⚙ are right-aligned on this row, one column inset from the terminal edge. Each is a three-cell button with the glyph centred and no gap between buttons (six columns reserved); hits cover the full button. Reserve those six columns before laying out status fields or messages so text cannot overwrite them. Lower-priority items drop first when narrow. On tiny widths draw and register only visible icon glyphs; a hidden footer has no hits.
 
 Frontmatter `status` colours (`tui/theme.rs`): `draft` → `status_warn` (orange); `proposed` → `status_plan` (blue); `accepted` / `active` / `done` → `status_ok` (green); `deferred` / `superseded` / `historical` → muted. Unknown values keep the plain text colour so user collections can keep a private vocabulary.
 
@@ -301,9 +298,9 @@ Generated from `BINDINGS` in `crates/wiki-reader/src/tui/keymap.rs`, the same ta
 
 ## Mouse
 
-Click to focus a pane; click items, links, breadcrumbs, prev/next, header icons, the frontmatter toggle and search results; middle-click, Shift+click or Ctrl+click for a new tab; wheel scrolls the pane under the pointer, or the Help/Search popup when one is open.
+Click to focus a pane; click items, links, breadcrumbs, prev/next, header icons, the frontmatter toggle and search results; middle-click, Shift+click or Ctrl+click for a new tab; wheel scrolls the pane under the pointer, or Help, Search, Options, or a modal viewer when one is open (Shift+wheel pans horizontally in viewers that support it).
 
-**Selecting text.** Press and drag in the View to select; both end cells are included and the selection is copied to the clipboard (OSC 52) on release. A plain click only places the cursor, and a link is followed on release if the pointer did not move, so a drag can start on link text. Dragging above or below the pane scrolls it, and keeps scrolling while the pointer is held still there. Any cursor movement clears the selection. What is copied is the text, not the layout: soft-wrapped rows of one paragraph rejoin into one line, code and quote gutters are dropped, table cells are tab-separated with empty cells kept and a wrapped cell rejoined into one (borders dropped), a copy over 75 KB is refused with a status message (OSC 52 payload limit), and in the raw view the source text is copied exactly. Hover works only where motion events arrive. Right-click is owned by herdr (see K3). Click, middle-click, and wheel verified inside herdr panes.
+**Selecting text.** Press and drag in the View to select; both end cells are included and the selection is copied to the clipboard (OSC 52) on release. A plain click only places the cursor, and a link is followed on release if the pointer did not move, so a drag can start on link text. Dragging above or below the pane scrolls it, and keeps scrolling while the pointer is held still there. Any cursor movement clears the selection. What is copied is the text, not the layout: soft-wrapped rows of one paragraph rejoin into one line, code and quote gutters are dropped, table cells are tab-separated with empty cells kept and a wrapped cell rejoined into one (borders dropped), a copy over 75 KB is refused with a status message (OSC 52 payload limit), and in the raw view the source text is copied exactly. Right-click is owned by herdr (see K3). Click, middle-click, and wheel verified inside herdr panes.
 
 ## Responsive rules
 

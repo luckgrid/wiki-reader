@@ -2,8 +2,8 @@
 id: WR-RENDER
 title: Rendering
 summary: How markdown, raw source, code, tables, and diagrams are rendered, including herdr's graphics constraints.
-status: draft
-updated: 2026-10-01
+status: active
+updated: 2026-10-05
 related: [overview, prior-art-and-libs]
 nav_order: 3
 ---
@@ -34,14 +34,14 @@ struct LinkSpan { id: LinkId, target: Target, segments: Vec<(line: u32, cols: Ra
 - `segments` covers every wrapped piece of the link text, so a link broken across lines is one focusable, clickable unit.
 - Links are ordered by document position; that order drives `Tab`/`Shift-Tab`.
 - Target resolution happens at render time against the index ([content model](../product/content-model.md)), so broken/external styling is known before drawing.
-- The reader maps visible segments to screen rects and registers them in the frame's `HitMap` ([architecture](overview.md)). Focus/hover styling is applied at draw time, not baked into the cached layout, so moving focus never re-lays out the page.
+- The reader maps visible segments to screen rects and registers them in the frame's `HitMap` ([architecture](overview.md)). Focus styling is applied at draw time, not baked into the cached layout, so moving focus never re-lays out the page.
 - Autolinks (`<https://…>`), reference links (`[x][ref]`), and images wrapped in links are included. Links inside code spans are not.
 
 ## Blocks and focusable items
 
 `RenderedDoc` also carries two indexes the viewer's keyboard model needs ([UI spec](../product/ui-spec.md)):
 
-- **Block starts:** the rendered line where each content block begins (paragraph, list, code, table, quote, diagram, heading). `Shift+↑/↓` jump between these, and headings are flagged for the proposed heading-jump.
+- **Block starts:** the rendered line where each content block begins (paragraph, list, code, table, quote, diagram, heading). `Shift+↑/↓` jump between these, and headings are flagged for heading-jump (`Alt+Shift+↑/↓`, shipped).
 - **Focusable items:** links and block actions (frontmatter toggle, expand and copy code, expand table, expand diagram) in document order, each with its line. The viewer appends the footer's prev/next buttons to build the `Tab` cycle.
 
 Both indexes are computed once per layout and stay valid across focus changes.
@@ -52,7 +52,7 @@ Headings (distinct per level), paragraphs with wrapping, bold/italic/strike/inli
 
 ## Rendered is formatted; raw shows the syntax
 
-Rendered mode drops markdown markers at layout time, as spans are pushed: no `#` on headings (H1/H2 get an underline rule, H2–H6 get two blank rows above and one below; H1 teal, H2–H4 peach, H5/H6 gray), no fence lines (a `── lang ──` label instead), no backticks on inline code, and "Linked from" is a box-drawn pane (tag header, title links, optional summaries, dividers). Because markers are omitted as spans are pushed, link column geometry, the source map and block actions stay correct. The raw view (`r`) is where the markdown syntax is shown. There is no toggle between presentations ([ADR-0014](../decisions/0014-remove-formatted-view-toggle.md), which supersedes [ADR-0012](../decisions/0012-syntax-vs-formatted.md)).
+Rendered mode drops markdown markers at layout time, as spans are pushed: no `#` on headings (H1/H2 get an underline rule, H2–H6 get two blank rows above and one below; theme-dependent heading colours), no fence lines (a `── lang ──` label instead), no backticks on inline code, and "Linked from" is a box-drawn pane (tag header, title links, optional summaries, dividers). Because markers are omitted as spans are pushed, link column geometry, the source map and block actions stay correct. The raw view (`r`) is where the markdown syntax is shown. There is no toggle between presentations ([ADR-0014](../decisions/0014-remove-formatted-view-toggle.md), which supersedes [ADR-0012](../decisions/0012-syntax-vs-formatted.md)).
 
 ## Raw view
 
@@ -88,6 +88,10 @@ Validate before building the image tier ([roadmap](../roadmap/phase-3-alpha.md),
 - **Decode.** `ImageManager` (`tui/images.rs`) queues only visible slots and decodes and scales them on a worker thread, keyed by (file path+stamp or Mermaid hash+bg, columns, rows). Mermaid size measures share the worker and fill `DiagramSizeCache` so the next layout can reserve rows. The worker skips queued jobs whose slot has scrolled away. Prepared pictures stay cached for scroll-back up to a 64 MiB budget (least recently drawn evicted first; visible pictures never are), and decode failures stay cached for the page. State is released when a page is rebuilt or removed. While a picture is pending, or if decoding fails, the first slot row shows `[image: alt]` (and the reason on failure).
 - **Placeholder.** Without a graphics protocol (tmux, unlisted terminals, `diagrams = "text"` or `"source"`), or when the file is rejected, the block is one text row: `[image: alt] path — reason`. Images inside running text, lists, quotes and tables are always the terse `[image: alt]`.
 - **Detection.** The startup probe follows [ADR-0004](../decisions/0004-diagram-rendering.md): `diagrams = "text"|"source"` skips the probe; never under `$TMUX`; under herdr only a confirmed Kitty answer (never Sixel/iTerm2); iTerm2 selected from `TERM_PROGRAM`; Ghostty, WezTerm and Kitty probed and trusted for Kitty or iTerm2; unknown terminals, including Terminal.app, are not probed. `WIKI_READER_IMAGE_QUERY_TIMEOUT_MS` overrides the 250 ms probe timeout for diagnosis.
+
+## Images
+
+Local in-collection images only ([ADR-0017](../decisions/0017-static-local-images-only.md)). Slot height defaults to **30** rows and is configurable **1–60** via `images.max_slot_rows`. `images.enabled = false` skips the graphics probe and shows text placeholders. The lite build has no image tier. Control and bidi characters are sanitised in render (and in code copy / table viewer). Long unbreakable tokens wrap in linear time (V4 / P3-34).
 
 ## Performance budgets
 

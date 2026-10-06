@@ -2,8 +2,8 @@
 id: WR-VISION
 title: Vision
 summary: Why wiki-reader exists, who it is for, and the principles that constrain it.
-status: draft
-updated: 2026-09-30
+status: active
+updated: 2026-10-05
 related: [spec, content-model, ui-spec]
 nav_order: 1
 ---
@@ -25,7 +25,7 @@ So reading a wiki still means leaving the terminal.
 
 ## Product statement
 
-A terminal pane that browses a markdown collection the way a good documentation site does, with a page tree on the left, a reader in the center, and navigation that just works with keyboard and mouse.
+A terminal pane that browses a markdown collection the way a good documentation site does, with a page tree on the left or right, a reader in the center, three built-in theme presets (`dark`, `light`, `herdr`), and navigation that just works with keyboard and mouse.
 
 ## Who it's for
 
@@ -35,7 +35,7 @@ A developer or architect working in herdr panes, with markdown collections sprea
 
 1. **Wiki, not editor.** Opening something replaces the view and records history. Tabs are opt-in, as in a browser. Editing is `$EDITOR`'s job.
 2. **One navigation path.** Tree clicks, search results, links, breadcrumbs, prev/next, and back/forward all go through one `navigate()` call, so they can't behave differently.
-3. **Mouse and keyboard are equals.** Anything clickable is reachable by keys, and anything with a key binding has a clickable affordance where it makes sense (search icon, back/forward, prev/next, breadcrumbs, links).
+3. **Mouse and keyboard are equals.** Anything clickable is reachable by keys, and anything with a key binding has a clickable affordance where it makes sense (search, Help, Options, prev/next, breadcrumbs, links). Back/forward are keyboard-only (header buttons deferred).
 4. **Links are first-class.** Every link is focusable, followable, and shows its target before you follow it.
 5. **Build on what exists.** Port proven rendering, use proven crates, and write new code only for the navigation experience.
 6. **Plain files are the source of truth.** No database. Wiki conventions (SUMMARY.md, index pages, frontmatter) are read, never required.
