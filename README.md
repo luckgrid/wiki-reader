@@ -128,4 +128,4 @@ Cargo workspace with `wiki-reader-core` (terminal-free), `wiki-reader-render`, `
 
 ## License
 
-Copyright © 2026 LUCKGRID. Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option. The two licenses are alternatives: users need to comply with only the one they choose.
+Copyright © 2026 LUCKGRID. Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option. The two licenses are alternatives: users need to comply with only the one they choose. The [NOTICE](NOTICE) file names the copyright holder (the Apache-2.0 text is kept verbatim, as the licence requires). Release binaries also contain third-party packages and the embedded Noto Sans font (SIL OFL 1.1); their notices are in [THIRD-PARTY-LICENSES](THIRD-PARTY-LICENSES) and in every release tarball.

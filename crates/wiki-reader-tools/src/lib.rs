@@ -6,7 +6,7 @@
 //! link extraction match what the reader itself resolves.
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     fs, io,
     path::{Path, PathBuf},
 };
@@ -95,6 +95,8 @@ pub fn check(root: &Path) -> Result<Report, Error> {
         check_doc(doc, &mut anchors, &mut errors)?;
     }
     check_version_sync(&root, &mut errors)?;
+    check_license_files(&root, &mut errors)?;
+    check_third_party_notices(&root, &mut errors)?;
     Ok(Report {
         files: docs.len(),
         errors,
@@ -153,6 +155,169 @@ fn check_version_sync(root: &Path, errors: &mut Vec<String>) -> Result<(), Error
         errors.push(format!(
             "wiki/roadmap/dogfood-log.md: latest ## {latest} is more than one patch ahead of workspace {workspace}"
         ));
+    }
+    Ok(())
+}
+
+/// Licence texts every published crate must carry, kept identical to the repository root.
+const LICENSE_FILES: [&str; 3] = ["LICENSE-MIT", "LICENSE-APACHE", "NOTICE"];
+
+/// crates.io packages only the crate directory, so each published crate carries its own copy of
+/// the licence files. The copies must match the root files byte for byte.
+fn check_license_files(root: &Path, errors: &mut Vec<String>) -> Result<(), Error> {
+    let crates = root.join("crates");
+    // Link-check unit trees have no workspace.
+    if !root.join("Cargo.toml").is_file() || !crates.is_dir() {
+        return Ok(());
+    }
+    let mut dirs: Vec<PathBuf> = fs::read_dir(&crates)
+        .map_err(io_error(&crates))?
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.join("Cargo.toml").is_file())
+        .collect();
+    dirs.sort();
+    for dir in dirs {
+        let manifest = dir.join("Cargo.toml");
+        let manifest_text = fs::read_to_string(&manifest).map_err(io_error(&manifest))?;
+        if manifest_text
+            .lines()
+            .any(|l| l.trim().replace(' ', "") == "publish=false")
+        {
+            continue;
+        }
+        let name = dir
+            .file_name()
+            .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+        for file in LICENSE_FILES {
+            let want_path = root.join(file);
+            let want = fs::read(&want_path).map_err(io_error(&want_path))?;
+            match fs::read(dir.join(file)) {
+                Ok(have) if have == want => {}
+                Ok(_) => errors.push(format!(
+                    "crates/{name}/{file}: differs from the root {file}; copy the root file"
+                )),
+                Err(_) => errors.push(format!(
+                    "crates/{name}/{file}: missing (published crates carry the root {file})"
+                )),
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Third-party (non-path) names in `[workspace.dependencies]`.
+fn workspace_third_party_deps(cargo: &str) -> Vec<String> {
+    let mut in_deps = false;
+    let mut names = Vec::new();
+    for line in cargo.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            in_deps = trimmed == "[workspace.dependencies]";
+            continue;
+        }
+        if !in_deps || trimmed.is_empty() || trimmed.starts_with('#') || trimmed.contains("path =")
+        {
+            continue;
+        }
+        if let Some((name, _)) = trimmed.split_once('=') {
+            names.push(name.trim().to_owned());
+        }
+    }
+    names
+}
+
+/// Dependency names in a crate manifest's normal `[dependencies]` tables (including
+/// `[target.*.dependencies]`), not dev- or build-dependencies.
+fn crate_normal_deps(manifest: &str) -> Vec<String> {
+    let mut in_deps = false;
+    let mut names = Vec::new();
+    for line in manifest.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            in_deps = trimmed == "[dependencies]"
+                || (trimmed.starts_with("[target.") && trimmed.ends_with(".dependencies]"));
+            continue;
+        }
+        if in_deps
+            && !trimmed.is_empty()
+            && !trimmed.starts_with('#')
+            && let Some((name, _)) = trimmed.split_once('=')
+        {
+            names.push(name.trim().to_owned());
+        }
+    }
+    names
+}
+
+/// Versions per package name from `Cargo.lock` (several when a crate appears twice).
+fn lock_versions(lock: &str) -> BTreeMap<String, Vec<String>> {
+    let mut map: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut name: Option<String> = None;
+    for line in lock.lines() {
+        if let Some(n) = quoted_assignment(line, "name") {
+            name = Some(n);
+        } else if let (Some(v), Some(n)) = (quoted_assignment(line, "version"), name.take()) {
+            map.entry(n).or_default().push(v);
+        }
+    }
+    map
+}
+
+/// Binary releases ship `THIRD-PARTY-LICENSES`; it must list every direct third-party dependency
+/// at its locked version, so a dependency change without `scripts/gen-third-party-licenses.sh`
+/// fails here.
+fn check_third_party_notices(root: &Path, errors: &mut Vec<String>) -> Result<(), Error> {
+    let cargo = root.join("Cargo.toml");
+    let lock = root.join("Cargo.lock");
+    if !cargo.is_file() || !lock.is_file() {
+        return Ok(());
+    }
+    let notices = root.join("THIRD-PARTY-LICENSES");
+    let Ok(text) = fs::read_to_string(&notices) else {
+        errors
+            .push("THIRD-PARTY-LICENSES: missing; run scripts/gen-third-party-licenses.sh".into());
+        return Ok(());
+    };
+    let cargo_text = fs::read_to_string(&cargo).map_err(io_error(&cargo))?;
+    let lock_text = fs::read_to_string(&lock).map_err(io_error(&lock))?;
+    let versions = lock_versions(&lock_text);
+    let third_party: HashSet<String> = workspace_third_party_deps(&cargo_text)
+        .into_iter()
+        .collect();
+    // Only what a published crate links at runtime ships in the binary; dev-dependencies and the
+    // unpublished tools crate do not.
+    let mut shipped: BTreeSet<String> = BTreeSet::new();
+    let crates = root.join("crates");
+    if let Ok(entries) = fs::read_dir(&crates) {
+        for entry in entries.filter_map(Result::ok) {
+            let manifest = entry.path().join("Cargo.toml");
+            let Ok(text) = fs::read_to_string(&manifest) else {
+                continue;
+            };
+            if text
+                .lines()
+                .any(|l| l.trim().replace(' ', "") == "publish=false")
+            {
+                continue;
+            }
+            shipped.extend(
+                crate_normal_deps(&text)
+                    .into_iter()
+                    .filter(|d| third_party.contains(d)),
+            );
+        }
+    }
+    for dep in shipped {
+        let Some(vers) = versions.get(&dep) else {
+            continue;
+        };
+        if !vers.iter().any(|v| text.contains(&format!("* {dep} {v}"))) {
+            errors.push(format!(
+                "THIRD-PARTY-LICENSES: {dep} {} is not listed; run scripts/gen-third-party-licenses.sh",
+                vers.join(" / ")
+            ));
+        }
     }
     Ok(())
 }
@@ -692,6 +857,102 @@ mod docs_sync {
             .unwrap_or_else(|| panic!("{rel}: missing {END}"));
         assert!(start < end, "{rel}: diagram markers out of order");
         doc[start + START.len()..end].to_owned()
+    }
+
+    fn license_tree(crate_files: &[(&str, &str)], manifest: &str) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let w = |rel: &str, body: &str| {
+            let p = dir.path().join(rel);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, body).unwrap();
+        };
+        w("Cargo.toml", "[workspace]\n");
+        for f in ["LICENSE-MIT", "LICENSE-APACHE", "NOTICE"] {
+            w(f, &format!("root {f}"));
+        }
+        w("crates/c/Cargo.toml", manifest);
+        for (f, body) in crate_files {
+            w(&format!("crates/c/{f}"), body);
+        }
+        dir
+    }
+
+    #[test]
+    fn license_files_must_match_the_root_in_published_crates() {
+        let good = license_tree(
+            &[
+                ("LICENSE-MIT", "root LICENSE-MIT"),
+                ("LICENSE-APACHE", "root LICENSE-APACHE"),
+                ("NOTICE", "root NOTICE"),
+            ],
+            "[package]\nname = \"c\"\n",
+        );
+        let mut errors = Vec::new();
+        super::check_license_files(good.path(), &mut errors).unwrap();
+        assert!(errors.is_empty(), "{errors:?}");
+
+        let bad = license_tree(
+            &[("LICENSE-MIT", "stale"), ("NOTICE", "root NOTICE")],
+            "[package]\nname = \"c\"\n",
+        );
+        let mut errors = Vec::new();
+        super::check_license_files(bad.path(), &mut errors).unwrap();
+        assert_eq!(errors.len(), 2, "{errors:?}");
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.contains("LICENSE-MIT") && e.contains("differs"))
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.contains("LICENSE-APACHE") && e.contains("missing"))
+        );
+    }
+
+    #[test]
+    fn third_party_notices_must_list_every_direct_dependency() {
+        let dir = tempfile::tempdir().unwrap();
+        let w = |rel: &str, body: &str| std::fs::write(dir.path().join(rel), body).unwrap();
+        w(
+            "Cargo.toml",
+            "[workspace.dependencies]\nserde = \"1\"\ninsta = \"1\"\nlocal = { path = \"crates/local\", version = \"0.1.0\" }\n",
+        );
+        w(
+            "Cargo.lock",
+            "[[package]]\nname = \"serde\"\nversion = \"1.0.2\"\n\n[[package]]\nname = \"insta\"\nversion = \"1.48.0\"\n\n[[package]]\nname = \"local\"\nversion = \"0.1.0\"\n",
+        );
+        std::fs::create_dir_all(dir.path().join("crates/local")).unwrap();
+        w(
+            "crates/local/Cargo.toml",
+            "[package]\nname = \"local\"\n\n[dependencies]\nserde = { workspace = true }\n\n[dev-dependencies]\ninsta = { workspace = true }\n",
+        );
+        let mut errors = Vec::new();
+        super::check_third_party_notices(dir.path(), &mut errors).unwrap();
+        assert_eq!(errors.len(), 1, "missing file: {errors:?}");
+        assert!(errors[0].contains("missing"));
+
+        w("THIRD-PARTY-LICENSES", "  * serde 1.0.1 (old)\n");
+        let mut errors = Vec::new();
+        super::check_third_party_notices(dir.path(), &mut errors).unwrap();
+        assert_eq!(errors.len(), 1, "stale version: {errors:?}");
+        assert!(errors[0].contains("serde 1.0.2"));
+
+        w(
+            "THIRD-PARTY-LICENSES",
+            "  * serde 1.0.2 (https://example.test)\n",
+        );
+        let mut errors = Vec::new();
+        super::check_third_party_notices(dir.path(), &mut errors).unwrap();
+        assert!(errors.is_empty(), "{errors:?}");
+    }
+
+    #[test]
+    fn unpublished_crates_need_no_license_copies() {
+        let dir = license_tree(&[], "[package]\nname = \"c\"\npublish = false\n");
+        let mut errors = Vec::new();
+        super::check_license_files(dir.path(), &mut errors).unwrap();
+        assert!(errors.is_empty(), "{errors:?}");
     }
 
     #[test]

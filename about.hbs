@@ -1,0 +1,24 @@
+Third-party notices for wiki-reader
+
+wiki-reader is licensed under MIT OR Apache-2.0 (see LICENSE-MIT, LICENSE-APACHE and NOTICE).
+Binary distributions also contain the open-source packages listed below, each under its own
+licence, and the Noto Sans font (SIL Open Font License 1.1, reproduced at the end).
+
+Overview of licences:
+{{#each overview}}
+  * {{{name}}} ({{count}})
+{{/each}}
+
+{{#each licenses}}
+================================================================================
+{{{name}}}
+================================================================================
+
+Used by:
+{{#each used_by}}
+  * {{crate.name}} {{crate.version}}{{#if crate.repository}} ({{crate.repository}}){{/if}}
+{{/each}}
+
+{{{text}}}
+
+{{/each}}

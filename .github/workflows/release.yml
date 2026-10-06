@@ -102,7 +102,7 @@ jobs:
             bin="target/release/wiki-reader"
           fi
           cp "$bin" "dist/${name}/"
-          cp LICENSE-MIT LICENSE-APACHE "dist/${name}/"
+          cp LICENSE-MIT LICENSE-APACHE NOTICE THIRD-PARTY-LICENSES "dist/${name}/"
           tar -C dist -czf "dist/${name}.tar.gz" "${name}"
           (cd dist && shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256")
           ls -la dist/
