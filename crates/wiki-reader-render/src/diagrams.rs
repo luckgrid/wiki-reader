@@ -97,27 +97,27 @@ fn source_fallback_lines(src: &str, reason: &str, width: u16) -> Vec<String> {
     let mut lines = Vec::new();
     let mut header = format!("│ diagram (source; {reason})");
     while !header.is_empty() {
-        if header.width() <= pane {
+        let (take, next) = split_fallback_line(&header, pane);
+        if next.is_empty() {
             lines.push(std::mem::take(&mut header));
             break;
         }
-        let (take, next) = split_fallback_line(&header, pane);
-        lines.push(take);
-        header = next;
+        lines.push(take.to_owned());
+        header = next.to_owned();
     }
     for raw in src.lines() {
-        let mut rest = raw.to_owned();
-        if rest.is_empty() {
+        if raw.is_empty() {
             lines.push(String::new());
             continue;
         }
+        let mut rest = raw;
         while !rest.is_empty() {
-            if rest.width() <= pane {
-                lines.push(std::mem::take(&mut rest));
+            let (take, next) = split_fallback_line(rest, pane);
+            if next.is_empty() {
+                lines.push(take.to_owned());
                 break;
             }
-            let (take, next) = split_fallback_line(&rest, pane);
-            lines.push(take);
+            lines.push(take.to_owned());
             rest = next;
         }
     }
@@ -125,12 +125,9 @@ fn source_fallback_lines(src: &str, reason: &str, width: u16) -> Vec<String> {
 }
 
 /// Word-boundary wrap for source fallback; hard-split only when a token exceeds the pane.
-fn split_fallback_line(s: &str, max: usize) -> (String, String) {
+fn split_fallback_line(s: &str, max: usize) -> (&str, &str) {
     if max == 0 {
-        return (String::new(), s.to_owned());
-    }
-    if s.width() <= max {
-        return (s.to_owned(), String::new());
+        return ("", s);
     }
     let mut col = 0usize;
     let mut last_ws: Option<usize> = None;
@@ -138,24 +135,23 @@ fn split_fallback_line(s: &str, max: usize) -> (String, String) {
         let cw = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
         if col + cw > max {
             if let Some(pos) = last_ws {
-                let take = s[..pos].trim_end().to_owned();
-                let rest = s[pos..].trim_start().to_owned();
+                let take = s[..pos].trim_end();
                 if !take.is_empty() {
-                    return (take, rest);
+                    return (take, s[pos..].trim_start());
                 }
             }
             if i == 0 {
                 let next = i + ch.len_utf8();
-                return (s[..next].to_owned(), s[next..].to_owned());
+                return (&s[..next], &s[next..]);
             }
-            return (s[..i].to_owned(), s[i..].to_owned());
+            return (&s[..i], &s[i..]);
         }
         if ch.is_whitespace() {
             last_ws = Some(i);
         }
         col += cw;
     }
-    (s.to_owned(), String::new())
+    (s, "")
 }
 
 fn max_line_width(lines: &[String]) -> usize {
@@ -167,13 +163,13 @@ fn text_tier_header_lines(reason: &str, width: u16) -> Vec<String> {
     let mut header = format!("│ diagram (text; {reason})");
     let mut lines = Vec::new();
     while !header.is_empty() {
-        if header.width() <= pane {
+        let (take, next) = split_fallback_line(&header, pane);
+        if next.is_empty() {
             lines.push(std::mem::take(&mut header));
             break;
         }
-        let (take, next) = split_fallback_line(&header, pane);
-        lines.push(take);
-        header = next;
+        lines.push(take.to_owned());
+        header = next.to_owned();
     }
     lines
 }

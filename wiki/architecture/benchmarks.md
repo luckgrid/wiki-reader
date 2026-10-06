@@ -107,6 +107,20 @@ Proposed budgets (documented only, not asserted in CI): frame build ≤ 16 ms p9
 
 Register re-rank: [audit-v0.1.8.md](../roadmap/audit-v0.1.8.md).
 
+### After P3-34 (linear wrap)
+
+Same machine / fingerprint `58fa6358b41688b2`, two release runs after rewriting wrap helpers:
+
+| Metric | Before (P3-31b) | After run 1 | After run 2 |
+|---|---:|---:|---:|
+| open_huge_token (ms) | 26427 / 26482 | 8.25 | 8.09 |
+| open_token_100k (ms) | 281 / 285 | 4.53 | 4.40 |
+| open_token_200k (ms) | 1105 / 1119 | 4.99 | 4.94 |
+| open_token_400k (ms) | 4439 / 4471 | 5.91 | 6.07 |
+| width_relayout_token_400k (ms) | 8707 / 8725 | 5.97 | 6.00 |
+
+Target ≪ 100 ms open; width relayout budget ≤ 50 ms — both met.
+
 ## Related
 
 - [Prior art & libraries](prior-art-and-libs.md)
