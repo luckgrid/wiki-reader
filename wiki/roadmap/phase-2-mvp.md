@@ -12,7 +12,7 @@ nav_order: 2
 
 Time box: ≈ 2 weeks.
 
-**Status (2026-10-06): done.** Closed early by operator decision: the dogfood clock started 2026-09-29, so about one week of the planned two had run. [Phase 3](phase-3-alpha.md) is active, and anything dogfooding turns up from here is a Phase 3 item, recorded in the [dogfood log](dogfood-log.md).
+**Status (2026-10-06): done.** Closed early by operator decision: the dogfood clock started 2026-09-29, so about one week of the planned two had run. [Phase 3](phase-3-alpha.md) is active, and anything dogfooding turns up from here is recorded in the [dogfood log](dogfood-log.md), against Phase 3 or as a Phase 4 seed.
 
 ## Exit criteria
 

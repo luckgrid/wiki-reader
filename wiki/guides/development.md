@@ -143,7 +143,7 @@ All documentation screenshots live in `wiki/assets/`: the images are inside the 
 
 ## Task workflow
 
-1. Open the current phase file under [roadmap](../roadmap/README.md). Active polish work is [Phase 3](../roadmap/phase-3-alpha.md); [Phase 2](../roadmap/phase-2-mvp.md) is done (closed 2026-10-06); dogfood findings go to Phase 3.
+1. Open the current phase file under [roadmap](../roadmap/README.md). [Phase 3](../roadmap/phase-3-alpha.md) is done (exit decision 2026-10-06) and [Phase 2](../roadmap/phase-2-mvp.md) closed before it; [Phase 4](../roadmap/phase-4-beta.md) is proposed. Dogfood findings go to the [dogfood log](../roadmap/dogfood-log.md).
 2. Pick a `todo` row; set Status to `doing`; implement the smallest change that completes it.
 3. Run `./scripts/check.sh` (the same checks CI runs).
 4. Set Status to `done`; reference the ID in commit messages. Leave exit criteria visible.
