@@ -10,7 +10,7 @@ nav_order: 3
 
 # Phase 3 — Alpha polish
 
-Phase 1 is closed and Phase 2 is feature complete (dogfood hold until ≈ 2026-10-13, fixes only; see [phase-2-mvp.md](phase-2-mvp.md)). Phase 3 was activated on 2026-10-01. Batch A (chrome, v0.1.3), the herdr work (v0.1.4) and the lite build, viewers, code viewer, toolbar icons and status enum (P3-19 to P3-26, v0.1.5), the audit fixes for crashes, terminal safety and performance (P3-27, P3-28, v0.1.6), robustness (P3-29, v0.1.7), table-viewer expand (P3-30, v0.1.8) and linear wrap for long tokens (P3-34, v0.1.9) have shipped. The phase stays active until the exit decision below, which waits on dogfooding the installed binary. Dogfood bites live in the [dogfood log](dogfood-log.md).
+Phase 1 is closed and Phase 2 is feature complete (dogfood hold until ≈ 2026-10-13, fixes only; see [phase-2-mvp.md](phase-2-mvp.md)). Phase 3 was activated on 2026-10-01. Batch A (chrome, v0.1.3), the herdr work (v0.1.4) and the lite build, viewers, code viewer, toolbar icons and status enum (P3-19 to P3-26, v0.1.5), the audit fixes for crashes, terminal safety and performance (P3-27, P3-28, v0.1.6), robustness (P3-29, v0.1.7), table-viewer expand (P3-30, v0.1.8) linear wrap for long tokens (P3-34, v0.1.9) and the orphaned-reader exit (P3-37, v0.1.10) have shipped. The phase stays active until the exit decision below, which waits on dogfooding the installed binary. Dogfood bites live in the [dogfood log](dogfood-log.md).
 
 ## Exit criteria
 
@@ -25,7 +25,7 @@ End with a recorded decision, not an automatic status change:
 
 ## Proposed order
 
-**Done:** P3-08 install; P3-06 Help; P3-12a–d images and diagrams; P3-07 themes / P3-11 layout; P3-13 options window; P3-14 table viewer; P3-15 image and diagram viewer; P3-16 nav label modes (closes P3-03); P3-18 footer buttons; P3-17 chrome pass (bordered bars). The chrome pass shipped in v0.1.3; herdr in v0.1.4; P3-19 to P3-26 in v0.1.5 (merged in #134 and #138 after the operator manual pass of 2026-10-04); P3-27 and P3-28 in v0.1.6; P3-29 in v0.1.7; P3-30 in v0.1.8; P3-31/P3-31b baseline and P3-34 linear wrap in v0.1.9.
+**Done:** P3-08 install; P3-06 Help; P3-12a–d images and diagrams; P3-07 themes / P3-11 layout; P3-13 options window; P3-14 table viewer; P3-15 image and diagram viewer; P3-16 nav label modes (closes P3-03); P3-18 footer buttons; P3-17 chrome pass (bordered bars). The chrome pass shipped in v0.1.3; herdr in v0.1.4; P3-19 to P3-26 in v0.1.5 (merged in #134 and #138 after the operator manual pass of 2026-10-04); P3-27 and P3-28 in v0.1.6; P3-29 in v0.1.7; P3-30 in v0.1.8; P3-31/P3-31b baseline and P3-34 linear wrap in v0.1.9; P3-37 orphaned-reader exit in v0.1.10.
 
 1. **P3-16** — Nav label modes: drop `title+filename`; `filename` shows real file-system names (folds into P3-03). *Done.*
 2. **P3-18** — Footer buttons: ⚙ moves from the header to the footer's bottom right, with a `?` help button to its left (part of P3-02). *Done.*
@@ -100,7 +100,7 @@ Per batch: manual passes in Ghostty and herdr, plus iTerm2/tmux for media or fal
 | P3-34 | Audit fixes: algorithmic | — | done | [audit-v0.1.8.md](audit-v0.1.8.md). V4 linear wrap: 1 MB open **26.3 s → 8.2 ms**, 400 KB resize **8.7 s → 6.0 ms**. V10/V13/V14 dropped. Shipped in v0.1.9. Does **not** gate the Phase 3 exit |
 | P3-35 | Audit fixes: media | — | todo | [audit-v0.1.8.md](audit-v0.1.8.md). Measure first: harness SVG + image-plan (V6); Kitty byte counter for V15; V16 LRU cap + keep fallback reason. Then decide. Operator manual pass in Ghostty and herdr. Does **not** gate the Phase 3 exit |
 | P3-36 | Audit fixes: process and tooling | — | todo | [audit-v0.1.8.md](audit-v0.1.8.md). V17 remainder (reap children, herdr timeout, surface open errors; early signal registration moved to P3-37), V19 (`release.yml` split; dry run first), V20 (`deny.toml` / Dependabot / pin hygiene; audit found unmaintained `bincode` / `ttf-parser`), V21 (`check_doc` via `core::nav::resolve`), boolean-arg tidy-ups. Does **not** gate the Phase 3 exit |
-| P3-37 | Audit fix: orphan process spin (V22) + early signals (V17) | — | doing | V22: TTY guard + session-leader watchdog + stdin hangup poll (`WIKI_READER_NO_WATCHDOG=1` opts out of the leader check); V17: SIGHUP/SIGTERM/SIGINT before raw mode; `scripts/check-orphan-exit.py` runs the PTY cases in `check.sh` and CI; error output no longer panics on a dead terminal (SIGABRT race). Intended release **v0.1.10**. Does **not** gate the Phase 3 exit |
+| P3-37 | Audit fix: orphan process spin (V22) + early signals (V17) | — | done | V22: TTY guard + session-leader watchdog + stdin hangup poll (`WIKI_READER_NO_WATCHDOG=1` opts out of the leader check); V17: SIGHUP/SIGTERM/SIGINT before raw mode; `scripts/check-orphan-exit.py` runs the PTY cases in `check.sh` and CI; error output no longer panics on a dead terminal (SIGABRT race). Ships in v0.1.10. Does **not** gate the Phase 3 exit |
 
 ## Related
 
