@@ -2,7 +2,7 @@
 
 Phased plan from completed Phase 0 through the MVP, alpha polish and beta. Each phase ends with a decision, not just a deliverable. Time boxes are guides for a solo builder.
 
-Dated dogfood bites live in the [dogfood log](dogfood-log.md); audit findings are tracked in the [v0.1.5 audit](audit-v0.1.5.md).
+Dated dogfood bites live in the [dogfood log](dogfood-log.md); audit findings are tracked in the [v0.1.5 audit](audit-v0.1.5.md) and the [v0.1.8 viewing-performance audit](audit-v0.1.8.md).
 
 ## Phases
 
