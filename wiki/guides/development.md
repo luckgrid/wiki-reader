@@ -23,11 +23,14 @@ How to pick up work in this repo.
 Supported path today — install the binary from git:
 
 ```bash
-# Full build (default features: images / Mermaid raster)
-cargo install --locked --git https://github.com/luckgrid/wiki-reader wiki-reader-tui
+# Full build from crates.io (default features: images / Mermaid raster)
+cargo install --locked wiki-reader-tui
 
 # Lite build (no image stack; ADR-0023)
-cargo install --locked --no-default-features --git https://github.com/luckgrid/wiki-reader wiki-reader-tui
+cargo install --locked --no-default-features wiki-reader-tui
+
+# Latest main instead of the last release
+cargo install --locked --git https://github.com/luckgrid/wiki-reader wiki-reader-tui
 ```
 
 Tagged releases attach platform tarballs (macOS arm64 / x86_64, Linux x86_64) plus SHA256 checksums. To upgrade, replace or roll back an installed version, see [Releasing and upgrading](releasing.md), which also covers how maintainers cut, dry-run, verify and fix a release. The tag name must be `v` plus the workspace `Cargo.toml` version (for example `v0.1.N`).

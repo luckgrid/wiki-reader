@@ -64,7 +64,7 @@ Legacy `nav.labels = "title+filename"` is read as `"title"` with one warning per
 
 ## Lite build
 
-`cargo install --locked --no-default-features --git https://github.com/luckgrid/wiki-reader wiki-reader` builds without the image stack ([ADR-0023](../decisions/0023-lite-build-is-a-cargo-feature.md)). `images.enabled` and `images.max_slot_rows` are still read but have no effect: every image is a text placeholder, no graphics probe runs, and the options window hides the Images and Max image rows groups. `diagrams = "image"` renders the text tier with the header `lite build: no image tier`; `auto` and `text` look the same as on a terminal without graphics. Everything else is unchanged.
+`cargo install --locked --no-default-features wiki-reader-tui` builds without the image stack ([ADR-0023](../decisions/0023-lite-build-is-a-cargo-feature.md)). `images.enabled` and `images.max_slot_rows` are still read but have no effect: every image is a text placeholder, no graphics probe runs, and the options window hides the Images and Max image rows groups. `diagrams = "image"` renders the text tier with the header `lite build: no image tier`; `auto` and `text` look the same as on a terminal without graphics. Everything else is unchanged.
 
 ## Options window
 
