@@ -76,16 +76,17 @@ cargo run -p wiki-reader --example keylog
 
 ### V22 orphan-spin check (manual)
 
-Orphaned readers used to burn ~100 %CPU inside `crossterm::event::poll` when the parent
-shell died but the PTY slave stayed open. After P3-37, a non-TTY stdio pair exits immediately,
-and a parent-death watchdog restores the terminal and exits if the main loop stays stuck.
+Orphaned readers used to burn ~100 %CPU inside `crossterm::event::poll` when the PTY
+master closed (or the parent died) while the slave stayed open. After P3-37: non-TTY
+stdio exits immediately; a watchdog exits on parent reparent or stdin POLLHUP/ERR.
 
 ```bash
 cargo build --locked --release -p wiki-reader
+# (i) parent alive, master closed, slave held — must exit (stdin hangup)
 python3 - <<'PY'
 import os, pty, subprocess, time
 master, slave = pty.openpty()
-# Keep the slave open here so closing the master alone is not a hangup for the child.
+hold = os.dup(slave)
 proc = subprocess.Popen(
     ["./target/release/wiki-reader", "fixtures/images"],
     stdin=slave, stdout=slave, stderr=slave, start_new_session=True,
@@ -94,12 +95,14 @@ os.close(slave)
 time.sleep(1)
 os.close(master)
 try:
-    print("exited", proc.wait(timeout=5))
+    print("exited", proc.wait(timeout=6))
 except subprocess.TimeoutExpired:
-    # Still running is a failure for this check; inspect with: ps -p <pid> -o %cpu=
     print("TIMEOUT pid", proc.pid)
     proc.kill()
+os.close(hold)
 PY
+# (iii) /dev/null — must exit immediately with a non-TTY error
+./target/release/wiki-reader fixtures/images </dev/null >/dev/null
 ```
 
 ## Crate boundaries
