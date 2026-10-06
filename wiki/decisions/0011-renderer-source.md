@@ -1,6 +1,6 @@
 ---
 id: WR-ADR-0011
-title: ADR-0011 — Renderer source (Phase 1)
+title: "ADR-0011: Renderer source (Phase 1)"
 summary: In-tree pulldown-cmark renderer; no markdown-tui-explorer library; sync watch without tokio.
 status: accepted
 updated: 2026-09-29
