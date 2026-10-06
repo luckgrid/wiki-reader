@@ -3000,6 +3000,7 @@ dependencies = [
  "insta",
  "ratatui",
  "ratatui-image",
+ "rustix 1.1.5",
  "shell-words",
  "signal-hook",
  "syntect",

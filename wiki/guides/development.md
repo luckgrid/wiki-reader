@@ -78,6 +78,37 @@ cargo run -p wiki-reader --example keylog
 # Run under herdr; see wiki/roadmap/spikes/p1-s1-herdr-input.md
 ```
 
+### V22 orphan-spin check (manual)
+
+Orphaned readers used to burn ~100 %CPU inside `crossterm::event::poll` when the PTY
+master closed (or the parent died) while the slave stayed open. After P3-37: non-TTY
+stdio exits immediately; a watchdog exits on parent reparent or stdin POLLHUP/ERR.
+
+```bash
+cargo build --locked --release -p wiki-reader
+# (i) parent alive, master closed, slave held — must exit (stdin hangup)
+python3 - <<'PY'
+import os, pty, subprocess, time
+master, slave = pty.openpty()
+hold = os.dup(slave)
+proc = subprocess.Popen(
+    ["./target/release/wiki-reader", "fixtures/images"],
+    stdin=slave, stdout=slave, stderr=slave, start_new_session=True,
+)
+os.close(slave)
+time.sleep(1)
+os.close(master)
+try:
+    print("exited", proc.wait(timeout=6))
+except subprocess.TimeoutExpired:
+    print("TIMEOUT pid", proc.pid)
+    proc.kill()
+os.close(hold)
+PY
+# (iii) /dev/null — must exit immediately with a non-TTY error
+./target/release/wiki-reader fixtures/images </dev/null >/dev/null
+```
+
 ## Crate boundaries
 
 | Crate | Responsibility |
