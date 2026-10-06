@@ -2,7 +2,7 @@
 
 Opens wiki-reader from a [herdr](https://herdr.dev) key or command, in the focused pane's
 directory. Requires herdr **0.9.0+** on Linux or macOS and a wiki-reader binary that supports
-`--herdr-split` and `--herdr-context` (v0.1.4 or later; the current release is v0.1.9) on `PATH`.
+`--herdr-split` and `--herdr-context` (v0.1.4 or later) on `PATH`.
 The manifest declares no build commands, startup hooks or event hooks.
 
 ## Install

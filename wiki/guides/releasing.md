@@ -115,6 +115,15 @@ Cut a tag only from a commit whose CI is already green on `main`. The release wo
    Repeat the binary caveats (unsigned, macOS quarantine, Linux glibc of `ubuntu-latest`).
 6. **Verify.** The release should list 3 tarballs and 3 checksums. Download one, check it with `shasum -a 256 -c`, install it, and run `wiki-reader --version`.
 7. **Record it.** Add a dated line to the [dogfood log](../roadmap/dogfood-log.md) (and update the relevant task row under [roadmap](../roadmap/README.md) when a release closes work).
+8. **Sweep for drift.** In the publication PR (dogfood log release row, plus the new tag in the P3-08 release list), search the current-facing docs for the previous version and for stale release words, and fix what the search finds. History files (the dogfood log, closed task rows, audit "Shipped in" lines) keep their old versions on purpose.
+
+   ```bash
+   # replace 0.1.N with the previous release
+   git grep -n -E 'v?0\.1\.N\b' -- README.md SECURITY.md integrations wiki/guides wiki/product wiki/architecture
+   git grep -n -i -E 'pre-?release|current release is' -- README.md SECURITY.md integrations wiki/guides wiki/product
+   ```
+
+   Also check that the README Status line, the install examples and the screenshots still describe the shipped UI, and that the known-issues list in [development](development.md#known-issues) is current.
 
 ## Fix or replace a published release (maintainers)
 
