@@ -124,5 +124,5 @@ jobs:
           files: |
             dist/*.tar.gz
             dist/*.tar.gz.sha256
-          # The whole 0.1 line is the alpha phase; drop `startsWith` when a v0.2.0+ tag ships.
-          prerelease: ${{ contains(github.ref_name, '-') || startsWith(github.ref_name, 'v0.1.') }}
+          # Only suffixed tags (`-rc.1`, `-alpha.1`) are prereleases; v0.1.11 and later are normal releases.
+          prerelease: ${{ contains(github.ref_name, '-') }}

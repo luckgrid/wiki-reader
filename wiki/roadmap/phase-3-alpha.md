@@ -10,7 +10,7 @@ nav_order: 3
 
 # Phase 3 — Alpha polish
 
-Phase 1 and Phase 2 are closed (Phase 2 early, on 2026-10-06 by operator decision; see [phase-2-mvp.md](phase-2-mvp.md)), so dogfooding now feeds this phase. Phase 3 was activated on 2026-10-01. Batch A (chrome, v0.1.3), the herdr work (v0.1.4) and the lite build, viewers, code viewer, toolbar icons and status enum (P3-19 to P3-26, v0.1.5), the audit fixes for crashes, terminal safety and performance (P3-27, P3-28, v0.1.6), robustness (P3-29, v0.1.7), table-viewer expand (P3-30, v0.1.8) linear wrap for long tokens (P3-34, v0.1.9) and the orphaned-reader exit (P3-37, v0.1.10) have shipped. The exit decision was recorded on 2026-10-06 (see [Exit decision](#exit-decision)). Dogfood bites live in the [dogfood log](dogfood-log.md).
+Phase 1 and Phase 2 are closed (Phase 2 early, on 2026-10-06 by operator decision; see [phase-2-mvp.md](phase-2-mvp.md)), so dogfooding now feeds this phase. Phase 3 was activated on 2026-10-01. Batch A (chrome, v0.1.3), the herdr work (v0.1.4) and the lite build, viewers, code viewer, toolbar icons and status enum (P3-19 to P3-26, v0.1.5), the audit fixes for crashes, terminal safety and performance (P3-27, P3-28, v0.1.6), robustness (P3-29, v0.1.7), table-viewer expand (P3-30, v0.1.8) linear wrap for long tokens (P3-34, v0.1.9), the orphaned-reader exit (P3-37, v0.1.10), and the tooling chores and first crates.io release (P3-39 to P3-41, v0.1.11) have shipped. The exit decision was recorded on 2026-10-06 (see [Exit decision](#exit-decision)). Dogfood bites live in the [dogfood log](dogfood-log.md).
 
 ## Exit criteria
 
@@ -51,7 +51,7 @@ With this decision Phase 3 is `done` and the [Phase 4 entry criteria](phase-4-be
 
 ## Proposed order
 
-**Done:** P3-08 install; P3-06 Help; P3-12a–d images and diagrams; P3-07 themes / P3-11 layout; P3-13 options window; P3-14 table viewer; P3-15 image and diagram viewer; P3-16 nav label modes (closes P3-03); P3-18 footer buttons; P3-17 chrome pass (bordered bars). The chrome pass shipped in v0.1.3; herdr in v0.1.4; P3-19 to P3-26 in v0.1.5 (merged in #134 and #138 after the operator manual pass of 2026-10-04); P3-27 and P3-28 in v0.1.6; P3-29 in v0.1.7; P3-30 in v0.1.8; P3-31/P3-31b baseline and P3-34 linear wrap in v0.1.9; P3-37 orphaned-reader exit in v0.1.10.
+**Done:** P3-08 install; P3-06 Help; P3-12a–d images and diagrams; P3-07 themes / P3-11 layout; P3-13 options window; P3-14 table viewer; P3-15 image and diagram viewer; P3-16 nav label modes (closes P3-03); P3-18 footer buttons; P3-17 chrome pass (bordered bars). The chrome pass shipped in v0.1.3; herdr in v0.1.4; P3-19 to P3-26 in v0.1.5 (merged in #134 and #138 after the operator manual pass of 2026-10-04); P3-27 and P3-28 in v0.1.6; P3-29 in v0.1.7; P3-30 in v0.1.8; P3-31/P3-31b baseline and P3-34 linear wrap in v0.1.9; P3-37 orphaned-reader exit in v0.1.10; P3-39 to P3-41 (crates.io release, one assets directory, Rust orphan-exit check) in v0.1.11.
 
 1. **P3-16** — Nav label modes: drop `title+filename`; `filename` shows real file-system names (folds into P3-03). *Done.*
 2. **P3-18** — Footer buttons: ⚙ moves from the header to the footer's bottom right, with a `?` help button to its left (part of P3-02). *Done.*

@@ -237,6 +237,12 @@ Phase 2 was closed early on 2026-10-06 (clock started 2026-09-29), so dogfooding
 | 2026-10-06 | decision | P3-38 (V23) investigated with the new Rust harness and dropped as not reproducible: with the PTY master open and unread, `q` and SIGTERM exit within 1 s, and a forced exit (leader killed, watchdog `process::exit`) shows macOS state `?E` for about 0.6 s and completes, on screens from 24×80 to 400×1200; a drained master gives the same 0.6 s, and `tcflush(OFlush)` before the forced exit changed nothing, so nothing was shipped. Case (v) of `check-orphan-exit` now guards that a reader exits with the master open and unread. The development guide's known-issues list is empty | P3-38, P3-41 |
 | 2026-10-06 | decision | **Phase 3 exit decision recorded (operator).** All six exit criteria are met, two with a noted caveat (the four main screenshots date from 2026-10-04; v0.1.10 idles at about 1 wakeup/s); see [Exit decision](phase-3-alpha.md#exit-decision). Deferred to Phase 4 as P4-12 to P4-15: P3-01, P3-33, P3-35 and P3-36. P3-38 (V23) dropped as not reproducible. Phase 3 is `done` and the Phase 4 entry criteria are met; Phase 4 stays `proposed` until activated separately. P3-39 (first crates.io release) waits only on a second drift check and the release workflow dry run | P3-39 |
 
+## v0.1.11
+
+| Date | Kind | Note | Task IDs |
+|------|------|------|----------|
+| 2026-10-06 | decision | Prepare v0.1.11, the first release published to crates.io (package `wiki-reader-tui`; `wiki-reader-core`, `-media` and `-render` alongside). Content since v0.1.10: the crates.io prep (rename, MSRV 1.92, `cargo-deny`, licences and notices, SECURITY.md), the Rust `check-orphan-exit` and its unread-master case, one `wiki/assets/` directory, the viewer screenshots, dependency bumps (`signal-hook` 0.4, `toml` 1.x, `mermaid-text` 0.57, `insta`, actions). The release workflow no longer flags `v0.1.*` tags as prereleases, and `link-check` bans the word in current docs. Phase 2 and Phase 3 are closed, so the release waits on nothing else; each publish command is confirmed with the operator | P3-39, P3-40, P3-41 |
+
 ## Related
 
 - [Phase 2](phase-2-mvp.md)
