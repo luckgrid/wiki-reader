@@ -97,6 +97,7 @@ pub fn check(root: &Path) -> Result<Report, Error> {
     check_version_sync(&root, &mut errors)?;
     check_license_files(&root, &mut errors)?;
     check_third_party_notices(&root, &mut errors)?;
+    check_release_wording(&root, &mut errors)?;
     Ok(Report {
         files: docs.len(),
         errors,
@@ -155,6 +156,44 @@ fn check_version_sync(root: &Path, errors: &mut Vec<String>) -> Result<(), Error
         errors.push(format!(
             "wiki/roadmap/dogfood-log.md: latest ## {latest} is more than one patch ahead of workspace {workspace}"
         ));
+    }
+    Ok(())
+}
+
+/// Words that called releases "pre-releases" before the first crates.io release. Current-facing
+/// docs say "release" and, where it matters, "pre-1.0". History files (the dogfood log, roadmap
+/// rows, audits) and the releasing guide, which explains the `-rc` rule, keep the old wording.
+const BANNED_RELEASE_WORDS: [&str; 2] = ["prerelease", "pre-release"];
+
+/// Directories of current-facing Markdown scanned for [`BANNED_RELEASE_WORDS`].
+const RELEASE_WORDING_DIRS: [&str; 3] = ["integrations", "wiki/guides", "wiki/product"];
+
+fn check_release_wording(root: &Path, errors: &mut Vec<String>) -> Result<(), Error> {
+    // Link-check unit trees have no workspace.
+    if !root.join("Cargo.toml").is_file() {
+        return Ok(());
+    }
+    let mut paths = vec![root.join("README.md"), root.join("SECURITY.md")];
+    for dir in RELEASE_WORDING_DIRS {
+        let dir = root.join(dir);
+        if dir.is_dir() {
+            collect(&dir, &mut paths)?;
+        }
+    }
+    paths.retain(|p| p.is_file() && !p.ends_with("wiki/guides/releasing.md"));
+    for path in paths {
+        let text = fs::read_to_string(&path).map_err(io_error(&path))?;
+        let rel = path.strip_prefix(root).unwrap_or(&path);
+        for (idx, line) in text.lines().enumerate() {
+            let lower = line.to_lowercase();
+            if let Some(word) = BANNED_RELEASE_WORDS.iter().find(|w| lower.contains(**w)) {
+                errors.push(format!(
+                    "{}:{}: stale release wording \"{word}\"",
+                    rel.display(),
+                    idx + 1
+                ));
+            }
+        }
     }
     Ok(())
 }
@@ -914,6 +953,37 @@ mod docs_sync {
             errors
                 .iter()
                 .any(|e| e.contains("LICENSE-APACHE") && e.contains("missing"))
+        );
+    }
+
+    #[test]
+    fn current_docs_must_not_say_prerelease() {
+        let dir = tempfile::tempdir().unwrap();
+        let w = |rel: &str, body: &str| {
+            let path = dir.path().join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, body).unwrap();
+        };
+        w("Cargo.toml", "[workspace]\n");
+        w("README.md", "Releases and binaries are on GitHub.\n");
+        w("SECURITY.md", "Pre-1.0 (`0.x`): only the latest release.\n");
+        // History and the releasing guide keep the old words on purpose.
+        w("wiki/guides/releasing.md", "A `-rc` tag is a prerelease.\n");
+        w("wiki/roadmap/dogfood-log.md", "published as a prerelease\n");
+        let mut errors = Vec::new();
+        super::check_release_wording(dir.path(), &mut errors).unwrap();
+        assert!(errors.is_empty(), "{errors:?}");
+
+        w("README.md", "ok\nPrereleases are on GitHub.\n");
+        w("wiki/product/spec.md", "a Pre-Release build\n");
+        let mut errors = Vec::new();
+        super::check_release_wording(dir.path(), &mut errors).unwrap();
+        assert_eq!(errors.len(), 2, "{errors:?}");
+        assert!(errors.iter().any(|e| e.starts_with("README.md:2:")));
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.starts_with("wiki/product/spec.md:1:"))
         );
     }
 
