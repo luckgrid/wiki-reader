@@ -6597,7 +6597,7 @@ MIT License
 Used by:
   * base64-simd 0.8.0 (https://github.com/Nugine/simd)
   * libm 0.2.16 (https://github.com/rust-lang/compiler-builtins)
-  * mermaid-text 0.56.1 (https://github.com/leboiko/markdown-reader/tree/master/crates/mermaid-text)
+  * mermaid-text 0.57.0 (https://github.com/leboiko/markdown-reader/tree/master/crates/mermaid-text)
   * vsimd 0.8.0 (https://github.com/Nugine/simd)
 
 MIT License
