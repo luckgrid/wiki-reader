@@ -104,6 +104,10 @@ pub fn check(root: &Path) -> Result<Report, Error> {
 /// Keep release-facing version strings aligned with `[workspace.package].version`.
 fn check_version_sync(root: &Path, errors: &mut Vec<String>) -> Result<(), Error> {
     let cargo = root.join("Cargo.toml");
+    // Link-check unit trees only create wiki pages; skip when there is no workspace.
+    if !cargo.is_file() {
+        return Ok(());
+    }
     let cargo_text = fs::read_to_string(&cargo).map_err(io_error(&cargo))?;
     let Some(workspace) = workspace_package_version(&cargo_text) else {
         errors.push("Cargo.toml: missing [workspace.package] version".into());
