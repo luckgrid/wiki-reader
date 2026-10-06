@@ -14,11 +14,11 @@ related: [phase-3-alpha, 0004-diagram-rendering]
 Run the temporary examples from the repository root:
 
 ```bash
-cargo run -p wiki-reader --example image-protocol
-cargo run -p wiki-reader --example image-protocol -- --force-kitty
-WIKI_READER_IMAGE_QUERY_TIMEOUT_MS=500 cargo run -p wiki-reader --example image-protocol
-cargo run -p wiki-reader --example mermaid-image -- fixtures/elements/README.md
-cargo run -p wiki-reader --example mermaid-image -- fixtures/mermaid/common-types.md wiki/architecture/rendering.md
+cargo run -p wiki-reader-tui --example image-protocol
+cargo run -p wiki-reader-tui --example image-protocol -- --force-kitty
+WIKI_READER_IMAGE_QUERY_TIMEOUT_MS=500 cargo run -p wiki-reader-tui --example image-protocol
+cargo run -p wiki-reader-tui --example mermaid-image -- fixtures/elements/README.md
+cargo run -p wiki-reader-tui --example mermaid-image -- fixtures/mermaid/common-types.md wiki/architecture/rendering.md
 ```
 
 `image-protocol` enters the alternate screen with `ratatui::try_init`, immediately runs the `ratatui-image` stdio query, then enables mouse capture and Kitty keyboard disambiguation. It reports the selected protocol, cell size, capabilities, relevant environment variables and query duration before drawing `assets/wiki-reader.png`. `j`/`k` vary a simulated top clip, `o` overlays `Clear` plus a popup, and `n` replaces the image.
@@ -29,7 +29,7 @@ cargo run -p wiki-reader --example mermaid-image -- fixtures/mermaid/common-type
 
 ### Dependency compatibility
 
-`ratatui-image` 11.1.0 declares `ratatui = "^0.30.1"`. The spike compiles with the workspace's ratatui 0.30.2, and `cargo tree -p wiki-reader -i ratatui --depth 2` shows one ratatui version shared by `wiki-reader` and `ratatui-image`.
+`ratatui-image` 11.1.0 declares `ratatui = "^0.30.1"`. The spike compiles with the workspace's ratatui 0.30.2, and `cargo tree -p wiki-reader-tui -i ratatui --depth 2` shows one ratatui version shared by `wiki-reader` and `ratatui-image`.
 
 The spike disables `ratatui-image` default features and enables only `crossterm`. Its direct `image` dependency enables only PNG. This avoids the default image codec set and Chafa integration while P3-12b decides the production feature set.
 

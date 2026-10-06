@@ -332,7 +332,7 @@ mod tests {
     }
 
     /// UI path: `RawDoc` for ~50 KB stays well under syntect cost (no sync highlight).
-    /// `cargo test -p wiki-reader --release -- raw_load_budget --ignored`
+    /// `cargo test -p wiki-reader-tui --release -- raw_load_budget --ignored`
     #[test]
     #[ignore = "release budget; run with --ignored --release"]
     fn raw_load_budget_50kb_under_50ms() {

@@ -1,7 +1,7 @@
 //! P3-31 / P3-31b viewing-cost baseline: deterministic tempfile fixtures + ignored timings.
 //!
 //! Run (release, print table):
-//! `cargo test -p wiki-reader --release -- --ignored --nocapture viewing_cost_baseline`
+//! `cargo test -p wiki-reader-tui --release -- --ignored --nocapture viewing_cost_baseline`
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -249,7 +249,7 @@ fn bench_fixture_writer_is_deterministic() {
     assert_eq!(fingerprint(a.path()), fingerprint(b.path()));
 }
 
-/// Manual baseline: `cargo test -p wiki-reader --release -- --ignored --nocapture viewing_cost_baseline`
+/// Manual baseline: `cargo test -p wiki-reader-tui --release -- --ignored --nocapture viewing_cost_baseline`
 #[test]
 #[ignore = "P3-31 baseline; run with --ignored --release --nocapture"]
 #[allow(clippy::too_many_lines)] // one printable table beats six helper fns

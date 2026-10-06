@@ -85,7 +85,7 @@ If porting the renderer takes more than ~3 days, temporarily depend on a simpler
 
 All operator items are ticked (2026-09-29). Phase status is `done`. Automated coverage is noted under each item; it does **not** close the item.
 
-1. [x] `cargo run -p wiki-reader --example keylog` in a herdr pane on your real keyboard; tick the [P1-S1](spikes/p1-s1-herdr-input.md) spike note (P1-G).
+1. [x] `cargo run -p wiki-reader-tui --example keylog` in a herdr pane on your real keyboard; tick the [P1-S1](spikes/p1-s1-herdr-input.md) spike note (P1-G).
    - Coverage: example exists; real keyboard 2026-09-29 in Ghostty + herdr (see spike for caveats → P1-R36).
 2. [x] On a real collection (e.g. any docs folder, or `fixtures/worked-example`): follow ten links incl. anchors, go back ten times, confirm one tab and a restored cursor (revisits allowed; deepest page is ≤3 hops from README.md).
    - Coverage: `link_chain_ten_links_ten_backs_one_tab` on `wiki/`; operator-confirmed on a real collection 2026-09-29.
@@ -98,7 +98,7 @@ All operator items are ticked (2026-09-29). Phase status is `done`. Automated co
 6. [x] Ctrl+C and `q` restore the terminal in herdr and in a plain terminal.
    - Coverage: confirmed on your machine 2026-09-29.
 
-Also: both ignored release budgets pass (operator-confirmed 2026-09-29) — `cargo test -p wiki-reader-render --release -- --ignored` (render <20 ms / 50 KB) and `cargo test -p wiki-reader --release -- raw_load_budget --ignored` (raw UI path <50 ms / 50 KB, no sync highlight; syntect ~370 ms / 50 KB release runs off-thread and paints asynchronously). CI asserts a ~170 KB debug render finishes under a 10 s wall-clock ceiling (guards regression to per-call newline scans).
+Also: both ignored release budgets pass (operator-confirmed 2026-09-29) — `cargo test -p wiki-reader-render --release -- --ignored` (render <20 ms / 50 KB) and `cargo test -p wiki-reader-tui --release -- raw_load_budget --ignored` (raw UI path <50 ms / 50 KB, no sync highlight; syntect ~370 ms / 50 KB release runs off-thread and paints asynchronously). CI asserts a ~170 KB debug render finishes under a 10 s wall-clock ceiling (guards regression to per-call newline scans).
 
 ## Related
 

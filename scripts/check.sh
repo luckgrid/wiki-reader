@@ -15,7 +15,7 @@ all | default | lite) ;;
 esac
 
 # Crates whose behaviour changes with the `media` feature.
-lite_pkgs=(-p wiki-reader -p wiki-reader-render -p wiki-reader-media)
+lite_pkgs=(-p wiki-reader-tui -p wiki-reader-render -p wiki-reader-media)
 
 if [[ $mode != lite ]]; then
   command -v rumdl >/dev/null || {
@@ -48,7 +48,7 @@ if [[ $mode != default ]]; then
   cargo clippy --locked --all-targets --no-default-features "${lite_pkgs[@]}" -- -D warnings
   cargo test --locked --no-default-features "${lite_pkgs[@]}"
 
-  tree=$(cargo tree --locked --no-default-features -p wiki-reader -e normal)
+  tree=$(cargo tree --locked --no-default-features -p wiki-reader-tui -e normal)
   if echo "$tree" | grep -E '(^|[^A-Za-z0-9_-])(image|resvg|mermaid-rs-renderer|ratatui-image) v'; then
     echo "lite build must not pull image, resvg, mermaid-rs-renderer or ratatui-image (ADR-0023)" >&2
     exit 1

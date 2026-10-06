@@ -33,12 +33,12 @@ Measured 2026-10-03 on macOS arm64 (Apple M2 Max, 12 cores, rustc 1.98.1), defau
 Method, per variant, each in its own empty `CARGO_TARGET_DIR`, nothing else running:
 
 ```bash
-cargo build --locked --release -p wiki-reader                          # full
-cargo build --locked --release -p wiki-reader --no-default-features    # lite
+cargo build --locked --release -p wiki-reader-tui                          # full
+cargo build --locked --release -p wiki-reader-tui --no-default-features    # lite
 ```
 
 - **Clean:** the first build into an empty target directory (all dependencies compiled), one run each.
-- **Warm:** `cargo clean --release -p wiki-reader` then the same build, dependencies already cached, three runs each. A second row also cleans `wiki-reader-render`, `wiki-reader-media` and `wiki-reader-core` first. (`cargo clean -p` without `--release` removes the dev profile only and times a no-op.)
+- **Warm:** `cargo clean --release -p wiki-reader-tui` then the same build, dependencies already cached, three runs each. A second row also cleans `wiki-reader-render`, `wiki-reader-media` and `wiki-reader-core` first. (`cargo clean -p` without `--release` removes the dev profile only and times a no-op.)
 - **Size:** `ls -l` on `target/release/wiki-reader`, not stripped.
 
 | | full | lite | lite vs full |
@@ -62,7 +62,7 @@ Measured on **v0.1.8** (P3-31 / P3-31b); V4 linear wrap numbers updated after **
 Measured 2026-10-05 on macOS arm64 (Apple silicon, darwin 26.5.2), `rustc` 1.98.1, wiki-reader on `main` at `5b8351e` (P3-31) with P3-31b harness top-up, **release** profile. Method: deterministic tempfile fixtures from `tui/app/perf_baseline.rs` (`FULL` scale: 5k pages, 10k-row table, 50k-line code, 1 MB token, 100/200/400 KB token curve, 30 diagrams, 500 links, 200 related pages, 200 media placeholders); `App::for_tests` + `ratatui::TestBackend` (excludes terminal diff/flush); medians of warm `Instant` samples; RSS via `ps -o rss=`. Harness is `#[ignore]` — CI only compiles it and runs the MINI determinism test.
 
 ```bash
-cargo test -p wiki-reader --locked --release -- --ignored --nocapture viewing_cost_baseline
+cargo test -p wiki-reader-tui --locked --release -- --ignored --nocapture viewing_cost_baseline
 ```
 
 Fixture fingerprint (both P3-31b runs): `58fa6358b41688b2`. Second run medians within about 10 % of the first on timed rows (absolute ms).

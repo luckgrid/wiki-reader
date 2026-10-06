@@ -750,7 +750,7 @@ mod tests {
     /// Opt-in contract check against the real herdr CLI, which the fake cannot give: herdr
     /// rejects `--name=value`, so only a real call proves the arguments are accepted.
     ///
-    /// `WIKI_READER_TEST_HERDR_PANE=<idle pane id> cargo test -p wiki-reader real_herdr -- --ignored`
+    /// `WIKI_READER_TEST_HERDR_PANE=<idle pane id> cargo test -p wiki-reader-tui real_herdr -- --ignored`
     #[test]
     #[ignore = "talks to a real herdr: set WIKI_READER_TEST_HERDR_PANE to an idle pane"]
     fn real_herdr_accepts_the_report_and_the_clear() {

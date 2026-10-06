@@ -1,7 +1,7 @@
 //! Live key/mouse event logger for herdr keymap verification (P1-G / P1-S1).
 //!
 //! ```text
-//! cargo run -p wiki-reader --example keylog
+//! cargo run -p wiki-reader-tui --example keylog
 //! ```
 //!
 //! Prints every crossterm `KeyEvent` / `MouseEvent` in raw mode with mouse
