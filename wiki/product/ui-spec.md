@@ -314,11 +314,9 @@ Click to focus a pane; click items, links, breadcrumbs, prev/next, header icons,
 
 | Slot | Purpose |
 |------|---------|
-| Viewer header | Sticky heading of the section in view |
-| Side nav header | Search field (replacing the search row), mode tabs |
-| Side nav footer | Widget actions, tabbed features (Pages / Outline / …) |
-| Right widget sidebar | Phase 4 widgets, incl. context engine ([context engine](../architecture/context-engine.md)) |
-| Header ‹ › buttons | Optional back/forward |
+| Viewer header | Sticky heading of the section in view (deferred P3-01) |
+| Right widget sidebar | Phase 4 widgets, incl. context engine ([context engine](../architecture/context-engine.md)); side-nav header/footer sub-regions closed with P3-02 / P3-18 |
+| Header ‹ › buttons | Optional back/forward (deferred [P4-07](../roadmap/phase-4-beta.md)) |
 
 ## Theming
 

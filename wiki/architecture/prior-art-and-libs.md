@@ -10,7 +10,7 @@ nav_order: 4
 
 # Prior art & libraries
 
-> Versions move fast. Pin exact versions at scaffold time, and check crates.io and each repo's license before adding a dependency.
+> Versions move fast. Workspace pins live in the root `Cargo.toml`; check crates.io and each repo's license before adding a dependency.
 
 ## Prior art
 
@@ -48,55 +48,62 @@ Tried as-is inside herdr. **Kept:** it's markdown-only, reads far better than su
 
 ## Libraries
 
-`syntect` and `ratatui-image` live in the TUI binary; `image` / `resvg` / `mermaid-rs-renderer` live in `wiki-reader-media` behind the `raster` feature. Other workspace deps include `serde_norway`, `toml` / `toml_edit`, `shell-words`, `signal-hook`, `notify` / `notify-debouncer-mini`, `pulldown-cmark`, and `clap`.
+Pinned in the workspace `Cargo.toml` (versions move; check crates.io before bumping).
 
 ### Core (`wiki-reader-core`)
 
 | Need | Crate | Notes |
 |------|-------|-------|
-| Markdown parsing | `pulldown-cmark` | Same parser markdown-reader uses, which keeps the render port simple. Enable tables, tasklists, strikethrough, footnotes; check its wikilink option. Alternative: `comrak` (full AST with sourcepos, wikilinks/front-matter extensions) if the event model gets painful. |
-| Frontmatter | own splitter + `toml` + a maintained YAML crate | `serde_yaml` is archived. Evaluate current maintained options at scaffold time. |
-| File discovery | `ignore` | `.gitignore`-aware walking (from ripgrep) |
-| Watching | `notify` + `notify-debouncer-mini` | Markdown-path filtered; rebuild off UI thread |
-| Regex (IDs) | `regex` | |
-| Globs | `globset` | Path rules, `applies_to` |
-| Git | shell out to `git` in POC → `gix` later | Shelling out is simpler and good enough at ~2 s refresh |
-| Fuzzy match | hand-rolled subsequence scorer | `nucleo` considered for Helix-class fuzzy; skipped — current scorer covers `tkn`→token and multi-word any-order pages (`projection token` → Token Projection). Revisit if lists get huge. |
-| Full-text search | in-memory scan (POC) → `tantivy` only if needed | |
-| Config | `serde` + `toml` (+ `figment` if layering gets complex) | |
-| Paths | `directories` / `dirs` | XDG config/state/cache |
+| Markdown parsing | `pulldown-cmark` | Event walk for links/headings; tables/tasklists enabled. |
+| Frontmatter | own splitter + `toml` + `serde_norway` | YAML via `serde_norway` (maintained); TOML via `toml`. |
+| Config write | `toml_edit` | Document-preserving single-key patches ([ADR-0018](../decisions/0018-config-write-path.md)). |
+| File discovery | `ignore` | `.gitignore`-aware walking. |
+| Watching | `notify` + `notify-debouncer-mini` | Markdown-path filtered; rebuild off UI thread. |
+| Globs | `globset` | `exclude`, path rules. |
+| URLs | `percent-encoding` | Link path decode. |
+| Serde | `serde` + `serde_json` | Config and herdr JSON. |
+| Errors | `thiserror` | Typed library errors. |
+| Fuzzy match | hand-rolled subsequence scorer | Covers short prefixes and multi-word any-order pages. |
+| Full-text search | in-memory scan | |
+| XDG paths | hand-rolled from env/`HOME` | No `directories` / `dirs` crate. |
 
 ### Render (`wiki-reader-render`)
 
 | Need | Crate | Notes |
 |------|-------|-------|
-| Code/raw highlighting | `syntect` (pure-Rust regex backend) | Also highlights raw markdown |
-| Mermaid → text | `mermaid-text` | By markdown-reader's author; flowchart, sequence, state, class, ER, and more. Pin ≥ 0.56.1 (earlier versions had a multibyte label bug). |
-| Mermaid → SVG | `mermaid-rs-renderer` | Pure Rust, no Node or Chromium |
-| SVG → PNG | `resvg` + `image` | |
-| Terminal images | `ratatui-image` | Kitty/Sixel/iTerm2/halfblocks. Force Kitty or off under herdr (see [rendering](rendering.md)). |
-| Width | `unicode-width` | CJK/emoji-safe wrapping |
+| Mermaid → text | `mermaid-text` ≥ 0.56.1 | Unicode box-drawing tier. |
+| Width | `unicode-width` | CJK/emoji-safe wrapping (linear wrap, V4). |
+| Media | `wiki-reader-media` | Palette always; heavy `raster` behind the feature. |
+
+### Media (`wiki-reader-media`, feature `raster`)
+
+| Need | Crate | Notes |
+|------|-------|-------|
+| Raster decode | `image` | PNG, JPEG, GIF (first frame), WebP. |
+| Mermaid → SVG | `mermaid-rs-renderer` | Pure Rust; off in lite. |
+| SVG → RGBA | `resvg` | Embedded Noto Sans; off in lite. |
 
 ### App (`wiki-reader`)
 
 | Need | Crate | Notes |
 |------|-------|-------|
-| TUI | `ratatui` 0.30.x + `crossterm` | 0.30 split into `ratatui-core`/`ratatui-widgets`. herdr itself is built on ratatui 0.30 + crossterm 0.29. |
-| Tree widget | flat `HitMap` rows ([ADR-0010](../decisions/0010-flat-side-nav-rows.md)) | Custom visible-row list; `tui-tree-widget` evaluated then rejected (ADR-0009 superseded) because `TreeState` duplicated core `NavState`. |
-| Scrolling | `tui-scrollview` (optional) | |
-| Async | not used ([ADR-0011](../decisions/0011-renderer-source.md)): std threads + `mpsc` | Watcher debounce, index rebuild, highlight |
-| CLI | `clap` (derive) | |
-| Errors | `anyhow` (bin), `thiserror` (libs), `color-eyre` optional | |
-| Opener | `open` crate (or shell `open`/`xdg-open`) | External links |
-| Clipboard | OSC 52 (hand-rolled, ~20 lines) | Works through herdr/SSH |
-| Snapshot tests | `insta` + ratatui `TestBackend` | Render a fixture page to a buffer and snapshot it |
+| TUI | `ratatui` 0.30.x (brings `crossterm`) | Flat side-nav rows ([ADR-0010](../decisions/0010-flat-side-nav-rows.md)); no `tui-tree-widget`. |
+| Terminal images | `ratatui-image` | In the **binary** (optional `media` feature); Kitty under herdr, else off/text. |
+| Raw highlighting | `syntect` (regex-fancy) | In the **binary**; off-thread worker. |
+| CLI | `clap` (derive) | Incl. `--herdr-context` / `--herdr-split`. |
+| Command lines | `shell-words` | Config `opener` / `editor` argv split. |
+| Signals | `signal-hook` | Clean terminal restore on SIGHUP/etc. |
+| Opener | hand-rolled `open` / `xdg-open` | No `open` crate. |
+| Clipboard | OSC 52 (hand-rolled) | Works through herdr/SSH. |
+| Async | not used ([ADR-0011](../decisions/0011-renderer-source.md)): std threads + `mpsc` | |
+| Snapshot tests | `insta` + ratatui `TestBackend` | |
 
 ## External tools (runtime, optional)
 
-- `git`: context signals.
-- `herdr` CLI: sibling panes, agent states (`herdr pane list --workspace $HERDR_WORKSPACE_ID` returns JSON with `cwd`/`foreground_cwd`).
-- `$EDITOR`: editing.
+- `herdr` CLI: plugin actions, sibling panes, agent states (`herdr pane list --workspace $HERDR_WORKSPACE_ID`).
+- `$EDITOR` / `$VISUAL`: editing.
+- `git`: context signals (Phase 4).
 
 ## Licensing
 
-The project is dual-licensed **MIT OR Apache-2.0**. No third-party source is ported; if that changes, keep copyright notices and add `THIRD_PARTY.md` in the same change.
+**MIT OR Apache-2.0** (`LICENSE-MIT`, `LICENSE-APACHE`). Compatible with learning from MIT tools such as markdown-reader; no source has been ported. If code is ever ported, keep its copyright notice in the ported files and add a `THIRD_PARTY.md` in the same change.
