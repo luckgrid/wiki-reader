@@ -1,7 +1,7 @@
 ---
 id: WR-ROADMAP-AUDIT-V018
 title: Audit of v0.1.8
-summary: Viewing-experience performance and Rust anti-pattern audit of v0.1.8 (frame time, scroll, resize and keypress latency, idle CPU, open and reindex cost), with severity, status and scheduled fix batches.
+summary: Viewing-experience performance audit of v0.1.8 with a P3-31 measured baseline and scheduled fix batches.
 status: active
 updated: 2026-10-05
 related: [phase-3-alpha, dogfood-log, audit-v0.1.5]
@@ -9,65 +9,70 @@ related: [phase-3-alpha, dogfood-log, audit-v0.1.5]
 
 # Audit of v0.1.8
 
-Static re-audit of **v0.1.8** aimed at the viewing experience: frame time, scroll, resize and keypress latency, idle CPU, and open and reindex cost. Three read-only code reviews covered TUI hot paths; render and core; and media, viewers, herdr, tooling and CI. Highest-impact claims were spot-checked against the code (see Spot-checked notes in findings where relevant). Nothing was built or run for this register, so every item is **traced, not run** until [P3-31](phase-3-alpha.md) measures a baseline. The Rust checklist covered blind `unwrap`/`expect`, needless clones, allocation in loops, boolean arguments, catch-all `_ =>`, silent `let _ =`, truncating casts, and O(n²) scans.
+Static re-audit of **v0.1.8** aimed at the viewing experience: frame time, scroll, resize and keypress latency, idle CPU, and open and reindex cost. Three read-only code reviews covered TUI hot paths; render and core; and media, viewers, herdr, tooling and CI. Highest-impact claims were spot-checked against the code. [P3-31](phase-3-alpha.md) then measured a release harness on synthetic fixtures (see [benchmarks](../architecture/benchmarks.md#viewing-cost-p3-31)); the **Measured** column and severity below use those numbers. The Rust checklist covered blind `unwrap`/`expect`, needless clones, allocation in loops, boolean arguments, catch-all `_ =>`, silent `let _ =`, truncating casts, and O(n²) scans.
 
 No `unwrap`/`expect` problems were found in the audited non-test code, no truncating `as` outside guarded clamps, and `unsafe_code` is forbidden. That is a real strength; the findings are about repeated work, not safety. Line numbers drift, so find items by symbol.
 
-**V-findings** continue the style of the [v0.1.5 audit](audit-v0.1.5.md) with a `V` prefix. Many restate staged E/N/L leftovers from that register; the Finding cell cites the prior ID where known. Severity is by effect on viewing. **Status values:** `planned` (next PR), `staged` (recorded, scheduled for a later release). Fix batches [P3-31](phase-3-alpha.md)…[P3-36](phase-3-alpha.md) do **not** gate the Phase 3 exit.
+**V-findings** continue the style of the [v0.1.5 audit](audit-v0.1.5.md) with a `V` prefix. Many restate staged E/N/L leftovers from that register. **Status values:** `fixed`, `staged` (still scheduled), `dropped` (measured negligible — not fixed). Fix batches [P3-32](phase-3-alpha.md)…[P3-36](phase-3-alpha.md) do **not** gate the Phase 3 exit. Proposed budgets (not CI asserts): frame build ≤ 16 ms p95, keypress→frame ≤ 50 ms, width relayout ≤ 50 ms, UI-thread reindex ≤ 16 ms.
 
-**Verified on main** at `378f9fa`: tag `v0.1.8` = release merge `cb36cec` (#154); assets and Cargo.lock at 0.1.8; #155 follow-ups for the table viewer; operator manual pass on the release binary; no open PRs. No remediation was needed before this audit.
+**Verified on main** at `378f9fa`: tag `v0.1.8` = release merge `cb36cec` (#154). Register landed in #158. P3-31 harness on `feat/p3-31-perf-baseline`.
 
-## High: per-frame and relayout cost
+## High
 
-| ID | Where | Finding | Status |
-|---|---|---|---|
-| V1 | `tui/app/draw.rs` → `nav_ui` `clamp_nav_scroll`; `regions/side_nav.rs` `visible_rows` | The whole expanded nav tree is flattened and every `NodeId` and label cloned twice per frame, plus 2–4 more times per nav wheel or key event. Cost scales with the tree. Spot-checked. | staged (P3-32) |
-| V2 | `app/mod.rs` `ensure_layout_width`, `relayout_after_diagram_size`, `reload_page_keeping_view_ex`; `events.rs` diagram-ready and nav-divider drag | N13 still present: diagram-ready calls `relayout_after_diagram_size` → full page reload and `RenderedViewerDoc::build_with`; nav-divider drag calls `resize_nav_to_column` every move and the next frame’s `ensure_layout_width` reloads when text width changes. The diagram size cache is shared (not cleared every mouse move). Spot-checked. | staged (P3-33) |
-| V3 | `core/watch.rs`; `nav/session.rs` `reindex`; `core/index.rs` | N12 remainder: every watcher event rebuilds the whole index (off-thread), then the UI thread does a deep `index == index` compare and, on any real change, reloads the page and resets selection even when the open page is unchanged. Spot-checked. | staged (P3-33) |
-| V4 | `render.rs` `push_span`, `split_at_width`, `split_at_word_boundary`, `wrap_cell`; `diagrams.rs` fallback | Quadratic wrapping: each cut copies the remainder. A multi-MB token or data URI stalls open and each resize. | staged (P3-34) |
-| V5 | `app/viewer_state.rs` `focus_list`; `viewer_doc.rs`; `regions/viewer.rs` | `focus_list()` clones every link target and sorts it each frame; the viewer scans all link spans and focus items for each visible row (rows × links × ~4). Spot-checked. Restates L13 in part. | staged (P3-32) |
-| V6 | `render/images.rs`; `media/raster.rs` `usvg_options` | E5 still open: the embedded font is copied and a font DB rebuilt on every `usvg_options()`; sizing a local SVG reads and parses it on the UI thread per image per relayout; Mermaid layout runs 2–3 times per diagram. Spot-checked (font). | staged (P3-35) |
+| ID | Where | Finding | Measured | Status |
+|---|---|---|---|---|
+| V4 | `render.rs` wrap helpers; `diagrams.rs` fallback | Quadratic wrapping: each cut copies the remainder. A multi-MB token or data URI stalls open and each resize. | Open 1 MB token page: **26.3 s** median (two release runs). | staged (P3-34) |
 
 ## Medium
 
-| ID | Where | Finding | Status |
-|---|---|---|---|
-| V7 | `events.rs` event loop | L12: `terminal.draw` every loop iteration, no dirty flag (≈4 full frame builds/s idle); V1/V5/V9 repeat on each. Spot-checked. | staged (P3-32) |
-| V8 | `images.rs` `recv_prefer_decode` | L12 remainder: polls every 20 ms forever (≈50 wakeups/s) when graphics are on. Also per-frame `HashSet<SlotKey>` with `PathBuf` clones, `retain_for` with `Vec::contains`, and `has_pending` scanning all entries. | staged (P3-32) |
-| V9 | `app/draw.rs` breadcrumb/page labels; `core/nav/tree.rs` | Breadcrumb and page labels recomputed each frame by a whole-tree DFS with clones; `page_order()` clones every key where still used for labels. | staged (P3-32) |
-| V10 | `app/mod.rs` search; `core/search.rs` | Content and page search run synchronously on the UI thread; each call re-sorts all pages and lowercases titles and paths. Restates E2 remainder. | staged (P3-34) |
-| V11 | `app/mod.rs` `match_spans`, `store_search_matches`; `draw.rs` | L13 remainder: `match_spans` rebuilds a case-folded glyph map over matching source lines every frame; `store_search_matches` walks hits with per-hit `display_cursor`. No binary search on `source_map` and no cached match spans. | staged (P3-32) |
-| V12 | `render.rs` `render_with`, `body_and_offset` | E6: `render_with` clones `ParsedPage` (body, links, headings) and every event; `body_and_offset` copies the body again. | staged (P3-33) |
-| V13 | `render.rs` `push_media`; `index.rs` `resolve_related` | L6: `push_media` is O(n²); `resolve_related` is O(pages × related). | staged (P3-34) |
-| V14 | `table_viewer.rs` `keep_cursor_visible`, `max_expand_height`; `viewer_doc.rs` `wrap_starts` | `keep_cursor_visible` is O(rows) per jump (introduced with P3-30 in v0.1.8 — the only regression in this register rather than an old gap); `max_expand_height` allocates `Vec<char>` per cell; the cursor row is re-wrapped 2–3× per frame; `wrap_starts` is duplicated in `viewer_doc.rs`. | staged (P3-34) |
-| V15 | `image_viewer.rs`; `images.rs` Kitty re-encode | A thread per `set_view` or Tab with no cancel; every pan step re-crops, re-composes the canvas and re-uploads the Kitty image (suspected churn, needs measurement). Inline Kitty re-encode while scrolling clipped slots also suspected. | staged (P3-35) |
-| V16 | `diagrams.rs`; `render/images.rs` | E4: diagram cache unbounded and keyed by width; `DiagramSizeCache::clear` never called. E8: a cache hit on open silently drops the fallback reason. | staged (P3-35) |
-| V17 | opener / herdr / `events.rs` signals | L10: signal handlers registered late, no SIGINT; opener children never reaped; herdr CLI has no timeout; open and signal failures are silent `let _ =`. | staged (P3-36) |
-| V18 | `core/index.rs`; `nav/tree.rs` | Every page keeps its full body and duplicates headings, keys and diagnostics; ~4 copies of each key in the nav tree; no total memory budget (pathological collections). | staged (P3-33) |
+| ID | Where | Finding | Measured | Status |
+|---|---|---|---|---|
+| V2 | `relayout_after_diagram_size`, `ensure_layout_width` | N13: diagram-ready still full-reloads; width changes reload rendered pages. Cache shared (not cleared every drag). | Width relayout on diagrams page: **1.6 ms** (under budget). Diagram-ready path not isolated in the harness. | staged (P3-33): keep diagram-ready coalesce; width path not worth a fix alone |
+| V3 | `watch.rs`; `session.rs` `reindex` | N12 remainder: full rebuild off-thread; deep `index ==`; real change reloads page even if open file unchanged. | UI-thread reindex identical **5.5 ms**, one-page change **15.6 ms** (at the 16 ms budget). | staged (P3-33) |
+| V6 | `raster.rs` `usvg_options` | E5: font copied and font DB rebuilt every call; SVG measure on UI thread; Mermaid layout 2–3×. | Not isolated (TestBackend / text-tier diagrams). | staged (P3-35) |
+| V7 | `events.rs` event loop | L12: `terminal.draw` every tick, no dirty flag. | Idle CPU not measured here (needs a real pane). Frame build itself is cheap once drawn. | staged (P3-32) |
+| V8 | `images.rs` `recv_prefer_decode` | L12: 20 ms poll when graphics on; per-frame `HashSet` / `PathBuf` churn. | Idle wakeups not measured (needs a real pane). | staged (P3-32) |
+| V10 | `app/mod.rs` search; `core/search.rs` | Sync UI-thread search; re-sort and lowercase each call. E2 remainder. | Not timed in harness (5k-page collection would stress it). | staged (P3-34) |
+| V11 | `match_spans`, `store_search_matches` | L13: rebuild glyph map / linear hit walk. | Not isolated (no active Content search in harness). | staged (P3-32) |
+| V12 | `render_with`, `body_and_offset` | E6: clones `ParsedPage` and body. | Folded into open/relayout times; not isolated. | staged (P3-33) |
+| V13 | `push_media`; `resolve_related` | L6: O(n²) media push; O(pages × related). | Not isolated. | staged (P3-34) |
+| V15 | `image_viewer.rs`; Kitty path | Uncancelled pan workers; suspected re-upload per pan. | Needs Kitty / counting writer. | staged (P3-35) |
+| V16 | `diagrams.rs` caches | E4 unbounded width-keyed cache; E8 drops fallback reason. | Not isolated. | staged (P3-35) |
+| V17 | opener / herdr / signals | L10: late signals, no SIGINT, unreaped children, no herdr timeout. | Process behaviour, not timed. | staged (P3-36) |
+| V18 | `index.rs`; `nav/tree.rs` | Full bodies in index; key duplication; no byte budget. | RSS after 5k-page open ≈ **39 MB**; after heavy pages ≈ **134–140 MB** (`ps` RSS). | staged (P3-33) |
+
+## Dropped (negligible under budget)
+
+| ID | Where | Finding | Measured | Status |
+|---|---|---|---|---|
+| V1 | `visible_rows` / nav flatten | Whole tree cloned per frame. | Expanded 5k-page nav frame: **0.86 ms**. | dropped (P3-31) |
+| V5 | `focus_list` / link scan | Clone+sort links each frame; rows × links scan. | Link-heavy frame: **1.7 ms**. | dropped (P3-31) |
+| V9 | breadcrumb / label DFS | Whole-tree DFS with clones per frame. | Included in frame timings above. | dropped (P3-31) |
+| V14 | `keep_cursor_visible` (P3-30 regression), `max_expand_height` | O(rows) jump; per-cell `Vec<char>`; wrap churn. | 10k-row table: `want` **4.1 ms**, `G`+draw **2.3 ms**, `PgDn`+draw **1.0 ms**. | dropped (P3-31) |
 
 ## Supply chain and tooling
 
-| ID | Where | Finding | Status |
-|---|---|---|---|
-| V19 | `.github/workflows/release.yml` | N18: the build job has `contents: write` and persisted credentials while `cargo build` runs dependency build scripts. Split into a read-only build job and a minimal upload job; `persist-credentials: false`. Spot-checked. | staged (P3-36) |
-| V20 | repo root, workflows | L15: no `deny.toml`, `SECURITY.md` or `dependabot.yml` (spot-checked); `checkout@v5`, `rust-cache@v2`, `upload-artifact@v4` pinned by tag while others are SHA-pinned; `bincode` 1.3.3 (via syntect) advisory to verify with `cargo audit` / `cargo deny`. | staged (P3-36) |
-| V21 | `wiki-reader-tools` `check_doc` | N19: uses raw `join` + `canonicalize` instead of the reader's resolver, so it gives false failures for extensionless, `%20`, `?query` and root-relative links and passes non-indexed targets. Fix: reuse `core::nav::resolve` against a built `Index`. | staged (P3-36) |
+| ID | Where | Finding | Measured | Status |
+|---|---|---|---|---|
+| V19 | `release.yml` | N18: write token during dependency build scripts. | Spot-checked (static). | staged (P3-36) |
+| V20 | repo / workflows | L15: no `deny.toml` / Dependabot / `SECURITY.md`; tag-pinned actions; advisories. | `cargo audit`: `bincode` 1.3.3 and `ttf-parser` 0.25.1 **unmaintained** warnings. `cargo deny` not installed (skipped). Clippy `-W perf/nursery/unwrap_used/…`: ~1121 warnings, mostly test `unwrap`/`expect`; 7 `redundant_clone` (see benchmarks). | staged (P3-36) |
+| V21 | `check_doc` | N19: resolver mismatch vs reader. | Static. | staged (P3-36) |
 
 ## Low and code quality
 
 | ID | Finding | Status |
 |---|---|---|
-| L13 remainder | `nav_scroll` is `u16`. | staged (with V5/V11 in P3-32) |
-| L11 remainder | Boolean-flag arguments (`viewer::draw` with many parameters, `reload_page_keeping_view_ex`, `App::build`, `Theme::effective_name`, `flush_session(force)`, `search_jump`, `help_jump`). | staged (P3-36) |
-| — | Render `strip_fm` duplicates parse's frontmatter logic and disagrees on a BOM and EOF fence; parse lacks `ENABLE_GFM` while render sets it; `Event::Html` dropped silently. | staged |
-| — | Public fields on `Tab` / `NavState` / `NavTree.items`; `provider.rs` discards exclude-pattern diagnostics; session expanded saved in hash order. | staged |
+| L13 remainder | `nav_scroll` is `u16`. | staged (P3-32 with V11) |
+| L11 remainder | Boolean-flag arguments; silent `let _ =`. | staged (P3-36) |
+| — | Render `strip_fm` vs parse frontmatter drift; parse lacks `ENABLE_GFM`; `Event::Html` dropped. | staged |
+| — | Public fields on `Tab` / `NavState` / `NavTree.items`; exclude-pattern diagnostics discarded; session expanded hash order. | staged |
 | L7 | Tabs not expanded in code. | staged |
-| — | `fold_dir` sorts with `to_lowercase` allocation per compare and nondeterministic case-only ties; alert-prefix parsing ~16 allocations per quote event; per-event wheel hit-map scans; `pos_at` clones the line per drag event; `patch_cols` allocates per char. | staged |
-| — | No `[profile.release]` tuning (LTO, codegen-units, panic); no `unwrap_used` / `expect_used` lints. | staged (with V20 / P3-31 one-off) |
+| — | `fold_dir` lowercase allocs; alert-prefix allocs; wheel hit-map scans; `pos_at` / `patch_cols` allocs. | staged |
+| — | No `[profile.release]` tuning; no `unwrap_used` / `expect_used` lints by default. | staged (P3-36 / V20) |
 
 ## Done well
 
-Input coalescing of up to 256 events per redraw; width clamp at 100 so wide resizes do not relayout; adaptive poll; decode, highlight and reindex off the UI thread with cancellation; viewer paints only visible rows; `SlugAllocator`, `partition_point` line lookups, `MAX_TEXT_HITS`; casts use `try_from`; guarded workers; atomic config and session writes; CI is `--locked` with a lite-tree guard and env indirection for `ref_name`.
+Input coalescing of up to 256 events per redraw; width clamp at 100 so wide resizes do not relayout; adaptive poll; decode, highlight and reindex off the UI thread with cancellation; viewer paints only visible rows; `SlugAllocator`, `partition_point` line lookups, `MAX_TEXT_HITS`; casts use `try_from`; guarded workers; atomic config and session writes; CI is `--locked` with a lite-tree guard and env indirection for `ref_name`. Everyday frame cost on a 5k-page expanded nav stayed under 2 ms in the P3-31 harness.
 
 ## Checked and sound
 
@@ -77,16 +82,16 @@ Input coalescing of up to 256 events per redraw; width clamp at 100 so wide resi
 
 | Task | Batch | Items |
 |---|---|---|
-| [P3-31](phase-3-alpha.md) | Baseline (measure) | Large-fixture generator and timing harness; record in [benchmarks](../architecture/benchmarks.md); one-off `cargo audit` / `cargo deny` and extra clippy lints; re-rank this register with numbers |
-| [P3-32](phase-3-alpha.md) | Frame cost | V1, V5, V9, V7, V8, V11 |
-| [P3-33](phase-3-alpha.md) | Relayout and reindex | V2, V3, V12, V18 |
-| [P3-34](phase-3-alpha.md) | Algorithmic | V4, V13, V10, V14 |
+| [P3-31](phase-3-alpha.md) | Baseline (measure) | Done: harness + [benchmarks](../architecture/benchmarks.md#viewing-cost-p3-31); register re-ranked |
+| [P3-32](phase-3-alpha.md) | Frame cost | V7, V8, V11 (V1/V5/V9 dropped) |
+| [P3-33](phase-3-alpha.md) | Relayout and reindex | V2 (diagram-ready), V3, V12, V18 |
+| [P3-34](phase-3-alpha.md) | Algorithmic | V4, V13, V10 (V14 dropped) |
 | [P3-35](phase-3-alpha.md) | Media | V6, V15, V16, L1–L5 caps |
 | [P3-36](phase-3-alpha.md) | Process and tooling | V17, V19, V20, V21, boolean-arg tidy-ups |
 
 Each fix PR starts with a failing test or a measurement; `./scripts/check.sh all`; regression tests with exact assertions; operator manual pass for user-visible changes (P3-32, P3-35); a dogfood-log line; release (`v0.1.9`+) only after the pass and explicit go-ahead before tagging.
 
-Severity above is provisional until [P3-31](phase-3-alpha.md) measures a baseline. P3-32…P3-36 scope is then re-confirmed against those numbers: an item that measures negligible is dropped, not fixed.
+P3-31 re-confirmed scope: items that measured negligible are **dropped** above, not fixed.
 
 ## Related
 
