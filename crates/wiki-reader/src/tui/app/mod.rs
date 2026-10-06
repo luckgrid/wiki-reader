@@ -42,6 +42,8 @@ mod viewer_state;
 #[cfg(feature = "media")]
 mod image_tests;
 #[cfg(test)]
+mod perf_baseline;
+#[cfg(test)]
 mod tests;
 
 pub use events::run;

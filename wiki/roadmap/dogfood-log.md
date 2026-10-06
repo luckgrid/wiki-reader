@@ -207,6 +207,8 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 | Date | Kind | Note | Task IDs |
 |------|------|------|----------|
 | 2026-10-05 | decision | Viewing-experience performance audit of v0.1.8 recorded in [audit-v0.1.8.md](audit-v0.1.8.md) (V1–V21; traced, not run). Fix batches filed as P3-31…P3-36; they do **not** gate the Phase 3 exit | P3-31, P3-32, P3-33, P3-34, P3-35, P3-36 |
+| 2026-10-05 | decision | Audit register PR [#158](https://github.com/luckgrid/wiki-reader/pull/158) squash-merged as `fe645e8` | — |
+| 2026-10-05 | fix | P3-31 baseline: ignored release harness + deterministic fixtures; numbers in [benchmarks](../architecture/benchmarks.md#viewing-cost-p3-31); register re-ranked (drop V1/V5/V9/V14; V4 = 26 s open). `cargo deny` not installed — skipped. Idle CPU / Kitty pan left for operator | P3-31 |
 
 ## Related
 

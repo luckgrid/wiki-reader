@@ -3,8 +3,8 @@ id: WR-BENCH
 title: Benchmarks
 summary: Binary size, memory and start-up compared with other terminal markdown tools.
 status: draft
-updated: 2026-10-03
-related: [prior-art-and-libs]
+updated: 2026-10-05
+related: [prior-art-and-libs, audit-v0.1.8]
 nav_order: 5
 ---
 
@@ -55,6 +55,48 @@ The earlier rough estimate for a build without the image tier was about 10 MiB; 
 
 Caveats: a single clean run per variant, one machine, and an uncommitted tree.
 
+## Viewing cost (P3-31)
+
+Measured 2026-10-05 on macOS arm64 (Apple silicon, darwin 26.5.2), `rustc` 1.98.1, wiki-reader at branch tip with harness on top of main `fe645e8`, **release** profile. Method: deterministic tempfile fixtures from `tui/app/perf_baseline.rs` (`FULL` scale: 5k pages, 10k-row table, 50k-line code, 1 MB token, 30 diagrams, 500 links); `App::for_tests` + `ratatui::TestBackend`; medians of warm `Instant` samples; RSS via `ps -o rss=`. Harness is `#[ignore]` — CI only compiles it.
+
+```bash
+cargo test -p wiki-reader --locked --release -- --ignored --nocapture viewing_cost_baseline
+```
+
+Fixture fingerprint (both runs): `bf30eaf32ac9f972`. Second run medians within about 10 % of the first on timed rows (absolute ms); `frame_link_heavy` and end RSS varied more.
+
+| Metric | Run 1 | Run 2 | Notes |
+|---|---:|---:|---|
+| open_index_5k (ms) | 208.0 | 203.4 | `App::for_tests` / index build |
+| frame_large_tree_expanded (ms) | 0.86 | 0.85 | nav fully expanded |
+| open_link_heavy (ms) | 4.54 | 4.59 | |
+| open_huge_token (ms) | 26322 | 26327 | V4 — quadratic wrap |
+| open_diagrams (ms) | 2.36 | 2.51 | text-tier fences |
+| open_long_code (ms) | 15.4 | 15.5 | |
+| open_big_table (ms) | 30.8 | 29.6 | |
+| frame_link_heavy (ms) | 1.92 | 1.51 | |
+| width_relayout_diagrams (ms) | 1.53 | 1.65 | `ensure_layout_width` |
+| reindex_ui_identical (ms) | 5.94 | 5.15 | |
+| reindex_ui_changed (ms) | 15.1 | 16.2 | at 16 ms budget |
+| table_want (ms) | 4.04 | 4.25 | 10k-row `want()` |
+| table_G_plus_draw (ms) | 2.24 | 2.33 | includes `keep_cursor_visible` |
+| table_PgDn_plus_draw (ms) | 1.03 | 1.05 | |
+| rss_kb_after_5k_open | 39680 | 39936 | ≈ 39 MiB |
+| rss_kb_end | 140512 | 134176 | after heavy pages |
+
+Proposed budgets (documented only, not asserted in CI): frame build ≤ 16 ms p95, keypress→frame ≤ 50 ms, width relayout ≤ 50 ms, UI-thread reindex ≤ 16 ms.
+
+**Not measured in-process:** idle CPU / wakeups (V7/V8 — operator, real pane, graphics on/off); Kitty pan upload bytes (V15).
+
+**One-off tooling (not committed to config):**
+
+- `cargo audit`: warnings only — `bincode` 1.3.3 (`RUSTSEC-2025-0141`), `ttf-parser` 0.25.1 (`RUSTSEC-2026-0192`), both unmaintained.
+- `cargo deny`: **not run** (`cargo-deny` not installed; install deferred to operator).
+- Clippy with `-W clippy::perf -W clippy::nursery -W clippy::unwrap_used -W clippy::expect_used -W clippy::redundant_clone -W clippy::needless_pass_by_value`: ≈1121 warnings; dominant are test `unwrap`/`expect`; 7 `redundant_clone` (e.g. `nav/session.rs`, `rendered_doc.rs`, tests).
+
+Register re-rank: [audit-v0.1.8.md](../roadmap/audit-v0.1.8.md).
+
 ## Related
 
 - [Prior art & libraries](prior-art-and-libs.md)
+- [Audit of v0.1.8](../roadmap/audit-v0.1.8.md)
