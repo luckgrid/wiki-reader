@@ -37,6 +37,12 @@ jobs:
       - name: Test
         run: cargo test --locked
 
+      # V22: an orphaned reader must exit cleanly (not spin, not abort) on a hung-up terminal.
+      - name: Orphaned reader exits (V22)
+        run: |
+          cargo build --locked -p wiki-reader
+          python3 scripts/check-orphan-exit.py target/debug/wiki-reader
+
       - name: Clippy (lite)
         run: cargo clippy --locked --all-targets --no-default-features -p wiki-reader -p wiki-reader-render -p wiki-reader-media -- -D warnings
 

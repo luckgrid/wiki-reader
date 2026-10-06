@@ -101,6 +101,9 @@ wiki-reader fixtures/worked-example
 # q to quit, ? for help
 ```
 
+wiki-reader exits by itself when its terminal goes away (the window closes, or the shell that
+started it exits); it never keeps running in the background.
+
 ### In herdr
 
 [`integrations/herdr/`](integrations/herdr/README.md) is a herdr plugin: bind a key to its

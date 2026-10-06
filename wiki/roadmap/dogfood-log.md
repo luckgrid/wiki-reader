@@ -219,6 +219,12 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 | 2026-10-05 | decision | Prepare v0.1.9 for V4 (P3-34) only. Bump workspace / path deps / herdr manifest; re-scope P3-33 (V3 only), P3-35 (measure first), P3-36 (+V22). Tag after green CI on the release merge commit | P3-34, P3-08 |
 | 2026-10-05 | release | [v0.1.9](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.9) published as a prerelease from #162 merge commit `1a8ec6f` after its CI passed on `main`. Release workflow passed; three tarballs and three checksums present. macOS arm64 download checksum verified and the extracted binary reports 0.1.9 (17 MiB, 6.7 MB tarball). `cargo install --locked --no-default-features` from the tag builds an 8.5 MiB lite binary that reports 0.1.9. Cargo dogfood install upgraded from v0.1.8 to v0.1.9 (`~/.cargo/bin/wiki-reader`, the only copy on `PATH`; `--version` reports 0.1.9). Phase 3 exit still waits on dogfooding this install. Clock continues without restarting | P3-34, P3-08 |
 
+## v0.1.10
+
+| Date | Kind | Note | Task IDs |
+|------|------|------|----------|
+| 2026-10-06 | fix | V22 orphan-exit check moved from a manual heredoc to `scripts/check-orphan-exit.py` (PTY cases: master closed with slave held, master closed during startup, parent killed, no TTY), wired into `scripts/check.sh` and CI on ubuntu and macOS. Strict mode (exit code, not a signal) found a startup race: closing the master immediately aborted the process with SIGABRT (macOS crash report) because `eprintln!` panics on a dead stderr. `main` and the background-panic report now print through `eprint_line` (errors ignored); the check passes 8 of 8 repeats | P3-37 |
+
 ## Related
 
 - [Phase 2](phase-2-mvp.md)

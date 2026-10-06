@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Usage: scripts/check.sh [all|default|lite]   (no args = all)
-#   default  fmt, clippy, tests, link-check, rumdl, ADR-0006 tree (default features)
+#   default  fmt, clippy, tests, orphan-exit check (V22), link-check, rumdl, ADR-0006 tree
 #   lite     clippy, tests, and the no-image-deps tree check with --no-default-features (ADR-0023)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -26,6 +26,12 @@ if [[ $mode != lite ]]; then
   cargo fmt --check
   cargo clippy --locked --all-targets -- -D warnings
   cargo test --locked
+  command -v python3 >/dev/null || {
+    echo "python3 not found; it runs scripts/check-orphan-exit.py (V22)" >&2
+    exit 1
+  }
+  cargo build --locked -p wiki-reader
+  python3 scripts/check-orphan-exit.py target/debug/wiki-reader
   cargo run --locked --quiet -p wiki-reader-tools --bin link-check
   rumdl fmt --check .
   rumdl check .

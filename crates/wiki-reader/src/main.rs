@@ -51,6 +51,15 @@ fn resolve_root(args: &Args, context: Option<&str>) -> PathBuf {
     PathBuf::from(".")
 }
 
+/// Print one line to stderr, ignoring write errors.
+///
+/// `eprintln!` panics when stderr is a hung-up terminal (V22), and a panic in the exit path
+/// aborts the process with SIGABRT (a crash report on macOS) instead of a plain error exit.
+pub(crate) fn eprint_line(msg: impl std::fmt::Display) {
+    use std::io::Write as _;
+    let _ = writeln!(std::io::stderr(), "{msg}");
+}
+
 fn main() -> ExitCode {
     let args = Args::parse();
     let context = std::env::var("HERDR_PLUGIN_CONTEXT_JSON").ok();
@@ -58,20 +67,20 @@ fn main() -> ExitCode {
         return match herdr::open_split(&herdr::HerdrCli::from_env(), context.as_deref()) {
             Ok(_) => ExitCode::SUCCESS,
             Err(msg) => {
-                eprintln!("wiki-reader: {msg}");
+                eprint_line(format_args!("wiki-reader: {msg}"));
                 ExitCode::FAILURE
             }
         };
     }
     let root = resolve_root(&args, context.as_deref());
     if let Err(msg) = check_root(&root) {
-        eprintln!("wiki-reader: {msg}");
+        eprint_line(format_args!("wiki-reader: {msg}"));
         return ExitCode::FAILURE;
     }
     match tui::app::run(&root, args.config.as_deref()) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
-            eprintln!("wiki-reader: {err}");
+            eprint_line(format_args!("wiki-reader: {err}"));
             ExitCode::FAILURE
         }
     }
