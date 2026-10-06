@@ -90,7 +90,7 @@ Input coalescing of up to 256 events per redraw; width clamp at 100 so wide resi
 | [P3-35](phase-3-alpha.md) | Media | V6, V15, V16, L1–L5 caps |
 | [P3-36](phase-3-alpha.md) | Process and tooling | V17, V19, V20, V21, boolean-arg tidy-ups |
 
-Each fix PR starts with a failing test or a measurement; `./scripts/check.sh all`; regression tests with exact assertions; operator manual pass for user-visible changes (P3-32, P3-35); a dogfood-log line; release (`v0.1.9`+) only after the pass and explicit go-ahead before tagging.
+Each fix PR starts with a failing test or a measurement; `./scripts/check.sh all`; regression tests with exact assertions; operator manual pass for user-visible changes (P3-34 wrap, P3-35 media); a dogfood-log line; release (`v0.1.9`+) only after the pass and explicit go-ahead before tagging.
 
 P3-31 re-confirmed scope: items that measured negligible are **dropped** above, not fixed.
 
