@@ -219,7 +219,7 @@ The earlier [P3-S1](p3-s1-image-protocol.md) verified Kitty in ordinary Herdr pa
 All test panes created by the spike were closed (the operator exited the verified popup); the scratch plugin was unlinked. `herdr plugin list` returned **No plugins installed**, matching the pre-spike state. Herdr retains plugin config/state directories after unlink by design; the scratch plugin stored no durable state there.
 
 - P3-09: shipped in v0.1.4 — default action opens an ordinary split pane (`wiki-reader --herdr-split`); overlay and popup are text-only options. Documented the 0.9.0 `--placement` help omitting popup and the plugin-pane graphics limit.
-- P3-10: shipped in v0.1.4 — publish from ordinary reader panes only; popup omission explicit in docs. Implemented as `Publisher` in `crates/wiki-reader/src/herdr.rs` ([ADR-0022](../../decisions/0022-herdr-launcher-and-page-publishing.md)); some title-versus-token / TTL checks remain for later dogfood.
+- P3-10: shipped in v0.1.4 — publish from ordinary reader panes only; popup omission explicit in docs. Implemented as `Publisher` in `crates/wiki-reader/src/herdr.rs` ([ADR-0022](../../decisions/0022-herdr-launcher-and-page-publishing.md)); the title-versus-token, opt-out, agent-pane and TTL checks were confirmed on 2026-10-06 (see the P3-10 row).
 - P4-05: config-watch seam is feasible independently of the plugin. Keep appearance/custom-palette limitations explicit.
 - Spike closed; P3-09/10 done in v0.1.4. Phase 2 adoption clock unchanged.
 
