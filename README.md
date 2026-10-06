@@ -46,7 +46,7 @@ Other tools that shaped it, and what each contributed, are listed in [Prior art 
 
 ## Status
 
-Phase 2 is feature-complete on a dogfood hold (clock 2026-09-29 → ≈ 2026-10-13). Phase 3 alpha polish is shipped through v0.1.10 (lite build, viewers, audit fixes, linear wrap for long tokens, orphaned-reader exit); the phase stays active until the exit decision after installed-binary dogfood. See the [roadmap](wiki/roadmap/README.md) and the [dogfood log](wiki/roadmap/dogfood-log.md). Prereleases and binaries are on [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases).
+Phase 2 is done (closed 2026-10-06). Phase 3 alpha polish is shipped through v0.1.10 (lite build, viewers, audit fixes, linear wrap for long tokens, orphaned-reader exit); the phase stays active until the exit decision after installed-binary dogfood. See the [roadmap](wiki/roadmap/README.md) and the [dogfood log](wiki/roadmap/dogfood-log.md). Prereleases and binaries are on [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases).
 
 ## Install
 

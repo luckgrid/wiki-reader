@@ -134,7 +134,7 @@ See [architecture overview](../architecture/overview.md) and [ADR-0006](../decis
 
 ## Task workflow
 
-1. Open the current phase file under [roadmap](../roadmap/README.md). Active polish work is [Phase 3](../roadmap/phase-3-alpha.md); [Phase 2](../roadmap/phase-2-mvp.md) is feature-complete on a fixes-only dogfood hold until the adoption verdict (≈ 2026-10-13).
+1. Open the current phase file under [roadmap](../roadmap/README.md). Active polish work is [Phase 3](../roadmap/phase-3-alpha.md); [Phase 2](../roadmap/phase-2-mvp.md) is done (closed 2026-10-06); dogfood findings go to Phase 3.
 2. Pick a `todo` row; set Status to `doing`; implement the smallest change that completes it.
 3. Run `./scripts/check.sh` (the same checks CI runs).
 4. Set Status to `done`; reference the ID in commit messages. Leave exit criteria visible.
