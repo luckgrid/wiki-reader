@@ -84,14 +84,14 @@ An orphaned reader used to burn ~100 %CPU inside `crossterm::event::poll` when t
 closed (or the parent died) while the slave stayed open, and one startup race aborted the
 process (SIGABRT) because `eprintln!` panics on a dead terminal. Now non-TTY stdio exits
 immediately, a watchdog exits when the session leader is gone or stdin reports POLLHUP/ERR,
-and error output never panics. [`scripts/check-orphan-exit.py`](../../scripts/check-orphan-exit.py) runs the cases on
+and error output never panics. The `check-orphan-exit` tool ([`crates/wiki-reader-tools/src/bin/check-orphan-exit/`](../../crates/wiki-reader-tools/src/bin/check-orphan-exit/main.rs)) runs the cases on
 a PTY (master closed with the slave held, master closed during startup, session leader killed,
 the same with `WIKI_READER_NO_WATCHDOG=1`, only the launcher exiting, no TTY) and fails unless the binary exits by itself with an exit code. `scripts/check.sh` and CI
 (ubuntu and macOS) run it:
 
 ```bash
 cargo build --locked -p wiki-reader-tui
-python3 scripts/check-orphan-exit.py target/debug/wiki-reader
+cargo run --locked --quiet -p wiki-reader-tools --bin check-orphan-exit -- target/debug/wiki-reader
 ```
 
 ## Known issues
@@ -100,7 +100,7 @@ python3 scripts/check-orphan-exit.py target/debug/wiki-reader
   terminal side keeps the master open but stops reading, the exiting process can stay in the
   uninterruptible `E` state (`(wiki-reader)` in `ps`) and ignores SIGKILL until the master is
   closed or read. A real terminal emulator always reads, so this has only shown up in test
-  harnesses; `scripts/check-orphan-exit.py` drains the master for that reason. Cause not confirmed,
+  harnesses; `check-orphan-exit` drains the master for that reason. Cause not confirmed,
   fix not attempted: see [the register](../roadmap/audit-v0.1.8.md).
 
 ## Crate boundaries

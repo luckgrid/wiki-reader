@@ -3039,6 +3039,7 @@ name = "wiki-reader-tools"
 version = "0.1.10"
 dependencies = [
  "pulldown-cmark",
+ "rustix 1.1.5",
  "tempfile",
  "thiserror 2.0.21",
  "wiki-reader-core",
