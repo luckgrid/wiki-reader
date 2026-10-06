@@ -3,13 +3,15 @@ id: WR-ADR-0013
 title: "ADR-0013: Nav shows folder names and page titles, no Overview"
 summary: Folders always read as the folder name, pages as their title (the new default), every README folder is a group; supersedes the landing-row "Overview" label in ADR-0010.
 status: accepted
-updated: 2026-09-30
-related: [0008-side-nav-as-site-nav, 0010-flat-side-nav-rows]
+updated: 2026-10-05
+related: [0008-side-nav-as-site-nav, 0010-flat-side-nav-rows, 0020-nav-label-modes]
 ---
 
 # ADR-0013: Nav shows folder names and page titles, no Overview
 
-**Status:** Accepted · **Date:** 2026-09-30 · **Supersedes:** the "Landing row label (P2-12)" section of [ADR-0010](0010-flat-side-nav-rows.md)
+**Status:** Accepted · **Date:** 2026-09-30 · **Supersedes:** the "Landing row label (P2-12)" section of [ADR-0010](0010-flat-side-nav-rows.md) · **Label rules superseded by:** [ADR-0020](0020-nav-label-modes.md)
+
+> Note: page/landing/folder label rules here are superseded by [ADR-0020](0020-nav-label-modes.md); tree grouping and ordering remain.
 
 ## Context
 

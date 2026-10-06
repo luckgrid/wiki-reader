@@ -3,7 +3,7 @@ id: WR-ROADMAP-P2
 title: Phase 2 — Wiki navigation MVP
 summary: Custom nav order, backlinks, tabs, diagrams, config, and session restore.
 status: active
-updated: 2026-10-03
+updated: 2026-10-05
 related: [phase-1-reader-shell, phase-3-alpha, dogfood-log]
 nav_order: 2
 ---
@@ -24,9 +24,9 @@ The dogfood polish batch (P2-11…P2-24a) should land before the clock is judged
 
 Phase 2 stays `active` through two weeks of real use on a real collection. Clock started 2026-09-29; exit remains ≈ 2026-10-13. Dated bites, fixes, releases and decisions live in the [dogfood log](dogfood-log.md).
 
-## Interim acceptance walk (2026-09-30)
+## Interim acceptance walk (2026-09-30) — historical
 
-Judged from tests, dogfood QA, and code — not a full interactive sweep of every row. Formal exit review ≈ 2026-10-13 re-confirms the adoption verdict.
+**Historical.** Snapshot from 2026-09-30; later landings supersede several rows below (image tier [P3-12](phase-3-alpha.md) / [ADR-0017](../decisions/0017-static-local-images-only.md); themes/layout/options [P3-07](phase-3-alpha.md)/[P3-11](phase-3-alpha.md)/[P3-13](phase-3-alpha.md) shipped; formatted toggle removed by [ADR-0014](../decisions/0014-remove-formatted-view-toggle.md)). Formal exit review ≈ 2026-10-13 still re-confirms the adoption verdict.
 
 ### P0
 
@@ -110,6 +110,7 @@ Judged from tests, dogfood QA, and code — not a full interactive sweep of ever
 | P2-31 | Nav nested rows indent one more column (3 per level); search bar icon becomes a text-height `/` | U3 | done | round 3 |
 | P2-32 | Frontmatter box rules span the full pane width; text colour no longer depends on the cursor line | D1 | done | round 3 |
 | P2-R37 | Table cell wider than the pane no longer spills out above the table | D1 | done | `push_span` wrapped cell text at pane width |
+| P2-R38 | Copy fixes: empty table cells kept, wrapped cells rejoined, OSC 52 cap on the encoded payload (75 KB of text), held drag keeps scrolling | CP | done | round 2 follow-ups (PR 2) |
 | P2-R39 | Reopened nav starts mid-list: footer navigation while the nav was hidden scrolled the list against a 1-row viewport | N4 | done | round 4; the viewport only updates while the nav is drawn, and a list that fits always starts under the search bar |
 | P2-33 | Search landing and popup polish: a content result keeps the page in place (centred only if off-screen), the phrase is highlighted in peach with the cursor inverted on it; cut-off rows end in `…`; bottom breathing room; Help dividers one row above, none below | U3 | done | round 4 |
 | P2-34 | List items that start with inline code or a link emit the marker first; inline code no longer full-row shades adjacent items into one band | D1 | done | round 5 PR 1 |
@@ -139,8 +140,7 @@ Judged from tests, dogfood QA, and code — not a full interactive sweep of ever
 | P2-58 | Docs structure: short README Status, dogfood log as its own file, benchmarks as their own page | — | done | dogfood 2026-10; [dogfood-log.md](dogfood-log.md), [benchmarks.md](../architecture/benchmarks.md) |
 | P2-59 | Narrow-terminal nav overlay: opaque inherited background, pinned header controls and outside-click dismissal | U2 / K1 | done | 2026-10-03 (v0.1.3): operator confirmed all three bugs on v0.1.2; pre-#121 `c69c348` renders reproduce bleed at 40/60 columns and regression tests fail for long breadcrumbs and outside clicks. Clear/fill only the overlay; reserve header icon columns and ellipsize overflow; outside clicks dismiss without activating underlying targets. Regression snapshots and mouse tests; post-fix terminal pass pending |
 | P2-60 | Diagrams switched under the options window stay blank until the page is left or scrolled | D1 | done | 2026-10-03 (v0.1.4): the Kitty upload rides in a picture's first cell on its first render, and `ratatui-image` never repeats it. A theme switch re-renders every diagram while the options window is open, so a picture first drawn with its first cell under the popup lost its upload. Popups now record their panels (`HitMap::occlude`) and `ImageManager::draw` holds a picture back until its first cell is visible (`Entry::Ready.confirmed`, reset when its rectangle or crop changes). Regression tests use a Kitty-protocol picker and fail without the fix; the P2-56 theme-switch test is unchanged |
-| P2-R38 | Copy fixes: empty table cells kept, wrapped cells rejoined, OSC 52 cap on the encoded payload (75 KB of text), held drag keeps scrolling | CP | done | round 2 follow-ups (PR 2) |
-| P2-24b | Image diagrams and images | D1 | moved | slipped to Phase 3 as P3-12 (2026-09-30), now split into P3-12a…d; images follow [ADR-0017](../decisions/0017-static-local-images-only.md) |
+| P2-24b | Image diagrams and images | D1 | moved | slipped to Phase 3 as P3-12 (2026-09-30), now split into P3-12a…d; images follow [ADR-0017](../decisions/0017-static-local-images-only.md); image tier shipped (P3-12c, [ADR-0004](../decisions/0004-diagram-rendering.md) accepted) |
 
 ## P2-23 scope
 
@@ -166,6 +166,8 @@ Acceptance:
 
 ## P2-24a scope
 
+**Historical.** Implemented then removed: see [ADR-0014](../decisions/0014-remove-formatted-view-toggle.md) (supersedes ADR-0012). Kept for context only.
+
 After P2-23. Browser-style reading without syntax markers.
 
 - **Formatted-text view:** render markdown as formatted text, with no visible syntax markers (`#`, `**`, backticks, fence lines, link brackets and URLs). Styling carries the meaning instead. Feasible in a terminal for everything except font size: headings differ by colour, weight, rules and spacing. The `source_map` must keep the cursor, line selection, link hits and block actions working on the formatted output.
@@ -175,6 +177,8 @@ Acceptance: the eye toggle switches views without losing the cursor position.
 
 ## P2-24b scope
 
+**Historical.** Slipped to Phase 3 as [P3-12](phase-3-alpha.md) (a…d); image tier shipped (P3-12c); images are static/local per [ADR-0017](../decisions/0017-static-local-images-only.md); [ADR-0004](../decisions/0004-diagram-rendering.md) accepted. Kept for context only.
+
 After P2-24a. Image diagrams and images; may slip to Phase 3 without blocking Phase 2 exit.
 
 - **Diagrams like jcode:** the D1 image tier: mermaid-rs-renderer → resvg → Kitty, following jcode's pipeline, per [ADR-0004](../decisions/0004-diagram-rendering.md). Include scroll and clear behaviour, herdr/Kitty detection, a cache, and the tier-selection defaults. Confirm ADR-0004 after the spike.
@@ -182,17 +186,19 @@ After P2-24a. Image diagrams and images; may slip to Phase 3 without blocking Ph
 
 Acceptance: diagrams render as images where Kitty graphics is available, otherwise in the text tier.
 
-## Proposed order (after Phase 1 exit)
+## Order (done)
 
-1. P2-R31 → P2-R32 → P2-R33
-2. P2-05 Tabs
-3. P2-06 Diagrams
+Feature work below is complete; Phase 2 remains on dogfood hold (fixes only) until the ≈ 2026-10-13 adoption verdict — do not treat this section as a to-do list.
 
-(Batch 1–2 done: P2-02/04/08/09/10/03.)
+1. P2-R31 → P2-R32 → P2-R33 — done
+2. P2-05 Tabs — done
+3. P2-06 Diagrams (text tier) — done; image tier → P3-12 (shipped)
 
-Dogfood polish batch (2026-09-30), in order:
+Batch 1–2 done: P2-02/04/08/09/10/03.
 
-1. Readability: P2-23 (includes P2-15, P2-16) → P2-11 → P2-24a (P2-24b after; may move to Phase 3)
+Dogfood polish batch (2026-09-30) — all done:
+
+1. Readability: P2-23 (includes P2-15, P2-16) → P2-11 → P2-24a (removed by ADR-0014; P2-24b → P3-12 shipped)
 2. Chrome: P2-17 → P2-18 → P2-19
 3. Nav: P2-12 → P2-13 → P2-14
 4. Keyboard flow: P2-22

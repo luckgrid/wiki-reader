@@ -15,7 +15,7 @@ Two audits feed this register. **E-findings** came from an audit done before v0.
 
 No `unsafe` Rust exists in the workspace (`unsafe_code = "forbid"` in every crate); that says nothing about third-party dependencies. Line numbers drift, so find items by symbol.
 
-**Shipped in v0.1.6:** every `fixed` and `fixed in part` item below that cites P3-27 or P3-28. **Shipped in v0.1.7:** P3-29 (N8, N14, N15, N16, N20 and L1–L5 in part). **Status values:** `fixed` (merged or in an open PR), `planned` (next PR), `staged` (recorded, scheduled for a later release). Tasks: [P3-27](phase-3-alpha.md) (crash and terminal fixes), [P3-28](phase-3-alpha.md) (performance) and [P3-29](phase-3-alpha.md) (robustness).
+**Shipped in v0.1.6:** every `fixed` and `fixed in part` item below that cites P3-27 or P3-28. **Shipped in v0.1.7:** P3-29 (N8, N14, N15, N16, N20 and L1–L5 in part). **Shipped in v0.1.8:** P3-30 (table-viewer expand). **Shipped in v0.1.9:** V4 / L6 quadratic wrap ([audit-v0.1.8](audit-v0.1.8.md) P3-34). **Status values:** `fixed` (merged or in an open PR), `planned` (next PR), `staged` (recorded, scheduled for a later release), `dropped` (measured negligible — see v0.1.8 register). Tasks: [P3-27](phase-3-alpha.md) (crash and terminal fixes), [P3-28](phase-3-alpha.md) (performance) and [P3-29](phase-3-alpha.md) (robustness); viewing leftovers continue as V-IDs in [audit-v0.1.8](audit-v0.1.8.md).
 
 ## High: crashes and terminal corruption
 
@@ -47,7 +47,7 @@ No `unsafe` Rust exists in the workspace (`unsafe_code = "forbid"` in every crat
 | N10 | `code_viewer.rs` | Width rescanned per frame, `slice_line` is O(left + width) per row. | fixed (P3-28): width measured once, column maths saturates |
 | N11 | `table_viewer.rs` | Widths rebuilt per row per frame, sort and filter allocate per comparison. | fixed (P3-28): one layout per frame, sort keys cached per column, filter without allocation |
 | N12 | `app/mod.rs` load and reindex | Failed `load_page` leaves a stale doc; any change reloads the page and clobbers selection. | fixed in part (P3-28): a failed read shows the removed state; an unchanged index reloads nothing. A real change still reloads the page and resets selection and focus |
-| N13 | `events.rs`, `images.rs` | Relayout storm per diagram completion and per width change. | staged |
+| N13 | `events.rs`, `images.rs` | Relayout storm per diagram completion and per width change. | dropped after measurement (V2 in [audit-v0.1.8](audit-v0.1.8.md)) |
 | N14 | core `parse.rs` | YAML alias amplification is only partly bounded. | fixed (P3-29): frontmatter size + token-start alias-marker caps |
 | N15 | core `provider.rs` | One unreadable directory is fatal; no file-size or page-count caps. | fixed (P3-29): skip walk errors with diagnostics; `MAX_PAGES` / `take(MAX_PAGE_BYTES)` (above the page cap, which pages survive follows FS walk order) |
 | N16 | core `config.rs` | Config write is not atomic; inline tables fail. | fixed (P3-29): canonicalize symlink target, copy perms, sync_all, rename (inline tables still unpatched) |
@@ -60,18 +60,18 @@ No `unsafe` Rust exists in the workspace (`unsafe_code = "forbid"` in every crat
 
 | ID | Finding | Status |
 |---|---|---|
-| E4 | Diagram text cache is unbounded. | staged |
-| E5 | Synchronous SVG measure; font DB rebuilt per call. | staged |
-| E6 | `render_with` clones `ParsedPage`. | staged |
-| E8 | Diagram cache hit drops the fallback reason. | staged |
+| E4 | Diagram text cache is unbounded. | staged → see V16 in [audit-v0.1.8](audit-v0.1.8.md) |
+| E5 | Synchronous SVG measure; font DB rebuilt per call. | staged → see V6 in [audit-v0.1.8](audit-v0.1.8.md) |
+| E6 | `render_with` clones `ParsedPage`. | staged → see V12 in [audit-v0.1.8](audit-v0.1.8.md) (dropped after measurement) |
+| E8 | Diagram cache hit drops the fallback reason. | staged → see V16 in [audit-v0.1.8](audit-v0.1.8.md) |
 | L1 to L5 | Media: zoom size drift, premultiplied alpha, uncancelled workers, unbounded worker file read, no Mermaid size cap. | fixed in part (P3-29): bitmap retention budget (N8); remaining media items stay staged |
-| L6 | `push_media` is O(n²); code and table text held several times; quadratic wrap on a long token (data URI). | staged |
+| L6 | `push_media` is O(n²); code and table text held several times; quadratic wrap on a long token (data URI). | fixed (V4, v0.1.9): linear wrap; `push_media` O(n²) dropped as V13 |
 | L7 | Tabs not expanded in code; zero-width characters counted as one column. | staged |
 | L8 | `nav_order` NaN or infinity broke the sort order. | fixed (P3-27): rejected at parse, `total_cmp` |
 | L9 | `Recording*` test doubles compiled into release builds. | fixed (P3-27): `#[cfg(test)]`, unused `RecordingOpener` removed |
 | L10 | Opener children never reaped; herdr CLI has no timeout; signal handlers registered late, no SIGINT. | staged |
 | L11 | Boolean-argument functions (`reload_page_keeping_view_ex`, `App::build`, `Theme::effective_name`, `viewer::draw`); silent `let _ =` on opener, signal and worker failures. | staged |
-| L12 | Event loop redraws every tick with no dirty flag; `recv_prefer_decode` polls every 20 ms. | staged |
+| L12 | Event loop redraws every tick with no dirty flag; `recv_prefer_decode` polls every 20 ms. | dropped after measurement (V7/V8 in [audit-v0.1.8](audit-v0.1.8.md); V8 still needs Ghostty/herdr confirm) |
 | L13 | `nav_scroll` is `u16`; `store_search_matches` is O(hits × lines); `focus_list` allocates per frame. | staged |
 | L14 | `code_viewer` `u16` overflow past about 65,500 columns (fixed in P3-28); `status::ALL` is not checked against the enum (staged). | fixed in part (P3-28) |
 | L15 | Supply chain: no `deny.toml`, `cargo audit`, Dependabot or `SECURITY.md`; actions pinned by tag; `bincode 1.3.3` advisory unverified. | staged |

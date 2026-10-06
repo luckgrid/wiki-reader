@@ -1,13 +1,15 @@
 ---
 id: WR-SPIKE-P3-S2
 title: P3-S2 herdr integration spike
-summary: Plugin popup and plain-pane metadata are viable on Herdr 0.9.0; live theme-name following needs a config watcher, not a plugin.
+summary: Ordinary-pane split launcher and plain-pane metadata are viable on Herdr 0.9.0; plugin overlay/popup are text-only (no cell metrics / no images); live theme-name following needs a config watcher, not a plugin.
 status: done
-updated: 2026-10-03
+updated: 2026-10-05
 related: [phase-3-alpha, phase-4-beta, p3-s1-image-protocol]
 ---
 
 # P3-S2 — herdr integration spike
+
+**Shipped:** [P3-09](../phase-3-alpha.md) / [P3-10](../phase-3-alpha.md) in v0.1.4 (ordinary-pane split default; overlay/popup text-only).
 
 ## Spike program
 
@@ -216,10 +218,10 @@ The earlier [P3-S1](p3-s1-image-protocol.md) verified Kitty in ordinary Herdr pa
 
 All test panes created by the spike were closed (the operator exited the verified popup); the scratch plugin was unlinked. `herdr plugin list` returned **No plugins installed**, matching the pre-spike state. Herdr retains plugin config/state directories after unlink by design; the scratch plugin stored no durable state there.
 
-- P3-09: the default action opens an ordinary split pane (`wiki-reader --herdr-split`); overlay and popup are text-only options. Test missing/malformed context and command failure. Document the 0.9.0 `--placement` help omitting popup and the plugin-pane graphics limit. The `/tmp` evidence files from the investigation are scratch and not preserved.
-- P3-10: publish from ordinary reader panes only; popup omission must be explicit in docs. Confirm title versus token display, update/renew/clear behavior and unsupported-server fallback before closing the row. Implemented as `Publisher` in `crates/wiki-reader/src/herdr.rs` ([ADR-0022](../../decisions/0022-herdr-launcher-and-page-publishing.md)); the title-versus-token and clear/TTL checks are the manual pass.
+- P3-09: shipped in v0.1.4 — default action opens an ordinary split pane (`wiki-reader --herdr-split`); overlay and popup are text-only options. Documented the 0.9.0 `--placement` help omitting popup and the plugin-pane graphics limit.
+- P3-10: shipped in v0.1.4 — publish from ordinary reader panes only; popup omission explicit in docs. Implemented as `Publisher` in `crates/wiki-reader/src/herdr.rs` ([ADR-0022](../../decisions/0022-herdr-launcher-and-page-publishing.md)); some title-versus-token / TTL checks remain for later dogfood.
 - P4-05: config-watch seam is feasible independently of the plugin. Keep appearance/custom-palette limitations explicit.
-- No task row is marked done by this spike, no release is cut, and the Phase 2 adoption clock remains unchanged.
+- Spike closed; P3-09/10 done in v0.1.4. Phase 2 adoption clock unchanged.
 
 ## References
 

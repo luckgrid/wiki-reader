@@ -3,13 +3,15 @@ id: WR-ADR-0019
 title: "ADR-0019: luckgrid presets, and `herdr` follows herdr's config"
 summary: dark and light take the luckgrid.net palette; the herdr preset reads herdr's selected theme from its config file, and is the default inside herdr.
 status: accepted
-updated: 2026-10-03
+updated: 2026-10-05
 related: [0018-config-write-path, 0004-diagram-rendering]
 ---
 
 # ADR-0019: luckgrid presets, and `herdr` follows herdr's config
 
 **Status:** Accepted · **Date:** 2026-10-03
+
+> Note: live theme follow can use a config watcher without a herdr plugin ([P3-S2](../roadmap/spikes/p3-s2-herdr-integration.md); Phase 4 [P4-05](../roadmap/phase-4-beta.md)). Custom-palette / `auto_switch` light-dark limits from the spike still apply.
 
 ## Context
 
