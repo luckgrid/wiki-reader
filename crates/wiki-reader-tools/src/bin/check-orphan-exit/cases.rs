@@ -13,8 +13,8 @@ use std::{
 use rustix::process::Signal;
 
 use crate::{
-    proc::{alive, cpu_seconds, ppid_of, send, wait_gone},
-    pty::{Pty, drain, open_pty},
+    proc::{alive, cpu_seconds, ppid_of, send, state, wait_gone},
+    pty::{Pty, drain, open_pty, set_winsize},
 };
 
 pub type Outcome = Result<String, String>;
@@ -114,6 +114,8 @@ struct Session {
     leader: Guard,
     app_pid: u32,
     pidfile: PathBuf,
+    /// The master end when nothing drains it (V23); dropped after the reader is killed.
+    master: Option<OwnedFd>,
 }
 
 impl Drop for Session {
@@ -142,20 +144,36 @@ fn wait_for_pid(pidfile: &Path) -> Result<u32, String> {
 
 /// Start the reader on a PTY inside a fresh session.
 ///
-/// `launcher == false`: the session leader is also the reader's parent.
-/// `launcher == true`: the leader stays alive and idle; a launcher child it spawned is the
+/// `opts.launcher == false`: the session leader is also the reader's parent.
+/// `opts.launcher == true`: the leader stays alive and idle; a launcher child it spawned is the
 /// reader's parent and is the one that can exit.
-fn start_in_session(cfg: &Config, watchdog_off: bool, launcher: bool) -> Result<Session, String> {
+#[derive(Clone, Copy, Default)]
+struct Opts {
+    /// Set `WIKI_READER_NO_WATCHDOG=1` for the reader.
+    watchdog_off: bool,
+    /// Insert a launcher between the session leader and the reader.
+    launcher: bool,
+    /// Keep the master open but never read it, on a large screen (V23).
+    unread_master: bool,
+}
+
+fn start_in_session(cfg: &Config, opts: Opts) -> Result<Session, String> {
     let Pty { master, slave } = setup(open_pty())?;
-    drain(master);
+    let master = if opts.unread_master {
+        setup(set_winsize(&slave, 120, 400))?;
+        Some(master)
+    } else {
+        drain(master);
+        None
+    };
     let n = NEXT_PIDFILE.fetch_add(1, Ordering::Relaxed);
     let pidfile = env::temp_dir().join(format!(
         "wiki-reader-orphan-exit-{}-{n}.pid",
         std::process::id()
     ));
-    let mut cmd = helper(if launcher { "launcher" } else { "app" }, cfg)?;
+    let mut cmd = helper(if opts.launcher { "launcher" } else { "app" }, cfg)?;
     cmd.arg(&pidfile);
-    if watchdog_off {
+    if opts.watchdog_off {
         cmd.env("WIKI_READER_NO_WATCHDOG", "1");
     }
     let leader = spawn_on(&slave, cmd)?;
@@ -164,6 +182,7 @@ fn start_in_session(cfg: &Config, watchdog_off: bool, launcher: bool) -> Result<
         leader,
         app_pid: 0,
         pidfile,
+        master,
     };
     session.app_pid = wait_for_pid(&session.pidfile)?;
     thread::sleep(Duration::from_millis(1500));
@@ -173,7 +192,13 @@ fn start_in_session(cfg: &Config, watchdog_off: bool, launcher: bool) -> Result<
 /// (ii) / (ii'): the session leader (also the parent) dies. The reader spun at ~100 %CPU before
 /// V22; with the watchdog disabled it must stay up.
 pub fn leader_killed(cfg: &Config, watchdog_off: bool) -> Outcome {
-    let mut session = start_in_session(cfg, watchdog_off, false)?;
+    let mut session = start_in_session(
+        cfg,
+        Opts {
+            watchdog_off,
+            ..Opts::default()
+        },
+    )?;
     let app = session.app_pid;
     if !alive(app) {
         return Err(format!(
@@ -204,7 +229,13 @@ pub fn leader_killed(cfg: &Config, watchdog_off: bool) -> Outcome {
 /// (ii''): only the launcher (the reader's parent) exits; the session leader and the terminal
 /// stay alive. The reader must keep running and sit idle: it is a legitimate session.
 pub fn launcher_exits(cfg: &Config) -> Outcome {
-    let session = start_in_session(cfg, false, true)?;
+    let session = start_in_session(
+        cfg,
+        Opts {
+            launcher: true,
+            ..Opts::default()
+        },
+    )?;
     let app = session.app_pid;
     let launcher = ppid_of(app).filter(|&p| p != session.leader.id());
     let Some(launcher) = launcher.filter(|_| alive(app)) else {
@@ -278,4 +309,45 @@ pub fn not_a_tty(cfg: &Config) -> Outcome {
                 .map_or_else(|| "on a signal".into(), |c| c.to_string())
         )),
     }
+}
+
+/// (v) V23: the terminal keeps the master open but never reads it, on a screen large enough to
+/// fill the PTY buffer, and the session leader dies, so the watchdog hard-exits the reader while
+/// its main thread may be blocked in a `write`. The reader must still exit with the master open.
+/// (An early test harness saw macOS state `E` here and blamed an undrained close; the exit takes
+/// the same ~0.6 s with a drained master, so this case guards the property, not a delay.)
+pub fn unread_master_leader_killed(cfg: &Config) -> Outcome {
+    let mut session = start_in_session(
+        cfg,
+        Opts {
+            unread_master: true,
+            ..Opts::default()
+        },
+    )?;
+    let app = session.app_pid;
+    if !alive(app) {
+        return Err(format!(
+            "pid {app} was not running before the leader was killed"
+        ));
+    }
+    // A few redraws on the large screen, none of them read.
+    if let Some(master) = &session.master {
+        for _ in 0..10 {
+            setup(rustix::io::write(master, b"\x1b[6~"))?;
+            thread::sleep(Duration::from_millis(20));
+        }
+    }
+    thread::sleep(Duration::from_millis(1500));
+    setup(send(session.leader.id(), Signal::KILL))?;
+    session.leader.wait(LIMIT);
+    // Watchdog: polls every 1 s and hard-exits after a 2 s grace.
+    if wait_gone(app, Duration::from_secs(8)) {
+        return Ok(format!(
+            "pid {app} exited although nothing reads the master"
+        ));
+    }
+    let stuck = state(app).unwrap_or_else(|| "?".into());
+    Err(format!(
+        "pid {app} still running (state {stuck}) with the master open and unread"
+    ))
 }

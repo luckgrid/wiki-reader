@@ -11,6 +11,7 @@ use rustix::{
     fs::{Mode, OFlags, open},
     io::{FdFlags, fcntl_setfd},
     pty::{OpenptFlags, grantpt, openpt, ptsname, unlockpt},
+    termios::{Winsize, tcsetwinsize},
 };
 
 /// Both ends of a fresh pseudo-terminal.
@@ -35,6 +36,19 @@ pub fn open_pty() -> io::Result<Pty> {
     fcntl_setfd(&master, FdFlags::CLOEXEC)?;
     fcntl_setfd(&slave, FdFlags::CLOEXEC)?;
     Ok(Pty { master, slave })
+}
+
+/// Resize the terminal; a large screen makes every frame big enough to fill the PTY buffer.
+pub fn set_winsize(slave: &OwnedFd, rows: u16, cols: u16) -> io::Result<()> {
+    Ok(tcsetwinsize(
+        slave,
+        Winsize {
+            ws_row: rows,
+            ws_col: cols,
+            ws_xpixel: 0,
+            ws_ypixel: 0,
+        },
+    )?)
 }
 
 /// Read and discard everything on `master`, like a live terminal emulator would.

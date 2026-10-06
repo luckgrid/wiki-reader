@@ -36,6 +36,11 @@ pub fn wait_gone(pid: u32, limit: Duration) -> bool {
     false
 }
 
+/// The `ps` state of `pid` (for example `S`, `R+`, `Z`, or `E` for a macOS process stuck exiting).
+pub fn state(pid: u32) -> Option<String> {
+    ps_field("stat", pid)
+}
+
 pub fn ppid_of(pid: u32) -> Option<u32> {
     ps_field("ppid", pid)?.parse().ok()
 }
