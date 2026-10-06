@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Security fixes land on the latest release (GitHub Releases, and crates.io once published). wiki-reader is pre-1.0 (`0.x`): only the latest release is supported, and fixes are not backported to older ones.
+Security fixes land on the latest release (crates.io and GitHub Releases). wiki-reader is pre-1.0 (`0.x`): only the latest release is supported, and fixes are not backported to older ones.
 
 ## Reporting a vulnerability
 

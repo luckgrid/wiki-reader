@@ -36,10 +36,13 @@ Quit any running wiki-reader before replacing the binary.
 ### Installed with cargo
 
 ```bash
+# Latest release on crates.io (also how you roll back: add --version 0.1.N)
+cargo install --locked --force wiki-reader-tui
+
 # Latest main
 cargo install --locked --force --git https://github.com/luckgrid/wiki-reader wiki-reader-tui
 
-# A specific release (also how you roll back); tags up to v0.1.10 use the old package name
+# A specific release from git; tags up to v0.1.10 use the old package name
 cargo install --locked --force --git https://github.com/luckgrid/wiki-reader --tag v0.1.N wiki-reader-tui
 cargo install --locked --force --git https://github.com/luckgrid/wiki-reader --tag v0.1.10 wiki-reader
 ```

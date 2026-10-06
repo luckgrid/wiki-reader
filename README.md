@@ -50,7 +50,13 @@ Phase 2 is done (closed 2026-10-06). Phase 3 alpha polish is shipped through v0.
 
 ## Install
 
-From git (supported today):
+From [crates.io](https://crates.io/crates/wiki-reader-tui):
+
+```bash
+cargo install --locked wiki-reader-tui
+```
+
+Or the latest `main` from git:
 
 ```bash
 cargo install --locked --git https://github.com/luckgrid/wiki-reader wiki-reader-tui
@@ -59,7 +65,7 @@ cargo install --locked --git https://github.com/luckgrid/wiki-reader wiki-reader
 Lite build (no images, SVG or Mermaid pictures; diagrams stay text, source or a placeholder; smaller binary, faster build; see [ADR-0023](wiki/decisions/0023-lite-build-is-a-cargo-feature.md)). It is a cargo feature only; there is no `-lite` release download:
 
 ```bash
-cargo install --locked --no-default-features --git https://github.com/luckgrid/wiki-reader wiki-reader-tui
+cargo install --locked --no-default-features wiki-reader-tui
 ```
 
 The package is named `wiki-reader-tui` (the command it installs is still `wiki-reader`), because the name `wiki-reader` is taken on crates.io. Releases up to and including v0.1.10 use the old package name: pin one with `cargo install --locked --git https://github.com/luckgrid/wiki-reader --tag v0.1.10 wiki-reader`. If you installed `wiki-reader` before the rename, run `cargo uninstall wiki-reader` first (or add `--force`), because cargo will not let a second package overwrite the same command.
@@ -73,7 +79,7 @@ tar xf wiki-reader-vX.Y.Z-<platform>.tar.gz
 
 Binaries are unsigned and not notarized. Browser downloads on macOS may be quarantined; clear with `xattr -d com.apple.quarantine path/to/wiki-reader` if Gatekeeper blocks them (`curl` downloads usually skip quarantine). The Linux binary is built on `ubuntu-latest` and links that runner's glibc, so older distros may need to build from source or use `cargo install`.
 
-crates.io packaging metadata is prepared (`version` on path deps, repository/readme); the crates are not published yet.
+The crates are published on crates.io: [`wiki-reader-tui`](https://crates.io/crates/wiki-reader-tui) (the binary) with the library crates `wiki-reader-core`, `wiki-reader-media` and `wiki-reader-render`.
 
 ## Upgrade
 
@@ -81,7 +87,7 @@ Check your version with `wiki-reader --version` and `which wiki-reader`. Upgrade
 
 ```bash
 # cargo install → ~/.cargo/bin (--force replaces it; a --tag before the rename needs the old name, see Install)
-cargo install --locked --force --git https://github.com/luckgrid/wiki-reader wiki-reader-tui
+cargo install --locked --force wiki-reader-tui
 
 # release tarball → usually ~/.local/bin (verify and unpack as above, then overwrite)
 install -m 0755 wiki-reader-vX.Y.Z-<platform>/wiki-reader ~/.local/bin/wiki-reader
