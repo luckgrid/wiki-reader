@@ -2,8 +2,8 @@
 id: WR-GUIDE-DEV
 title: Development
 summary: Toolchain, checks, crate boundaries, dependency policy, docs conventions, and task workflow.
-status: draft
-updated: 2026-10-03
+status: active
+updated: 2026-10-05
 related: []
 ---
 
@@ -23,7 +23,11 @@ How to pick up work in this repo.
 Supported path today — install the binary from git:
 
 ```bash
+# Full build (default features: images / Mermaid raster)
 cargo install --locked --git https://github.com/luckgrid/wiki-reader wiki-reader
+
+# Lite build (no image stack; ADR-0023)
+cargo install --locked --no-default-features --git https://github.com/luckgrid/wiki-reader wiki-reader
 ```
 
 Tagged releases attach platform tarballs (macOS arm64 / x86_64, Linux x86_64) plus SHA256 checksums. To upgrade, replace or roll back an installed version, see [Releasing and upgrading](releasing.md), which also covers how maintainers cut, dry-run, verify and fix a release. The tag name must be `v` plus the workspace `Cargo.toml` version (for example `v0.1.N`).
@@ -67,11 +71,11 @@ cargo run -p wiki-reader -- fixtures/worked-example
 # q to quit, ? for help
 ```
 
-Herdr keymap check (P1-G entry criterion for P1-08):
+Herdr keymap check (historical Phase 1 entry criterion for P1-08; kept as a probe):
 
 ```bash
 cargo run -p wiki-reader --example keylog
-# Run under herdr; tick wiki/roadmap/spikes/p1-s1-herdr-input.md
+# Run under herdr; see wiki/roadmap/spikes/p1-s1-herdr-input.md
 ```
 
 ## Crate boundaries
@@ -82,6 +86,7 @@ cargo run -p wiki-reader --example keylog
 | `wiki-reader-render` | Markdown → `RenderedDoc` (lines, link spans, source map, media inventory). |
 | `wiki-reader-media` | Image decode and Mermaid/SVG rasterisation behind `raster`; never depends on render. |
 | `wiki-reader` | Binary TUI: app state, layout, hit map, keymap. |
+| `wiki-reader-tools` | Repo tooling (`link-check`); `publish = false`. |
 
 See [architecture overview](../architecture/overview.md) and [ADR-0006](../decisions/0006-reader-first.md).
 
@@ -100,7 +105,7 @@ See [architecture overview](../architecture/overview.md) and [ADR-0006](../decis
 
 ## Task workflow
 
-1. Open the current phase file under [roadmap](../roadmap/README.md) (Phase 2: [phase-2-mvp.md](../roadmap/phase-2-mvp.md)).
+1. Open the current phase file under [roadmap](../roadmap/README.md). Active polish work is [Phase 3](../roadmap/phase-3-alpha.md); [Phase 2](../roadmap/phase-2-mvp.md) is feature-complete on a fixes-only dogfood hold until the adoption verdict (≈ 2026-10-13).
 2. Pick a `todo` row; set Status to `doing`; implement the smallest change that completes it.
 3. Run `./scripts/check.sh` (the same checks CI runs).
 4. Set Status to `done`; reference the ID in commit messages. Leave exit criteria visible.

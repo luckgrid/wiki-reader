@@ -2,8 +2,8 @@
 id: WR-GUIDE-CONFIG
 title: Configuration
 summary: Where wiki-reader reads and writes config, how files merge, every key with its default, and what the options window changes.
-status: draft
-updated: 2026-10-03
+status: active
+updated: 2026-10-05
 related: [development, releasing]
 ---
 
@@ -30,12 +30,12 @@ The collection file is untrusted, since it comes with the content you are readin
 | `nav.labels` | `"title"`, `"filename"` | `"title"` | Side-nav page titles or actual filenames including extensions; folders keep on-disk names. Header/footer labels stay title-based. |
 | `diagrams` | `"auto"`, `"image"`, `"text"`, `"source"` | `"auto"` | Mermaid tier; see [ADR-0004](../decisions/0004-diagram-rendering.md). tmux always uses text. |
 | `images.enabled` | `true`, `false` | `true` | `false` skips the terminal graphics probe and shows text placeholders. No effect in the [lite build](#lite-build). |
-| `images.max_slot_rows` | integer `1`–`60` | `30` | Tallest picture or diagram slot, in rows. |
+| `images.max_slot_rows` | integer `1`–`60` | `30` | Tallest picture or diagram slot, in rows. The options window offers 10, 20, 30, 40, 50, 60; other values in that range still work from the file. |
 | `herdr.publish` | `true`, `false` | `true` | Inside a herdr pane, show the page being read in herdr's sidebar (title and a `page` token, renewed while open and cleared on exit). Display-only; never reports agent state. Plugin popups have no pane of their own and never publish. See [ADR-0022](../decisions/0022-herdr-launcher-and-page-publishing.md). |
 | `copy.path` | `"relative"`, `"absolute"` | `"relative"` | What `y` ("Copy file path" in Help) copies: with the nav focused, the selected row's file or folder path; with the viewer focused, the open page's path. Relative to the collection root, or absolute. Also a row in the options window. |
 | `exclude` | glob, or list of globs | none | Paths left out of the collection. |
 | `opener` | command string | system opener | Opens external URLs: program, then its args, then the URL. User file or `--config` only. |
-| `editor` | command string | `$EDITOR` | User file or `--config` only. |
+| `editor` | command string | `$VISUAL`, else `$EDITOR` | User file or `--config` only. Config wins over the environment when set. |
 | `keys` | table of action name → chord | none | User file or `--config` only, for example `quit = "Q"`. |
 
 ```toml
@@ -61,7 +61,7 @@ Legacy `nav.labels = "title+filename"` is read as `"title"` with one warning per
 
 ## Options window
 
-`,` or `c` (or the layout footer ⚙) opens the options window, and the same keys, or `Esc`, close it. Each setting is a group of radio rows: `↑` / `↓` move, `Enter` applies. It edits `theme`, `nav.position`, `nav.labels`, `diagrams`, `images.enabled`, `images.max_slot_rows` and `copy.path`. Each change applies at once and is saved to one key of the file, per [ADR-0018](../decisions/0018-config-write-path.md):
+`,` or `c` (or the layout footer ⚙) opens the options window, and the same keys, or `Esc`, close it. Each setting is a group of radio rows: `↑` / `↓` or `j` / `k` move; `Enter`, `Space` or `→` applies. It edits `theme`, `nav.position`, `nav.labels`, `diagrams`, `images.enabled`, `images.max_slot_rows` and `copy.path`. Each change applies at once and is saved to one key of the file, per [ADR-0018](../decisions/0018-config-write-path.md):
 
 ![The options window: grouped radio rows for theme, panels, nav labels, Mermaid, images, image rows and copy path](../assets/wiki-reader-options.png)
 
