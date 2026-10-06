@@ -78,35 +78,20 @@ cargo run -p wiki-reader --example keylog
 # Run under herdr; see wiki/roadmap/spikes/p1-s1-herdr-input.md
 ```
 
-### V22 orphan-spin check (manual)
+### Orphaned-reader check (V22)
 
-Orphaned readers used to burn ~100 %CPU inside `crossterm::event::poll` when the PTY
-master closed (or the parent died) while the slave stayed open. After P3-37: non-TTY
-stdio exits immediately; a watchdog exits on parent reparent or stdin POLLHUP/ERR.
+An orphaned reader used to burn ~100 %CPU inside `crossterm::event::poll` when the PTY master
+closed (or the parent died) while the slave stayed open, and one startup race aborted the
+process (SIGABRT) because `eprintln!` panics on a dead terminal. Now non-TTY stdio exits
+immediately, a watchdog exits on parent reparent or stdin POLLHUP/ERR, and error output never
+panics. [`scripts/check-orphan-exit.py`](../../scripts/check-orphan-exit.py) runs the cases on
+a PTY (master closed with the slave held, master closed during startup, parent killed, no
+TTY) and fails unless the binary exits by itself with an exit code. `scripts/check.sh` and CI
+(ubuntu and macOS) run it:
 
 ```bash
-cargo build --locked --release -p wiki-reader
-# (i) parent alive, master closed, slave held — must exit (stdin hangup)
-python3 - <<'PY'
-import os, pty, subprocess, time
-master, slave = pty.openpty()
-hold = os.dup(slave)
-proc = subprocess.Popen(
-    ["./target/release/wiki-reader", "fixtures/images"],
-    stdin=slave, stdout=slave, stderr=slave, start_new_session=True,
-)
-os.close(slave)
-time.sleep(1)
-os.close(master)
-try:
-    print("exited", proc.wait(timeout=6))
-except subprocess.TimeoutExpired:
-    print("TIMEOUT pid", proc.pid)
-    proc.kill()
-os.close(hold)
-PY
-# (iii) /dev/null — must exit immediately with a non-TTY error
-./target/release/wiki-reader fixtures/images </dev/null >/dev/null
+cargo build --locked -p wiki-reader
+python3 scripts/check-orphan-exit.py target/debug/wiki-reader
 ```
 
 ## Crate boundaries

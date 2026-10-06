@@ -100,7 +100,7 @@ Per batch: manual passes in Ghostty and herdr, plus iTerm2/tmux for media or fal
 | P3-34 | Audit fixes: algorithmic | — | done | [audit-v0.1.8.md](audit-v0.1.8.md). V4 linear wrap: 1 MB open **26.3 s → 8.2 ms**, 400 KB resize **8.7 s → 6.0 ms**. V10/V13/V14 dropped. Shipped in v0.1.9. Does **not** gate the Phase 3 exit |
 | P3-35 | Audit fixes: media | — | todo | [audit-v0.1.8.md](audit-v0.1.8.md). Measure first: harness SVG + image-plan (V6); Kitty byte counter for V15; V16 LRU cap + keep fallback reason. Then decide. Operator manual pass in Ghostty and herdr. Does **not** gate the Phase 3 exit |
 | P3-36 | Audit fixes: process and tooling | — | todo | [audit-v0.1.8.md](audit-v0.1.8.md). V17 remainder (reap children, herdr timeout, surface open errors; early signal registration moved to P3-37), V19 (`release.yml` split; dry run first), V20 (`deny.toml` / Dependabot / pin hygiene; audit found unmaintained `bincode` / `ttf-parser`), V21 (`check_doc` via `core::nav::resolve`), boolean-arg tidy-ups. Does **not** gate the Phase 3 exit |
-| P3-37 | Audit fix: orphan process spin (V22) + early signals (V17) | — | doing | V22: TTY guard + parent-death watchdog + stdin hangup poll; V17: SIGHUP/SIGTERM/SIGINT before raw mode. Intended release **v0.1.10**. Does **not** gate the Phase 3 exit |
+| P3-37 | Audit fix: orphan process spin (V22) + early signals (V17) | — | doing | V22: TTY guard + parent-death watchdog + stdin hangup poll; V17: SIGHUP/SIGTERM/SIGINT before raw mode; `scripts/check-orphan-exit.py` runs the PTY cases in `check.sh` and CI; error output no longer panics on a dead terminal (SIGABRT race). Intended release **v0.1.10**. Does **not** gate the Phase 3 exit |
 
 ## Related
 

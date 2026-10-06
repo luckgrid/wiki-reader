@@ -226,7 +226,7 @@ fn take_background_panics() -> Vec<String> {
 /// Print worker panics to stderr once the alternate screen is gone.
 fn report_background_panics() {
     for message in take_background_panics() {
-        eprintln!("{message}");
+        crate::eprint_line(message);
     }
 }
 
