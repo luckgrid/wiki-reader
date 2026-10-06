@@ -1,10 +1,11 @@
 //! Event loop, mouse, and terminal lifecycle.
 
-use std::io::{self, stdout};
+use std::io::{self, IsTerminal, stdout};
 use std::panic;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 
 use ratatui::DefaultTerminal;
 use ratatui::Terminal;
@@ -32,8 +33,10 @@ use wiki_reader_core::nav::{NavStop, NodeId};
 ///
 /// # Errors
 ///
-/// Returns when terminal init/draw fails or the collection cannot be indexed.
+/// Returns when stdin/stdout are not a terminal, terminal init/draw fails, or the collection
+/// cannot be indexed.
 pub fn run(root: &Path, config: Option<&Path>) -> io::Result<()> {
+    require_tty()?;
     // Validate before entering the terminal so empty collections don't leak raw mode.
     let mut app = App::new_with_config(root, config).map_err(|err| match err {
         wiki_reader_core::Error::EmptyCollection => io::Error::new(
@@ -49,6 +52,10 @@ pub fn run(root: &Path, config: Option<&Path>) -> io::Result<()> {
 
     app.publisher = crate::herdr::Publisher::from_env(app.herdr_publish);
     app.search_batching = true;
+    // Signals and the parent-death watchdog arm before raw mode (V17 / V22).
+    let terminate = Arc::new(AtomicBool::new(false));
+    register_terminate_signals(&terminate);
+    spawn_parent_watchdog(Arc::clone(&terminate));
     let mut terminal = ratatui::try_init()?;
     // After `try_init`, so this hook is the outermost and decides who may restore the terminal.
     install_panic_hook();
@@ -76,12 +83,71 @@ pub fn run(root: &Path, config: Option<&Path>) -> io::Result<()> {
         )?;
         guard.keyboard_enhancement = true;
     }
-    let result = run_loop(&mut terminal, &mut app, &mut guard);
+    let result = run_loop(&mut terminal, &mut app, &mut guard, &terminate);
     // A terminal error (closed tty after SIGHUP) must not lose the session.
     app.flush_session(true);
     drop(guard);
     report_background_panics();
     result
+}
+
+/// Refuse a non-interactive stdio pair so we never enter raw mode on a pipe or closed tty.
+fn require_tty() -> io::Result<()> {
+    if !stdio_is_terminal(io::stdin().is_terminal(), io::stdout().is_terminal()) {
+        return Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "stdin and stdout must be a terminal (not a pipe or file)",
+        ));
+    }
+    Ok(())
+}
+
+fn stdio_is_terminal(stdin_tty: bool, stdout_tty: bool) -> bool {
+    stdin_tty && stdout_tty
+}
+
+fn register_terminate_signals(terminate: &Arc<AtomicBool>) {
+    let _ = signal_hook::flag::register(signal_hook::consts::SIGHUP, Arc::clone(terminate));
+    let _ = signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(terminate));
+    let _ = signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(terminate));
+}
+
+/// Exit when the parent shell is gone. If the main thread is stuck inside `event::poll` (V22),
+/// restore the terminal and force-exit after a short grace.
+///
+/// ponytail: `parent_id` polling only; no `PR_SET_PDEATHSIG`. Ceiling: 1 s detection lag; upgrade
+/// to a crossterm EOF-as-hangup path if upstream lands one.
+fn spawn_parent_watchdog(terminate: Arc<AtomicBool>) {
+    #[cfg(unix)]
+    {
+        let start_ppid = std::os::unix::process::parent_id();
+        let _ = std::thread::Builder::new()
+            .name("parent-watch".into())
+            .spawn(move || {
+                let mut orphaned_at: Option<Instant> = None;
+                loop {
+                    std::thread::sleep(Duration::from_secs(1));
+                    let ppid = std::os::unix::process::parent_id();
+                    if ppid == 1 || ppid != start_ppid {
+                        terminate.store(true, Ordering::Relaxed);
+                        let since = orphaned_at.get_or_insert_with(Instant::now);
+                        // Grace for a clean loop exit via `terminate`; then hard-stop a stuck poll.
+                        if since.elapsed() >= Duration::from_secs(2) {
+                            let _ = execute!(stdout(), PopKeyboardEnhancementFlags);
+                            let _ = execute!(stdout(), DisableMouseCapture);
+                            ratatui::restore();
+                            std::process::exit(1);
+                        }
+                    } else {
+                        orphaned_at = None;
+                    }
+                }
+            });
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = terminate;
+    }
 }
 
 /// RAII restore for raw mode / alt screen / mouse capture / kitty keyboard flags.
@@ -163,10 +229,8 @@ fn run_loop(
     terminal: &mut DefaultTerminal,
     app: &mut App,
     guard: &mut TerminalGuard,
+    terminate: &AtomicBool,
 ) -> io::Result<()> {
-    let terminate = Arc::new(AtomicBool::new(false));
-    let _ = signal_hook::flag::register(signal_hook::consts::SIGHUP, Arc::clone(&terminate));
-    let _ = signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&terminate));
     loop {
         terminal.draw(|frame| draw(frame, app))?;
         if terminate.load(Ordering::Relaxed) {
@@ -489,5 +553,18 @@ mod panic_log_tests {
         assert_eq!(kept.len(), MAX_BACKGROUND_PANICS, "bounded");
         assert_eq!(kept[0], "thread 'w' panicked: 0", "oldest first");
         assert!(take_background_panics().is_empty(), "taken once");
+    }
+}
+
+#[cfg(test)]
+mod tty_guard_tests {
+    use super::stdio_is_terminal;
+
+    #[test]
+    fn requires_both_stdin_and_stdout_to_be_terminals() {
+        assert!(stdio_is_terminal(true, true));
+        assert!(!stdio_is_terminal(false, true));
+        assert!(!stdio_is_terminal(true, false));
+        assert!(!stdio_is_terminal(false, false));
     }
 }

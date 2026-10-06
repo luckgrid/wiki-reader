@@ -67,11 +67,39 @@ cargo run -p wiki-reader -- fixtures/worked-example
 # q to quit, ? for help
 ```
 
-Herdr keymap check (P1-G entry criterion for P1-08):
+Herdr keymap check (historical Phase 1 entry criterion for P1-08; kept as a probe):
 
 ```bash
 cargo run -p wiki-reader --example keylog
-# Run under herdr; tick wiki/roadmap/spikes/p1-s1-herdr-input.md
+# Run under herdr; see wiki/roadmap/spikes/p1-s1-herdr-input.md
+```
+
+### V22 orphan-spin check (manual)
+
+Orphaned readers used to burn ~100 %CPU inside `crossterm::event::poll` when the parent
+shell died but the PTY slave stayed open. After P3-37, a non-TTY stdio pair exits immediately,
+and a parent-death watchdog restores the terminal and exits if the main loop stays stuck.
+
+```bash
+cargo build --locked --release -p wiki-reader
+python3 - <<'PY'
+import os, pty, subprocess, time
+master, slave = pty.openpty()
+# Keep the slave open here so closing the master alone is not a hangup for the child.
+proc = subprocess.Popen(
+    ["./target/release/wiki-reader", "fixtures/images"],
+    stdin=slave, stdout=slave, stderr=slave, start_new_session=True,
+)
+os.close(slave)
+time.sleep(1)
+os.close(master)
+try:
+    print("exited", proc.wait(timeout=5))
+except subprocess.TimeoutExpired:
+    # Still running is a failure for this check; inspect with: ps -p <pid> -o %cpu=
+    print("TIMEOUT pid", proc.pid)
+    proc.kill()
+PY
 ```
 
 ## Crate boundaries
