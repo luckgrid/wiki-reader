@@ -41,7 +41,7 @@ jobs:
       - name: Orphaned reader exits (V22)
         run: |
           cargo build --locked -p wiki-reader-tui
-          python3 scripts/check-orphan-exit.py target/debug/wiki-reader
+          cargo run --locked --quiet -p wiki-reader-tools --bin check-orphan-exit -- target/debug/wiki-reader
 
       - name: Clippy (lite)
         run: cargo clippy --locked --all-targets --no-default-features -p wiki-reader-tui -p wiki-reader-render -p wiki-reader-media -- -D warnings
