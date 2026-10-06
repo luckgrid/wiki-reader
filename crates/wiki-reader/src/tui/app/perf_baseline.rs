@@ -1,4 +1,4 @@
-//! P3-31 viewing-cost baseline: deterministic tempfile fixtures + ignored timings.
+//! P3-31 / P3-31b viewing-cost baseline: deterministic tempfile fixtures + ignored timings.
 //!
 //! Run (release, print table):
 //! `cargo test -p wiki-reader --release -- --ignored --nocapture viewing_cost_baseline`
@@ -29,6 +29,8 @@ const FULL: Scale = Scale {
     token_bytes: 1_000_000,
     diagrams: 30,
     links: 500,
+    related_pages: 200,
+    media_images: 200,
 };
 
 /// Tiny scale so CI compiles and proves the writer is hash-stable without writing 5k files.
@@ -40,6 +42,8 @@ const MINI: Scale = Scale {
     token_bytes: 32,
     diagrams: 1,
     links: 2,
+    related_pages: 2,
+    media_images: 2,
 };
 
 #[derive(Clone, Copy)]
@@ -51,6 +55,8 @@ struct Scale {
     token_bytes: usize,
     diagrams: usize,
     links: usize,
+    related_pages: usize,
+    media_images: usize,
 }
 
 fn write_collection(root: &Path, scale: Scale) {
@@ -90,6 +96,14 @@ fn write_collection(root: &Path, scale: Scale) {
     token.push('\n');
     std::fs::write(root.join("bench/huge-token.md"), token).expect("token");
 
+    // V4 scaling curve fixtures (kept out of FULL.token_bytes so the 1 MB case stays one run).
+    for kb in [100usize, 200, 400] {
+        let mut body = String::from("# Token scale\n\n");
+        body.push_str(&"a".repeat(kb * 1024));
+        body.push('\n');
+        std::fs::write(root.join(format!("bench/token-{kb}k.md")), body).expect("token scale");
+    }
+
     let mut diagrams = String::from("# Diagrams\n\n");
     for i in 0..scale.diagrams {
         let _ = write!(diagrams, "```mermaid\nflowchart LR\n  A{i}-->B{i}\n```\n\n");
@@ -108,6 +122,27 @@ fn write_collection(root: &Path, scale: Scale) {
         }
     }
     std::fs::write(root.join("bench/link-heavy.md"), links).expect("links");
+
+    // V13: many `related:` edges (resolve_related during Index::build) + media-heavy render.
+    let related_dir = root.join("bench/related");
+    std::fs::create_dir_all(&related_dir).expect("related dir");
+    for i in 0..scale.related_pages {
+        let target = format!(
+            "large-tree/d{:02}/p{:02}.md",
+            i % scale.groups.max(1),
+            i % 10
+        );
+        let body = format!(
+            "---\ntitle: Related {i}\nrelated: [{target}]\n---\n\n# Related {i}\n\nBody.\n"
+        );
+        std::fs::write(related_dir.join(format!("r{i:03}.md")), body).expect("related page");
+    }
+
+    let mut media = String::from("# Media heavy\n\n");
+    for i in 0..scale.media_images {
+        let _ = writeln!(media, "![img-{i}](missing-{i}.png)\n");
+    }
+    std::fs::write(root.join("bench/media-heavy.md"), media).expect("media");
 }
 
 fn fingerprint(root: &Path) -> u64 {
@@ -194,6 +229,17 @@ fn modal_code(app: &mut App, code: KeyCode) {
     app.update(Action::ModalKey(KeyEvent::new(code, KeyModifiers::NONE)));
 }
 
+fn open_median(app: &mut App, rel: &str, n: usize) -> f64 {
+    let mut s = Vec::with_capacity(n);
+    for _ in 0..n {
+        let start = Instant::now();
+        go(app, rel);
+        draw_once(app, 120, 40);
+        s.push(start.elapsed());
+    }
+    median_ms(&s)
+}
+
 #[test]
 fn bench_fixture_writer_is_deterministic() {
     let a = tempfile::tempdir().expect("a");
@@ -240,15 +286,22 @@ fn viewing_cost_baseline() {
         ("open_diagrams", "bench/diagrams.md"),
         ("open_long_code", "bench/long-code.md"),
         ("open_big_table", "bench/big-table.md"),
+        ("open_media_heavy", "bench/media-heavy.md"),
     ] {
-        let mut s = Vec::new();
-        for _ in 0..3 {
-            let start = Instant::now();
-            go(&mut app, rel);
-            draw_once(&mut app, 120, 40);
-            s.push(start.elapsed());
-        }
-        rows.push((label, median_ms(&s)));
+        rows.push((label, open_median(&mut app, rel, 3)));
+    }
+
+    // V4 scaling curve (100/200/400 KB — not 1 MB).
+    for kb in [100usize, 200, 400] {
+        let label = match kb {
+            100 => "open_token_100k",
+            200 => "open_token_200k",
+            _ => "open_token_400k",
+        };
+        rows.push((
+            label,
+            open_median(&mut app, &format!("bench/token-{kb}k.md"), 3),
+        ));
     }
 
     go(&mut app, "bench/link-heavy.md");
@@ -270,6 +323,74 @@ fn viewing_cost_baseline() {
         samples.push(start.elapsed());
     }
     rows.push(("width_relayout_diagrams", median_ms(&samples)));
+
+    // V2: diagram-ready relayout (isolated from width path).
+    go(&mut app, "bench/diagrams.md");
+    draw_once(&mut app, 120, 40);
+    samples.clear();
+    for _ in 0..5 {
+        let start = Instant::now();
+        app.relayout_after_diagram_size();
+        draw_once(&mut app, 120, 40);
+        samples.push(start.elapsed());
+    }
+    rows.push(("diagram_ready_relayout", median_ms(&samples)));
+
+    // V4 resize cost on a long unbreakable token (400 KB — keeps the run shorter than 1 MB).
+    go(&mut app, "bench/token-400k.md");
+    draw_once(&mut app, 120, 40);
+    samples.clear();
+    for (i, w) in [80u16, 90, 100, 80, 90].into_iter().enumerate() {
+        let start = Instant::now();
+        app.ensure_layout_width(w);
+        draw_once(&mut app, 120 + u16::try_from(i).unwrap_or(0), 40);
+        samples.push(start.elapsed());
+    }
+    rows.push(("width_relayout_token_400k", median_ms(&samples)));
+
+    // V10: search keystroke burst + flush on draw (Content mode).
+    go(&mut app, "bench/link-heavy.md");
+    draw_once(&mut app, 120, 40);
+    app.search_batching = true;
+    samples.clear();
+    for _ in 0..5 {
+        app.update(Action::CloseSearch);
+        app.update(Action::OpenSearch);
+        app.update(Action::SearchToggleMode); // Content
+        let start = Instant::now();
+        for c in "body".chars() {
+            app.update(Action::SearchChar(c));
+        }
+        draw_once(&mut app, 120, 40); // flushes batched search
+        samples.push(start.elapsed());
+    }
+    rows.push(("search_keystroke_flush", median_ms(&samples)));
+
+    // V11: active Content-search match path (activate + match_spans + next+draw).
+    app.update(Action::CloseSearch);
+    app.update(Action::OpenSearch);
+    app.update(Action::SearchToggleMode);
+    for c in "body".chars() {
+        app.update(Action::SearchChar(c));
+    }
+    draw_once(&mut app, 120, 40);
+    app.update(Action::SearchActivate);
+    samples.clear();
+    for _ in 0..10 {
+        let start = Instant::now();
+        let _ = app.match_spans();
+        samples.push(start.elapsed());
+    }
+    rows.push(("match_spans", median_ms(&samples)));
+    samples.clear();
+    for _ in 0..5 {
+        let start = Instant::now();
+        app.update(Action::SearchNextMatch);
+        draw_once(&mut app, 120, 40);
+        samples.push(start.elapsed());
+    }
+    rows.push(("search_next_match_draw", median_ms(&samples)));
+    app.update(Action::CloseSearch);
 
     // Reindex UI thread: identical index (should be cheap) vs one-page change.
     go(&mut app, "bench/link-heavy.md");

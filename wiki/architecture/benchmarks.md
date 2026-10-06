@@ -57,36 +57,47 @@ Caveats: a single clean run per variant, one machine, and an uncommitted tree.
 
 ## Viewing cost (P3-31)
 
-Measured 2026-10-05 on macOS arm64 (Apple silicon, darwin 26.5.2), `rustc` 1.98.1, wiki-reader at branch tip with harness on top of main `fe645e8`, **release** profile. Method: deterministic tempfile fixtures from `tui/app/perf_baseline.rs` (`FULL` scale: 5k pages, 10k-row table, 50k-line code, 1 MB token, 30 diagrams, 500 links); `App::for_tests` + `ratatui::TestBackend`; medians of warm `Instant` samples; RSS via `ps -o rss=`. Harness is `#[ignore]` — CI only compiles it.
+Measured 2026-10-05 on macOS arm64 (Apple silicon, darwin 26.5.2), `rustc` 1.98.1, wiki-reader on `main` at `5b8351e` (P3-31) with P3-31b harness top-up, **release** profile. Method: deterministic tempfile fixtures from `tui/app/perf_baseline.rs` (`FULL` scale: 5k pages, 10k-row table, 50k-line code, 1 MB token, 100/200/400 KB token curve, 30 diagrams, 500 links, 200 related pages, 200 media placeholders); `App::for_tests` + `ratatui::TestBackend` (excludes terminal diff/flush); medians of warm `Instant` samples; RSS via `ps -o rss=`. Harness is `#[ignore]` — CI only compiles it and runs the MINI determinism test.
 
 ```bash
 cargo test -p wiki-reader --locked --release -- --ignored --nocapture viewing_cost_baseline
 ```
 
-Fixture fingerprint (both runs): `bf30eaf32ac9f972`. Second run medians within about 10 % of the first on timed rows (absolute ms); `frame_link_heavy` and end RSS varied more.
+Fixture fingerprint (both P3-31b runs): `58fa6358b41688b2`. Second run medians within about 10 % of the first on timed rows (absolute ms).
 
 | Metric | Run 1 | Run 2 | Notes |
 |---|---:|---:|---|
-| open_index_5k (ms) | 208.0 | 203.4 | `App::for_tests` / index build |
-| frame_large_tree_expanded (ms) | 0.86 | 0.85 | nav fully expanded |
-| open_link_heavy (ms) | 4.54 | 4.59 | |
-| open_huge_token (ms) | 26322 | 26327 | V4 — quadratic wrap |
-| open_diagrams (ms) | 2.36 | 2.51 | text-tier fences |
-| open_long_code (ms) | 15.4 | 15.5 | |
-| open_big_table (ms) | 30.8 | 29.6 | |
-| frame_link_heavy (ms) | 1.92 | 1.51 | |
-| width_relayout_diagrams (ms) | 1.53 | 1.65 | `ensure_layout_width` |
-| reindex_ui_identical (ms) | 5.94 | 5.15 | |
-| reindex_ui_changed (ms) | 15.1 | 16.2 | at 16 ms budget |
-| table_want (ms) | 4.04 | 4.25 | 10k-row `want()` |
-| table_G_plus_draw (ms) | 2.24 | 2.33 | includes `keep_cursor_visible` |
-| table_PgDn_plus_draw (ms) | 1.03 | 1.05 | |
-| rss_kb_after_5k_open | 39680 | 39936 | ≈ 39 MiB |
-| rss_kb_end | 140512 | 134176 | after heavy pages |
+| open_index_5k (ms) | 235.3 | 262.2 | includes 200 related pages |
+| frame_large_tree_expanded (ms) | 0.88 | 0.90 | nav fully expanded |
+| open_link_heavy (ms) | 4.56 | 4.64 | |
+| open_huge_token (ms) | 26427 | 26482 | V4 — quadratic wrap |
+| open_token_100k (ms) | 281 | 285 | V4 scale |
+| open_token_200k (ms) | 1105 | 1119 | V4 scale |
+| open_token_400k (ms) | 4439 | 4471 | V4 scale |
+| open_diagrams (ms) | 2.50 | 2.57 | text-tier fences |
+| open_long_code (ms) | 15.8 | 15.6 | |
+| open_big_table (ms) | 28.7 | 30.5 | |
+| open_media_heavy (ms) | 7.18 | 7.30 | V13 `push_media` (200 images) |
+| frame_link_heavy (ms) | 1.53 | 1.52 | |
+| width_relayout_diagrams (ms) | 1.62 | 1.60 | `ensure_layout_width` |
+| diagram_ready_relayout (ms) | 1.09 | 1.05 | V2 `relayout_after_diagram_size` |
+| width_relayout_token_400k (ms) | 8707 | 8725 | V4 resize cost |
+| search_keystroke_flush (ms) | 5.53 | 5.65 | V10 Content search burst+draw |
+| match_spans (ms) | 0.007 | 0.007 | V11 |
+| search_next_match_draw (ms) | 0.93 | 0.93 | V11 |
+| reindex_ui_identical (ms) | 5.42 | 5.37 | |
+| reindex_ui_changed (ms) | 16.9 | 16.1 | at 16 ms budget |
+| table_want (ms) | 4.27 | 4.17 | 10k-row `want()` |
+| table_G_plus_draw (ms) | 2.46 | 2.39 | includes `keep_cursor_visible` |
+| table_PgDn_plus_draw (ms) | 1.08 | 1.11 | |
+| rss_kb_after_5k_open | 42224 | 42144 | ≈ 41 MiB |
+| rss_kb_end | 138736 | 135136 | after heavy pages |
 
 Proposed budgets (documented only, not asserted in CI): frame build ≤ 16 ms p95, keypress→frame ≤ 50 ms, width relayout ≤ 50 ms, UI-thread reindex ≤ 16 ms.
 
-**Not measured in-process:** idle CPU / wakeups (V7/V8 — operator, real pane, graphics on/off); Kitty pan upload bytes (V15).
+**Caveats.** Frame timings use `TestBackend`, so they exclude terminal diff and flush. V14 was dropped at 10k rows only (the loop is O(rows); ≈25 ms at 100k).
+
+**Not measured in-process:** Kitty pan upload bytes (V15). Idle CPU / wakeups (V7/V8) measured on installed v0.1.8 under a PTY: **0.0 %CPU**, idlew **0** (images on/off) — dropped.
 
 **One-off tooling (not committed to config):**
 
