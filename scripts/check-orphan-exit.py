@@ -12,7 +12,8 @@ not a crash signal) when
   (ii') the same with WIKI_READER_NO_WATCHDOG=1, where it must keep running,
   (ii'') only the launcher (its parent) exits while the session leader lives: it must keep
         running and idle, and
-  (iii) stdio is not a terminal at all (non-TTY guard).
+  (iii) stdio is not a terminal at all (non-TTY guard), and
+  (iv)  SIGHUP, SIGTERM and SIGINT (registered before raw mode) end the session cleanly.
 Exits 0 when every case passes. Unix only (CI: ubuntu and macOS).
 """
 import os
@@ -219,6 +220,33 @@ def case_launcher_exits():
         finish(leader, app_pid, master, pid_r)
 
 
+def case_signal(sig):
+    """SIGHUP / SIGTERM / SIGINT are registered before raw mode and must end the session cleanly."""
+    master, slave = pty.openpty()
+    drain(master)
+    proc = subprocess.Popen(
+        [BIN, ROOT], stdin=slave, stdout=slave, stderr=slave, start_new_session=True
+    )
+    os.close(slave)
+    try:
+        time.sleep(1.5)
+        if proc.poll() is not None:
+            return False, f"exited {proc.returncode} before the signal was sent"
+        proc.send_signal(sig)
+        try:
+            proc.wait(timeout=LIMIT)
+        except subprocess.TimeoutExpired:
+            return False, f"still running {LIMIT:.0f}s after {sig.name}"
+        if proc.returncode < 0:
+            return False, f"died on signal {-proc.returncode} after {sig.name}, not a clean exit"
+        return True, f"exited {proc.returncode} after {sig.name}"
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+        os.close(master)
+
+
 def case_not_a_tty():
     with open(os.devnull, "rb") as dev_in, open(os.devnull, "wb") as dev_out:
         proc = subprocess.Popen([BIN, ROOT], stdin=dev_in, stdout=dev_out, stderr=dev_out)
@@ -246,6 +274,9 @@ def main():
             lambda: case_leader_killed(dict(os.environ, WIKI_READER_NO_WATCHDOG="1"), False),
         ),
         ("(ii'') launcher exits, leader alive: keeps running, idle", case_launcher_exits),
+        ("(iv) SIGHUP ends the session", lambda: case_signal(signal.SIGHUP)),
+        ("(iv') SIGTERM ends the session", lambda: case_signal(signal.SIGTERM)),
+        ("(iv'') SIGINT ends the session", lambda: case_signal(signal.SIGINT)),
         ("(iii) not a tty", case_not_a_tty),
     ]
     failed = False
