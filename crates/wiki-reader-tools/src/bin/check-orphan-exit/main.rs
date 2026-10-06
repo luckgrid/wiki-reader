@@ -12,7 +12,8 @@
 //!   (ii'') only the launcher (its parent) exits while the session leader lives: it must keep
 //!          running and idle,
 //!   (iii)  stdio is not a terminal at all (non-TTY guard), and
-//!   (iv)   SIGHUP, SIGTERM and SIGINT (registered before raw mode) end the session cleanly.
+//!   (iv)   SIGHUP, SIGTERM and SIGINT (registered before raw mode) end the session cleanly, and
+//!   (v)    the master stays open but is never read (V23) while the session leader dies.
 //! Exits 0 when every case passes, 1 when one fails, 2 on a setup error. Unix only (CI: ubuntu
 //! and macOS).
 
@@ -83,6 +84,10 @@ fn main() -> std::process::ExitCode {
         (
             "(iv'') SIGINT ends the session",
             Box::new(|| cases::signal(&cfg, Signal::INT, "SIGINT")),
+        ),
+        (
+            "(v) V23: unread master, leader killed: still exits",
+            Box::new(|| cases::unread_master_leader_killed(&cfg)),
         ),
         ("(iii) not a tty", Box::new(|| cases::not_a_tty(&cfg))),
     ];

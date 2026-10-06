@@ -86,7 +86,7 @@ process (SIGABRT) because `eprintln!` panics on a dead terminal. Now non-TTY std
 immediately, a watchdog exits when the session leader is gone or stdin reports POLLHUP/ERR,
 and error output never panics. The `check-orphan-exit` tool ([`crates/wiki-reader-tools/src/bin/check-orphan-exit/`](../../crates/wiki-reader-tools/src/bin/check-orphan-exit/main.rs)) runs the cases on
 a PTY (master closed with the slave held, master closed during startup, session leader killed,
-the same with `WIKI_READER_NO_WATCHDOG=1`, only the launcher exiting, no TTY) and fails unless the binary exits by itself with an exit code. `scripts/check.sh` and CI
+the same with `WIKI_READER_NO_WATCHDOG=1`, only the launcher exiting, an open but unread master, no TTY) and fails unless the binary exits by itself with an exit code. `scripts/check.sh` and CI
 (ubuntu and macOS) run it:
 
 ```bash
@@ -96,12 +96,11 @@ cargo run --locked --quiet -p wiki-reader-tools --bin check-orphan-exit -- targe
 
 ## Known issues
 
-- **A reader can linger in macOS state `E` when its PTY master is never read (V23, P3-38).** If the
-  terminal side keeps the master open but stops reading, the exiting process can stay in the
-  uninterruptible `E` state (`(wiki-reader)` in `ps`) and ignores SIGKILL until the master is
-  closed or read. A real terminal emulator always reads, so this has only shown up in test
-  harnesses; `check-orphan-exit` drains the master for that reason. Cause not confirmed,
-  fix not attempted: see [the register](../roadmap/audit-v0.1.8.md).
+None open. A reader seen twice in macOS state `E` with a PTY master that was never read (V23,
+P3-38) could not be reproduced as a hang: a forced exit shows `E` for about 0.6 s with or without
+a reader on the master, and `check-orphan-exit` now guards that a reader exits with the master
+open and unread. If it recurs, capture `ps -o pid,ppid,stat,wchan` for the process and say which
+process holds the other end of the terminal; see [the register](../roadmap/audit-v0.1.8.md).
 
 ## Crate boundaries
 

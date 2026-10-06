@@ -17,7 +17,7 @@ path = "src/bin/check-orphan-exit/main.rs"
 
 [dependencies]
 pulldown-cmark = { workspace = true }
-rustix = { workspace = true, features = ["pty"] }
+rustix = { workspace = true, features = ["pty", "termios"] }
 thiserror = { workspace = true }
 wiki-reader-core = { workspace = true }
 
