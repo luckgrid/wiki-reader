@@ -202,6 +202,12 @@ Phase 2 stays `active` through two weeks of real use on a real collection. Clock
 | 2026-10-05 | decision | Prepare v0.1.8 to put P3-30 in the installed dogfood binary. Bump the workspace, path dependency versions and the herdr plugin manifest; require green CI on the release merge commit before tagging. Phase 2 stays on the fixes-only hold until the ≈ 2026-10-13 verdict; the adoption clock does not restart. Tag only after the operator manual pass and explicit go-ahead | P3-30, P3-08 |
 | 2026-10-05 | release | [v0.1.8](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.8) published as a prerelease from #154 merge commit `cb36cec` after its CI passed on `main`. The release workflow passed; three tarballs and three checksums present. macOS arm64 download checksum verified and the extracted binary reports 0.1.8 (17 MiB, 6.7 MB tarball). `cargo install --locked --no-default-features` from the tag builds an 8.5 MiB lite binary that reports 0.1.8. Cargo dogfood install upgraded from v0.1.7 to v0.1.8 (`~/.cargo/bin/wiki-reader`, the only copy on `PATH`; `--version` reports 0.1.8). The Phase 3 exit decision waits on dogfooding this install. Clock continues without restarting | P3-30, P3-08 |
 
+## v0.1.9
+
+| Date | Kind | Note | Task IDs |
+|------|------|------|----------|
+| 2026-10-05 | decision | Viewing-experience performance audit of v0.1.8 recorded in [audit-v0.1.8.md](audit-v0.1.8.md) (V1–V21; traced, not run). Fix batches filed as P3-31…P3-36; they do **not** gate the Phase 3 exit | P3-31, P3-32, P3-33, P3-34, P3-35, P3-36 |
+
 ## Related
 
 - [Phase 2](phase-2-mvp.md)

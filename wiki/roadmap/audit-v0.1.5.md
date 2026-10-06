@@ -4,10 +4,12 @@ title: Audit of v0.1.5
 summary: Findings from a pre-0.1.5 audit and a static re-audit of v0.1.5 (crashes, performance, memory, robustness, supply chain), with severity, status and the PR that fixes each.
 status: active
 updated: 2026-10-05
-related: [phase-3-alpha, dogfood-log]
+related: [phase-3-alpha, dogfood-log, audit-v0.1.8]
 ---
 
 # Audit of v0.1.5
+
+Staged viewing, performance and supply-chain leftovers from this register continue under V-IDs in the [v0.1.8 audit](audit-v0.1.8.md).
 
 Two audits feed this register. **E-findings** came from an audit done before v0.1.5 (build, clippy, 681 tests, targeted probes). **N-findings** come from a static re-audit of v0.1.5: the code new in 0.1.5, the core crates and OS touchpoints, and the TUI layer, checked against a Rust anti-pattern list (blind `unwrap`/`expect`, over-cloning, allocation in loops, boolean arguments, catch-all error hiding). The re-audit read code only: nothing was built or probed, so each N-finding is "traced, not run" unless the table says otherwise. Four were re-read and confirmed in the code (N1 to N4).
 
@@ -80,5 +82,6 @@ No `unsafe` Rust exists in the workspace (`unsafe_code = "forbid"` in every crat
 
 ## Related
 
+- [Audit of v0.1.8](audit-v0.1.8.md)
 - [Phase 3](phase-3-alpha.md)
 - [Dogfood log](dogfood-log.md)
