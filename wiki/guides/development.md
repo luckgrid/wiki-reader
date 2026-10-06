@@ -94,6 +94,15 @@ cargo build --locked -p wiki-reader
 python3 scripts/check-orphan-exit.py target/debug/wiki-reader
 ```
 
+## Known issues
+
+- **A reader can linger in macOS state `E` when its PTY master is never read (V23, P3-38).** If the
+  terminal side keeps the master open but stops reading, the exiting process can stay in the
+  uninterruptible `E` state (`(wiki-reader)` in `ps`) and ignores SIGKILL until the master is
+  closed or read. A real terminal emulator always reads, so this has only shown up in test
+  harnesses; `scripts/check-orphan-exit.py` drains the master for that reason. Cause not confirmed,
+  fix not attempted: see [the register](../roadmap/audit-v0.1.8.md).
+
 ## Crate boundaries
 
 | Crate | Responsibility |
