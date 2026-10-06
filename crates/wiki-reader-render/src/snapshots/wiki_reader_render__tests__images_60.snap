@@ -42,7 +42,8 @@ A JPEG:
 
 
 
-A tall PNG, capped at 30 rows, with a white stripe every
+A tall PNG (default max slot height 30 rows, configurable
+1–60 via images.max_slot_rows), with a white stripe every
 100 px to check scroll cropping:
 
 
@@ -117,5 +118,5 @@ inline text.
 slot line=13 20x4 small.png
 slot line=20 60x8 wide.png
 slot line=31 60x8 photo.jpg
-slot line=43 16x30 tall.png
-slot line=76 10x2 diagram.svg
+slot line=44 16x30 tall.png
+slot line=77 10x2 diagram.svg

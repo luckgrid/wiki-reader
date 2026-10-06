@@ -118,7 +118,7 @@ That runs `cargo fmt --check`, clippy and tests for both feature sets, link-chec
 
 ## Workspace
 
-Cargo workspace with `wiki-reader-core` (terminal-free), `wiki-reader-render`, `wiki-reader-media` (image decode and Mermaid/SVG rasterisation), and the `wiki-reader` TUI binary. Docs live in `wiki/`. See [guides/development.md](wiki/guides/development.md).
+Cargo workspace with `wiki-reader-core` (terminal-free), `wiki-reader-render`, `wiki-reader-media` (image decode and Mermaid/SVG rasterisation), the `wiki-reader` TUI binary, and `wiki-reader-tools` (repo tooling; not published). Docs live in `wiki/`. See [guides/development.md](wiki/guides/development.md).
 
 ## License
 

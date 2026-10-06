@@ -17,7 +17,7 @@ A JPEG:
 
 ![Wide photo](img/photo.jpg)
 
-A tall PNG, capped at 30 rows, with a white stripe every 100 px to check scroll cropping:
+A tall PNG (default max slot height 30 rows, configurable 1–60 via `images.max_slot_rows`), with a white stripe every 100 px to check scroll cropping:
 
 ![Tall bands](img/tall.png)
 
