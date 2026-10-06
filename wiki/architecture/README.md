@@ -7,7 +7,7 @@ How wiki-reader is structured: crates, navigation core, rendering, and seams for
 1. [Overview](overview.md) — crates, navigate(), hit map, runtime.
 2. [Rendering](rendering.md) — markdown, links, diagrams.
 3. [Prior art & libraries](prior-art-and-libs.md) — Phase 0 findings and crate choices.
-4. [Benchmarks](benchmarks.md) — binary size, memory and start-up.
+4. [Benchmarks](benchmarks.md) — binary size, memory, start-up and viewing cost.
 5. [Integrations](integrations.md) — external providers, design tokens, herdr (non-blocking).
 6. [Context engine](context-engine.md) — deferred to Phase 4.
 

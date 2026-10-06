@@ -7,7 +7,7 @@ updated: 2026-09-29
 related: [0002-build-vs-fork]
 ---
 
-# ADR-0011 — Renderer source
+# ADR-0011: Renderer source (Phase 1)
 
 ## Context
 

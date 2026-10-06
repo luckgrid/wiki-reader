@@ -3,7 +3,7 @@ id: WR-CONTEXT
 title: Context engine
 summary: How wiki-reader decides what is relevant right now — signals, resolution, ranking, and highlights.
 status: deferred
-updated: 2026-09-30
+updated: 2026-10-05
 related: [overview, integrations]
 nav_order: 7
 ---
@@ -26,7 +26,7 @@ Signals are collected independently. Each is optional, and each records whether 
 
 | Priority | Signal | Source | Notes |
 |----------|--------|--------|-------|
-| 1 | Manual pin | `f` key or `wiki-reader focus <ID\|path>` | Always wins. Persisted per root in session state. |
+| 1 | Manual pin | to be designed (no `f` key / `wiki-reader focus` yet) | Always wins when present. |
 | 2 | Git branch | `git rev-parse --abbrev-ref HEAD` in the context repo | Parsed with configured patterns into work unit IDs. |
 | 3 | herdr workspace | `HERDR_WORKSPACE_ID`, then `herdr pane list --workspace <id>` | Sibling panes' `cwd` / `foreground_cwd`, agent state, agent labels. JSON output. |
 | 4 | Working directory | Process cwd, or `--context-dir` | Mapped through path rules. |

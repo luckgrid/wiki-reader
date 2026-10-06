@@ -2,8 +2,8 @@
 id: WR-CONTENT
 title: Content model
 summary: What counts as a page, link, ID, and relationship; frontmatter conventions wiki-reader reads.
-status: draft
-updated: 2026-09-30
+status: active
+updated: 2026-10-05
 related: [spec, ui-spec]
 nav_order: 3
 ---
@@ -15,6 +15,8 @@ What counts as a page, link, ID, and relationship; frontmatter conventions wiki-
 ## Collection
 
 A root directory (or several, see R25). A page is any `.md`/`.markdown` file not excluded by `.gitignore` or config `exclude` globs. Dot-directories are included unless ignored, since records often live in places like `.planning/`. Symlinked `.md` files are skipped (`follow_links` is off), so a page must be a regular file under the collection root.
+
+**Limits:** at most 50,000 pages per collection; each page file at most 8 MiB; frontmatter at most 64 KiB; YAML frontmatter at most 64 `*alias` markers (rejected before expand). Oversized or alias-heavy input is skipped or shown with a diagnostic, never a crash.
 
 ## Page identity
 
@@ -31,7 +33,7 @@ YAML (`---`) or TOML (`+++`). Unknown keys are kept and shown raw in a "metadata
 |-----|------|----------|
 | `id` | string | Addressable ID; strong context match |
 | `title` | string | Display title |
-| `summary` | string | Highlights, search results, hover |
+| `summary` | string | Highlights, search results; hover preview deferred ([P4-08](../roadmap/phase-4-beta.md)) |
 | `status` | enum | Highlights, tree badge. Canonical values: `draft`, `proposed`, `accepted`, `active`, `done`, `deferred`, `superseded`, `historical` (see [wiki README](../README.md)) |
 | `tags` | list | Context matching |
 | `work_units` | list | Context matching |
@@ -46,21 +48,22 @@ YAML (`---`) or TOML (`+++`). Unknown keys are kept and shown raw in a "metadata
 | Kind | Detected from | Resolves to |
 |------|---------------|-------------|
 | `Link` | `[text](./other.md#anchor)` | page + anchor, or `Unresolved` |
-| `WikiLink` | `[[other]]`, `[[other#h]]`, `[[other\|label]]` (P1) | page by stem/title/ID |
-| `IdMention` | text matching configured `id_pattern` | pages whose `id` matches, else a "virtual" work-unit node |
+| `WikiLink` | `[[other]]`, `[[other#h]]`, `[[other\|label]]` | reserved — not emitted yet |
+| `IdMention` | text matching configured `id_pattern` | reserved — not emitted yet |
 | `FrontmatterRelated` | `related:` | page or ID |
 | `Parent` | directory structure | folder index page |
 | `External` | `http(s)://`, `mailto:` | shown; confirm before open |
-| `Unsupported` | other URI schemes | muted; never opened |
+
+Unsupported URI schemes (`file:`, `javascript:`, custom `…://…`) are link *targets* (muted, never opened), not a separate edge kind.
 
 Backlinks are the reverse of every edge except `Parent`. The index keeps a flat `Vec<Edge>` plus two maps (`by_from` and `by_to`), so a graph view (R24) is just another consumer.
 
-**Virtual work-unit nodes.** An ID mentioned in many pages but defined by none still becomes a node. Selecting it lists every mention. For workstream-style repos this is often the most useful view.
+**Virtual work-unit nodes** (reserved — not emitted yet). An ID mentioned in many pages but defined by none would still become a node; selecting it would list every mention. For workstream-style repos this is often the most useful view once `IdMention` ships.
 
 ## Parsing rules
 
 - Frontmatter is split off before markdown parsing, so it's never interpreted as markdown.
-- ID mentions inside fenced code blocks are **ignored by default** (configurable), to avoid counting example IDs.
+- ID mentions inside fenced code blocks are reserved (not emitted yet); the intended default is to ignore them (configurable) so example IDs are not counted.
 - Anchors use GitHub-style slugging, which is what most collections are written against.
 - Every edge records its source line, so raw view and `$EDITOR` jumps land in the right place.
 
@@ -154,7 +157,7 @@ First match wins:
 
 1. **`SUMMARY.md`** (mdBook) or **`_sidebar.md`** (docsify) at the root: its nested link list defines order and grouping. Pages it doesn't list are appended in natural order under "Other pages".
 2. **Frontmatter `nav_order`** among siblings; unordered siblings follow.
-3. **Natural sort**: README/landing first, then `01-…` < `02-…` < `10-…`, case-insensitive; folders and files interleaved by name (config: `folders_first`).
+3. **Natural sort**: README/landing first, then `01-…` < `02-…` < `10-…`, case-insensitive; folders and files interleaved by name.
 
 **Prev/next** walk the rendered tree depth-first over *page items only*. Group headers aren't pages. So "next" after a group's landing page is its first child, and "next" after a group's last page is the item after the group.
 

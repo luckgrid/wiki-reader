@@ -3,13 +3,15 @@ id: WR-ADR-0015
 title: "ADR-0015: New-tab combos via kitty keyboard disambiguation"
 summary: Enable DISAMBIGUATE_ESCAPE_CODES so Cmd/Ctrl+Enter and Cmd/Ctrl+→ open new tabs; Ctrl+click joins Shift+click. Supersedes ADR-0007's "no Ctrl+Enter" consequence in part.
 status: accepted
-updated: 2026-10-01
-related: [0007-input-focus-model]
+updated: 2026-10-05
+related: [0007-input-focus-model, 0016-ctrl-only-new-tab-combos]
 ---
 
 # ADR-0015: New-tab combos via kitty keyboard disambiguation
 
-**Status:** Accepted · **Date:** 2026-10-01 · **Supersedes in part:** [ADR-0007](0007-input-focus-model.md) (Ctrl+Enter reliability)
+**Status:** Accepted · **Date:** 2026-10-01 · **Supersedes in part:** [ADR-0007](0007-input-focus-model.md) (Ctrl+Enter reliability) · **Cmd bindings dropped by:** [ADR-0016](0016-ctrl-only-new-tab-combos.md)
+
+> Note: Cmd/Super new-tab bindings from this ADR are dropped by [ADR-0016](0016-ctrl-only-new-tab-combos.md); Ctrl combos and kitty disambiguation remain.
 
 ## Context
 

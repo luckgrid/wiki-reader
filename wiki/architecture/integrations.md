@@ -2,8 +2,8 @@
 id: WR-INTEGRATIONS
 title: Integration plan
 summary: When and how to integrate an external index provider, design-system themes, and herdr, and what to keep open now.
-status: draft
-updated: 2026-09-30
+status: active
+updated: 2026-10-05
 related: [overview, context-engine]
 nav_order: 6
 ---
@@ -46,6 +46,8 @@ herdr is the host environment, so it's the integration most likely to pay off ea
 | Plugin | [`integrations/herdr/`](../../integrations/herdr/README.md): an action that opens wiki-reader in a new ordinary split pane in the focused pane's directory (images work), plus text-only overlay and popup actions; herdr 0.9.x gives plugin panes no cell metrics | Alpha (P3-09) |
 
 ### Pane setup (today)
+
+The `integrations/herdr` plugin and the binary flags `--herdr-context` / `--herdr-split` open the reader from herdr ([ADR-0022](../decisions/0022-herdr-launcher-and-page-publishing.md)).
 
 Install the binary ([Install](../../README.md#install)), then launch it in a herdr pane against a collection root:
 
