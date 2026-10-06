@@ -81,14 +81,14 @@ To go back to an older release, repeat the steps with that release's tarball (or
 
 Cut a tag only from a commit whose CI is already green on `main`. The release workflow builds and smoke-tests `--version` but does not re-run the full test suite.
 
-1. **Prepare.** Branch `release/vX.Y.Z` (for example `release/v0.1.N`), then bump every place that carries the version (link-check asserts the starred items stay aligned):
+1. **Prepare.** Branch `release/vX.Y.Z` (for example `release/v0.1.N`), then bump every place that carries the version. Items marked "asserted" are checked by `link-check`:
 
-   - * workspace `version` in root `Cargo.toml`
-   - * the three path-dependency versions in `[workspace.dependencies]`
+   - workspace `version` in root `Cargo.toml` (asserted)
+   - the three path-dependency versions in `[workspace.dependencies]` (asserted)
    - `Cargo.lock` (refresh by building or testing)
-   - * `integrations/herdr/herdr-plugin.toml`
-   - * the Status line in root `README.md` (must name `v` + workspace version)
-   - * a matching `## v0.1.N` heading in the [dogfood log](../roadmap/dogfood-log.md) when the release is recorded (must not be newer than the workspace before the bump lands)
+   - `integrations/herdr/herdr-plugin.toml` (asserted)
+   - the Status line in root `README.md` (must name `v` + workspace version; asserted)
+   - a matching `## v0.1.N` heading in the [dogfood log](../roadmap/dogfood-log.md) when the release is recorded (must not be newer than the workspace before the bump lands; asserted)
    - [wiki/roadmap/README.md](../roadmap/README.md) phase table / notes as needed
    - Phase 3 intro, Done list, and P3-08 release list in [phase-3-alpha.md](../roadmap/phase-3-alpha.md)
    - the audit register "Shipped in" line when the release closes audit work
