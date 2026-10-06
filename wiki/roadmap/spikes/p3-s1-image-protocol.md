@@ -21,7 +21,7 @@ cargo run -p wiki-reader-tui --example mermaid-image -- fixtures/elements/README
 cargo run -p wiki-reader-tui --example mermaid-image -- fixtures/mermaid/common-types.md wiki/architecture/rendering.md
 ```
 
-`image-protocol` enters the alternate screen with `ratatui::try_init`, immediately runs the `ratatui-image` stdio query, then enables mouse capture and Kitty keyboard disambiguation. It reports the selected protocol, cell size, capabilities, relevant environment variables and query duration before drawing `assets/wiki-reader.png`. `j`/`k` vary a simulated top clip, `o` overlays `Clear` plus a popup, and `n` replaces the image.
+`image-protocol` enters the alternate screen with `ratatui::try_init`, immediately runs the `ratatui-image` stdio query, then enables mouse capture and Kitty keyboard disambiguation. It reports the selected protocol, cell size, capabilities, relevant environment variables and query duration before drawing `wiki/assets/wiki-reader.png`. `j`/`k` vary a simulated top clip, `o` overlays `Clear` plus a popup, and `n` replaces the image.
 
 `mermaid-image` extracts Mermaid fences from Markdown (or reads a `.mmd` as one diagram), produces SVG with `mermaid-rs-renderer`, rasterises it with `resvg` and an embedded OFL Noto Sans font, and displays each successful block through the same Picker. `--render-only --output-dir DIR` writes SVG/PNG pairs for repeatability and visual inspection.
 

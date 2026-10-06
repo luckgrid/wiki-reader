@@ -132,6 +132,16 @@ See [architecture overview](../architecture/overview.md) and [ADR-0006](../decis
 - Wiki lives under `wiki/` with collection READMEs as indexes. Document standard is in [wiki/README.md](../README.md).
 - ADRs under `wiki/decisions/` are immutable once accepted — supersede, don't edit; mechanical metadata or formatting fixes that don't change decision text are allowed.
 
+## Screenshots
+
+All documentation screenshots live in `wiki/assets/`: the images are inside the collection root so wiki pages can show them when the reader is opened on `wiki/` (images outside the root are not rendered, [ADR-0017](../decisions/0017-static-local-images-only.md)). The root README and the crates.io README link to the same files. They are not test fixtures (those live under `fixtures/` and stay tiny); retake them when the UI changes.
+
+- `wiki-reader.png`: the main layout, in the root README and the [UI spec](../product/ui-spec.md).
+- `wiki-reader-help.png`, `wiki-reader-search.png`: the Help and Search popups, in the UI spec.
+- `wiki-reader-options.png`: the options window, in the UI spec and the [configuration guide](configuration.md).
+- `wiki-reader-table-viewer.png`, `wiki-reader-table-viewer-filter.png`: the table viewer with the focused row expanded, and with a `/` filter applied, in the UI spec.
+- `wiki-reader-diagram-viewer.png`, `wiki-reader-diagram-viewer-zoom.png`, `wiki-reader-media-viewer.png`: the diagram viewer at fit and at 200 % zoom, and the image viewer over a picture slot, in the UI spec.
+
 ## Task workflow
 
 1. Open the current phase file under [roadmap](../roadmap/README.md). Active polish work is [Phase 3](../roadmap/phase-3-alpha.md); [Phase 2](../roadmap/phase-2-mvp.md) is done (closed 2026-10-06); dogfood findings go to Phase 3.

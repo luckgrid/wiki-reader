@@ -185,7 +185,7 @@ fn args() -> Args {
         .and_then(|value| value.parse().ok())
         .unwrap_or(250);
     Args {
-        image_path: image_path.unwrap_or_else(|| PathBuf::from("assets/wiki-reader.png")),
+        image_path: image_path.unwrap_or_else(|| PathBuf::from("wiki/assets/wiki-reader.png")),
         force_protocol,
         timeout: Duration::from_millis(timeout_ms),
     }

@@ -2,7 +2,7 @@
 
 A terminal wiki reader for markdown collections. It browses like a documentation site (side nav, breadcrumbs, working links, back/forward, prev/next), sized to live in a multiplexer pane next to your work, and renders images and Mermaid diagrams where the terminal supports it.
 
-![wiki-reader browsing its own wiki: side nav, rendered page, tab, Linked from pane](https://raw.githubusercontent.com/luckgrid/wiki-reader/main/assets/wiki-reader.png)
+![wiki-reader browsing its own wiki: side nav, rendered page, tab, Linked from pane](https://raw.githubusercontent.com/luckgrid/wiki-reader/main/wiki/assets/wiki-reader.png)
 
 ## Install
 

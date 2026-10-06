@@ -26,7 +26,7 @@ A terminal wiki reader for markdown collections. It browses like a documentation
 ```
 <!-- ui-diagram:end -->
 
-![wiki-reader browsing its own wiki: side nav, rendered page, tab, Linked from pane](assets/wiki-reader.png)
+![wiki-reader browsing its own wiki: side nav, rendered page, tab, Linked from pane](wiki/assets/wiki-reader.png)
 
 Help (`?`), search (`/`) and options (`,` or `c`) are popups over the same layout. Click `?` / ⚙ at the full-width layout footer's bottom right, below both panes, for Help / Options; the header retains ◫ / ✕ for nav / quit.
 
