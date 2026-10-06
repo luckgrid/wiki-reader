@@ -51,7 +51,7 @@ No `unwrap`/`expect` problems were found in the audited non-test code, no trunca
 | V9 | breadcrumb / label DFS | Whole-tree DFS with clones per frame. | Included in frame timings above (TestBackend). | dropped (P3-31) |
 | V14 | `keep_cursor_visible` (P3-30 regression), `max_expand_height` | O(rows) jump; per-cell `Vec<char>`; wrap churn. | 10k-row table: `want` **4.1 ms**, `G`+draw **2.3 ms**, `PgDn`+draw **1.0 ms**. Dropped at 10k only — loop is O(rows), so ≈25 ms at 100k. | dropped (P3-31) |
 | V7 | `events.rs` event loop | L12: draw every tick. | Idle **0.0 %CPU** / idlew **0** on v0.1.8 (PTY). | dropped (P3-31b) |
-| V8 | `images.rs` idle poll | 20 ms worker poll; per-frame set churn. | Same idle pass as V7 (bare PTY; no cell-size / image manager). Graphics-on remeasure still pending — confirm in Ghostty/herdr with a picture. | dropped (P3-31b); confirm in Ghostty/herdr with a picture |
+| V8 | `images.rs` idle poll | 20 ms worker poll; per-frame set churn. | Same idle pass as V7 (bare PTY; no cell-size / image manager). Graphics-on remeasure 2026-10-06 (v0.1.10, Ghostty, `top`, 60 s idle each): picture on screen ≈ 0.4 idle wakeups/s, picture scrolled off ≈ 1.4/s, Mermaid diagram ≈ 0.5/s, images disabled ≈ 0.8–1.3/s; 0.3–0.5 %CPU in every case. No 50/s pattern (a constant 20 ms poll would show that) and no difference with images off. | dropped (P3-31b); confirmed 2026-10-06 |
 | V10 | `app/mod.rs` search | Sync UI-thread search; re-sort / lowercase. | Content search keystroke+flush **5.5 ms** (under 50 ms budget). | dropped (P3-31b) |
 | V11 | `match_spans`, `store_search_matches` | Rebuild glyph map / linear hit walk. | `match_spans` **0.007 ms**; next-match+draw **0.9 ms**. | dropped (P3-31b) |
 | V13 | `push_media`; `resolve_related` | O(n²) media push; O(pages × related). | Media-heavy open (200 images) **7.2 ms**; related edges folded into index open (~30 ms vs prior 5k baseline). | dropped (P3-31b) |
@@ -89,7 +89,7 @@ Input coalescing of up to 256 events per redraw; width clamp at 100 so wide resi
 | Task | Batch | Items |
 |---|---|---|
 | [P3-31](phase-3-alpha.md) | Baseline (measure) | Done: harness + [benchmarks](../architecture/benchmarks.md#viewing-cost-p3-31); register re-ranked. P3-31b top-up: idle CPU, V2/V10/V11/V13/V4-scale |
-| [P3-32](phase-3-alpha.md) | Frame cost | **Empty / dropped** — V7/V8/V11 dropped after measurement (V1/V5/V9 already dropped). V8 still needs graphics-on idle confirm in Ghostty/herdr |
+| [P3-32](phase-3-alpha.md) | Frame cost | **Empty / dropped** — V7/V8/V11 dropped after measurement (V1/V5/V9 already dropped). V8 graphics-on idle confirmed in Ghostty on 2026-10-06 |
 | [P3-33](phase-3-alpha.md) | Relayout and reindex | **V3 only** (low priority). V12/V18 dropped unless re-measured |
 | [P3-34](phase-3-alpha.md) | Algorithmic | **V4 fixed** (linear wrap; shipped v0.1.9). V10/V13/V14 dropped |
 | [P3-35](phase-3-alpha.md) | Media | Measure first: V6 (SVG harness), V15 (Kitty), V16 (LRU + reason), L1–L5 caps |
