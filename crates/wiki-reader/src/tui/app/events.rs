@@ -140,7 +140,7 @@ fn stdin_disconnected() -> bool {
 /// Exit when the parent shell is gone or stdin hangs up. If the main thread is stuck inside
 /// `event::poll` (V22), restore the terminal and force-exit after a short grace.
 ///
-/// ponytail: parent_id + stdin POLLHUP/ERR; no `PR_SET_PDEATHSIG`. Ceiling: 1 s detection lag.
+/// ponytail: `parent_id` + stdin POLLHUP/ERR; no `PR_SET_PDEATHSIG`. Ceiling: 1 s detection lag.
 /// Forced exit skips Drop and terminal restore: a hung-up PTY can block restore writes forever,
 /// herdr title/token clear relies on the publisher TTL (default 10 min), and the session is not
 /// flushed on this path.
