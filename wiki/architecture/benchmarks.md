@@ -10,7 +10,7 @@ nav_order: 5
 
 # Benchmarks
 
-Installed binary, memory, start-up and crate count were measured on 2026-10-02 (local time) on macOS arm64, wiki-reader at `main` `976e3ff` (release profile, after the options window, viewers and themes) against the markdown-reader 1.34.75 Homebrew binary. These measurements were carried forward, not re-measured at `a153696`. Memory and start-up used a pseudo-terminal opened on this repo's `wiki/` folder (42 pages), three runs each; no graphics protocol answered, so Mermaid stayed on the text tier. Only the release download size was updated for `a153696` (**v0.1.1**): the published macOS arm64 tarball is 6.7 MiB. The original measurement note used the UTC date 2026-10-03.
+**Size / memory / start-up (commit `976e3ff` → `a153696` / v0.1.1; not re-measured since).** Measured 2026-10-02 (local) on macOS arm64 against the markdown-reader 1.34.75 Homebrew binary (release profile, after the options window, viewers and themes). Memory and start-up used a pseudo-terminal on this repo's `wiki/` folder (42 pages), three runs each; no graphics protocol answered, so Mermaid stayed on the text tier. Only the release download size was updated for `a153696` (**v0.1.1**): the published macOS arm64 tarball is 6.7 MiB. The original measurement note used the UTC date 2026-10-03.
 
 | | wiki-reader | wiki-reader lite (P3-19) | markdown-reader | treemd 0.9.1 | glow 3.0.0 |
 |---|---|---|---|---|---|
@@ -28,7 +28,7 @@ Not measured: treemd and glow memory and start-up (not installed; only the publi
 
 ## Lite build (P3-19)
 
-Measured 2026-10-03 on macOS arm64 (Apple M2 Max, 12 cores, rustc 1.98.1), default `release` profile, the same checkout for both builds: base commit `0517adc` plus the uncommitted P3-19 working tree (the commit will differ). The lite build is `--no-default-features`, which drops `image`, `resvg`, `mermaid-rs-renderer` and `ratatui-image` (asserted by `scripts/check.sh` and CI).
+Measured 2026-10-03 on macOS arm64 (Apple M2 Max, 12 cores, rustc 1.98.1), default `release` profile, checkout at `0517adc` (P3-19; **not re-measured since** for binary size / build times). The lite build is `--no-default-features`, which drops `image`, `resvg`, `mermaid-rs-renderer` and `ratatui-image` (asserted by `scripts/check.sh` and CI).
 
 Method, per variant, each in its own empty `CARGO_TARGET_DIR`, nothing else running:
 
@@ -53,9 +53,11 @@ The earlier rough estimate for a build without the image tier was about 10 MiB; 
 
 **Boundary.** A plain `cfg` boundary was enough, no trait: `wiki-reader-media` has a `raster` feature (decode, SVG and Mermaid raster, the embedded font), `wiki-reader-render` forwards it as `media` and falls back to placeholders and the text tier when it is off, and the `wiki-reader` TUI gates its `ratatui-image` probe, decode worker, drawing and viewer on `media`. The spike found no place where a second implementation behind a trait would be needed.
 
-Caveats: a single clean run per variant, one machine, and an uncommitted tree.
+Caveats: a single clean run per variant, one machine.
 
 ## Viewing cost (P3-31)
+
+Measured on **v0.1.8** (P3-31 / P3-31b); V4 linear wrap numbers updated after **v0.1.9**.
 
 Measured 2026-10-05 on macOS arm64 (Apple silicon, darwin 26.5.2), `rustc` 1.98.1, wiki-reader on `main` at `5b8351e` (P3-31) with P3-31b harness top-up, **release** profile. Method: deterministic tempfile fixtures from `tui/app/perf_baseline.rs` (`FULL` scale: 5k pages, 10k-row table, 50k-line code, 1 MB token, 100/200/400 KB token curve, 30 diagrams, 500 links, 200 related pages, 200 media placeholders); `App::for_tests` + `ratatui::TestBackend` (excludes terminal diff/flush); medians of warm `Instant` samples; RSS via `ps -o rss=`. Harness is `#[ignore]` — CI only compiles it and runs the MINI determinism test.
 
@@ -107,7 +109,7 @@ Proposed budgets (documented only, not asserted in CI): frame build ≤ 16 ms p9
 
 Register re-rank: [audit-v0.1.8.md](../roadmap/audit-v0.1.8.md).
 
-### After P3-34 (linear wrap)
+### After P3-34 (linear wrap, v0.1.9)
 
 Same machine / fingerprint `58fa6358b41688b2`, two release runs after rewriting wrap helpers:
 

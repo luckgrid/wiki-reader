@@ -3,13 +3,15 @@ id: WR-ADR-0010
 title: "ADR-0010: Flat visible rows for side nav (supersedes ADR-0009)"
 summary: Ship a custom flat list of visible rows into HitMap instead of tui-tree-widget; TreeState would duplicate NavState.
 status: accepted
-updated: 2026-09-29
+updated: 2026-10-05
 related: [0008-side-nav-as-site-nav, 0009-tui-tree-widget, 0013-nav-labels-folder-names-and-titles]
 ---
 
-# ADR-0010: Flat visible rows for side nav
+# ADR-0010: Flat visible rows for side nav (supersedes ADR-0009)
 
-**Status:** Accepted · **Date:** 2026-09-29 · **Supersedes:** [ADR-0009](0009-tui-tree-widget.md)
+**Status:** Accepted · **Date:** 2026-09-29 · **Supersedes:** [ADR-0009](0009-tui-tree-widget.md) · **Landing-row label superseded by:** [ADR-0013](0013-nav-labels-folder-names-and-titles.md)
+
+> Note: the "Landing row label (P2-12)" section below is superseded by [ADR-0013](0013-nav-labels-folder-names-and-titles.md); the flat-rows decision remains.
 
 ## Context
 

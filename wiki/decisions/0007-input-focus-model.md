@@ -3,13 +3,15 @@ id: WR-ADR-0007
 title: "ADR-0007: Input & focus model"
 summary: Browser-standard Tab cycling in the viewer, cursor-line arrows with Shift block jumps, Shift+Left/Right pane focus with per-pane cursor memory.
 status: accepted
-updated: 2026-09-30
-related: []
+updated: 2026-10-05
+related: [0015-new-tab-combos-kitty-keyboard]
 ---
 
 # ADR-0007: Input & focus model
 
-**Status:** Accepted · **Date:** 2026-09-28 · **Updated:** 2026-09-30 (P2-22)
+**Status:** Accepted · **Date:** 2026-09-28 · **Updated:** 2026-09-30 (P2-22) · **Ctrl+Enter consequence superseded in part by:** [ADR-0015](0015-new-tab-combos-kitty-keyboard.md)
+
+> Note: the "no Ctrl+Enter" consequence below is superseded in part by [ADR-0015](0015-new-tab-combos-kitty-keyboard.md) / [ADR-0016](0016-ctrl-only-new-tab-combos.md).
 
 ## Context
 

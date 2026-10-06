@@ -2,8 +2,8 @@
 id: WR-SPEC
 title: Product spec
 summary: User stories, prioritized requirements with acceptance criteria, and success measures for the wiki-reader reader.
-status: draft
-updated: 2026-10-03
+status: active
+updated: 2026-10-05
 related: [vision, content-model, ui-spec]
 nav_order: 2
 ---
@@ -28,7 +28,7 @@ Terminal markdown tools display files but don't support wiki browsing: links are
 **Browsing**
 
 - As a reader, I want selecting a page in the tree to replace the current page so that browsing feels like a wiki, not an editor.
-- As a reader, I want back/forward (keys and clickable buttons) so that I can retrace my path.
+- As a reader, I want back/forward from the keyboard so that I can retrace my path (header buttons deferred, [P4-07](../roadmap/phase-4-beta.md)).
 - As a reader, I want breadcrumbs I can click so that I can jump up to a section.
 - As a reader, I want prev/next links in the footer so that I can read a section front to back.
 - As a reader, I want the side nav to show document titles in a site-like structure, and to reveal and highlight the page I'm on however I got there.
@@ -96,29 +96,29 @@ Terminal markdown tools display files but don't support wiki browsing: links are
 | D1 | Diagrams | Tiered Mermaid per [ADR-0004](../decisions/0004-diagram-rendering.md). |
 | R1 | Responsive | Side nav auto-hides below 80 cols; overlay via `◫`/`b`. |
 | E1 | Open in editor | `e` at the cursor line. |
-| C1 | Config | Keys, opener, theme, diagram mode, excludes, `nav.labels`. |
+| C1 | Config | `theme`, `nav.position`, `nav.labels`, `diagrams`, `images.enabled`, `images.max_slot_rows`, `copy.path`, `herdr.publish`, `exclude`, `opener`, `editor`, `keys`. |
 | M1 | Session | Restore last page, history, and both pane cursors per root. |
 | J1 | Heading jump | `Alt+Shift+↑/↓` jump by heading (if the keys arrive reliably; else remap). |
 
-### P2: design for, don't build
+### P2: shipped and deferred
 
-| ID | Consideration | Design implication now |
-|----|---------------|------------------------|
-| U1 | Sticky viewer section header | Renderer keeps a heading index by line; the viewer layout reserves an optional top row. |
-| U2 | Side nav header/footer | Side nav is a column of (header?, list, footer?) sub-regions from the start. |
-| U3 | Nav label options | `nav.labels = title \| filename` affects only the side-nav file tree; breadcrumbs and View footer links remain title-based ([ADR-0021](../decisions/0021-side-nav-only-label-mode.md)). Folders keep on-disk names; `filename` shows real file-system names (including the extension). Drop `title+filename`; map an existing `title+filename` config value to `title` with one warning per config load ([ADR-0020](../decisions/0020-nav-label-modes.md)). |
-| U4 | Header back/forward buttons | Header right/left slots are lists of icon buttons, not hard-coded. |
-| U5 | Options window | Config is one typed struct with a single merge path; a settings popup can later read and write it without a second source of truth. |
-| U6 | Table viewer | Expose each table's cell grid from the renderer (not only styled lines), so a modal can filter, sort and scroll it. Size the window to content (capped at today's size); keep in-view table styles (bold header, borders, link colour). |
-| U7 | Image and diagram viewer | Image and Mermaid slots already carry their source (`SlotSource`); keep it that way so a modal can re-raster at any size and pan or zoom. Size to content (capped; wide pictures keep today's width); fit / actual-size toggle on top of zoom; opening a picture shows it larger than its inline slot. Tab / Shift+Tab carousel through every image and diagram in the document; a key cycles image / text / source for an open diagram (session-only). |
-| U8 | Footer icon buttons | P3-18 places Options (⚙) at the full-width layout footer's bottom right, below both panes, with a `?` Help icon button to its left. Keyboard shortcuts remain `,` / `c` for Options and `?` for Help. |
-| U9 | Lite install | Image, SVG and Mermaid-raster code behind a default-on cargo feature so `cargo install --no-default-features` is a smaller build; diagrams fall back to text. |
-| W1 | Widget sidebar incl. context engine ([context engine](../architecture/context-engine.md)) | Optional right slot; widget trait gets read-only page + index. |
-| W2 | Agent CLI (`--json`) | Core stays terminal-free ([ADR-0006](../decisions/0006-reader-first.md)). |
-| W3 | External provider | `CollectionProvider` trait. |
-| W4 | Design-system themes / shared design tokens | Semantic theme tokens only. |
-| W5 | herdr integration | "Current page changed" event. |
-| W6 | Link hover preview | Hit map already knows link targets. |
+| ID | Consideration | Status |
+|----|---------------|--------|
+| U1 | Sticky viewer section header | Deferred (P3-01) |
+| U2 | Side nav header/footer | Closed (P3-18 delivered footer controls; further sub-regions are a Phase 4 widget-slot concern) |
+| U3 | Nav label options | Shipped (`nav.labels = title \| filename`; [ADR-0020](../decisions/0020-nav-label-modes.md), [ADR-0021](../decisions/0021-side-nav-only-label-mode.md)) |
+| U4 | Header back/forward buttons | Deferred ([P4-07](../roadmap/phase-4-beta.md)); back/forward are keyboard-only |
+| U5 | Options window | Shipped |
+| U6 | Table viewer | Shipped (incl. focused-row expand, P3-30) |
+| U7 | Image and diagram viewer | Shipped |
+| U8 | Footer icon buttons | Shipped (P3-18) |
+| U9 | Lite install | Shipped ([ADR-0023](../decisions/0023-lite-build-is-a-cargo-feature.md)) |
+| W1 | Widget sidebar incl. context engine ([context engine](../architecture/context-engine.md)) | Deferred (Phase 4) |
+| W2 | Agent CLI (`--json`) | Deferred (Phase 4); core stays terminal-free ([ADR-0006](../decisions/0006-reader-first.md)) |
+| W3 | External provider | Deferred; `CollectionProvider` trait is the seam |
+| W4 | Design-system themes / shared design tokens | Deferred (three built-in presets shipped; theme files later) |
+| W5 | herdr integration | Shipped (launcher, `--herdr-context` / `--herdr-split`, page publish) |
+| W6 | Link hover preview | Deferred ([P4-08](../roadmap/phase-4-beta.md)) |
 
 ## Success measures
 
@@ -134,4 +134,3 @@ Terminal markdown tools display files but don't support wiki browsing: links are
 | Do your collections use `SUMMARY.md`/`_sidebar.md`, numbered filenames, or neither? (drives P1 nav order) | No |
 | External links: open directly, or confirm first? (default: confirm) | No |
 | Should group headers also open their landing page on click (in addition to toggling)? Current spec: toggle only. | No |
-| Does markdown-reader's crate expose a library API we can depend on instead of porting? | No |

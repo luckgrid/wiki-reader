@@ -2,8 +2,8 @@
 id: WR-GUIDE-RELEASING
 title: Releasing and upgrading
 summary: How users upgrade or replace an installed wiki-reader, and how maintainers cut, dry-run, verify and replace a release.
-status: draft
-updated: 2026-10-03
+status: active
+updated: 2026-10-05
 related: [development]
 ---
 
@@ -40,10 +40,12 @@ Quit any running wiki-reader before replacing the binary.
 cargo install --locked --force --git https://github.com/luckgrid/wiki-reader wiki-reader
 
 # A specific release (also how you roll back)
-cargo install --locked --force --git https://github.com/luckgrid/wiki-reader --tag v0.1.1 wiki-reader
+cargo install --locked --force --git https://github.com/luckgrid/wiki-reader --tag v0.1.N wiki-reader
 ```
 
 `--force` is what replaces the already-installed binary in `~/.cargo/bin`. Confirm with `which wiki-reader` that you are not still hitting a copy elsewhere.
+
+Rolling back to an older tag can surface `unknown key` diagnostics for config keys the older binary does not know yet. The keys stay in the file; clear or ignore the diagnostics, or keep a newer binary.
 
 ### Installed from a release tarball
 
@@ -81,7 +83,19 @@ To go back to an older release, repeat the steps with that release's tarball (or
 
 Cut a tag only from a commit whose CI is already green on `main`. The release workflow builds and smoke-tests `--version` but does not re-run the full test suite.
 
-1. **Prepare.** Branch `release/vX.Y.Z` (for example `release/v0.1.2`), bump `version` in the workspace `Cargo.toml` to the next `0.1.N` and refresh `Cargo.lock`, bump `version` in `integrations/herdr/herdr-plugin.toml` to match, and update the roadmap note. Run `./scripts/check.sh`, open a PR, wait for green checks, and squash-merge.
+1. **Prepare.** Branch `release/vX.Y.Z` (for example `release/v0.1.N`), then bump and refresh every place that carries the version:
+
+   - workspace `version` in root `Cargo.toml`
+   - the three path-dependency versions in `[workspace.dependencies]` (`wiki-reader-core`, `wiki-reader-media`, `wiki-reader-render`)
+   - `Cargo.lock` (refresh by building or testing)
+   - `integrations/herdr/herdr-plugin.toml`
+   - the Status line in root `README.md`
+   - [wiki/roadmap/README.md](../roadmap/README.md) phase table / notes as needed
+   - Phase 3 intro, Done list, and P3-08 release list in [phase-3-alpha.md](../roadmap/phase-3-alpha.md)
+   - the audit register "Shipped in" line when the release closes audit work
+   - version/commit labels in [benchmarks.md](../architecture/benchmarks.md) when numbers are re-measured
+
+   Run `./scripts/check.sh`, open a PR, wait for green checks, and squash-merge.
 2. **Optional dry run.** In GitHub, Actions → Release → *Run workflow* on the branch or `main`. It builds all three targets, names the packages `dry-run`, and uploads them as workflow artifacts. It does **not** create or touch a GitHub Release (the attach step only runs on a tag push). Use this after changing `release.yml` or its pinned actions.
 3. **Tag the merge commit** as `v` plus the `Cargo.toml` version and push the tag. The workflow fails if the tag and the crate version differ.
 
@@ -103,7 +117,7 @@ Cut a tag only from a commit whose CI is already green on `main`. The release wo
 
 ## Fix or replace a published release (maintainers)
 
-Treat a published tag as immutable once anyone may have installed it, and prefer fixing forward: merge the fix and cut the next version (for example `v0.1.2` after a bad `v0.1.1`). Notes can always be corrected in place:
+Treat a published tag as immutable once anyone may have installed it, and prefer fixing forward: merge the fix and cut the next version (for example `v0.1.N+1` after a bad `v0.1.N`). Notes can always be corrected in place:
 
 ```bash
 gh release edit vX.Y.Z --notes-file notes.md
