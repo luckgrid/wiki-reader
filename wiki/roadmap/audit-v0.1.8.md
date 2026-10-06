@@ -21,7 +21,7 @@ No `unwrap`/`expect` problems were found in the audited non-test code, no trunca
 
 | ID | Where | Finding | Measured | Status |
 |---|---|---|---|---|
-| V4 | `render.rs` wrap helpers; `diagrams.rs` fallback | Quadratic wrapping: each cut copies the remainder. A multi-MB token or data URI stalls open and each resize. | Open 1 MB token: **26.3–26.4 s**; 100/200/400 KB: **0.28 / 1.1 / 4.4 s**; width relayout on 400 KB token: **8.7 s**. | staged (P3-34) — fix first |
+| V4 | `render.rs` wrap helpers; `diagrams.rs` fallback | Quadratic wrapping: each cut copies the remainder. A multi-MB token or data URI stalls open and each resize. | Before: open 1 MB **26.3 s**, 400 KB resize **8.7 s**. After linear wrap: open 1 MB **8.2 ms**, 400 KB resize **6.0 ms** (two release runs). | fixed (P3-34) |
 
 ## Medium
 
@@ -86,7 +86,7 @@ Input coalescing of up to 256 events per redraw; width clamp at 100 so wide resi
 | [P3-31](phase-3-alpha.md) | Baseline (measure) | Done: harness + [benchmarks](../architecture/benchmarks.md#viewing-cost-p3-31); register re-ranked. P3-31b top-up: idle CPU, V2/V10/V11/V13/V4-scale |
 | [P3-32](phase-3-alpha.md) | Frame cost | **Empty** — V7/V8/V11 dropped after measurement (V1/V5/V9 already dropped) |
 | [P3-33](phase-3-alpha.md) | Relayout and reindex | V3, V12, V18 (V2 dropped — diagram-ready 1.1 ms) |
-| [P3-34](phase-3-alpha.md) | Algorithmic | **V4 first** (linear wrap). V10/V13/V14 dropped |
+| [P3-34](phase-3-alpha.md) | Algorithmic | **V4 fixed** (linear wrap). V10/V13/V14 dropped |
 | [P3-35](phase-3-alpha.md) | Media | V6, V15, V16, L1–L5 caps |
 | [P3-36](phase-3-alpha.md) | Process and tooling | V17, V19, V20, V21, boolean-arg tidy-ups |
 

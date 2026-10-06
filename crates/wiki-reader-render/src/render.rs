@@ -1530,18 +1530,15 @@ impl<'a> LayoutState<'a> {
             self.push_span_piece(&text, kind, src);
             return;
         }
-        let mut rest = text;
+        // Walk once via byte offsets — no per-cut `width()` or remainder `to_owned`.
+        let mut rest = text.as_str();
         while !rest.is_empty() {
             let avail = self.width.saturating_sub(self.cur_width());
             if avail == 0 {
                 self.commit_quote_wrap(src);
                 continue;
             }
-            if rest.width() <= avail {
-                self.push_span_piece(&rest, kind, src);
-                break;
-            }
-            let (take, next) = split_at_word_boundary(&rest, avail);
+            let (take, next) = split_at_word_boundary(rest, avail);
             if take.is_empty() {
                 // Token does not fit on this line: move to next if we already have content.
                 let only_quote_gutter =
@@ -1556,15 +1553,15 @@ impl<'a> LayoutState<'a> {
                 } else {
                     self.width.max(1)
                 };
-                let (take2, next2) = split_at_width(&rest, hard_w);
-                self.push_span_piece(&take2, kind, src);
+                let (take2, next2) = split_at_width(rest, hard_w);
+                self.push_span_piece(take2, kind, src);
                 rest = next2;
                 if !rest.is_empty() {
                     self.commit_quote_wrap(src);
                 }
                 continue;
             }
-            self.push_span_piece(&take, kind, src);
+            self.push_span_piece(take, kind, src);
             rest = next;
             if !rest.is_empty() {
                 self.commit_quote_wrap(src);
@@ -1765,7 +1762,7 @@ impl<'a> LayoutState<'a> {
             let piece = if summary.width() > avail {
                 let room = avail.saturating_sub(1).max(1);
                 let (take, _) = split_at_width(summary, room);
-                let mut s = take;
+                let mut s = take.to_owned();
                 s.push('…');
                 s
             } else {
@@ -1812,7 +1809,7 @@ impl<'a> LayoutState<'a> {
             let room = avail.saturating_sub(1).max(1);
             let (take, _) = split_at_width(text, room);
             if !take.is_empty() {
-                self.push_span(take, kind, src);
+                self.push_span(take.to_owned(), kind, src);
             }
             self.push_span("…".into(), kind, src);
             // Pad after … — split_at_width can undershoot `room` on a wide glyph.
@@ -1823,7 +1820,7 @@ impl<'a> LayoutState<'a> {
             }
         } else {
             let (take, _) = split_at_width(text, avail);
-            self.push_span(take, kind, src);
+            self.push_span(take.to_owned(), kind, src);
             let leading = if with_sides { 2 } else { 0 };
             let used = self.cur_width().saturating_sub(leading);
             if used < avail {
@@ -1985,8 +1982,8 @@ impl<'a> LayoutState<'a> {
                     break;
                 }
                 let (take, next) = split_at_width(&note, self.width.max(1));
-                self.push_raw_line(take, StyleKind::Table, src);
-                note = next;
+                self.push_raw_line(take.to_owned(), StyleKind::Table, src);
+                note = next.to_owned();
             }
             for (row_src, row) in &rows {
                 self.push_raw_line(format!("│ {}", row.join(" | ")), StyleKind::Table, *row_src);
@@ -2136,24 +2133,29 @@ fn unique_slug(base: &str, used: &mut HashMap<String, u32>) -> String {
     }
 }
 
-fn split_at_width(s: &str, max: usize) -> (String, String) {
-    if s.width() <= max {
-        return (s.to_owned(), String::new());
+/// Byte end (exclusive) of the prefix of `s` that fits in `max` display columns.
+/// Forces at least one char when `max > 0` so a wide glyph still advances.
+fn cut_at_width(s: &str, max: usize) -> usize {
+    if max == 0 {
+        return 0;
     }
     let mut col = 0usize;
     for (i, ch) in s.char_indices() {
         let cw = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
         if col + cw > max {
             if i == 0 {
-                // force one char
-                let next = i + ch.len_utf8();
-                return (s[..next].to_owned(), s[next..].to_owned());
+                return i + ch.len_utf8();
             }
-            return (s[..i].to_owned(), s[i..].to_owned());
+            return i;
         }
         col += cw;
     }
-    (s.to_owned(), String::new())
+    s.len()
+}
+
+fn split_at_width(s: &str, max: usize) -> (&str, &str) {
+    let end = cut_at_width(s, max);
+    (&s[..end], &s[end..])
 }
 
 /// Cut `s` to `max` display columns, ending with `…` when trimmed.
@@ -2180,23 +2182,30 @@ fn truncate_code_line(s: &str, max: usize) -> String {
 }
 
 /// Prefer breaking at the last whitespace that fits; empty take means "no break in avail".
-fn split_at_word_boundary(s: &str, max: usize) -> (String, String) {
+fn split_at_word_boundary(s: &str, max: usize) -> (&str, &str) {
     if max == 0 {
-        return (String::new(), s.to_owned());
+        return ("", s);
     }
-    if s.width() <= max {
-        return (s.to_owned(), String::new());
-    }
-    let (hard, _) = split_at_width(s, max);
-    if let Some(pos) = hard.rfind(|c: char| c.is_whitespace()) {
-        let take = hard[..pos].trim_end().to_owned();
-        if !take.is_empty() {
-            let rest = s[pos..].trim_start().to_owned();
-            return (take, rest);
+    let mut col = 0usize;
+    let mut last_ws: Option<usize> = None;
+    for (i, ch) in s.char_indices() {
+        let cw = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+        if col + cw > max {
+            if let Some(pos) = last_ws {
+                let take = s[..pos].trim_end();
+                if !take.is_empty() {
+                    return (take, s[pos..].trim_start());
+                }
+            }
+            // No whitespace in the fitting prefix — caller may soft-wrap to next line.
+            return ("", s);
         }
+        if ch.is_whitespace() {
+            last_ws = Some(i);
+        }
+        col += cw;
     }
-    // No whitespace in the fitting prefix — caller may soft-wrap to next line.
-    (String::new(), s.to_owned())
+    (s, "")
 }
 
 fn longest_word_width(s: &str) -> usize {
@@ -2342,19 +2351,15 @@ fn wrap_cell(cell: &str, width: usize) -> Vec<String> {
         return vec![String::new()];
     }
     let mut lines = Vec::new();
-    let mut rest = cell.to_owned();
+    let mut rest = cell;
     while !rest.is_empty() {
-        if rest.width() <= width {
-            lines.push(std::mem::take(&mut rest));
-            break;
-        }
-        let (take, next) = split_at_word_boundary(&rest, width);
+        let (take, next) = split_at_word_boundary(rest, width);
         if take.is_empty() {
-            let (hard, next2) = split_at_width(&rest, width);
-            lines.push(hard);
+            let (hard, next2) = split_at_width(rest, width);
+            lines.push(hard.to_owned());
             rest = next2;
         } else {
-            lines.push(take);
+            lines.push(take.to_owned());
             rest = next;
         }
     }
@@ -2611,5 +2616,96 @@ mod offset_line_tests {
             elapsed.as_secs() < 10,
             "render took {elapsed:?}, expected < 10s (debug); quadratic offset→line would be ~100s"
         );
+    }
+
+    /// V4: a 200 KB unbreakable token must render in linear time (quadratic wrap
+    /// was ~1 s in release / multi-second in debug).
+    #[test]
+    fn long_unbreakable_token_renders_under_two_seconds() {
+        use std::time::{Duration, Instant};
+        let src = format!("# T\n\n{}\n", "a".repeat(200_000));
+        let index = empty_index();
+        let key = empty_key();
+        let start = Instant::now();
+        let doc = render(&src, None, &key, &index, 80);
+        let elapsed = start.elapsed();
+        assert!(
+            doc.lines.len() > 1000,
+            "expected many wrapped lines, got {}",
+            doc.lines.len()
+        );
+        assert!(
+            elapsed < Duration::from_secs(2),
+            "render took {elapsed:?}; quadratic wrap cannot meet 2s on 200 KB"
+        );
+    }
+
+    /// Differential: new wrap helpers match the pre-fix quadratic behaviour.
+    #[test]
+    fn wrap_helpers_match_legacy_on_varied_strings() {
+        fn legacy_cut(s: &str, max: usize) -> usize {
+            if max == 0 {
+                return 0;
+            }
+            let mut col = 0usize;
+            for (i, ch) in s.char_indices() {
+                let cw = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+                if col + cw > max {
+                    return if i == 0 { i + ch.len_utf8() } else { i };
+                }
+                col += cw;
+            }
+            s.len()
+        }
+        fn legacy_split_at_width(s: &str, max: usize) -> (String, String) {
+            if unicode_width::UnicodeWidthStr::width(s) <= max {
+                return (s.to_owned(), String::new());
+            }
+            let i = legacy_cut(s, max);
+            (s[..i].to_owned(), s[i..].to_owned())
+        }
+        fn legacy_split_at_word_boundary(s: &str, max: usize) -> (String, String) {
+            if max == 0 {
+                return (String::new(), s.to_owned());
+            }
+            if unicode_width::UnicodeWidthStr::width(s) <= max {
+                return (s.to_owned(), String::new());
+            }
+            let (hard, _) = legacy_split_at_width(s, max);
+            if let Some(pos) = hard.rfind(|c: char| c.is_whitespace()) {
+                let take = hard[..pos].trim_end().to_owned();
+                if !take.is_empty() {
+                    return (take, s[pos..].trim_start().to_owned());
+                }
+            }
+            (String::new(), s.to_owned())
+        }
+
+        let cases = [
+            ("hello", 10usize),
+            ("hello world", 5),
+            ("abcdefghij", 4),
+            ("a", 0),
+            ("你好世界", 4),
+            ("a\u{0301}bc", 2), // combining acute
+            ("word1 word2 word3", 8),
+            ("x", 1),
+            ("😀😀", 2),
+            ("   spaced", 4),
+        ];
+        for &(s, max) in &cases {
+            let (a, b) = split_at_width(s, max);
+            let (la, lb) = legacy_split_at_width(s, max);
+            assert_eq!((a, b), (la.as_str(), lb.as_str()), "width {max:?} on {s:?}");
+            let (a, b) = split_at_word_boundary(s, max);
+            let (la, lb) = legacy_split_at_word_boundary(s, max);
+            assert_eq!((a, b), (la.as_str(), lb.as_str()), "word {max:?} on {s:?}");
+        }
+        // wrap_cell: long token hard-splits
+        let lines = wrap_cell(&"a".repeat(10), 3);
+        assert_eq!(lines, vec!["aaa", "aaa", "aaa", "a"]);
+        let lines = wrap_cell("one two three", 5);
+        assert_eq!(lines[0], "one");
+        assert!(lines.iter().any(|l| l.contains("two")));
     }
 }
