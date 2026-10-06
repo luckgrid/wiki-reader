@@ -40,7 +40,7 @@ jobs:
       # V22: an orphaned reader must exit cleanly (not spin, not abort) on a hung-up terminal.
       - name: Orphaned reader exits (V22)
         run: |
-          cargo build --locked -p wiki-reader
+          cargo build --locked -p wiki-reader-tui
           python3 scripts/check-orphan-exit.py target/debug/wiki-reader
 
       - name: Clippy (lite)

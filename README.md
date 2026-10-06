@@ -62,6 +62,8 @@ Lite build (no images, SVG or Mermaid pictures; diagrams stay text, source or a 
 cargo install --locked --no-default-features --git https://github.com/luckgrid/wiki-reader wiki-reader-tui
 ```
 
+The package is named `wiki-reader-tui` (the command it installs is still `wiki-reader`), because the name `wiki-reader` is taken on crates.io. Releases up to and including v0.1.10 use the old package name: pin one with `cargo install --locked --git https://github.com/luckgrid/wiki-reader --tag v0.1.10 wiki-reader`. If you installed `wiki-reader` before the rename, run `cargo uninstall wiki-reader` first (or add `--force`), because cargo will not let a second package overwrite the same command.
+
 Release binaries (macOS arm64 / x86_64, Linux x86_64) ship on `v*` tags under [GitHub Releases](https://github.com/luckgrid/wiki-reader/releases). Download the matching `.tar.gz`, verify the checksum, and put `wiki-reader` on your `PATH`:
 
 ```bash
@@ -78,7 +80,7 @@ crates.io packaging metadata is prepared (`version` on path deps, repository/rea
 Check your version with `wiki-reader --version` and `which wiki-reader`. Upgrade the **same way you installed** (mixing paths leaves two binaries; whichever is first on `PATH` wins).
 
 ```bash
-# cargo install → ~/.cargo/bin (--force replaces it; add --tag v0.1.N to pin one)
+# cargo install → ~/.cargo/bin (--force replaces it; a --tag before the rename needs the old name, see Install)
 cargo install --locked --force --git https://github.com/luckgrid/wiki-reader wiki-reader-tui
 
 # release tarball → usually ~/.local/bin (verify and unpack as above, then overwrite)

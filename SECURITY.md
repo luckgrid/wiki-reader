@@ -2,10 +2,10 @@
 
 ## Supported versions
 
-Security fixes land on the latest published `0.1.x` prerelease. Older tags are not backported.
+Security fixes land on the latest release (GitHub Releases, and crates.io once published). wiki-reader is pre-1.0 (`0.x`): only the latest release is supported, and fixes are not backported to older ones.
 
 ## Reporting a vulnerability
 
-Open a [private vulnerability report](https://github.com/luckgrid/wiki-reader/security/advisories/new) on GitHub, or email the maintainers listed in the repository. Please do not file public issues for undisclosed vulnerabilities.
+Please use GitHub's [private vulnerability reporting](https://github.com/luckgrid/wiki-reader/security/advisories/new) for this repository. Do not file public issues for undisclosed vulnerabilities.
 
-Include a clear description, reproduction steps, and impact. You should hear back within a few days.
+Include a clear description, reproduction steps and the impact. You should hear back within a few days.

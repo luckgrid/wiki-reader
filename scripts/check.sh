@@ -30,7 +30,7 @@ if [[ $mode != lite ]]; then
     echo "python3 not found; it runs scripts/check-orphan-exit.py (V22)" >&2
     exit 1
   }
-  cargo build --locked -p wiki-reader
+  cargo build --locked -p wiki-reader-tui
   python3 scripts/check-orphan-exit.py target/debug/wiki-reader
   cargo run --locked --quiet -p wiki-reader-tools --bin link-check
   rumdl fmt --check .
