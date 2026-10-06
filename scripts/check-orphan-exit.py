@@ -105,25 +105,42 @@ def cpu_seconds(pid):
     return days * 86400 + secs
 
 
+# Child program run inside the session: start the reader (stdio inherited, so it keeps the PTY),
+# report its pid on fd `w`, then wait. No shell job control: `sh` implementations differ in what
+# a background job gets as stdin (dash gives it /dev/null), which would make every case vacuous.
+SPAWN_APP = (
+    "import os, subprocess, sys\n"
+    "bin_, root, w = sys.argv[1], sys.argv[2], int(sys.argv[3])\n"
+    "p = subprocess.Popen([bin_, root])\n"
+    "os.write(w, (str(p.pid) + '\\n').encode())\n"
+    "os.close(w)\n"
+    "p.wait()\n"
+)
+# Session leader that stays alive and delegates the spawn to a launcher child.
+SPAWN_VIA_LAUNCHER = (
+    "import subprocess, sys, time\n"
+    "bin_, root, w, prog = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]\n"
+    "subprocess.Popen([sys.executable, '-c', prog, bin_, root, w], pass_fds=(int(w),))\n"
+    "time.sleep(60)\n"
+)
+
+
 def start_in_session(env, launcher):
     """Start the reader on a PTY inside a fresh session; return (leader, app_pid, master, pipe).
 
-    launcher=False: `sh` is both the session leader and the reader's parent.
-    launcher=True:  an outer `sh` stays alive as the session leader, an inner `sh` (the
-                    launcher, parent of the reader) is the one that can exit.
-    `<&0` matters: a background job in a non-interactive sh would otherwise get stdin from
-    /dev/null, and the reader would exit at once on the non-TTY guard (a vacuous pass).
+    launcher=False: the leader process is both the session leader and the reader's parent.
+    launcher=True:  the leader stays alive and idle; a launcher child it spawned is the
+                    reader's parent and is the one that can exit.
     """
     master, slave = pty.openpty()
     drain(master)
     pid_r, pid_w = os.pipe()
-    inner = f'"$0" "$1" <&0 & echo $! >&{pid_w}; wait'
     if launcher:
-        script = f"sh -c '{inner}' \"$0\" \"$1\" <&0 & sleep 60"
+        argv = [sys.executable, "-c", SPAWN_VIA_LAUNCHER, BIN, ROOT, str(pid_w), SPAWN_APP]
     else:
-        script = inner
+        argv = [sys.executable, "-c", SPAWN_APP, BIN, ROOT, str(pid_w)]
     leader = subprocess.Popen(
-        ["sh", "-c", script, BIN, ROOT],
+        argv,
         stdin=slave,
         stdout=slave,
         stderr=slave,
