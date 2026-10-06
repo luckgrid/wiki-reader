@@ -112,10 +112,49 @@ fn register_terminate_signals(terminate: &Arc<AtomicBool>) {
     let _ = signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(terminate));
 }
 
-/// True when the process has been reparented away from the shell that launched it.
-/// `ppid == 1` alone is not enough: a process started under PID 1 (container init) is fine.
-fn orphaned(start_ppid: u32, ppid: u32) -> bool {
-    ppid != start_ppid
+/// True when the session leader (the shell or terminal child that owns this session) is gone
+/// while we are not that leader ourselves. A reader whose session leader died keeps running with
+/// its terminal never reporting a hang-up and spins at ~100 %CPU inside `event::poll` (V22,
+/// reproduced on macOS: leader killed, PTY master still open). A parent that merely exits (a
+/// launcher) does not trigger this: with the leader alive the reader idles at ~0 %CPU.
+fn session_leader_gone(sid: u32, own_pid: u32, leader_exists: bool) -> bool {
+    sid != own_pid && !leader_exists
+}
+
+/// Environment switch that turns the session-leader check off (V22 escape hatch).
+const NO_WATCHDOG_ENV: &str = "WIKI_READER_NO_WATCHDOG";
+
+/// Whether `WIKI_READER_NO_WATCHDOG` asks to skip the session-leader check: set, non-empty and
+/// not an explicit "0" / "false" / "no" / "off". Only that check is optional: a hung-up stdin is
+/// never usable, so that check stays on.
+fn leader_check_disabled(value: Option<&std::ffi::OsStr>) -> bool {
+    let Some(v) = value.and_then(|v| v.to_str()) else {
+        return value.is_some();
+    };
+    let v = v.trim();
+    !(v.is_empty()
+        || matches!(
+            v.to_ascii_lowercase().as_str(),
+            "0" | "false" | "no" | "off"
+        ))
+}
+
+/// Session id of this process and whether that session's leader still exists (`kill(sid, 0)`).
+/// `None` when either lookup fails, which counts as "cannot tell", never as "gone".
+#[cfg(unix)]
+fn session_leader_state() -> Option<(u32, u32, bool)> {
+    use rustix::io::Errno;
+    use rustix::process::{getpid, getsid, test_kill_process};
+
+    let sid = getsid(None).ok()?;
+    // Only ESRCH means "no such process"; EPERM and anything else means it exists (or we cannot
+    // tell), which must never count as "gone".
+    let leader_exists = !matches!(test_kill_process(sid), Err(Errno::SRCH));
+    Some((
+        sid.as_raw_nonzero().get().unsigned_abs(),
+        getpid().as_raw_nonzero().get().unsigned_abs(),
+        leader_exists,
+    ))
 }
 
 /// True when poll revents say stdin is gone (PTY master closed while the slave stays open).
@@ -137,25 +176,29 @@ fn stdin_disconnected() -> bool {
     }
 }
 
-/// Exit when the parent shell is gone or stdin hangs up. If the main thread is stuck inside
-/// `event::poll` (V22), restore the terminal and force-exit after a short grace.
+/// Exit when the session leader is gone (unless `WIKI_READER_NO_WATCHDOG` is set) or stdin hangs
+/// up. If the main thread is stuck inside `event::poll` (V22), force-exit after a short grace.
 ///
-/// ponytail: `parent_id` + stdin POLLHUP/ERR; no `PR_SET_PDEATHSIG`. Ceiling: 1 s detection lag.
+/// ponytail: session-leader `kill(sid, 0)` + stdin POLLHUP/ERR; polled once a second, so up to
+/// ~1 s detection lag. A zombie leader still counts as alive until its parent reaps it.
 /// Forced exit skips Drop and terminal restore: a hung-up PTY can block restore writes forever,
 /// herdr title/token clear relies on the publisher TTL (default 10 min), and the session is not
 /// flushed on this path.
 fn spawn_parent_watchdog(terminate: Arc<AtomicBool>) {
     #[cfg(unix)]
     {
-        let start_ppid = std::os::unix::process::parent_id();
+        let check_leader = !leader_check_disabled(std::env::var_os(NO_WATCHDOG_ENV).as_deref());
         let _ = std::thread::Builder::new()
             .name("parent-watch".into())
             .spawn(move || {
                 let mut orphaned_at: Option<Instant> = None;
                 loop {
                     std::thread::sleep(Duration::from_secs(1));
-                    let ppid = std::os::unix::process::parent_id();
-                    if orphaned(start_ppid, ppid) || stdin_disconnected() {
+                    let leader_gone = check_leader
+                        && session_leader_state().is_some_and(|(sid, own, exists)| {
+                            session_leader_gone(sid, own, exists)
+                        });
+                    if leader_gone || stdin_disconnected() {
                         terminate.store(true, Ordering::Relaxed);
                         let since = orphaned_at.get_or_insert_with(Instant::now);
                         // Grace for a clean loop exit via `terminate`; then hard-stop a stuck poll.
@@ -585,7 +628,11 @@ mod panic_log_tests {
 mod tty_guard_tests {
     use rustix::event::PollFlags;
 
-    use super::{orphaned, stdin_hangup_revents, stdio_is_terminal};
+    use std::ffi::OsStr;
+
+    use super::{
+        leader_check_disabled, session_leader_gone, stdin_hangup_revents, stdio_is_terminal,
+    };
 
     #[test]
     fn requires_both_stdin_and_stdout_to_be_terminals() {
@@ -596,12 +643,25 @@ mod tty_guard_tests {
     }
 
     #[test]
-    fn orphaned_when_parent_changes_not_when_started_under_init() {
-        assert!(!orphaned(100, 100), "unchanged parent");
-        assert!(orphaned(100, 50), "parent changed");
-        assert!(orphaned(100, 1), "parent became init");
-        assert!(!orphaned(1, 1), "started under init");
-        assert!(orphaned(1, 42), "left init for another parent");
+    fn session_leader_gone_only_when_it_is_another_process_that_has_exited() {
+        assert!(!session_leader_gone(100, 200, true), "leader alive");
+        assert!(session_leader_gone(100, 200, false), "leader exited");
+        assert!(
+            !session_leader_gone(200, 200, false),
+            "we are the leader: nothing to watch"
+        );
+        assert!(!session_leader_gone(200, 200, true));
+    }
+
+    #[test]
+    fn no_watchdog_env_turns_the_leader_check_off() {
+        assert!(!leader_check_disabled(None), "unset keeps the check");
+        for on in ["1", "true", "yes", "on", "anything"] {
+            assert!(leader_check_disabled(Some(OsStr::new(on))), "{on}");
+        }
+        for off in ["", " ", "0", "false", "FALSE", "no", "off", " 0 "] {
+            assert!(!leader_check_disabled(Some(OsStr::new(off))), "{off:?}");
+        }
     }
 
     #[test]

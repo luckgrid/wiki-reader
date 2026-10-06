@@ -38,7 +38,7 @@ mermaid-text = "0.56.1"
 mermaid-rs-renderer = { version = "0.3.1", default-features = false }
 resvg = { version = "0.48.1", default-features = false, features = ["text"] }
 signal-hook = "0.3.18"
-rustix = { version = "1.1", features = ["event"] }
+rustix = { version = "1.1", features = ["event", "process"] }
 wiki-reader-core = { path = "crates/wiki-reader-core", version = "0.1.9" }
 # Heavy media deps are opt-in per crate: the lite build drops them (ADR-0023).
 wiki-reader-media = { path = "crates/wiki-reader-media", version = "0.1.9", default-features = false }

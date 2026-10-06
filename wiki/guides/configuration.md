@@ -55,6 +55,13 @@ publish = false
 
 Legacy `nav.labels = "title+filename"` is read as `"title"` with one warning per config load, even if several config layers use it. Loading does not rewrite files; choose a supported value in Options or edit the config to stop the warning. See [ADR-0020](../decisions/0020-nav-label-modes.md).
 
+## Environment
+
+| Variable | Effect |
+|----------|--------|
+| `WIKI_READER_NO_WATCHDOG` | Set to `1` to turn off the session-leader check. By default wiki-reader exits within a few seconds when the shell that owns its terminal session is gone, because a reader left in that state spins at about 100 % CPU. A launcher that merely exits while that shell and the terminal live does not end the session, so most setups never need this; with the check off, an orphaned reader can spin until killed. A terminal that has hung up always ends the session. Empty, `0`, `false`, `no` and `off` leave the check on. |
+| `WIKI_READER_IMAGE_QUERY_TIMEOUT_MS` | Timeout for the terminal graphics probe at startup. Mainly for the `image-protocol` example; see [P3-S1](../roadmap/spikes/p3-s1-image-protocol.md). |
+
 ## Lite build
 
 `cargo install --locked --no-default-features --git https://github.com/luckgrid/wiki-reader wiki-reader` builds without the image stack ([ADR-0023](../decisions/0023-lite-build-is-a-cargo-feature.md)). `images.enabled` and `images.max_slot_rows` are still read but have no effect: every image is a text placeholder, no graphics probe runs, and the options window hides the Images and Max image rows groups. `diagrams = "image"` renders the text tier with the header `lite build: no image tier`; `auto` and `text` look the same as on a terminal without graphics. Everything else is unchanged.
