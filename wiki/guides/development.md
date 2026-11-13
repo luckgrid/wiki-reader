@@ -3,7 +3,7 @@ id: WR-GUIDE-DEV
 title: Development
 summary: Toolchain, checks, crate boundaries, dependency policy, docs conventions, and task workflow.
 status: active
-updated: 2026-10-05
+updated: 2026-11-13
 related: []
 ---
 
@@ -35,7 +35,7 @@ cargo install --locked --git https://github.com/luckgrid/wiki-reader wiki-reader
 
 Tagged releases attach platform tarballs (macOS arm64 / x86_64, Linux x86_64) plus SHA256 checksums. To upgrade, replace or roll back an installed version, see [Releasing and upgrading](releasing.md), which also covers how maintainers cut, dry-run, verify and fix a release. The tag name must be `v` plus the workspace `Cargo.toml` version (for example `v0.1.N`).
 
-crates.io metadata is prepared on the publishable crates; do not `cargo publish` until that is an intentional follow-up. `wiki-reader-tools` stays `publish = false`.
+Releases reach crates.io from the `publish` job of the release workflow on a `v*` tag, through Trusted Publishing; nobody runs `cargo publish` by hand except in the break-glass case in [Releasing and upgrading](releasing.md#cratesio-trusted-publishing). `wiki-reader-tools` stays `publish = false`.
 
 ## Checks
 

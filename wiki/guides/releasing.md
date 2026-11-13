@@ -1,9 +1,9 @@
 ---
 id: WR-GUIDE-RELEASING
 title: Releasing and upgrading
-summary: How users upgrade or replace an installed wiki-reader, and how maintainers cut, dry-run, verify and replace a release.
+summary: How users upgrade or replace an installed wiki-reader, and how maintainers cut, dry-run, verify and replace a release (crates.io through Trusted Publishing).
 status: active
-updated: 2026-10-06
+updated: 2026-11-13
 related: [development]
 ---
 
@@ -104,22 +104,15 @@ Cut a tag only from a commit whose CI is already green on `main`. The release wo
 
    Run `./scripts/check.sh`, open a PR, wait for green checks, and squash-merge.
 2. **Optional dry run.** In GitHub, Actions → Release → *Run workflow* on the branch or `main`. It builds all three targets, names the packages `dry-run`, and uploads them as workflow artifacts. It does **not** create or touch a GitHub Release (the attach step only runs on a tag push). Use this after changing `release.yml` or its pinned actions.
-3. **Publish to crates.io** (from the merge commit, on a clean checkout). Needs a crates.io token with `publish-new` / `publish-update` scope from `cargo login`. Dry-run first, then publish all workspace crates in dependency order:
-
-   ```bash
-   cargo publish --workspace --dry-run --locked
-   cargo publish --workspace --locked
-   ```
-
-   A published version cannot be overwritten, only yanked, so confirm the dry run, `cargo deny check` and green CI first. Then tag the **same** commit.
-4. **Tag the merge commit** as `v` plus the `Cargo.toml` version and push the tag. The workflow fails if the tag and the crate version differ.
+3. **Tag the merge commit** as `v` plus the `Cargo.toml` version and push the tag. This needs only `git`, not Rust or a crates.io token, so it can be done from any clean checkout. The workflow fails if the tag and the crate version differ.
 
    ```bash
    git tag vX.Y.Z <merge-commit>
    git push origin vX.Y.Z
    ```
 
-5. **Wait for the three builds** (linux-x86_64, macos-arm64, macos-x86_64). Each builds with `--locked`, runs `--version`, packages `wiki-reader-<tag>-<platform>.tar.gz` plus a `.sha256`, and attaches both to the release.
+4. **Wait for the three builds** (linux-x86_64, macos-arm64, macos-x86_64). Each builds with `--locked`, runs `--version`, packages `wiki-reader-<tag>-<platform>.tar.gz` plus a `.sha256`, and attaches both to the release.
+5. **Approve and watch the crates.io job.** Once all three builds pass, the `crates.io` job (`publish`, in the `crates-io` environment) dry-runs `cargo publish --workspace --locked` and then publishes every publishable crate in dependency order, authenticated by [Trusted Publishing](#cratesio-trusted-publishing) rather than a stored token. A published version cannot be overwritten, only yanked, which is why the job waits for the builds. If the environment requires a reviewer, approve the deployment in the run. If the job fails partway (some crates published, some not), see [Fix or replace a published release](#fix-or-replace-a-published-release-maintainers).
 6. **Write the release notes.** The workflow does not generate them:
 
    ```bash
@@ -139,6 +132,26 @@ Cut a tag only from a commit whose CI is already green on `main`. The release wo
 
    Also check that the README Status line, the install examples and the screenshots still describe the shipped UI, and that the known-issues list in [development](development.md#known-issues) is current.
 
+## crates.io Trusted Publishing
+
+crates.io publishes from the `publish` job of [`release.yml`](../../.github/workflows/release.yml), which gets a short-lived token through [Trusted Publishing](https://crates.io/docs/trusted-publishing) (OpenID Connect between GitHub Actions and crates.io). The action revokes the token when the job ends. No crates.io token is stored in the repository, on a maintainer's machine or in the Workbench guest.
+
+One-time setup (already done once it is recorded in the [dogfood log](../roadmap/dogfood-log.md)):
+
+1. **GitHub environment.** In the repository's Settings → Environments, create `crates-io`. Under *Deployment branches and tags*, choose *Selected branches and tags* and add the tag rule `v*`. Optionally add a required reviewer so that every publish waits for approval.
+2. **crates.io trusted publisher.** For each published crate (`wiki-reader-core`, `wiki-reader-media`, `wiki-reader-render`, `wiki-reader-tui`), open the crate's Settings → Trusted Publishing on crates.io, signed in as an owner, and add a GitHub publisher with repository owner `luckgrid`, repository `wiki-reader`, workflow `release.yml` and environment `crates-io`.
+3. **Optional, once the first publish through Actions has worked:** on the crate settings page, require Trusted Publishing for new versions, so that a leaked API token can no longer publish.
+
+**Break-glass API token.** The account's long-lived crates.io API token is kept offline (owner's removable drive), not in CI. Use it only when Actions cannot publish, for example to finish a half-published release by hand. Use it on a trusted machine with Rust installed, from a clean checkout of the tagged commit:
+
+```bash
+cargo login            # paste the token from the drive; it is stored in ~/.cargo/credentials.toml
+cargo publish --locked -p <crate-not-yet-published>   # dependencies first
+cargo logout           # removes the stored token again
+```
+
+Never put that token into the Workbench guest, a repository secret, a shell history file or an agent's context. If it may have been exposed, revoke it on crates.io (Account settings → API Tokens) and create a new one for the drive.
+
 ## Fix or replace a published release (maintainers)
 
 Treat a published tag as immutable once anyone may have installed it, and prefer fixing forward: merge the fix and cut the next version (for example `v0.1.N+1` after a bad `v0.1.N`). Notes can always be corrected in place:
@@ -152,6 +165,8 @@ If only one asset is bad, re-run the failed build job from the workflow run (a r
 ```bash
 gh release upload vX.Y.Z wiki-reader-vX.Y.Z-<platform>.tar.gz wiki-reader-vX.Y.Z-<platform>.tar.gz.sha256 --clobber
 ```
+
+If the crates.io job failed after publishing only some crates, re-run the failed job if the cause was temporary (crates that are already published make `cargo publish --workspace` stop, so first check which versions crates.io lists). Otherwise publish the missing crates with the break-glass token (see [crates.io Trusted Publishing](#cratesio-trusted-publishing)), or yank what went up and fix forward with the next version.
 
 Only for a release that is broken and that nobody has used yet: delete it and its tag, merge the fix, and tag again.
 
