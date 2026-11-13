@@ -2561,6 +2561,49 @@ fn reindex_anchored_keeps_cursor_via_scroll_none() {
     );
 }
 
+/// Nav cursor (as a node id) after focusing the nav and moving down `n` rows.
+fn nav_cursor_after_moving(app: &mut App, n: usize) -> NavStop {
+    app.update(Action::FocusNav);
+    for _ in 0..n {
+        app.update(Action::NavStepDown);
+    }
+    app.navigator.nav().cursor.clone()
+}
+
+#[test]
+fn unchanged_reindex_keeps_nav_cursor() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let moved = nav_cursor_after_moving(&mut app, 3);
+    let page = NavStop::Node(NodeId::Page(app.navigator.tab().current().page.clone()));
+    assert_ne!(moved, page, "test needs the cursor off the open page");
+    let index = app.navigator.index().clone();
+    app.apply_reindex(index);
+    assert_eq!(
+        app.navigator.nav().cursor,
+        moved,
+        "an identical rebuild must not move the nav cursor"
+    );
+}
+
+#[test]
+fn changed_reindex_keeps_nav_cursor_while_nav_focused() {
+    let root = fixture();
+    let mut app = App::new(&root).unwrap();
+    let moved = nav_cursor_after_moving(&mut app, 3);
+    let mut index = app.navigator.index().clone();
+    index.diagnostics.push(wiki_reader_core::parse::Diagnostic {
+        message: "changed".into(),
+    });
+    app.apply_reindex(index);
+    assert_eq!(
+        app.navigator.nav().cursor,
+        moved,
+        "a real reindex reloads the page but leaves the nav cursor where the user put it"
+    );
+    assert_eq!(app.focus, FocusPane::Nav);
+}
+
 #[test]
 fn search_n_n_wrap_and_highlight() {
     let root = fixture();

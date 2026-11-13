@@ -4,8 +4,9 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
-use notify::RecursiveMode;
-use notify_debouncer_mini::new_debouncer;
+use notify::event::{AccessKind, AccessMode};
+use notify::{Event, EventHandler, EventKind, RecursiveMode, WatcherKind};
+use notify_debouncer_mini::{Config, new_debouncer_opt};
 
 use crate::provider::is_markdown;
 
@@ -24,7 +25,7 @@ pub struct Watcher {
     root: PathBuf,
     exclude: Option<globset::GlobSet>,
     /// Keep the debouncer (and its thread) alive.
-    _debouncer: notify_debouncer_mini::Debouncer<notify::RecommendedWatcher>,
+    _debouncer: notify_debouncer_mini::Debouncer<ChangesOnly>,
 }
 
 impl Watcher {
@@ -61,7 +62,8 @@ impl Watcher {
     ) -> Result<Self, notify::Error> {
         let root = std::fs::canonicalize(root).map_err(notify::Error::io)?;
         let (tx, rx) = mpsc::channel();
-        let mut debouncer = new_debouncer(debounce, tx)?;
+        let config = Config::default().with_timeout(debounce);
+        let mut debouncer = new_debouncer_opt::<_, ChangesOnly>(config, tx)?;
         debouncer.watcher().watch(&root, RecursiveMode::Recursive)?;
         Ok(Self {
             rx,
@@ -96,6 +98,51 @@ impl Watcher {
             }
         }
         out
+    }
+}
+
+/// True when `kind` reports a read rather than a change.
+///
+/// Linux inotify (notify 8) reports every `open(2)` and every close of a file opened only for
+/// reading, and the mini debouncer drops the kind. Left in, wiki-reader's own reads — the page
+/// it shows, and the reindex reading every page — set dirty, which starts another reindex: a
+/// loop about twice a second that kept snapping the side-nav cursor back to the open page.
+/// `Close(Write)` stays: it is inotify's "a writer finished" signal.
+#[must_use]
+pub fn is_read_only_event(kind: &EventKind) -> bool {
+    matches!(kind, EventKind::Access(a) if !matches!(a, AccessKind::Close(AccessMode::Write)))
+}
+
+/// The platform watcher with read-only events dropped before they reach the debouncer.
+pub struct ChangesOnly(notify::RecommendedWatcher);
+
+impl notify::Watcher for ChangesOnly {
+    fn new<F: EventHandler>(mut event_handler: F, config: notify::Config) -> notify::Result<Self> {
+        let filtered = move |res: notify::Result<Event>| {
+            if let Ok(ev) = &res
+                && is_read_only_event(&ev.kind)
+            {
+                return;
+            }
+            event_handler.handle_event(res);
+        };
+        notify::RecommendedWatcher::new(filtered, config).map(Self)
+    }
+
+    fn watch(&mut self, path: &Path, recursive_mode: RecursiveMode) -> notify::Result<()> {
+        self.0.watch(path, recursive_mode)
+    }
+
+    fn unwatch(&mut self, path: &Path) -> notify::Result<()> {
+        self.0.unwatch(path)
+    }
+
+    fn configure(&mut self, option: notify::Config) -> notify::Result<bool> {
+        self.0.configure(option)
+    }
+
+    fn kind() -> WatcherKind {
+        notify::RecommendedWatcher::kind()
     }
 }
 
@@ -306,6 +353,55 @@ mod tests {
         let _ = watcher.poll_dirty();
         fs::remove_dir_all(&docs).unwrap();
         assert!(wait_dirty(&watcher), "directory delete should dirty");
+    }
+
+    #[test]
+    fn reads_do_not_set_dirty() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        let docs = root.join("docs");
+        fs::create_dir(&docs).unwrap();
+        fs::write(docs.join("a.md"), "# a\n").unwrap();
+        let watcher = start_test(root);
+        thread::sleep(TEST_DEBOUNCE.saturating_mul(2));
+        let _ = watcher.poll_dirty();
+
+        // What a reindex does: list directories and read every page.
+        for _ in 0..3 {
+            let _ = fs::read_dir(root).unwrap().count();
+            let _ = fs::read_dir(&docs).unwrap().count();
+            let _ = fs::read_to_string(docs.join("a.md")).unwrap();
+        }
+        for _ in 0..6 {
+            thread::sleep(TEST_DEBOUNCE);
+            assert!(
+                !watcher.poll_dirty().dirty,
+                "reading pages and listing directories must not set dirty"
+            );
+        }
+        fs::write(docs.join("a.md"), "# a2\n").unwrap();
+        assert!(
+            wait_dirty(&watcher),
+            "a write after the reads must still dirty"
+        );
+    }
+
+    #[test]
+    fn read_only_event_kinds() {
+        use notify::event::{AccessKind, AccessMode, CreateKind, ModifyKind};
+        assert!(is_read_only_event(&EventKind::Access(AccessKind::Open(
+            AccessMode::Any
+        ))));
+        assert!(is_read_only_event(&EventKind::Access(AccessKind::Close(
+            AccessMode::Read
+        ))));
+        assert!(is_read_only_event(&EventKind::Access(AccessKind::Read)));
+        assert!(!is_read_only_event(&EventKind::Access(AccessKind::Close(
+            AccessMode::Write
+        ))));
+        assert!(!is_read_only_event(&EventKind::Modify(ModifyKind::Any)));
+        assert!(!is_read_only_event(&EventKind::Create(CreateKind::File)));
+        assert!(!is_read_only_event(&EventKind::Any));
     }
 
     #[test]
