@@ -1758,9 +1758,7 @@ impl App {
         match rx.try_recv() {
             Ok(Ok(index)) => {
                 self.rebuild_rx = None;
-                let view = self.view_state();
-                let effects = self.navigator.reindex(index, view);
-                self.apply_effects(effects);
+                self.apply_reindex(index);
                 true
             }
             Ok(Err(err)) => {
@@ -1774,6 +1772,22 @@ impl App {
                 self.message = "reindex worker stopped".into();
                 true
             }
+        }
+    }
+
+    /// Swap in a rebuilt index. A reindex is not navigation: with the side nav focused its
+    /// cursor stays where the user left it (`reindex` already moves it to Search if that node
+    /// is gone), and an unchanged index applies nothing at all.
+    pub(crate) fn apply_reindex(&mut self, index: Index) {
+        let view = self.view_state();
+        let effects = self.navigator.reindex(index, view);
+        let keep = (self.focus == FocusPane::Nav).then(|| self.navigator.nav().cursor.clone());
+        if !effects.is_empty() {
+            self.apply_effects(effects);
+        }
+        if let Some(stop) = keep {
+            self.navigator.set_nav_stop(stop);
+            self.ensure_nav_cursor_visible();
         }
     }
 
