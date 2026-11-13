@@ -3,7 +3,7 @@ id: WR-ROADMAP-DOGFOOD
 title: Dogfood log
 summary: Dated bites, fixes, releases and decisions from the Phase 2 dogfood clock, grouped by release cut.
 status: active
-updated: 2026-10-05
+updated: 2026-11-13
 related: [phase-2-mvp, phase-3-alpha, phase-4-beta]
 ---
 
@@ -243,6 +243,15 @@ Phase 2 was closed early on 2026-10-06 (clock started 2026-09-29), so dogfooding
 |------|------|------|----------|
 | 2026-10-06 | decision | Prepare v0.1.11, the first release published to crates.io (package `wiki-reader-tui`; `wiki-reader-core`, `-media` and `-render` alongside). Content since v0.1.10: the crates.io prep (rename, MSRV 1.92, `cargo-deny`, licences and notices, SECURITY.md), the Rust `check-orphan-exit` and its unread-master case, one `wiki/assets/` directory, the viewer screenshots, dependency bumps (`signal-hook` 0.4, `toml` 1.x, `mermaid-text` 0.57, `insta`, actions). The release workflow no longer flags `v0.1.*` tags as prereleases, and `link-check` bans the word in current docs. Phase 2 and Phase 3 are closed, so the release waits on nothing else; each publish command is confirmed with the operator | P3-39, P3-40, P3-41 |
 | 2026-10-06 | release | [v0.1.11](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.11) published, the first release on crates.io (`wiki-reader-tui` with `wiki-reader-core`, `-media` and `-render`) and the first GitHub release not flagged as a prerelease. Merge commit `7532065` had green CI; the Release workflow dry run built all three targets before the tag. `cargo publish --workspace --locked` published four crates; tag `v0.1.11` produced three tarballs with checksums. Verified: `cargo install --locked wiki-reader-tui` and `--no-default-features` in fresh `CARGO_HOME`s report 0.1.11 (17.6 MB and 9.0 MB), the macOS arm64 download matches its checksum and carries the notice files, docs.rs built `wiki-reader-core`. Install docs now lead with crates.io | P3-39 |
+
+## v0.1.12
+
+| Date | Kind | Note | Task IDs |
+|------|------|------|----------|
+| 2026-11-13 | bite | In the Workbench guest (Fedora under Lima, inside herdr and in a plain shell), the side-nav cursor snapped back to the open page about once a second while moving with the arrow keys. Not reproducible on macOS ([#200](https://github.com/luckgrid/wiki-reader/issues/200)). | |
+| 2026-11-13 | fix | Cause: notify 8's inotify backend reports file opens and read-only closes, and the mini debouncer drops the event kind, so every page read set dirty and the reader reindexed itself about twice a second. Each reindex snapped the focused nav back to the open page. Read-only events are now dropped before the debouncer, and a reindex keeps the nav cursor ([#201](https://github.com/luckgrid/wiki-reader/pull/201)). | |
+| 2026-11-13 | fix | `cargo-deny` failed on new advisories RUSTSEC-2026-0414 and -0433 (pulldown-cmark) and -0486 (rustix): bumped to 0.13.6 and 1.1.6, with THIRD-PARTY-LICENSES regenerated ([#203](https://github.com/luckgrid/wiki-reader/pull/203)). | |
+| 2026-11-13 | decision | crates.io publishing moves into the release workflow through Trusted Publishing: a `v*` tag builds the binaries, then the `publish` job in the `crates-io` environment publishes the crates. No registry token is stored, and the long-lived token stays offline as break-glass ([#202](https://github.com/luckgrid/wiki-reader/pull/202)). Prepare v0.1.12 for the Linux fix; it is the first release published this way. | |
 
 ## Related
 
