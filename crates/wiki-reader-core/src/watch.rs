@@ -355,6 +355,10 @@ mod tests {
         assert!(wait_dirty(&watcher), "directory delete should dirty");
     }
 
+    /// Linux only: inotify is the backend that reports reads (macOS `FSEvents` reports none, so
+    /// there is nothing to filter there, and its late events for the setup's own writes made
+    /// this flaky on macOS CI).
+    #[cfg(target_os = "linux")]
     #[test]
     fn reads_do_not_set_dirty() {
         let dir = tempdir().unwrap();
@@ -363,8 +367,19 @@ mod tests {
         fs::create_dir(&docs).unwrap();
         fs::write(docs.join("a.md"), "# a\n").unwrap();
         let watcher = start_test(root);
-        thread::sleep(TEST_DEBOUNCE.saturating_mul(2));
-        let _ = watcher.poll_dirty();
+        // Drain until two windows in a row are quiet, so setup events can't leak into the check.
+        let mut quiet = 0;
+        for _ in 0..40 {
+            thread::sleep(TEST_DEBOUNCE.saturating_mul(2));
+            if watcher.poll_dirty().dirty {
+                quiet = 0;
+            } else {
+                quiet += 1;
+                if quiet == 2 {
+                    break;
+                }
+            }
+        }
 
         // What a reindex does: list directories and read every page.
         for _ in 0..3 {
