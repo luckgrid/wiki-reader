@@ -885,10 +885,10 @@ Apache License 2.0
 ================================================================================
 
 Used by:
-  * wiki-reader-tui 0.1.11 (https://github.com/luckgrid/wiki-reader)
-  * wiki-reader-core 0.1.11 (https://github.com/luckgrid/wiki-reader)
-  * wiki-reader-media 0.1.11 (https://github.com/luckgrid/wiki-reader)
-  * wiki-reader-render 0.1.11 (https://github.com/luckgrid/wiki-reader)
+  * wiki-reader-tui 0.1.12 (https://github.com/luckgrid/wiki-reader)
+  * wiki-reader-core 0.1.12 (https://github.com/luckgrid/wiki-reader)
+  * wiki-reader-media 0.1.12 (https://github.com/luckgrid/wiki-reader)
+  * wiki-reader-render 0.1.12 (https://github.com/luckgrid/wiki-reader)
   * kurbo 0.13.1 (https://github.com/linebender/kurbo)
   * polycool 0.4.0 (https://github.com/linebender/kurbo)
   * siphasher 1.0.4 (https://github.com/jedisct1/rust-siphash)
@@ -5338,7 +5338,7 @@ Apache License 2.0
 ================================================================================
 
 Used by:
-  * wiki-reader-tools 0.1.11
+  * wiki-reader-tools 0.1.12
   * allocator-api2 0.2.21 (https://github.com/zakarumych/allocator-api2)
   * anyhow 1.0.104 (https://github.com/dtolnay/anyhow)
   * ascii-dag 0.9.1 (https://github.com/AshutoshMahala/ascii-dag)
