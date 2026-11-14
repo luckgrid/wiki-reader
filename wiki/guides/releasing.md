@@ -3,7 +3,7 @@ id: WR-GUIDE-RELEASING
 title: Releasing and upgrading
 summary: How users upgrade or replace an installed wiki-reader, and how maintainers cut, dry-run, verify and replace a release (crates.io through Trusted Publishing).
 status: active
-updated: 2026-11-13
+updated: 2026-11-14
 related: [development]
 ---
 
@@ -103,7 +103,7 @@ Cut a tag only from a commit whose CI is already green on `main`. The release wo
    - version/commit labels in [benchmarks.md](../architecture/benchmarks.md) when numbers are re-measured
 
    Run `./scripts/check.sh`, open a PR, wait for green checks, and squash-merge.
-2. **Optional dry run.** In GitHub, Actions → Release → *Run workflow* on the branch or `main`. It builds all three targets, names the packages `dry-run`, and uploads them as workflow artifacts. It does **not** create or touch a GitHub Release (the attach step only runs on a tag push). Use this after changing `release.yml` or its pinned actions.
+2. **Required dry run before tagging.** In GitHub, Actions → Release → *Run workflow* on `main` after the release PR is merged. Wait for all three builds, their `--version` smoke tests, and artifact uploads to pass on the merge commit you intend to tag. This catches retired runner labels and release-workflow failures that normal CI does not exercise. It names the packages `dry-run` and uploads them as workflow artifacts; it does **not** create or touch a GitHub Release or publish to crates.io (both require a tag push). A branch dry run can help validate workflow changes before merging, but does not replace this check on merged `main`.
 3. **Tag the merge commit** as `v` plus the `Cargo.toml` version and push the tag. This needs only `git`, not Rust or a crates.io token, so it can be done from any clean checkout. The workflow fails if the tag and the crate version differ.
 
    ```bash
