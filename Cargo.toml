@@ -15,7 +15,7 @@ homepage = "https://github.com/luckgrid/wiki-reader"
 
 [workspace.dependencies]
 thiserror = "2.0.21"
-ignore = "0.4.33"
+ignore = "0.4.34"
 tempfile = "3.27.0"
 filetime = "0.2.26"
 clap = { version = "4.6.7", features = ["derive"] }
@@ -23,7 +23,7 @@ ratatui = "0.30.2"
 ratatui-image = { version = "11.1.0", default-features = false, features = ["crossterm"] }
 image = { version = "0.25.6", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.151"
+serde_json = "1.0.154"
 serde_norway = "0.9.42"
 toml = "1.1.6"
 toml_edit = "0.25.15"
