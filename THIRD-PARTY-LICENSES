@@ -885,10 +885,10 @@ Apache License 2.0
 ================================================================================
 
 Used by:
-  * wiki-reader-tui 0.1.10 (https://github.com/luckgrid/wiki-reader)
-  * wiki-reader-core 0.1.10 (https://github.com/luckgrid/wiki-reader)
-  * wiki-reader-media 0.1.10 (https://github.com/luckgrid/wiki-reader)
-  * wiki-reader-render 0.1.10 (https://github.com/luckgrid/wiki-reader)
+  * wiki-reader-tui 0.1.11 (https://github.com/luckgrid/wiki-reader)
+  * wiki-reader-core 0.1.11 (https://github.com/luckgrid/wiki-reader)
+  * wiki-reader-media 0.1.11 (https://github.com/luckgrid/wiki-reader)
+  * wiki-reader-render 0.1.11 (https://github.com/luckgrid/wiki-reader)
   * kurbo 0.13.1 (https://github.com/linebender/kurbo)
   * polycool 0.4.0 (https://github.com/linebender/kurbo)
   * siphasher 1.0.4 (https://github.com/jedisct1/rust-siphash)
@@ -1107,7 +1107,7 @@ Used by:
   * linux-raw-sys 0.12.1 (https://github.com/sunfishcode/linux-raw-sys)
   * linux-raw-sys 0.4.15 (https://github.com/sunfishcode/linux-raw-sys)
   * rustix 0.38.44 (https://github.com/bytecodealliance/rustix)
-  * rustix 1.1.5 (https://github.com/bytecodealliance/rustix)
+  * rustix 1.1.6 (https://github.com/bytecodealliance/rustix)
 
 
                                  Apache License
@@ -4131,7 +4131,7 @@ Used by:
   * roxmltree 0.20.0 (https://github.com/RazrFalcon/roxmltree)
   * roxmltree 0.21.1 (https://github.com/RazrFalcon/roxmltree)
   * rustix 0.38.44 (https://github.com/bytecodealliance/rustix)
-  * rustix 1.1.5 (https://github.com/bytecodealliance/rustix)
+  * rustix 1.1.6 (https://github.com/bytecodealliance/rustix)
   * scopeguard 1.2.0 (https://github.com/bluss/scopeguard)
   * signal-hook-mio 0.2.5 (https://github.com/vorner/signal-hook)
   * signal-hook-registry 1.4.8 (https://github.com/vorner/signal-hook)
@@ -5338,7 +5338,7 @@ Apache License 2.0
 ================================================================================
 
 Used by:
-  * wiki-reader-tools 0.1.10
+  * wiki-reader-tools 0.1.11
   * allocator-api2 0.2.21 (https://github.com/zakarumych/allocator-api2)
   * anyhow 1.0.104 (https://github.com/dtolnay/anyhow)
   * ascii-dag 0.9.1 (https://github.com/AshutoshMahala/ascii-dag)
@@ -6776,7 +6776,7 @@ MIT License
 ================================================================================
 
 Used by:
-  * pulldown-cmark 0.13.4 (https://github.com/raphlinus/pulldown-cmark)
+  * pulldown-cmark 0.13.6 (https://github.com/raphlinus/pulldown-cmark)
 
 The MIT License
 
