@@ -3,7 +3,7 @@ id: WR-ROADMAP-DOGFOOD
 title: Dogfood log
 summary: Dated bites, fixes, releases and decisions from the Phase 2 dogfood clock, grouped by release cut.
 status: active
-updated: 2026-11-13
+updated: 2026-11-14
 related: [phase-2-mvp, phase-3-alpha, phase-4-beta]
 ---
 
@@ -253,6 +253,7 @@ Phase 2 was closed early on 2026-10-06 (clock started 2026-09-29), so dogfooding
 | 2026-11-13 | fix | `cargo-deny` failed on new advisories RUSTSEC-2026-0414 and -0433 (pulldown-cmark) and -0486 (rustix): bumped to 0.13.6 and 1.1.6, with THIRD-PARTY-LICENSES regenerated ([#203](https://github.com/luckgrid/wiki-reader/pull/203)). | |
 | 2026-11-14 | fix | `reads_do_not_set_dirty` failed once on macOS CI (a late FSEvents event for the setup's own write); it now runs on Linux only, where reads produce events, and drains setup events first ([#205](https://github.com/luckgrid/wiki-reader/pull/205)). serde_json 1.0.154 and ignore 0.4.34 with THIRD-PARTY-LICENSES regenerated ([#206](https://github.com/luckgrid/wiki-reader/pull/206)); resvg 0.50 deferred, because it brings a second fontdb next to mermaid-rs-renderer's and changes text shaping. | |
 | 2026-11-13 | decision | crates.io publishing moves into the release workflow through Trusted Publishing: a `v*` tag builds the binaries, then the `publish` job in the `crates-io` environment publishes the crates. No registry token is stored, and the long-lived token stays offline as break-glass ([#202](https://github.com/luckgrid/wiki-reader/pull/202)). Prepare v0.1.12 for the Linux fix; it is the first release published this way. | |
+| 2026-11-14 | release | [v0.1.12](https://github.com/luckgrid/wiki-reader/releases/tag/v0.1.12) published: the Linux side-nav fix, advisory and dependency bumps, and the first crates.io publish through Trusted Publishing (`wiki-reader-tui` with `wiki-reader-core`, `-media` and `-render`). The first tag at `37c0a5a` failed because GitHub had retired `macos-14`; that release and tag were deleted. Retagged on the runner fix `3aa6dfe` ([#207](https://github.com/luckgrid/wiki-reader/pull/207)); three tarballs with checksums; crates.io lists 0.1.12 for all four crates | |
 
 ## Related
 
