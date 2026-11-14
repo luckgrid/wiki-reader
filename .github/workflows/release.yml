@@ -126,3 +126,46 @@ jobs:
             dist/*.tar.gz.sha256
           # Only suffixed tags (`-rc.1`, `-alpha.1`) are prereleases; v0.1.11 and later are normal releases.
           prerelease: ${{ contains(github.ref_name, '-') }}
+
+  # crates.io, after all three builds pass, on a tag push only. Trusted Publishing: crates.io
+  # trusts this workflow (release.yml) in the `crates-io` environment and mints a short-lived
+  # token per run, which the action revokes when the job ends. No registry secret is stored.
+  # One-time setup and the break-glass path: wiki/guides/releasing.md.
+  publish:
+    name: crates.io
+    needs: build
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Verify tag matches crate version
+        shell: bash
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          ver=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)
+          if [[ "$REF_NAME" != "v${ver}" ]]; then
+            echo "tag '$REF_NAME' does not match Cargo.toml version 'v${ver}'" >&2
+            exit 1
+          fi
+
+      - name: Install toolchain
+        run: rustup toolchain install
+
+      - name: Dry run
+        run: cargo publish --workspace --locked --dry-run
+
+      - name: Authenticate with crates.io
+        id: auth
+        # rust-lang/crates-io-auth-action@v1.0.6
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9
+
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: cargo publish --workspace --locked
