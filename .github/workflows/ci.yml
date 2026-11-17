@@ -67,7 +67,7 @@ jobs:
 
       - name: Install rumdl
         # rvben/rumdl@v0
-        uses: rvben/rumdl@1e0f1d13c87418c31e0d59dacddd98f27a02efcc
+        uses: rvben/rumdl@0d3d6e4f07c585a9433df162949ca0fe280a40dd
         with:
           install-only: true
           version: "0.2.78"
